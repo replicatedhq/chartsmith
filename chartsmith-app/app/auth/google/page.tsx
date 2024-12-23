@@ -1,0 +1,62 @@
+'use client'
+
+import { useEffect, useRef } from "react"
+import { useSearchParams, useRouter } from "next/navigation"
+import { Loader2 } from "lucide-react"
+import { useToast } from "@/components/toast/use-toast"
+import { Card } from "@/components/ui/Card"
+import { exchangeGoogleCode } from "@/lib/auth/actions/exchange-google-code"
+
+export default function GoogleCallbackPage() {
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const { toast } = useToast()
+  const exchangeComplete = useRef(false)
+
+  useEffect(() => {
+    const code = searchParams.get('code')
+
+    if (!code) {
+      // No code provided, redirect to error page
+      router.push('/auth/error')
+      return
+    }
+
+    // Google callback page
+    if (!exchangeComplete.current) {
+      exchangeComplete.current = true
+
+      exchangeGoogleCode(code)
+        .then(profile => {
+          console.log('Google profile:', profile)
+          router.push('/')
+        })
+        .catch(error => {
+          console.error('Auth Error:', error)
+          toast({
+            title: "Authentication Error",
+            description: error.message,
+            variant: "destructive"
+          })
+          router.push('/auth/error')
+        })
+    }
+  }, [searchParams, router, toast])
+
+  return (
+    <div className="container mx-auto flex items-center justify-center min-h-screen">
+      <Card className="w-full max-w-md p-6">
+        <div className="flex flex-col items-center justify-center space-y-4 text-center">
+          <div className="flex items-center space-x-2">
+            <Loader2 className="h-6 w-6 animate-spin" />
+            <h2 className="text-2xl font-bold">Logging you in</h2>
+          </div>
+
+          <p className="text-sm text-muted-foreground">
+            Please wait while we complete your Google log in...
+          </p>
+        </div>
+      </Card>
+    </div>
+  )
+}

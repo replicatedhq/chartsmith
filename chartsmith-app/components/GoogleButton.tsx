@@ -1,11 +1,25 @@
 import React from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useToast } from './toast/use-toast';
+import { getGoogleAuthUrl } from '@/lib/auth/google';
 
 export function GoogleButton() {
   const { theme } = useTheme();
+  const { toast } = useToast()
+
   const handleGoogleSignIn = () => {
-    // Google sign-in logic will be implemented here
-    console.log('Google sign-in clicked');
+    try {
+      const authUrl = getGoogleAuthUrl()
+
+      window.location.href = authUrl
+    } catch (error) {
+      console.error('Failed to initiate Google login:', error)
+      toast({
+        title: "Error",
+        description: "Failed to initiate Google login. Please try again.",
+        variant: "destructive",
+      })
+    }
   };
 
   return (

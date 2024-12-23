@@ -13,8 +13,8 @@ export default function LoginPage() {
     <div className={`min-h-screen ${
       theme === 'dark' ? 'bg-dark' : 'bg-gray-50'
     }`}>
-      <main className="flex flex-col items-center justify-center px-6 py-20">
-        <div className="max-w-md w-full space-y-8">
+      <main className="container mx-auto flex flex-col items-center justify-center px-6 py-20">
+        <div className="w-full max-w-md space-y-8">
           <div className="text-center">
             <h1 className={`text-3xl font-bold ${
               theme === 'dark' ? 'text-text' : 'text-text'
