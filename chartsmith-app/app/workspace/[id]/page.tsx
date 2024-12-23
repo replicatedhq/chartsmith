@@ -9,12 +9,22 @@ import { ChatContainer } from '@/components/editor/chat/ChatContainer';
 import { useChartFiles } from '@/app/hooks/useChartFiles';
 
 import { useWorkspaceUI } from '@/contexts/WorkspaceUIContext';
+import { useParams } from 'next/navigation';
+import { useSession } from '@/app/hooks/useSession';
+import { getWorkspaceMessagesAction } from '@/lib/workspace/actions/get-workspace-messages';
+
 
 export default function EditorPage() {
+  const params = useParams();
+  const { isSessionLoading, session } = useSession();
   const { isChatVisible, isFileTreeVisible } = useWorkspaceUI();
   const [messages, setMessages] = useState<Message[]>([]);
   const [editorContent, setEditorContent] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+
+  if (!params.id) {
+    return <div>Workspace not found</div>;
+  }
 
   const {
     files,
@@ -24,8 +34,8 @@ export default function EditorPage() {
     updateFile,
     importFiles
   } = useChartFiles({
-    initialFiles: [],
-    debug: true
+    debug: true,
+    workspaceID: params.id as string,
   });
 
   const handleSendMessage = async (message: string) => {
@@ -48,7 +58,15 @@ export default function EditorPage() {
     }
   };
 
-  // Update file content when editor content changes
+  // load the initial messages
+  useEffect(() => {
+    if (!session) {
+      return;
+    }
+
+    getWorkspaceMessagesAction(session, params.id as string).then(setMessages);
+  }, [session]);
+
   useEffect(() => {
     if (selectedFile && selectedFile.path) {
       updateFile(selectedFile.path, editorContent);

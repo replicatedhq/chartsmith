@@ -11,8 +11,10 @@ export function EditorLayout({ children }: EditorLayoutProps) {
 
   return (
     <div className={`h-screen flex flex-col overflow-hidden ${theme === 'dark' ? 'bg-dark' : 'bg-white'}`}>
-      <TopNav />
-      <div className="flex-1 flex min-h-0">
+      <div className="flex-none">
+        <TopNav />
+      </div>
+      <div className="flex-1 flex min-h-0 w-full">
         {children}
       </div>
     </div>

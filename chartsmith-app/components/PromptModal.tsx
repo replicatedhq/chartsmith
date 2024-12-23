@@ -4,9 +4,9 @@ import React, { useEffect } from 'react';
 import { X, Sparkles } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { PromptInput } from './PromptInput';
-import { createWorkspaceFromPrompt } from '@/lib/workspace/actions/create-workspace-from-prompt';
 import { useSession } from '@/app/hooks/useSession';
 import { useRouter } from 'next/navigation';
+import { createWorkspaceAction } from '@/lib/workspace/actions/create-workspace-from-prompt';
 
 interface PromptModalProps {
   isOpen: boolean;
@@ -61,7 +61,7 @@ export function PromptModal({ isOpen, onClose }: PromptModalProps) {
       setIsLoading(true);
       setError(null);
 
-      const workspaceId = await createWorkspaceFromPrompt(session!, "prompt", prompt);
+      const workspaceId = await createWorkspaceAction(session!, "prompt", prompt);
 
       router.push(`/workspace/${workspaceId}`);
     } catch (err) {

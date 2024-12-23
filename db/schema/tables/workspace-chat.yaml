@@ -1,0 +1,27 @@
+database: chartsmith
+name: workspace_chat
+schema:
+  postgres:
+    primaryKey:
+    - workspace_id
+    columns:
+    - name: workspace_id
+      type: text
+      constraints:
+        notNull: true
+    - name: created_at
+      type: timestamp
+      constraints:
+        notNull: true
+    - name: sent_by
+      type: text
+      constraints:
+        notNull: true
+    - name: content
+      type: text
+      constraints:
+        notNull: true
+    - name: is_complete
+      type: boolean
+      constraints:
+        notNull: true

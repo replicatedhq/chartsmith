@@ -31,6 +31,15 @@ export async function createWorkspace(name: string, createdType: string, prompt:
         );
       }
 
+      // add the first chat message
+      if (createdType === "prompt") {
+        await client.query(
+          `INSERT INTO workspace_chat (workspace_id, created_at, sent_by, content, is_complete)
+          VALUES ($1, now(), $2, $3, true)`,
+          [id, "user", prompt]
+        );
+      }
+
       // Commit transaction
       await client.query('COMMIT');
 
