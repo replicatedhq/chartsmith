@@ -1,12 +1,22 @@
 database: chartsmith
-name: workspace
+name: workspace_file
 schema:
   postgres:
     primaryKey:
-    - id
+    - workspace_id
+    - file_path
+    - revision_number
     columns:
-    - name: id
+    - name: workspace_id
       type: text
+      constraints:
+        notNull: true
+    - name: file_path
+      type: text
+      constraints:
+        notNull: true
+    - name: revision_number
+      type: integer
       constraints:
         notNull: true
     - name: created_at
@@ -15,21 +25,11 @@ schema:
         notNull: true
     - name: last_updated_at
       type: timestamp
+    - name: content
+      type: text
+      constraints:
+        notNull: true
     - name: name
       type: text
-      constraints:
-        notNull: true
-    - name: created_by_user_id
-      type: text
-      constraints:
-        notNull: true
-    - name: created_type
-      type: text
-      constraints:
-        notNull: true
-    - name: prompt
-      type: text
-    - name: current_revision_number
-      type: integer
       constraints:
         notNull: true

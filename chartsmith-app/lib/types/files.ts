@@ -2,8 +2,8 @@ export interface FileNode {
   name: string;
   type: 'file' | 'folder';
   children?: FileNode[];
-  content?: string;
-  path?: string;
+  content: string;
+  path: string;
   hasError?: boolean;
   errorCount?: number;
   errorLine?: number;

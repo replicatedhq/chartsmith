@@ -1,22 +1,30 @@
 "use client"
 
 import { FileNode } from '@/lib/types/files';
+import { Session } from '@/lib/types/session';
 import { convertFilesToTree } from '@/lib/utils/files/convert';
 import { findFileByPath } from '@/lib/utils/files/find';
 import { deleteFile, updateFileContent } from '@/lib/utils/files/update';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import { useSession } from './useSession';
+import { getInitialWorkspaceFiles } from '@/lib/workspace/actions/get-workspace-files';
 
 interface UseChartFilesOptions {
-  initialFiles?: FileNode[];
   debug?: boolean;
+  workspaceID: string;
 }
 
-export function useChartFiles({ initialFiles = [], debug = false }: UseChartFilesOptions = {}) {
-  const [files, setFiles] = useState<FileNode[]>(initialFiles);
+export function useChartFiles(props: UseChartFilesOptions) {
+  const { isSessionLoading, session } = useSession();
+  const [files, setFiles] = useState<FileNode[]>([]);
   const [selectedFile, setSelectedFile] = useState<FileNode | undefined>();
 
+  useEffect(() => {
+    getInitialWorkspaceFiles(props.workspaceID).then(setFiles);
+  }, [session]);
+
   const importFiles = useCallback((fileMap: Record<string, string>) => {
-    if (debug) {
+    if (props.debug) {
       console.log('Importing files:', fileMap);
       if (!fileMap || Object.keys(fileMap).length === 0) {
         console.warn('Empty or invalid file map provided');
@@ -24,7 +32,7 @@ export function useChartFiles({ initialFiles = [], debug = false }: UseChartFile
       }
     }
 
-    const fileTree = convertFilesToTree(fileMap, { debug });
+    const fileTree = convertFilesToTree(fileMap, { debug: props.debug });
     setFiles(fileTree);
 
     // Select default file
@@ -35,7 +43,7 @@ export function useChartFiles({ initialFiles = [], debug = false }: UseChartFile
     }
 
     return fileTree;
-  }, [debug]);
+  }, [props.debug]);
 
   const updateFile = useCallback((path: string, content: string) => {
     if (!path) {
