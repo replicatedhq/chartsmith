@@ -55,7 +55,7 @@ export function WorkspaceContainer({
           )
         )}
         <div className={`w-px ${theme === 'dark' ? 'bg-dark-border' : 'bg-gray-200'} flex-shrink-0`} />
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 w-full">
           <CodeEditor 
             file={selectedFile} 
             theme={theme}

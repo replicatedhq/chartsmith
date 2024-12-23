@@ -2,21 +2,20 @@
 
 import { SideNav } from '@/components/SideNav';
 import { useTheme } from '@/contexts/ThemeContext';
+import { WorkspaceUIProvider, useWorkspaceUI } from '@/contexts/WorkspaceUIContext';
 import React from 'react';
 
-export default function WorkspaceLayout({
+function WorkspaceLayoutContent({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   const { theme } = useTheme();
-
-  const [isChatVisible, setIsChatVisible] = React.useState(true);
-  const [isFileTreeVisible, setIsFileTreeVisible] = React.useState(true);
+  const { isChatVisible, setIsChatVisible, isFileTreeVisible, setIsFileTreeVisible } = useWorkspaceUI();
 
   const showSideNav = true;
   return (
-    <div className={`min-h-screen ${theme === 'dark' ? 'bg-dark' : 'bg-white'} flex`}>
+    <div className={`min-h-screen ${theme === 'dark' ? 'bg-dark' : 'bg-white'} flex w-full`}>
       {showSideNav && (
         <SideNav
           isChatVisible={isChatVisible}
@@ -25,7 +24,23 @@ export default function WorkspaceLayout({
           onToggleFileTree={() => setIsFileTreeVisible(!isFileTreeVisible)}
         />
       )}
-      { children }
+      <div className="flex-1">
+        {children}
+      </div>
     </div>
+  );
+}
+
+export default function WorkspaceLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <WorkspaceUIProvider>
+      <WorkspaceLayoutContent>
+        {children}
+      </WorkspaceLayoutContent>
+    </WorkspaceUIProvider>
   );
 }

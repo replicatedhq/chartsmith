@@ -12,7 +12,7 @@ export function EditorNav({ view, onViewChange }: EditorNavProps) {
   const { theme } = useTheme();
   
   return (
-    <div className={`h-12 border-b flex items-center px-4 ${
+    <div className={`h-12 min-h-[48px] border-b flex items-center px-4 ${
       theme === 'dark' 
         ? 'bg-dark-surface border-dark-border' 
         : 'bg-white border-gray-200'

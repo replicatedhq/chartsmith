@@ -29,7 +29,6 @@ export function SideNav({
   onToggleFileTree
 }: SideNavProps) {
   const { theme } = useTheme();
-  const isRecommendationsPage = location.pathname === '/recommendations';
 
   return (
     <nav className={`w-16 flex-shrink-0 ${theme === 'dark' ? 'bg-dark-surface border-dark-border' : 'bg-light-surface border-light-border'} border-r flex flex-col justify-between`}>
@@ -45,18 +44,7 @@ export function SideNav({
           >
             <Home className="w-5 h-5" />
           </Link>
-        </Tooltip>          {isRecommendationsPage && (
-            <div className="mt-4">
-              <Tooltip content="Back to Chart">
-                <Link
-                  href="/editor"
-                  className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors text-neutral hover:${theme === 'dark' ? 'bg-dark-border/40' : 'bg-light-border/40'}`}
-                >
-                  <ArrowLeft className="w-5 h-5" />
-                </Link>
-              </Tooltip>
-            </div>
-          )}
+        </Tooltip>
 
         <div className="mt-8 w-full px-3">
           <div className={`border-t ${theme === 'dark' ? 'border-dark-border' : 'border-light-border'}`} />

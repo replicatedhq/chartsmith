@@ -5,16 +5,16 @@ import { FileNode, Message } from '@/components/editor/types';
 import { useEditorView } from '@/hooks/useEditorView';
 import { EditorLayout } from '@/components/editor/layout/EditorLayout';
 import { WorkspaceContainer } from '@/components/editor/workspace/WorkspaceContainer';
-import { useChartFiles } from '@/app/hooks/useChartFiles';
 import { ChatContainer } from '@/components/editor/chat/ChatContainer';
+import { useChartFiles } from '@/app/hooks/useChartFiles';
+
+import { useWorkspaceUI } from '@/contexts/WorkspaceUIContext';
 
 export default function EditorPage() {
+  const { isChatVisible, isFileTreeVisible } = useWorkspaceUI();
   const [messages, setMessages] = useState<Message[]>([]);
   const [editorContent, setEditorContent] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-
-  const isChatVisible = true;
-  const isFileTreeVisible = true;
 
   const {
     files,
