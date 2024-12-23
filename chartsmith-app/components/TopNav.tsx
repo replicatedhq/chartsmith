@@ -41,7 +41,7 @@ export function TopNav() {
           ? 'border-dark-border bg-dark-surface'
           : 'border-gray-200 bg-white'
       }`}>
-        <Link href="/" className={`flex items-center space-x-2 ${
+        <Link href="/" className={`flex items-center space-x-2 w-[240px] ${
           theme === 'dark' ? 'text-white' : 'text-gray-900'
         }`}>
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -89,7 +89,7 @@ export function TopNav() {
           </div>
         </div>
 
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-2 w-[240px] justify-end">
           <StatusDropdown
             label="Eval"
             items={evalItems}
