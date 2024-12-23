@@ -1,0 +1,31 @@
+database: chartsmith
+name: workspace
+schema:
+  postgres:
+    primaryKey:
+    - id
+    columns:
+    - name: id
+      type: text
+      constraints:
+        notNull: true
+    - name: created_at
+      type: timestamp
+      constraints:
+        notNull: true
+    - name: last_updated_at
+      type: timestamp
+    - name: name
+      type: text
+      constraints:
+        notNull: true
+    - name: created_by_user_id
+      type: text
+      constraints:
+        notNull: true
+    - name: created_type
+      type: text
+      constraints:
+        notNull: true
+    - name: prompt
+      type: text

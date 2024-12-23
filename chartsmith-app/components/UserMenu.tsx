@@ -38,7 +38,7 @@ export function UserMenu() {
       </button>
 
       {isOpen && (
-        <div className={`absolute right-0 mt-2 w-48 rounded-lg shadow-lg border py-1 z-50 ${
+        <div className={`absolute right-0 mt-2 w-64 rounded-lg shadow-lg border py-1 z-50 ${
           theme === 'dark'
             ? 'bg-dark-surface border-dark-border'
             : 'bg-white border-gray-200'

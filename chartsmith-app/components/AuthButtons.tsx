@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { UserMenu } from './UserMenu';
 
 export function AuthButtons() {
-  const { isAuthenticated, signIn } = useAuth();
+  const { isAuthenticated } = useAuth();
   const { theme } = useTheme();
   const router = useRouter();
 

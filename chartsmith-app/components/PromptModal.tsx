@@ -4,6 +4,9 @@ import React, { useEffect } from 'react';
 import { X, Sparkles } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { PromptInput } from './PromptInput';
+import { createWorkspaceFromPrompt } from '@/lib/workspace/actions/create-workspace-from-prompt';
+import { useSession } from '@/app/hooks/useSession';
+import { useRouter } from 'next/navigation';
 
 interface PromptModalProps {
   isOpen: boolean;
@@ -11,7 +14,9 @@ interface PromptModalProps {
 }
 
 export function PromptModal({ isOpen, onClose }: PromptModalProps) {
+  const { isSessionLoading, session } = useSession();
   const { theme } = useTheme();
+  const router = useRouter();
 
   const [error, setError] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
@@ -40,6 +45,11 @@ export function PromptModal({ isOpen, onClose }: PromptModalProps) {
     }
   }, [isOpen]);
 
+  console.log(isSessionLoading);
+  if (isSessionLoading) {
+    return null;
+  }
+
   const handleClose = () => {
     setError(null);
     setIsLoading(false);
@@ -47,7 +57,19 @@ export function PromptModal({ isOpen, onClose }: PromptModalProps) {
   };
 
   const createFromPrompt = async (prompt: string) => {
-    setIsLoading(true);
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      const workspaceId = await createWorkspaceFromPrompt(session!, "prompt", prompt);
+
+      router.push(`/workspace/${workspaceId}`);
+    } catch (err) {
+      console.error('Failed to create workspace:', err);
+      setError(err instanceof Error ? err.message : 'Failed to create workspace');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   if (!isOpen) return null;

@@ -1,5 +1,6 @@
 "use client"
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { GoogleUserProfile } from '@/lib/auth/types';
 
 interface User {
   id: string;
@@ -11,45 +12,63 @@ interface User {
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
-  signIn: () => void;
   signOut: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+function parseJwt(token: string) {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+      return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+    }).join(''));
+    return JSON.parse(jsonPayload);
+  } catch (e) {
+    return null;
+  }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
 
-  // Move localStorage access to useEffect to avoid SSR issues
   useEffect(() => {
-    const savedUser = localStorage.getItem('user');
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
+    // Check for session cookie
+    const cookies = document.cookie.split(';');
+    const sessionCookie = cookies.find(c => c.trim().startsWith('session='));
+
+    if (sessionCookie) {
+      const token = sessionCookie.split('=')[1];
+      const payload = parseJwt(token);
+
+      if (payload && payload.exp * 1000 > Date.now()) {
+        // Valid JWT that hasn't expired
+        setUser({
+          id: payload.sub,
+          name: payload.name,
+          email: payload.email,
+          avatar: payload.picture
+        });
+      } else {
+        // Invalid or expired token, clear the cookie
+        document.cookie = 'session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+      }
     }
   }, []);
 
-  const signIn = () => {
-    // Simulate Google sign in
-    const mockUser = {
-      id: '1',
-      name: 'John Doe',
-      email: 'john@example.com',
-      avatar: 'https://ui-avatars.com/api/?name=John+Doe&background=6a77fb&color=fff'
-    };
-    setUser(mockUser);
-    localStorage.setItem('user', JSON.stringify(mockUser));
-  };
-
   const signOut = () => {
     setUser(null);
-    localStorage.removeItem('user');
+    // Delete the session cookie by setting it to expire in the past
+    document.cookie = 'session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax';
+    // Redirect to home page after logout
+    window.location.href = '/';
   };
 
   return (
     <AuthContext.Provider value={{
       user,
       isAuthenticated: !!user,
-      signIn,
       signOut
     }}>
       {children}
@@ -64,3 +83,4 @@ export function useAuth() {
   }
   return context;
 }
+
