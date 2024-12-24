@@ -11,7 +11,8 @@ export async function listMessagesForWorkspace(workspaceID: string): Promise<Mes
             SELECT
                 workspace_chat.created_at,
                 workspace_chat.sent_by,
-                workspace_chat.content,
+                workspace_chat.prompt,
+                workspace_chat.response,
                 workspace_chat.is_complete
             FROM
                 workspace_chat
@@ -25,18 +26,29 @@ export async function listMessagesForWorkspace(workspaceID: string): Promise<Mes
       return [];
     }
 
-    const messages: Message[] = result.rows.map((row: {
-      sent_by: string;
-      content: string;
-      created_at: Date;
-    }) => {
-      return {
-        role: row.sent_by === "user" ? "user" : "assistant",
-        content: row.content,
+    // each chat is a user message, and if there is a response that is the assistant message
+    const messages: Message[] = [];
+
+    for (let i = 0; i < result.rows.length; i++) {
+      const row = result.rows[i];
+
+      const userMessage: Message = {
+        role: "user",
+        content: row.prompt,
         changes: undefined,
         fileChanges: undefined
       };
-    });
+      messages.push(userMessage);
+
+      if (row.response) {
+        messages.push({
+          role: "assistant",
+          content: row.response,
+          changes: undefined,
+          fileChanges: undefined
+        });
+      }
+    }
 
     return messages;
   } catch (err) {

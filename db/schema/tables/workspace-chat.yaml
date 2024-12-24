@@ -13,6 +13,10 @@ schema:
       type: text
       constraints:
         notNull: true
+    - name: is_initial_message
+      type: boolean
+      constraints:
+        notNull: true
     - name: created_at
       type: timestamp
       constraints:
@@ -21,10 +25,12 @@ schema:
       type: text
       constraints:
         notNull: true
-    - name: content
+    - name: prompt
       type: text
       constraints:
         notNull: true
+    - name: response
+      type: text
     - name: is_complete
       type: boolean
       constraints:

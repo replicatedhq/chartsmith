@@ -32,9 +32,9 @@ export async function createWorkspace(name: string, createdType: string, prompt:
       let chatId: string = srs.default({ length: 12, alphanumeric: true });
       if (createdType === "prompt") {
         await client.query(
-          `INSERT INTO workspace_chat (id, workspace_id, created_at, sent_by, content, is_complete)
-          VALUES ($1, $2, now(), $3, $4, true)`,
-          [chatId, id, "user", prompt]
+          `INSERT INTO workspace_chat (id, workspace_id, created_at, sent_by, prompt, response, is_complete, is_initial_message)
+          VALUES ($1, $2, now(), $3, $4, null, false, true)`,
+          [chatId, id, userId, prompt]
         );
       }
 
