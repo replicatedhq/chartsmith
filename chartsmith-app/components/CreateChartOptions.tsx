@@ -18,7 +18,7 @@ export function CreateChartOptions() {
   const { theme } = useTheme();
   const router = useRouter();
   const fileInputRef = React.useRef<HTMLInputElement>(null);
-  const [showReplicatedModal, setShowReplicatedModal] = useState(false);
+  const setShowReplicatedModal = useState(false)[1];
   const [showPromptModal, setShowPromptModal] = useState(false);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {

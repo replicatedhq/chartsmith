@@ -4,8 +4,8 @@ import { FileBrowser } from '../FileBrowser';
 import { RenderedFileBrowser } from '../RenderedFileBrowser';
 import { CodeEditor } from '../CodeEditor';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { FileNode } from '../types';
 import { EditorView } from '../../../hooks/useEditorView';
+import { FileNode } from '@/lib/types/files';
 
 interface WorkspaceContainerProps {
   view: EditorView;
@@ -16,7 +16,7 @@ interface WorkspaceContainerProps {
   onFileSelect: (file: FileNode) => void;
   onFileDelete: (path: string) => void;
   editorContent: string;
-  onEditorChange?: (value: string | undefined) => void;
+  onEditorChange: (value: string | undefined) => void;
   isFileTreeVisible: boolean;
 }
 
@@ -40,14 +40,14 @@ export function WorkspaceContainer({
       <div className="flex-1 flex min-h-0">
         {isFileTreeVisible && (
           view === 'source' ? (
-            <FileBrowser 
+            <FileBrowser
               nodes={files}
               onFileSelect={onFileSelect}
               onFileDelete={onFileDelete}
               selectedFile={selectedFile}
             />
           ) : (
-            <RenderedFileBrowser 
+            <RenderedFileBrowser
               nodes={renderedFiles}
               onFileSelect={onFileSelect}
               selectedFile={selectedFile}
@@ -56,11 +56,11 @@ export function WorkspaceContainer({
         )}
         <div className={`w-px ${theme === 'dark' ? 'bg-dark-border' : 'bg-gray-200'} flex-shrink-0`} />
         <div className="flex-1 min-w-0 w-full">
-          <CodeEditor 
-            file={selectedFile} 
+          <CodeEditor
+            file={selectedFile}
             theme={theme}
             value={editorContent}
-            onChange={view === 'source' ? onEditorChange : undefined}
+            onChange={onEditorChange}
           />
         </div>
       </div>

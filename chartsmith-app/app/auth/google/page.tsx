@@ -1,13 +1,13 @@
-'use client'
+"use client"
 
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Loader2 } from "lucide-react"
 import { useToast } from "@/components/toast/use-toast"
 import { Card } from "@/components/ui/Card"
 import { exchangeGoogleCodeForSession } from "@/lib/auth/actions/exchange-google-code"
 
-export default function GoogleCallbackPage() {
+function GoogleCallback() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const { toast } = useToast()
@@ -17,23 +17,19 @@ export default function GoogleCallbackPage() {
     const code = searchParams.get('code')
 
     if (!code) {
-      // No code provided, redirect to error page
       router.push('/auth/error')
       return
     }
 
-    // Google callback page
     if (!exchangeComplete.current) {
       exchangeComplete.current = true
 
       exchangeGoogleCodeForSession(code)
       .then(jwt => {
-        // save the session to a cookie
         const expires = new Date();
         expires.setDate(expires.getDate() + 7);
         document.cookie = `session=${jwt}; expires=${expires.toUTCString()}; path=/; SameSite=Lax`
         
-        // Force a page reload to ensure all components re-render with the new auth state
         window.location.href = '/';
       })
       .catch(error => {
@@ -58,5 +54,22 @@ export default function GoogleCallbackPage() {
         </div>
       </Card>
     </div>
+  )
+}
+
+export default function GoogleCallbackPage() {
+  return (
+    <Suspense fallback={
+      <div className="container mx-auto flex items-center justify-center min-h-screen">
+        <Card className="w-full max-w-md p-6">
+          <div className="flex flex-col items-center justify-center space-y-4 text-center">
+            <Loader2 className="h-6 w-6 animate-spin" />
+            <p>Loading...</p>
+          </div>
+        </Card>
+      </div>
+    }>
+      <GoogleCallback />
+    </Suspense>
   )
 }

@@ -2,16 +2,13 @@ import React from 'react';
 import {
   Home,
   FolderKanban,
-  Settings,
-  HelpCircle,
   Lightbulb,
   MessageSquare,
-  ArrowLeft,
   FileJson
 } from 'lucide-react';
 import { UserMenu } from './UserMenu';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useRouter, usePathname } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { Tooltip } from './ui/Tooltip';
 import Link from 'next/link';
 

@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useEffect } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import { X, Sparkles } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { PromptInput } from './PromptInput';
@@ -21,6 +21,12 @@ export function PromptModal({ isOpen, onClose }: PromptModalProps) {
   const [error, setError] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
 
+  const handleClose = useCallback(() => {
+    setError(null);
+    setIsLoading(false);
+    onClose();
+  }, [onClose]);
+
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -35,7 +41,7 @@ export function PromptModal({ isOpen, onClose }: PromptModalProps) {
     return () => {
       document.removeEventListener('keydown', handleEscape);
     };
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, handleClose]);
 
   // Reset state when modal closes
   useEffect(() => {
@@ -45,16 +51,9 @@ export function PromptModal({ isOpen, onClose }: PromptModalProps) {
     }
   }, [isOpen]);
 
-  console.log(isSessionLoading);
   if (isSessionLoading) {
     return null;
   }
-
-  const handleClose = () => {
-    setError(null);
-    setIsLoading(false);
-    onClose();
-  };
 
   const createFromPrompt = async (prompt: string) => {
     try {

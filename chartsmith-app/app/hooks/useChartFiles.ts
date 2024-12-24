@@ -1,7 +1,7 @@
 "use client"
 
 import { FileNode } from '@/lib/types/files';
-import { Session } from '@/lib/types/session';
+
 import { convertFilesToTree } from '@/lib/utils/files/convert';
 import { findFileByPath } from '@/lib/utils/files/find';
 import { deleteFile, updateFileContent } from '@/lib/utils/files/update';
@@ -15,12 +15,12 @@ interface UseChartFilesOptions {
 }
 
 export function useChartFiles(props: UseChartFilesOptions) {
-  const { isSessionLoading, session } = useSession();
+  const { session } = useSession();
   const [files, setFiles] = useState<FileNode[]>([]);
   const [selectedFile, setSelectedFile] = useState<FileNode | undefined>();
 
   useEffect(() => {
-    getInitialWorkspaceFiles(props.workspaceID).then(setFiles);
+    getInitialWorkspaceFiles().then(setFiles);
   }, [session]);
 
   const importFiles = useCallback((fileMap: Record<string, string>) => {

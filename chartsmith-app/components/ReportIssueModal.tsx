@@ -80,7 +80,7 @@ export function ReportIssueModal({ isOpen, onClose, message }: ReportIssueModalP
             <label className={`block text-sm font-medium mb-2 ${
               theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
             }`}>
-              What's wrong with these changes?
+              What&apos;s wrong with these changes?
             </label>
             <textarea
               value={description}

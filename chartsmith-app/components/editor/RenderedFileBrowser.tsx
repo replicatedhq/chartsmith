@@ -2,9 +2,9 @@
 
 import React, { useState } from 'react';
 import { FileText, ChevronRight, ChevronDown } from 'lucide-react';
-import { FileNode } from './types';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useValuesScenarios } from '@/app/contexts/ValuesScenariosContext';
+import { FileNode } from '@/lib/types/files';
 
 interface RenderedFileBrowserProps {
   nodes: FileNode[];
@@ -43,7 +43,7 @@ export function RenderedFileBrowser({ nodes, onFileSelect, selectedFile }: Rende
       <div className="flex-1 overflow-auto p-2">
         <div className="space-y-1">
           {[{ id: 'default', name: 'Default values.yaml', enabled: true }, ...scenarios]
-            .filter(scenario => scenario.enabled !== false)
+            .filter(scenario => 'enabled' in scenario ? scenario.enabled !== false : true)
             .map((scenario) => (
             <div key={scenario.id}>
               <button

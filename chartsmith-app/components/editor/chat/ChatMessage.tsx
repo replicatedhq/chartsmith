@@ -3,8 +3,8 @@ import { Message } from '../types';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { ChatActions } from './ChatActions';
 import { ChatChanges } from './ChatChanges';
-import { ReportIssueModal } from '@/components/ReportIssueModal';
 import { UndoConfirmationModal } from '@/components/UndoConfirmationModal';
+import { ReportIssueModal } from '@/components/ReportIssueModal';
 
 interface ChatMessageProps {
   message: Message;

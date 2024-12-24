@@ -2,16 +2,15 @@ import React, { useState } from 'react';
 import { RotateCcw, AlertTriangle } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { Message } from './types';
-import { ReportIssueModal } from '../modals/ReportIssueModal';
-import { UndoConfirmationModal } from '../modals/UndoConfirmationModal';
+import { ReportIssueModal } from '../ReportIssueModal';
+import { UndoConfirmationModal } from '../UndoConfirmationModal';
 
 interface ChatMessageProps {
   message: Message;
   onUndo?: () => void;
-  onReport?: () => void;
 }
 
-export function ChatMessage({ message, onUndo, onReport }: ChatMessageProps) {
+export function ChatMessage({ message, onUndo }: ChatMessageProps) {
   const { theme } = useTheme();
   const isAssistant = message.role === 'assistant';
   const [showReportModal, setShowReportModal] = useState(false);

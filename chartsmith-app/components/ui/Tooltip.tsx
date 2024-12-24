@@ -5,10 +5,9 @@ import React, { useState } from 'react';
 interface TooltipProps {
   content: string;
   children: React.ReactNode;
-  position?: 'right';
 }
 
-export function Tooltip({ content, children, position = 'right' }: TooltipProps) {
+export function Tooltip({ content, children }: TooltipProps) {
   const [isVisible, setIsVisible] = useState(false);
 
   return (

@@ -25,13 +25,16 @@ export async function listMessagesForWorkspace(workspaceID: string): Promise<Mes
       return [];
     }
 
-    const messages: Message[] = result.rows.map((row: any) => {
+    const messages: Message[] = result.rows.map((row: {
+      sent_by: string;
+      content: string;
+      created_at: Date;
+    }) => {
       return {
         role: row.sent_by === "user" ? "user" : "assistant",
         content: row.content,
-        changes: null,
-        fileChanges: null,
-        timestamp: row.created_at
+        changes: undefined,
+        fileChanges: undefined
       };
     });
 

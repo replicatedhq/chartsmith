@@ -1,30 +1,26 @@
 "use client"
 
 import React, { useState, useEffect } from 'react';
-import { FileNode, Message } from '@/components/editor/types';
 import { useEditorView } from '@/hooks/useEditorView';
 import { EditorLayout } from '@/components/editor/layout/EditorLayout';
 import { WorkspaceContainer } from '@/components/editor/workspace/WorkspaceContainer';
 import { ChatContainer } from '@/components/editor/chat/ChatContainer';
 import { useChartFiles } from '@/app/hooks/useChartFiles';
-
 import { useWorkspaceUI } from '@/contexts/WorkspaceUIContext';
 import { useParams } from 'next/navigation';
 import { useSession } from '@/app/hooks/useSession';
 import { getWorkspaceMessagesAction } from '@/lib/workspace/actions/get-workspace-messages';
-
+import { Message } from '@/components/editor/types';
+import { FileNode } from '@/lib/types/files';
 
 export default function EditorPage() {
   const params = useParams();
-  const { isSessionLoading, session } = useSession();
+  const { session } = useSession();
   const { isChatVisible, isFileTreeVisible } = useWorkspaceUI();
   const [messages, setMessages] = useState<Message[]>([]);
-  const [editorContent, setEditorContent] = useState('');
+  const [editorContent, setEditorContent] = useState<string>('');
   const [isTyping, setIsTyping] = useState(false);
-
-  if (!params.id) {
-    return <div>Workspace not found</div>;
-  }
+  const { view, toggleView, updateFileSelection } = useEditorView();
 
   const {
     files,
@@ -32,7 +28,6 @@ export default function EditorPage() {
     selectedFile,
     setSelectedFile,
     updateFile,
-    importFiles
   } = useChartFiles({
     debug: true,
     workspaceID: params.id as string,
@@ -40,10 +35,7 @@ export default function EditorPage() {
 
   const handleSendMessage = async (message: string) => {
     if (isTyping) return;
-
-    // Add user message
     setMessages(prev => [...prev, { role: 'user', content: message }]);
-
     setIsTyping(true);
   };
 
@@ -58,14 +50,10 @@ export default function EditorPage() {
     }
   };
 
-  // load the initial messages
   useEffect(() => {
-    if (!session) {
-      return;
-    }
-
+    if (!session || !params.id) return;
     getWorkspaceMessagesAction(session, params.id as string).then(setMessages);
-  }, [session]);
+  }, [session, params.id]);
 
   useEffect(() => {
     if (selectedFile && selectedFile.path) {
@@ -73,10 +61,7 @@ export default function EditorPage() {
     }
   }, [editorContent, selectedFile, updateFile]);
 
-  // Render templates for preview
   const renderedFiles: FileNode[] = [];
-
-  const { view, toggleView, updateFileSelection, viewState } = useEditorView();
 
   const handleViewChange = () => {
     const newView = view === 'source' ? 'rendered' : 'source';
@@ -114,7 +99,7 @@ export default function EditorPage() {
           }
         }}
         editorContent={editorContent}
-        onEditorChange={setEditorContent}
+        onEditorChange={(value) => setEditorContent(value ?? '')}
         isFileTreeVisible={isFileTreeVisible}
       />
     </EditorLayout>

@@ -1,27 +1,28 @@
 interface Params {
   isLoaded: boolean;
   DBUri: string;
-
   authMethod?: string;
+  DB_URI: string;
 }
 
-let params: Params = {
+const params: Params = {
   isLoaded: false,
-  DBUri: process.env["CHARTSMITH_PG_URI"] || process.env["DB_URI"]!
+  DBUri: process.env["CHARTSMITH_PG_URI"] || process.env["DB_URI"]!,
+  DB_URI: process.env["CHARTSMITH_PG_URI"] || process.env["DB_URI"]!
 };
 
 export async function loadParams() {
   params.isLoaded = true;
 }
 
-// return params, if empty will try to get
-export async function getParam(key: string): Promise<any> {
+export async function getParam(key: keyof Params): Promise<string> {
   if (!params.isLoaded) {
     await loadParams();
   }
 
   switch (key) {
     case "DB_URI":
+    case "DBUri":
       return params.DBUri;
     default:
       throw new Error(`unknown param ${key}`);

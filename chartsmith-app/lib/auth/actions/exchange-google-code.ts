@@ -2,7 +2,6 @@
 
 import { fetchGoogleProfile } from "../client"
 import { createSession, sessionToken } from "../session";
-import { GoogleUserProfile } from "../types"
 import { upsertUser } from "../user";
 
 export async function exchangeGoogleCodeForSession(code: string): Promise<string> {

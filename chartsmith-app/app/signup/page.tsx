@@ -1,12 +1,10 @@
 "use client"
 
 import React from 'react';
-import { HomeHeader } from '@/components/HomeHeader';
 import { GoogleButton } from '@/components/GoogleButton';
 import { useTheme } from '@/contexts/ThemeContext';
-import { AuthButtons } from '@/components/AuthButtons';
 
-export default function LoginPage() {
+export default function SignupPage() {
   const { theme } = useTheme();
 
   return (
@@ -35,12 +33,12 @@ export default function LoginPage() {
               <span className={`text-sm ${
                 theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
               }`}>
-                New to ChartSmith?{' '}
+                Already have an account?{' '}
                 <a
-                  href="/signup"
+                  href="/login"
                   className="font-medium text-primary hover:text-primary/90 transition-colors"
                 >
-                  Get started
+                  Sign in
                 </a>
               </span>
             </div>

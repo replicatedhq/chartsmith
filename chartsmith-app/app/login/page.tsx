@@ -1,10 +1,8 @@
 "use client"
 
 import React from 'react';
-import { HomeHeader } from '@/components/HomeHeader';
 import { GoogleButton } from '@/components/GoogleButton';
 import { useTheme } from '@/contexts/ThemeContext';
-import { AuthButtons } from '@/components/AuthButtons';
 
 export default function LoginPage() {
   const { theme } = useTheme();

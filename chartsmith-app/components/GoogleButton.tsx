@@ -2,6 +2,7 @@ import React from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useToast } from './toast/use-toast';
 import { getGoogleAuthUrl } from '@/lib/auth/google';
+import Image from 'next/image';
 
 export function GoogleButton() {
   const { theme } = useTheme();
@@ -31,7 +32,7 @@ export function GoogleButton() {
           : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
       } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary`}
     >
-      <img
+      <Image
         src="https://www.google.com/favicon.ico"
         alt="Google"
         className="w-5 h-5"

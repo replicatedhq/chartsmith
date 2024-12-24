@@ -169,7 +169,7 @@ export function CreateChartModal({ isOpen, onClose }: CreateChartModalProps) {
                 <textarea
                   value={promptInput}
                   onChange={(e) => setPromptInput(e.target.value)}
-                  placeholder="Example: I need a Helm chart for a web application with Redis cache and PostgreSQL database..."
+                  placeholder="Example: I need a Helm chart for a web application with Redis cache and PostgreSQL database&hellip;"
                   className={`w-full px-4 py-3 rounded-lg border resize-none h-32 ${
                     theme === 'dark'
                       ? 'bg-dark border-dark-border text-gray-300 placeholder-gray-500'
@@ -193,7 +193,7 @@ export function CreateChartModal({ isOpen, onClose }: CreateChartModalProps) {
               <p className={`mt-2 text-sm ${
                 theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
               }`}>
-                Provide details about your application's architecture and requirements
+                Provide details about your application&apos;s architecture and requirements
               </p>
             </div>
           )}

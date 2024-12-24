@@ -9,9 +9,10 @@ interface DeleteFileModalProps {
   onClose: () => void;
   filePath: string;
   isRequired?: boolean;
+  onConfirm: () => void;
 }
 
-export function DeleteFileModal({ isOpen, onClose, filePath, isRequired }: DeleteFileModalProps) {
+export function DeleteFileModal({ isOpen, onClose, filePath, isRequired, onConfirm }: DeleteFileModalProps) {
   const { theme } = useTheme();
 
   if (!isOpen) return null;
@@ -75,10 +76,7 @@ export function DeleteFileModal({ isOpen, onClose, filePath, isRequired }: Delet
           </button>
           {!isRequired && (
             <button
-              onClick={() => {
-                // Handle delete
-                onClose();
-              }}
+              onClick={onConfirm}
               className="px-4 py-2 text-sm text-white bg-error hover:bg-error/90 rounded-lg transition-colors"
             >
               Delete

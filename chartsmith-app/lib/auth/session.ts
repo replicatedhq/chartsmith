@@ -17,7 +17,7 @@ export async function createSession(user: User): Promise<Session> {
     const id = srs.default({ length: 12, alphanumeric: true });
     const db = getDB(await getParam("DB_URI"));
 
-    const result = await db.query(
+    await db.query(
       `
             INSERT INTO session (id, user_id, expires_at)
             VALUES ($1, $2, now() + interval '24 hours')
@@ -95,9 +95,9 @@ export async function findSession(token: string): Promise<Session | undefined> {
       user,
       expiresAt: row.expires_at
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
     // if the error contains "jwt expired" just return undefined
-    if (err.message.includes("jwt expired")) {
+    if (err instanceof Error && err.message.includes("jwt expired")) {
       return;
     }
 

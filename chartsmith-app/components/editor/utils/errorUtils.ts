@@ -1,4 +1,4 @@
-import { validateYAMLIndentation } from '../../../utils/yaml';
+import { validateYAMLIndentation } from '@/utils/yaml';
 
 export function findErrorLines(content: string): number[] {
   const errors = validateYAMLIndentation(content);

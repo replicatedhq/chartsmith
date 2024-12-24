@@ -25,7 +25,7 @@ export function StatusDropdown({ label, items, showStatus = true, theme = 'dark'
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [showWorkInCliModal, setShowWorkInCliModal] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const timeoutRef = useRef<number>();
+  const timeoutRef = useRef<number | undefined>(undefined);
 
   const handleMouseEnter = () => {
     if (timeoutRef.current) {

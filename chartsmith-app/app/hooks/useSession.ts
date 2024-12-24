@@ -44,7 +44,7 @@ export const useSession = (redirectIfNotLoggedIn: boolean = true) => {
     };
 
     validate(token);
-  }, [router]);
+  }, [router, redirectIfNotLoggedIn]);
 
   return {
     isSessionLoading: isLoading,

@@ -63,15 +63,6 @@ export async function createWorkspace(name: string, createdType: string, prompt:
   }
 }
 
-async function insertWorkspaceFile(workspaceId: string, name: string, path: string, content: string): Promise<void> {
-  const db = getDB(await getParam("DB_URI"));
-  return db.query(
-    `INSERT INTO workspace_file (workspace_id, file_path, revision_number, created_at, last_updated_at, content, name)
-    VALUES ($1, $2, 0, now(), now(), $3, $4)
-      `,
-    [workspaceId, path, content, name]
-  );
-}
 
 function getInitialWorkspaceFiles(): FileNode[] {
   return [

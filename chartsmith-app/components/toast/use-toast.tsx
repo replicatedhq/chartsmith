@@ -1,10 +1,7 @@
 // Inspired by react-hot-toast library
 import * as React from "react"
 
-import type {
-  ToastActionElement,
-  ToastProps,
-} from "./toast"
+import type { ToastProps } from "./toast"
 
 const TOAST_LIMIT = 1
 const TOAST_REMOVE_DELAY = 1000000
@@ -24,7 +21,9 @@ const actionTypes = {
   UPDATE_TOAST: "UPDATE_TOAST",
   DISMISS_TOAST: "DISMISS_TOAST",
   REMOVE_TOAST: "REMOVE_TOAST",
-} as const
+} as const;
+
+type ActionType = typeof actionTypes;
 
 let count = 0
 
@@ -32,8 +31,6 @@ function genId() {
   count = (count + 1) % Number.MAX_VALUE
   return count.toString()
 }
-
-type ActionType = typeof actionTypes
 
 type Action =
   | {
@@ -67,7 +64,7 @@ const addToRemoveQueue = (toastId: string) => {
   const timeout = setTimeout(() => {
     toastTimeouts.delete(toastId)
     dispatch({
-      type: "REMOVE_TOAST",
+      type: actionTypes.REMOVE_TOAST,
       toastId: toastId,
     })
   }, TOAST_REMOVE_DELAY)
@@ -148,13 +145,12 @@ function toast({ ...props }: Toast) {
 
   const update = (props: ToasterToast) =>
     dispatch({
-      type: "UPDATE_TOAST",
+      type: actionTypes.UPDATE_TOAST,
       toast: { ...props, id },
     })
-  const dismiss = () => dispatch({ type: "DISMISS_TOAST", toastId: id })
+  const dismiss = () => dispatch({      type: actionTypes.DISMISS_TOAST, toastId: id })
 
-  dispatch({
-    type: "ADD_TOAST",
+  dispatch({      type: actionTypes.ADD_TOAST,
     toast: {
       ...props,
       id,

@@ -1,8 +1,8 @@
 import React from 'react';
 import { FileTree } from './FileTree';
-import { FileNode } from './types';
 import { useTheme } from '../../contexts/ThemeContext';
 import { FolderPlus, FilePlus } from 'lucide-react';
+import { FileNode } from '@/lib/types/files';
 
 interface FileBrowserProps {
   nodes: FileNode[];
@@ -26,8 +26,8 @@ export function FileBrowser({ nodes, onFileSelect, onFileDelete, selectedFile }:
 
   return (
     <div className={`w-64 h-full border-r flex-shrink-0 flex flex-col ${
-      theme === 'dark' 
-        ? 'bg-dark-surface border-dark-border' 
+      theme === 'dark'
+        ? 'bg-dark-surface border-dark-border'
         : 'bg-white border-gray-200'
     }`}>
       <div className={`p-2 text-sm border-b flex items-center justify-between ${
@@ -58,7 +58,7 @@ export function FileBrowser({ nodes, onFileSelect, onFileDelete, selectedFile }:
         </div>
       </div>
       <div className="flex-1 overflow-auto p-2">
-        <FileTree 
+        <FileTree
           nodes={nodes}
           onFileSelect={onFileSelect}
           onFileDelete={onFileDelete}

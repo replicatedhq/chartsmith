@@ -2,7 +2,7 @@
 
 import { FileNode } from "@/lib/types/files";
 
-export async function getInitialWorkspaceFiles(workspaceID: string): Promise<FileNode[]> {
+export async function getInitialWorkspaceFiles(): Promise<FileNode[]> {
   const staticFiles: FileNode[] = [
     {
       name: 'Chart.yaml',

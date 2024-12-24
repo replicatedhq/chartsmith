@@ -23,7 +23,8 @@ export function convertFilesToTree(files: FileMap, options: FileTreeOptions = {}
           name: part,
           type: 'folder',
           children: [],
-          path: folderPath
+          path: folderPath,
+          content: ''  // Adding required content property for folders
         };
         current.push(folder);
       }

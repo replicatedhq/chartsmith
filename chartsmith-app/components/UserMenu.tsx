@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { LogOut } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
+import Image from 'next/image';
 
 export function UserMenu() {
   const { user, signOut } = useAuth();
@@ -30,7 +31,7 @@ export function UserMenu() {
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-2"
       >
-        <img
+        <Image
           src={user.avatar}
           alt={user.name}
           className="w-8 h-8 rounded-full"

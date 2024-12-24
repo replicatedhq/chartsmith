@@ -2,7 +2,7 @@ import React from 'react';
 import { useTheme } from '../../../contexts/ThemeContext';
 
 interface ChatChangesProps {
-  changes: string;
+  changes?: string;
 }
 
 export function ChatChanges({ changes }: ChatChangesProps) {

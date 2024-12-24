@@ -13,7 +13,7 @@ export async function upsertUser(email: string, name: string, imageUrl: string):
     const db = getDB(await getParam("DB_URI"));
     const id = srs.default({ length: 12, alphanumeric: true });
 
-    const result = await db.query(
+    await db.query(
       `INSERT INTO chartsmith_user (id, email, name, image_url, created_at, last_login_at, last_active_at)
       VALUES ($1, $2, $3, $4, now(), now(), now())
         `,

@@ -1,38 +1,38 @@
-const { Pool } = require("pg");
-const url = require("url");
-const querystring = require("querystring");
+import { Pool, PoolConfig } from 'pg';
+import { parse } from 'url';
+import { parse as parseQueryString } from 'querystring';
 
-let pool: any = null;
+let pool: Pool | null = null;
 
-export function getDB(uri: string): any {
+export function getDB(uri: string): Pool {
   if (pool) {
     return pool;
   }
 
-  const params = url.parse(uri);
-  const auth = params.auth.split(":");
+  const params = parse(uri);
+  const auth = params.auth?.split(":") || [];
 
-  let ssl: any = {
+  let ssl: boolean | { rejectUnauthorized: boolean } = {
     rejectUnauthorized: false
   };
-  const parsedQuery = querystring.parse(params.query);
+  const parsedQuery = parseQueryString(params.query || '');
   if (parsedQuery.sslmode === "disable") {
     ssl = false;
   }
 
-  const p = new Pool({
+  const config: PoolConfig = {
     user: auth[0],
     password: auth[1],
-    host: params.hostname,
-    port: params.port,
-    database: params.pathname.split("/")[1],
-    ssl: ssl,
+    host: params.hostname || '',
+    port: parseInt(params.port || '5432'),
+    database: params.pathname?.split("/")[1] || '',
+    ssl,
     max: 20,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 2000
-  });
+  };
 
-  pool = p;
+  pool = new Pool(config);
 
   return pool;
 }

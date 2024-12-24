@@ -34,7 +34,6 @@ export function CodeEditor({ file, theme = 'light', value, onChange }: CodeEdito
           lineDecorationsWidth: 5,
           renderLineHighlight: 'all',
           folding: true,
-          scrollBeyondLastLine: false,
           wordWrap: 'on',
           wrappingIndent: 'indent',
           fixedOverflowWidgets: true,

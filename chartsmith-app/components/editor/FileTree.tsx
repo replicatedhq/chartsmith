@@ -1,18 +1,17 @@
 import React from 'react';
 import { FolderOpen, FileText, ChevronDown, ChevronRight, Trash2 } from 'lucide-react';
-import { FileNode } from './types';
 import { useTheme } from '../../contexts/ThemeContext';
 import { DeleteFileModal } from '../DeleteFileModal';
+import { FileNode } from '@/lib/types/files';
 
 interface FileTreeProps {
   nodes: FileNode[];
-  level?: number;
   onFileSelect: (file: FileNode) => void;
   onFileDelete: (path: string) => void;
   selectedFile?: FileNode;
 }
 
-export function FileTree({ nodes, level = 0, onFileSelect, onFileDelete, selectedFile }: FileTreeProps) {
+export function FileTree({ nodes, onFileSelect, onFileDelete, selectedFile }: FileTreeProps) {
   const { theme } = useTheme();
   const [expandedFolders, setExpandedFolders] = React.useState<Set<string>>(
     new Set(['templates'])
@@ -31,16 +30,16 @@ export function FileTree({ nodes, level = 0, onFileSelect, onFileDelete, selecte
   // Convert flat file list into tree structure
   const buildFileTree = (files: FileNode[]) => {
     const tree: Record<string, FileNode & { children: FileNode[] }> = {};
-    
+
     // First create folder nodes
     files.forEach(file => {
       const parts = file.path.split('/');
       let currentPath = '';
-      
+
       parts.slice(0, -1).forEach(part => {
         const parentPath = currentPath;
         currentPath = currentPath ? `${currentPath}/${part}` : part;
-        
+
         if (!tree[currentPath]) {
           tree[currentPath] = {
             name: part,
@@ -49,7 +48,7 @@ export function FileTree({ nodes, level = 0, onFileSelect, onFileDelete, selecte
             children: [],
             content: ''
           };
-          
+
           if (parentPath && tree[parentPath]) {
             tree[parentPath].children.push(tree[currentPath]);
           }
@@ -163,8 +162,8 @@ export function FileTree({ nodes, level = 0, onFileSelect, onFileDelete, selecte
           </button>
         )}
       </div>
-      {node.type === 'folder' && 
-       node.children && 
+      {node.type === 'folder' &&
+       node.children &&
        expandedFolders.has(node.path) && (
         <div>
           {node.children
