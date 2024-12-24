@@ -13,6 +13,7 @@ import { Tooltip } from './ui/Tooltip';
 import Link from 'next/link';
 
 interface SideNavProps {
+  workspaceID: string;
   isChatVisible?: boolean;
   onToggleChat?: () => void;
   isFileTreeVisible?: boolean;
@@ -20,6 +21,7 @@ interface SideNavProps {
 }
 
 export function SideNav({
+  workspaceID,
   isChatVisible = true,
   onToggleChat,
   isFileTreeVisible = true,
@@ -95,7 +97,7 @@ export function SideNav({
         <div className="mt-2">
           <Tooltip content="View Recommendations">
             <Link
-              href="/recommendations"
+              href={`/workspace/${workspaceID}/recommendations`}
               className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors relative ${
                 usePathname() === '/recommendations'
                   ? `${theme === 'dark' ? 'bg-dark-border/60' : 'bg-light-border/60'} text-primary`

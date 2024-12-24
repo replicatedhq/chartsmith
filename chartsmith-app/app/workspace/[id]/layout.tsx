@@ -3,6 +3,7 @@
 import { SideNav } from '@/components/SideNav';
 import { useTheme } from '@/contexts/ThemeContext';
 import { WorkspaceUIProvider, useWorkspaceUI } from '@/contexts/WorkspaceUIContext';
+import { useParams } from 'next/navigation';
 import React from 'react';
 
 function WorkspaceLayoutContent({
@@ -11,6 +12,7 @@ function WorkspaceLayoutContent({
   children: React.ReactNode;
 }>) {
   const { theme } = useTheme();
+  const params = useParams();
   const { isChatVisible, setIsChatVisible, isFileTreeVisible, setIsFileTreeVisible } = useWorkspaceUI();
 
   const showSideNav = true;
@@ -18,6 +20,7 @@ function WorkspaceLayoutContent({
     <div className={`min-h-screen ${theme === 'dark' ? 'bg-dark' : 'bg-white'} flex w-full`}>
       {showSideNav && (
         <SideNav
+          workspaceID={params.id as string}
           isChatVisible={isChatVisible}
           onToggleChat={() => setIsChatVisible(!isChatVisible)}
           isFileTreeVisible={isFileTreeVisible}
