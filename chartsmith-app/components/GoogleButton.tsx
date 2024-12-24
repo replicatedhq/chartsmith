@@ -35,6 +35,8 @@ export function GoogleButton() {
       <Image
         src="https://www.google.com/favicon.ico"
         alt="Google"
+        width={120}
+        height={30}
         className="w-5 h-5"
       />
       Continue with Google
