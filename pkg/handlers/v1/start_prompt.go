@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/replicatedhq/chartsmith/api/pkg/prompt"
+	"github.com/replicatedhq/chartsmith/pkg/prompt"
 )
 
 type StartPromptRequest struct {

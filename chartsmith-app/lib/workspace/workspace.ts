@@ -15,14 +15,12 @@ export async function createWorkspace(name: string, createdType: string, prompt:
     try {
       await client.query('BEGIN');
 
-      // Create workspace
       await client.query(
         `INSERT INTO workspace (id, created_at, last_updated_at, name, created_by_user_id, created_type, prompt, current_revision_number)
         VALUES ($1, now(), now(), $2, $3, $4, $5, 0)`,
         [id, name, userId, createdType, prompt]
       );
 
-      // Insert all files in the same transaction
       for (const file of initialFiles) {
         await client.query(
           `INSERT INTO workspace_file (workspace_id, file_path, revision_number, created_at, last_updated_at, content, name)
@@ -31,16 +29,17 @@ export async function createWorkspace(name: string, createdType: string, prompt:
         );
       }
 
-      // add the first chat message
+      let chatId: string = srs.default({ length: 12, alphanumeric: true });
       if (createdType === "prompt") {
         await client.query(
-          `INSERT INTO workspace_chat (workspace_id, created_at, sent_by, content, is_complete)
-          VALUES ($1, now(), $2, $3, true)`,
-          [id, "user", prompt]
+          `INSERT INTO workspace_chat (id, workspace_id, created_at, sent_by, content, is_complete)
+          VALUES ($1, $2, now(), $3, $4, true)`,
+          [chatId, id, "user", prompt]
         );
       }
 
-      // Commit transaction
+      await client.query(`SELECT pg_notify('new_chat', $1)`, [chatId]);
+
       await client.query('COMMIT');
 
       return {
