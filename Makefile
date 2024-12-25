@@ -12,8 +12,6 @@ postgres:
 	    -d -p5433:5432 \
 	    postgres:16
 
-
-
 .PHONY: schema
 schema:
 	rm -rf ./db/generated-schema
