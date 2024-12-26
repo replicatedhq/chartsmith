@@ -29,3 +29,13 @@ build-worker:
 run-worker: build-worker
 	@echo "Running $(WORKER_BINARY_NAME)..."
 	@./$(WORKER_BUILD_DIR)/$(WORKER_BINARY_NAME) run --pg-uri="$(CHARTSMITH_PG_URI)"
+
+.PHONY: centrifugo
+centrifugo:
+	@echo "Starting centrifugo..."
+	docker run -d --rm \
+		--name centrifugo \
+		--ulimit nofile=262144:262144 \
+		-v ./hack/centrifugo:/centrifugo \
+		-p 8888:8000 centrifugo/centrifugo:v5 centrifugo \
+		-c config.json
