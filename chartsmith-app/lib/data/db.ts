@@ -12,20 +12,12 @@ export function getDB(uri: string): Pool {
   const params = parse(uri);
   const auth = params.auth?.split(":") || [];
 
-  // Determine SSL configuration
   let ssl: boolean | { rejectUnauthorized: boolean } = {
     rejectUnauthorized: false
   };
-
-  // Check environment variable for Postgres SSL
-  if (process.env.POSTGRES_SSL_DISABLE === 'true') {
+  const parsedQuery = parseQueryString(params.query || '');
+  if (parsedQuery.sslmode === "disable") {
     ssl = false;
-  } else {
-    // Check query parameters for SSL mode
-    const parsedQuery = parseQueryString(params.query || '');
-    if (parsedQuery.sslmode === "disable") {
-      ssl = false;
-    }
   }
 
   const config: PoolConfig = {
