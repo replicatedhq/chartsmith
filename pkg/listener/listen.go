@@ -22,7 +22,7 @@ func Listen(ctx context.Context) error {
 		fmt.Printf("Waiting for notification...\n")
 		notification, err := conn.WaitForNotification(ctx)
 		if err != nil {
-			return err
+			return fmt.Errorf("waiting for notification: %w", err)
 		}
 
 		switch notification.Channel {

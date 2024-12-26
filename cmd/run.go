@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 
 	"github.com/replicatedhq/chartsmith/pkg/listener"
@@ -34,12 +35,39 @@ func RunCmd() *cobra.Command {
 			sigs := make(chan os.Signal, 1)
 			signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 
-			go runWorker(ctx, v.GetString("pg-uri"))
+			var wg sync.WaitGroup
+			errChan := make(chan error, 1)
 
-			<-sigs
-			cancel()
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				if err := runWorker(ctx, v.GetString("pg-uri")); err != nil {
+					select {
+					case errChan <- err:
+					default:
+						// Prevent blocking if error channel is full
+					}
+				}
+			}()
 
-			return nil
+			go func() {
+				wg.Wait()
+				close(errChan)
+			}()
+
+			select {
+			case <-sigs:
+				cancel()
+				wg.Wait()
+				return nil
+			case err, ok := <-errChan:
+				if ok {
+					cancel()
+					wg.Wait()
+					return fmt.Errorf("worker error: %w", err)
+				}
+				return nil
+			}
 		},
 	}
 
@@ -53,11 +81,11 @@ func runWorker(ctx context.Context, pgURI string) error {
 		URI: pgURI,
 	}
 	if err := persistence.InitPostgres(pgOpts); err != nil {
-		return err
+		return fmt.Errorf("failed to initialize postgres connection: %w", err)
 	}
 
 	if err := listener.Listen(ctx); err != nil {
-		return err
+		return fmt.Errorf("failed to start listener: %w", err)
 	}
 
 	return nil
