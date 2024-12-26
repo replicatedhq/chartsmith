@@ -6,13 +6,7 @@ import { Session } from "@/lib/types/session";
 import { validateSession } from "@/lib/auth/actions/validate-session";
 
 export const useSession = (redirectIfNotLoggedIn: boolean = false) => {
-  const [session, setSession] = useState<Session | undefined>({
-    user: {
-      id: 'default-user',
-      email: 'default@example.com',
-      name: 'Default User'
-    }
-  } as Session);
+  const [session, setSession] = useState<Session | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
