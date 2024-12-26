@@ -23,10 +23,8 @@ Chartsmith is an AI-powered tool that helps you build better Helm charts.
 2. Set requisite environment variables:
 
 ```bash
-export CHARTSMITH_PG_URI=postgresql://user:password@localhost:5432/chartsmith
+export CHARTSMITH_PG_URI=postgresql://user:password@localhost:5432/chartsmith?sslmode=disable
 export ANTHROPIC_API_KEY=your_anthropic_api_key
-export POSTGRES_SSL_DISABLE=true #optional
-export NEXT_PUBLIC_MOCK_AUTH=true #optional
 ```
 
 3. Start the PostgreSQL database:
