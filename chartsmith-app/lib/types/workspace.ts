@@ -4,4 +4,6 @@ export interface Workspace {
   createdAt: Date;
   lastUpdatedAt: Date;
   name: string;
+
+  isInitialized: boolean;
 }

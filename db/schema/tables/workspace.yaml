@@ -33,3 +33,7 @@ schema:
       type: integer
       constraints:
         notNull: true
+    - name: is_initialized
+      type: boolean
+      constraints:
+        notNull: true

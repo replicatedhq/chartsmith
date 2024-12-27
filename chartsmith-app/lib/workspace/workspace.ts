@@ -16,8 +16,8 @@ export async function createWorkspace(name: string, createdType: string, prompt:
       await client.query('BEGIN');
 
       await client.query(
-        `INSERT INTO workspace (id, created_at, last_updated_at, name, created_by_user_id, created_type, prompt, current_revision_number)
-        VALUES ($1, now(), now(), $2, $3, $4, $5, 0)`,
+        `INSERT INTO workspace (id, created_at, last_updated_at, name, created_by_user_id, created_type, prompt, current_revision_number, is_initialized)
+        VALUES ($1, now(), now(), $2, $3, $4, $5, 0, false)`,
         [id, name, userId, createdType, prompt]
       );
 
@@ -46,7 +46,8 @@ export async function createWorkspace(name: string, createdType: string, prompt:
         id: id,
         createdAt: new Date(),
         lastUpdatedAt: new Date(),
-        name: name
+        name: name,
+        isInitialized: false
       };
     } catch (err) {
       // Rollback transaction on error
@@ -62,6 +63,47 @@ export async function createWorkspace(name: string, createdType: string, prompt:
   }
 }
 
+export async function getWorkspace(id: string): Promise<Workspace | undefined> {
+  try {
+    const db = getDB(await getParam("DB_URI"));
+    const result = await db.query(
+      `
+            SELECT
+                workspace.id,
+                workspace.created_at,
+                workspace.last_updated_at,
+                workspace.name,
+                workspace.created_by_user_id,
+                workspace.created_type,
+                workspace.prompt,
+                workspace.current_revision_number,
+                workspace.is_initialized
+            FROM
+                workspace
+            WHERE
+                workspace.id = $1
+        `,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return;
+    }
+
+    const row = result.rows[0];
+
+    return {
+      id: row.id,
+      createdAt: row.created_at,
+      lastUpdatedAt: row.last_updated_at,
+      name: row.name,
+      isInitialized: row.is_initialized
+    };
+  } catch (err) {
+    console.error(err);
+    throw err;
+  }
+}
 
 function getInitialWorkspaceFiles(): FileNode[] {
   return [
