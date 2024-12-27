@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useEditorView } from '@/hooks/useEditorView';
 import { EditorLayout } from '@/components/editor/layout/EditorLayout';
 import { WorkspaceContainer } from '@/components/editor/workspace/WorkspaceContainer';
@@ -16,6 +16,8 @@ import { Workspace } from '@/lib/types/workspace';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { Card } from '@/components/ui/Card';
 import { ChatMessage } from '@/components/editor/ChatMessage';
+import { getCentrifugoTokenAction } from '@/lib/centrifugo/actions/get-centrifugo-token-action';
+import { Centrifuge } from "centrifuge";
 
 export default function WorkspacePage() {
   const { workspace } = useWorkspace();
@@ -26,6 +28,10 @@ export default function WorkspacePage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [editorContent, setEditorContent] = useState<string>('');
   const [isTyping, setIsTyping] = useState(false);
+  const [centrifugoToken, setCentrifugoToken] = useState<string | null>(null);
+  const centrifugeRef = useRef<Centrifuge | null>(null);
+  const hasConnectedRef = useRef(false);
+
   const { view, toggleView, updateFileSelection } = useEditorView();
 
   const {
@@ -42,6 +48,11 @@ export default function WorkspacePage() {
   const renderedFiles: FileNode[] = [];
 
   useEffect(() => {
+    if (!session || !workspace) return;
+    getCentrifugoTokenAction(session, workspace.id).then(setCentrifugoToken);
+  }, [session, workspace]);
+
+  useEffect(() => {
     if (selectedFile && selectedFile.path) {
       updateFile(selectedFile.path, editorContent);
     }
@@ -52,6 +63,61 @@ export default function WorkspacePage() {
 
     getWorkspaceMessagesAction(session, params.id as string).then(setMessages);
   }, [session, workspace]);
+
+  useEffect(() => {
+    if (!centrifugoToken || !session || hasConnectedRef.current) {
+      return;
+    }
+
+    if (!centrifugeRef.current) {
+      centrifugeRef.current = new Centrifuge(process.env.NEXT_PUBLIC_CENTRIFUGO_ADDRESS!, {
+        debug: true,
+        token: centrifugoToken
+      });
+
+      const cf = centrifugeRef.current;
+
+      cf.on('connected', (ctx) => {
+        console.log('Connected to Centrifugo:', ctx);
+      });
+
+      cf.on('disconnected', (ctx) => {
+        console.log('Disconnected from Centrifugo:', ctx);
+      });
+
+      cf.on('error', (ctx) => {
+        console.error('Centrifugo error:', ctx);
+      });
+    }
+
+    const cf = centrifugeRef.current;
+    const channel = `workspace#${workspace?.id}`;
+   const sub = cf.newSubscription(channel);
+
+    sub.on("publication", (message: any) => {
+      console.log('Received message:', message.data);
+
+    });
+
+    sub.on('subscribed', (ctx) => {
+      console.log(`Subscribed to channel ${channel}:`, ctx);
+    });
+
+    sub.on('error', (ctx) => {
+      console.error(`Subscription error for channel ${channel}:`, ctx);
+    });
+
+    sub.subscribe();
+    cf.connect();
+    hasConnectedRef.current = true;
+
+    return () => {
+      hasConnectedRef.current = false;
+      cf.disconnect();
+      centrifugeRef.current = null;
+    };
+  }, [centrifugoToken, session]);
+
 
   const handleSendMessage = async (message: string) => {
     if (isTyping) return;
@@ -70,6 +136,7 @@ export default function WorkspacePage() {
     }
   };
 
+  console.log(centrifugoToken);
   const handleViewChange = () => {
     const newView = view === 'source' ? 'rendered' : 'source';
     const newFiles = newView === 'rendered' ? renderedFiles : files;
@@ -100,8 +167,6 @@ export default function WorkspacePage() {
       </EditorLayout>
     );
   }
-
-  console.log(messages);
 
   if (!workspace.isInitialized) {
     return (
