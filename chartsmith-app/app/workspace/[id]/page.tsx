@@ -48,9 +48,9 @@ export default function WorkspacePage() {
   const renderedFiles: FileNode[] = [];
 
   useEffect(() => {
-    if (!session || !workspace) return;
-    getCentrifugoTokenAction(session, workspace.id).then(setCentrifugoToken);
-  }, [session, workspace]);
+    if (!session) return;
+    getCentrifugoTokenAction(session).then(setCentrifugoToken);
+  }, [session]);
 
   useEffect(() => {
     if (selectedFile && selectedFile.path) {
@@ -91,7 +91,7 @@ export default function WorkspacePage() {
     }
 
     const cf = centrifugeRef.current;
-    const channel = `workspace#${workspace?.id}`;
+    const channel = `${workspace?.id}#${session.user.id}`;
    const sub = cf.newSubscription(channel);
 
     sub.on("publication", (message: any) => {

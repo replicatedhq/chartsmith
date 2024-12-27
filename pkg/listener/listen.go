@@ -49,7 +49,13 @@ func handleNewChatNotification(ctx context.Context, chatID string) error {
 		return nil
 	}
 
-	go llm.SendChatMessage(ctx, chatMessage)
+	go func() {
+		err := llm.SendChatMessage(ctx, chatMessage)
+		if err != nil {
+			fmt.Printf("Error sending chat message: %+v\n", err)
+		}
+
+	}()
 
 	return nil
 }
