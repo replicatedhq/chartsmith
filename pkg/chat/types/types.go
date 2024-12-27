@@ -1,14 +1,9 @@
 package types
 
-import "time"
-
 type Chat struct {
-	ID               string
-	WorkspaceID      string
-	IsInitialMessage bool
-	CreatedAt        time.Time
-	SentBy           string
-	Prompt           string
-	Response         string
-	IsComplete       bool
+	ID          string `json:"id"`
+	WorkspaceID string `json:"-"`
+	Prompt      string `json:"prompt"`
+	Response    string `json:"response"`
+	IsComplete  bool   `json:"is_complete"`
 }

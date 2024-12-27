@@ -1,5 +1,9 @@
 package types
 
+import (
+	chattypes "github.com/replicatedhq/chartsmith/pkg/chat/types"
+)
+
 type Config struct {
 	Address string
 	APIKey  string
@@ -21,9 +25,9 @@ type Event interface {
 var _ Event = ChatMessageUpdatedEvent{}
 
 type ChatMessageUpdatedEvent struct {
-	WorkspaceID string `json:"workspace_id"`
-	Message     string `json:"message"`
-	IsComplete  bool   `json:"is_complete"`
+	WorkspaceID string          `json:"workspace_id"`
+	Message     *chattypes.Chat `json:"message"`
+	IsComplete  bool            `json:"is_complete"`
 }
 
 func (e ChatMessageUpdatedEvent) GetMessageData() (map[string]interface{}, error) {

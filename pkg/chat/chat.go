@@ -16,8 +16,6 @@ func GetChatMessage(ctx context.Context, id string) (*types.Chat, error) {
 	query := `SELECT
 		workspace_chat.id,
 		workspace_chat.workspace_id,
-		workspace_chat.created_at,
-		workspace_chat.sent_by,
 		workspace_chat.prompt,
 		workspace_chat.response,
 		workspace_chat.is_complete
@@ -32,8 +30,6 @@ func GetChatMessage(ctx context.Context, id string) (*types.Chat, error) {
 	err := row.Scan(
 		&chat.ID,
 		&chat.WorkspaceID,
-		&chat.CreatedAt,
-		&chat.SentBy,
 		&chat.Prompt,
 		&response,
 		&chat.IsComplete,

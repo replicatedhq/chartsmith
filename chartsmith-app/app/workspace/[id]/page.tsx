@@ -95,8 +95,16 @@ export default function WorkspacePage() {
    const sub = cf.newSubscription(channel);
 
     sub.on("publication", (message: any) => {
-      console.log('Received message:', message.data);
+      console.log('Received message:', message);
+      const chatMessage = message.data.message;
+      if (!chatMessage) return;
 
+      setMessages(prevMessages => {
+        const index = prevMessages.findIndex(m => m.id === chatMessage.id);
+        const newMessages = [...prevMessages];
+        newMessages[index] = chatMessage;
+        return newMessages;
+      });
     });
 
     sub.on('subscribed', (ctx) => {
@@ -120,9 +128,7 @@ export default function WorkspacePage() {
 
 
   const handleSendMessage = async (message: string) => {
-    if (isTyping) return;
-    setMessages(prev => [...prev, { role: 'user', content: message }]);
-    setIsTyping(true);
+    return;
   };
 
   const handleUndoChanges = (message: Message) => {
@@ -169,6 +175,7 @@ export default function WorkspacePage() {
   }
 
   if (!workspace.isInitialized) {
+    console.log(messages);
     return (
       <EditorLayout>
         <div className="flex justify-center h-full w-full pt-8">

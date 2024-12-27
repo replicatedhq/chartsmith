@@ -9,6 +9,7 @@ export async function listMessagesForWorkspace(workspaceID: string): Promise<Mes
     const result = await db.query(
       `
             SELECT
+                workspace_chat.id,
                 workspace_chat.created_at,
                 workspace_chat.sent_by,
                 workspace_chat.prompt,
@@ -32,22 +33,14 @@ export async function listMessagesForWorkspace(workspaceID: string): Promise<Mes
     for (let i = 0; i < result.rows.length; i++) {
       const row = result.rows[i];
 
-      const userMessage: Message = {
-        role: "user",
-        content: row.prompt,
-        changes: undefined,
-        fileChanges: undefined
+      const message: Message = {
+        id: row.id,
+        prompt: row.prompt,
+        response: row.response,
+        fileChanges: undefined,
+        isComplete: row.is_complete,
       };
-      messages.push(userMessage);
-
-      if (row.response) {
-        messages.push({
-          role: "assistant",
-          content: row.response,
-          changes: undefined,
-          fileChanges: undefined
-        });
-      }
+      messages.push(message);
     }
 
     return messages;

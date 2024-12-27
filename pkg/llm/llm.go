@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
-	"github.com/replicatedhq/chartsmith/pkg/chat"
 	"github.com/replicatedhq/chartsmith/pkg/chat/types"
 	"github.com/replicatedhq/chartsmith/pkg/realtime"
 	realtimetypes "github.com/replicatedhq/chartsmith/pkg/realtime/types"
@@ -19,10 +18,7 @@ func SendChatMessage(ctx context.Context, c *types.Chat) error {
 		return err
 	}
 
-	userMessage := c.Prompt
-	if c.IsInitialMessage {
-		userMessage = "generate a helm chart based on the following prompt: " + c.Prompt
-	}
+	userMessage := "generate a helm chart based on the following prompt: " + c.Prompt
 
 	stream := client.Messages.NewStreaming(context.TODO(), anthropic.MessageNewParams{
 		Model:     anthropic.F(anthropic.ModelClaude3_5Sonnet20241022),
@@ -34,14 +30,6 @@ func SendChatMessage(ctx context.Context, c *types.Chat) error {
 	})
 
 	userIDs, err := workspace.ListUserIDsForWorkspace(ctx, c.WorkspaceID)
-	if err != nil {
-		return err
-	}
-
-	fmt.Printf("Streaming response to user ids: %+v\n", userIDs)
-
-	// we know we will have a message
-	responseChatMessage, err := chat.CreateResponseMessage(ctx, c.WorkspaceID)
 	if err != nil {
 		return err
 	}
@@ -58,11 +46,11 @@ func SendChatMessage(ctx context.Context, c *types.Chat) error {
 		switch delta := event.Delta.(type) {
 		case anthropic.ContentBlockDeltaEventDelta:
 			if delta.Text != "" {
-				responseChatMessage.Prompt += delta.Text
+				c.Response += delta.Text
 
 				e := realtimetypes.ChatMessageUpdatedEvent{
 					WorkspaceID: c.WorkspaceID,
-					Message:     responseChatMessage.Prompt,
+					Message:     c,
 					IsComplete:  false,
 				}
 				r := realtimetypes.Recipient{
