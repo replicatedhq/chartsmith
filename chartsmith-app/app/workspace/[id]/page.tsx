@@ -211,6 +211,7 @@ export default function WorkspacePage() {
     return;
   }
 
+  console.log(messages);
   return (
     <EditorLayout>
       {isChatVisible && (

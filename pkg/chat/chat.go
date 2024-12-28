@@ -6,7 +6,6 @@ import (
 
 	"github.com/replicatedhq/chartsmith/pkg/chat/types"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
-	"github.com/tuvistavie/securerandom"
 )
 
 func GetChatMessage(ctx context.Context, id string) (*types.Chat, error) {
@@ -44,22 +43,14 @@ func GetChatMessage(ctx context.Context, id string) (*types.Chat, error) {
 	return &chat, nil
 }
 
-func CreateResponseMessage(ctx context.Context, workspaceID string) (*types.Chat, error) {
+func MarkComplete(ctx context.Context, chat *types.Chat) error {
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
 
-	id, err := securerandom.Hex(12)
-	if err != nil {
-		return nil, err
-	}
+	query := `UPDATE workspace_chat
+	SET response = $1, is_complete = true
+	WHERE id = $2`
 
-	query := `INSERT INTO workspace_chat (id, workspace_id, created_at, sent_by, prompt, response, is_complete, is_initial_message)
-	VALUES ($1, $2, now(), $3, $4, null, false, true)`
-
-	_, err = conn.Exec(ctx, query, id, workspaceID, "agent", "")
-	if err != nil {
-		return nil, err
-	}
-
-	return GetChatMessage(ctx, id)
+	_, err := conn.Exec(ctx, query, chat.Response, chat.ID)
+	return err
 }
