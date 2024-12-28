@@ -14,7 +14,7 @@ import { FileNode } from '@/lib/types/files';
 import { Workspace } from '@/lib/types/workspace';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { Card } from '@/components/ui/Card';
-import { ChatMessage } from '@/components/editor/ChatMessage';
+import { ChatMessage } from '@/components/editor/chat/ChatMessage';
 import { getCentrifugoTokenAction } from '@/lib/centrifugo/actions/get-centrifugo-token-action';
 import { Centrifuge } from "centrifuge";
 
@@ -169,6 +169,7 @@ export default function WorkspacePage() {
     );
   }
 
+  // Show chat-only view when workspace has no files yet
   if (workspace.files.length === 0) {
     return (
       <EditorLayout>
@@ -178,7 +179,7 @@ export default function WorkspacePage() {
               <div className="space-y-4">
                 {messages.map((message, index) => (
                   <ChatMessage
-                    key={index}
+                    key={message.id || index}
                     message={message}
                   />
                 ))}
@@ -211,7 +212,6 @@ export default function WorkspacePage() {
     return;
   }
 
-  console.log(messages);
   return (
     <EditorLayout>
       {isChatVisible && (

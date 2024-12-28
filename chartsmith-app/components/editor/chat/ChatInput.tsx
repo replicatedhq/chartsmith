@@ -35,18 +35,17 @@ export function ChatInput({ onSubmit }: ChatInputProps) {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Type your message..."
-          className={`w-full px-4 py-3 rounded-lg ${
-            theme === 'dark' 
-              ? 'bg-dark border-dark-border text-gray-300 placeholder-gray-500' 
+          placeholder="Type your message..."          className={`w-full px-4 py-3 rounded-lg ${
+            theme === 'dark'
+              ? 'bg-dark border-dark-border text-gray-300 placeholder-gray-500'
               : 'bg-white border-gray-200 text-gray-700 placeholder-gray-400'
           } border focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent`}
         />
         <button
           type="submit"
           className={`absolute right-2 top-1/2 -translate-y-1/2 p-2 ${
-            theme === 'dark' 
-              ? 'text-gray-400 hover:text-white' 
+            theme === 'dark'
+              ? 'text-gray-400 hover:text-white'
               : 'text-gray-400 hover:text-gray-600'
           }`}
         >

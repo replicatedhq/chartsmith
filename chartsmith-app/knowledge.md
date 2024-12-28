@@ -14,3 +14,4 @@
 
 - Never update state of a component during render of another component
 - Move state updates that depend on prop/state changes into useEffect
+- Use stable IDs as React keys when available to preserve component state during updates

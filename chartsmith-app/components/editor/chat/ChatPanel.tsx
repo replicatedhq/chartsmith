@@ -30,7 +30,7 @@ export function ChatPanel({ messages, onSendMessage, onUndoChanges }: ChatPanelP
   return (
     <>
       <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${
-        theme === 'dark' ? 'bg-dark' : 'bg-gray-50'
+        theme === 'dark' ? 'bg-dark-surface' : 'bg-gray-50'
       }`}>
         {messages.map((message, index) => (
           <ChatMessage
