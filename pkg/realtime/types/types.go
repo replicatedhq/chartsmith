@@ -2,6 +2,7 @@ package types
 
 import (
 	chattypes "github.com/replicatedhq/chartsmith/pkg/chat/types"
+	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 )
 
 type Config struct {
@@ -40,4 +41,20 @@ func (e ChatMessageUpdatedEvent) GetMessageData() (map[string]interface{}, error
 
 func (e ChatMessageUpdatedEvent) GetChannelName() string {
 	return e.WorkspaceID
+}
+
+var _ Event = WorkspaceUpdatedEvent{}
+
+type WorkspaceUpdatedEvent struct {
+	Workspace *workspacetypes.Workspace `json:"workspace"`
+}
+
+func (e WorkspaceUpdatedEvent) GetMessageData() (map[string]interface{}, error) {
+	return map[string]interface{}{
+		"workspace": e.Workspace,
+	}, nil
+}
+
+func (e WorkspaceUpdatedEvent) GetChannelName() string {
+	return e.Workspace.ID
 }

@@ -5,7 +5,6 @@ import { useEditorView } from '@/hooks/useEditorView';
 import { EditorLayout } from '@/components/editor/layout/EditorLayout';
 import { WorkspaceContainer } from '@/components/editor/workspace/WorkspaceContainer';
 import { ChatContainer } from '@/components/editor/chat/ChatContainer';
-import { useChartFiles } from '@/app/hooks/useChartFiles';
 import { useWorkspaceUI } from '@/contexts/WorkspaceUIContext';
 import { useParams } from 'next/navigation';
 import { useSession } from '@/app/hooks/useSession';
@@ -20,7 +19,7 @@ import { getCentrifugoTokenAction } from '@/lib/centrifugo/actions/get-centrifug
 import { Centrifuge } from "centrifuge";
 
 export default function WorkspacePage() {
-  const { workspace } = useWorkspace();
+  const { setWorkspace, workspace } = useWorkspace();
   const params = useParams();
   const { session } = useSession();
 
@@ -34,29 +33,12 @@ export default function WorkspacePage() {
 
   const { view, toggleView, updateFileSelection } = useEditorView();
 
-  const {
-    files,
-    setFiles,
-    selectedFile,
-    setSelectedFile,
-    updateFile,
-  } = useChartFiles({
-    debug: true,
-    workspaceID: params.id as string,
-  });
-
   const renderedFiles: FileNode[] = [];
 
   useEffect(() => {
     if (!session) return;
     getCentrifugoTokenAction(session).then(setCentrifugoToken);
   }, [session]);
-
-  useEffect(() => {
-    if (selectedFile && selectedFile.path) {
-      updateFile(selectedFile.path, editorContent);
-    }
-  }, [editorContent, selectedFile, updateFile]);
 
   useEffect(() => {
     if (!session) return;
@@ -95,16 +77,29 @@ export default function WorkspacePage() {
    const sub = cf.newSubscription(channel);
 
     sub.on("publication", (message: any) => {
-      console.log('Received message:', message);
-      const chatMessage = message.data.message;
-      if (!chatMessage) return;
+      // this could be a chatmessageupdated event or a workspaceupdated event
+      const isWorkspaceUpdatedEvent = message.data.workspace;
 
-      setMessages(prevMessages => {
-        const index = prevMessages.findIndex(m => m.id === chatMessage.id);
-        const newMessages = [...prevMessages];
-        newMessages[index] = chatMessage;
-        return newMessages;
-      });
+      if (!isWorkspaceUpdatedEvent) {
+        const chatMessage = message.data.message;
+        if (!chatMessage) return;
+
+        setMessages(prevMessages => {
+          const index = prevMessages.findIndex(m => m.id === chatMessage.id);
+          const newMessages = [...prevMessages];
+          newMessages[index] = chatMessage;
+          return newMessages;
+        });
+      } else {
+        // Only update workspace if it has changed
+        const newWorkspace = message.data.workspace;
+        setWorkspace(prev => {
+          if (JSON.stringify(prev) === JSON.stringify(newWorkspace)) {
+            return prev;
+          }
+          return newWorkspace;
+        });
+      }
     });
 
     sub.on('subscribed', (ctx) => {
@@ -131,29 +126,6 @@ export default function WorkspacePage() {
     return;
   };
 
-  const handleUndoChanges = (message: Message) => {
-    if (message.fileChanges) {
-      message.fileChanges.forEach(change => {
-        updateFile(change.path, change.content);
-        if (selectedFile?.path === change.path) {
-          setEditorContent(change.content);
-        }
-      });
-    }
-  };
-
-  console.log(centrifugoToken);
-  const handleViewChange = () => {
-    const newView = view === 'source' ? 'rendered' : 'source';
-    const newFiles = newView === 'rendered' ? renderedFiles : files;
-    toggleView(newFiles);
-  };
-
-  const handleFileSelect = (file: FileNode) => {
-    setSelectedFile(file);
-    setEditorContent(file.content || '');
-    updateFileSelection(file);
-  };
 
   if (!workspace) {
     return (
@@ -195,6 +167,25 @@ export default function WorkspacePage() {
     )
   }
 
+  const handleViewChange = () => {
+    const newView = view === 'source' ? 'rendered' : 'source';
+    const newFiles = newView === 'rendered' ? renderedFiles : workspace.files;
+    toggleView(newFiles);
+  };
+
+
+  const handleFileSelect = (file: FileNode) => {
+    return;
+  }
+
+  const handleFileDelete = (path: string) => {
+    return;
+  }
+
+  const handleUndoChanges = (message: Message) => {
+    return;
+  }
+
   return (
     <EditorLayout>
       {isChatVisible && (
@@ -207,17 +198,10 @@ export default function WorkspacePage() {
       <WorkspaceContainer
         view={view}
         onViewChange={handleViewChange}
-        files={files}
+        files={workspace.files}
         renderedFiles={renderedFiles}
-        selectedFile={selectedFile}
         onFileSelect={handleFileSelect}
-        onFileDelete={path => {
-          setFiles(files.filter(f => f.path !== path));
-          if (selectedFile?.path === path) {
-            setSelectedFile(undefined);
-            setEditorContent('');
-          }
-        }}
+        onFileDelete={handleFileDelete}
         editorContent={editorContent}
         onEditorChange={(value) => setEditorContent(value ?? '')}
         isFileTreeVisible={isFileTreeVisible}

@@ -51,17 +51,23 @@ func SendChatMessage(ctx context.Context, w *workspacetypes.Workspace, c *types.
 			if delta.Text != "" {
 				c.Response += delta.Text
 
-				streamResponse := true
 				if strings.Contains(c.Response, "<helmsmith") {
-					streamResponse = false
-
 					// parse all files and chart in the repsonse
 					if err := parseArtifactsInResponse(w, c.Response); err != nil {
 						return err
 					}
-				}
 
-				if streamResponse {
+					e := realtimetypes.WorkspaceUpdatedEvent{
+						Workspace: w,
+					}
+					r := realtimetypes.Recipient{
+						UserIDs: userIDs,
+					}
+
+					if err := realtime.SendEvent(ctx, r, e); err != nil {
+						return err
+					}
+				} else {
 					e := realtimetypes.ChatMessageUpdatedEvent{
 						WorkspaceID: c.WorkspaceID,
 						Message:     c,
