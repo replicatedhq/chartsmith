@@ -7,6 +7,7 @@ import (
 	"github.com/replicatedhq/chartsmith/pkg/chat"
 	"github.com/replicatedhq/chartsmith/pkg/llm"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
+	"github.com/replicatedhq/chartsmith/pkg/workspace"
 )
 
 func Listen(ctx context.Context) error {
@@ -45,12 +46,17 @@ func handleNewChatNotification(ctx context.Context, chatID string) error {
 		return err
 	}
 
+	w, err := workspace.GetWorkspace(ctx, chatMessage.WorkspaceID)
+	if err != nil {
+		return err
+	}
+
 	if chatMessage.IsComplete == true {
 		return nil
 	}
 
 	go func() {
-		err := llm.SendChatMessage(ctx, chatMessage)
+		err := llm.SendChatMessage(ctx, w, chatMessage)
 		if err != nil {
 			fmt.Printf("Error sending chat message: %+v\n", err)
 		}

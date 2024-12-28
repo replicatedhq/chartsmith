@@ -3,6 +3,7 @@ package llm
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
@@ -10,9 +11,10 @@ import (
 	"github.com/replicatedhq/chartsmith/pkg/realtime"
 	realtimetypes "github.com/replicatedhq/chartsmith/pkg/realtime/types"
 	"github.com/replicatedhq/chartsmith/pkg/workspace"
+	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 )
 
-func SendChatMessage(ctx context.Context, c *types.Chat) error {
+func SendChatMessage(ctx context.Context, w *workspacetypes.Workspace, c *types.Chat) error {
 	fmt.Printf("Sending chat message: %+v\n", c)
 	client, err := newAnthropicClient(ctx)
 	if err != nil {
@@ -54,7 +56,7 @@ func SendChatMessage(ctx context.Context, c *types.Chat) error {
 					streamResponse = false
 
 					// parse all files and chart in the repsonse
-					if err := parseArtifactsInResponse(c.WorkspaceID, c.Response); err != nil {
+					if err := parseArtifactsInResponse(w, c.Response); err != nil {
 						return err
 					}
 				}
@@ -81,19 +83,30 @@ func SendChatMessage(ctx context.Context, c *types.Chat) error {
 		return stream.Err()
 	}
 
+	// write the final workspace and files to the database
+	if err := workspace.CreateWorkspaceRevision(ctx, w); err != nil {
+		return err
+	}
+
 	return nil
 }
 
-func parseArtifactsInResponse(workspaceID string, response string) error {
+func parseArtifactsInResponse(workspace *workspacetypes.Workspace, response string) error {
 	parser := NewParser()
 
 	parser.Parse(response)
 
 	result := parser.GetResult()
 
-	fmt.Printf("title: %s\n", result.Title)
+	workspace.Name = result.Title
+
+	workspace.Files = []workspacetypes.File{}
 	for _, file := range result.Files {
-		fmt.Printf("file: %s, content len: %d\n", file.Path, len(file.Content))
+		workspace.Files = append(workspace.Files, workspacetypes.File{
+			Path:    file.Path,
+			Name:    filepath.Base(file.Path),
+			Content: file.Content,
+		})
 	}
 
 	return nil

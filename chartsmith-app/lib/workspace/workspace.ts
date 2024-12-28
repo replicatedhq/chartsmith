@@ -16,8 +16,8 @@ export async function createWorkspace(name: string, createdType: string, prompt:
       await client.query('BEGIN');
 
       await client.query(
-        `INSERT INTO workspace (id, created_at, last_updated_at, name, created_by_user_id, created_type, prompt, current_revision_number, is_initialized)
-        VALUES ($1, now(), now(), $2, $3, $4, $5, 0, false)`,
+        `INSERT INTO workspace (id, created_at, last_updated_at, name, created_by_user_id, created_type, prompt, current_revision_number)
+        VALUES ($1, now(), now(), $2, $3, $4, $5, 0)`,
         [id, name, userId, createdType, prompt]
       );
 
@@ -76,8 +76,7 @@ export async function getWorkspace(id: string): Promise<Workspace | undefined> {
                 workspace.created_by_user_id,
                 workspace.created_type,
                 workspace.prompt,
-                workspace.current_revision_number,
-                workspace.is_initialized
+                workspace.current_revision_number
             FROM
                 workspace
             WHERE
