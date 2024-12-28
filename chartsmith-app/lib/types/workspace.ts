@@ -1,3 +1,4 @@
+import { FileNode } from "./files";
 
 export interface Workspace {
   id: string;
@@ -5,5 +6,5 @@ export interface Workspace {
   lastUpdatedAt: Date;
   name: string;
 
-  isInitialized: boolean;
+  files: FileNode[];
 }

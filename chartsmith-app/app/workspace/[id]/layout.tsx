@@ -38,7 +38,7 @@ function WorkspaceLayoutContent({
 
   return (
     <div className={`min-h-screen ${theme === 'dark' ? 'bg-dark' : 'bg-white'} flex w-full`}>
-      {params.id && workspace && workspace.isInitialized && (
+      {params.id && workspace && workspace.files.length > 0 && (
         <SideNav
           workspaceID={params.id as string}
           isChatVisible={isChatVisible}

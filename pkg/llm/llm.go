@@ -3,6 +3,7 @@ package llm
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
 	"github.com/replicatedhq/chartsmith/pkg/chat/types"
@@ -48,17 +49,29 @@ func SendChatMessage(ctx context.Context, c *types.Chat) error {
 			if delta.Text != "" {
 				c.Response += delta.Text
 
-				e := realtimetypes.ChatMessageUpdatedEvent{
-					WorkspaceID: c.WorkspaceID,
-					Message:     c,
-					IsComplete:  false,
-				}
-				r := realtimetypes.Recipient{
-					UserIDs: userIDs,
+				streamResponse := true
+				if strings.Contains(c.Response, "<helmsmith") {
+					streamResponse = false
+
+					// parse all files and chart in the repsonse
+					if err := parseArtifactsInResponse(c.WorkspaceID, c.Response); err != nil {
+						return err
+					}
 				}
 
-				if err := realtime.SendEvent(ctx, r, e); err != nil {
-					return err
+				if streamResponse {
+					e := realtimetypes.ChatMessageUpdatedEvent{
+						WorkspaceID: c.WorkspaceID,
+						Message:     c,
+						IsComplete:  false,
+					}
+					r := realtimetypes.Recipient{
+						UserIDs: userIDs,
+					}
+
+					if err := realtime.SendEvent(ctx, r, e); err != nil {
+						return err
+					}
 				}
 			}
 		}
@@ -66,6 +79,21 @@ func SendChatMessage(ctx context.Context, c *types.Chat) error {
 
 	if stream.Err() != nil {
 		return stream.Err()
+	}
+
+	return nil
+}
+
+func parseArtifactsInResponse(workspaceID string, response string) error {
+	parser := NewParser()
+
+	parser.Parse(response)
+
+	result := parser.GetResult()
+
+	fmt.Printf("title: %s\n", result.Title)
+	for _, file := range result.Files {
+		fmt.Printf("file: %s, content len: %d\n", file.Path, len(file.Content))
 	}
 
 	return nil

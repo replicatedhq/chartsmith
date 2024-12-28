@@ -47,7 +47,7 @@ export async function createWorkspace(name: string, createdType: string, prompt:
         createdAt: new Date(),
         lastUpdatedAt: new Date(),
         name: name,
-        isInitialized: false
+        files: [],
       };
     } catch (err) {
       // Rollback transaction on error
@@ -97,7 +97,7 @@ export async function getWorkspace(id: string): Promise<Workspace | undefined> {
       createdAt: row.created_at,
       lastUpdatedAt: row.last_updated_at,
       name: row.name,
-      isInitialized: row.is_initialized
+      files: [],
     };
   } catch (err) {
     console.error(err);

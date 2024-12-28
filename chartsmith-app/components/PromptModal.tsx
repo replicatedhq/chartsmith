@@ -111,6 +111,7 @@ export function PromptModal({ isOpen, onClose }: PromptModalProps) {
           <PromptInput
             onSubmit={createFromPrompt}
             isLoading={isLoading}
+            className={theme === 'dark' ? 'bg-surface' : ''}
           />
         </div>
       </div>

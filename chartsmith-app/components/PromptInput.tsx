@@ -7,9 +7,10 @@ import { useTheme } from '@/contexts/ThemeContext';
 interface PromptInputProps {
   onSubmit: (prompt: string) => void;
   isLoading?: boolean;
+  className?: string;
 }
 
-export function PromptInput({ onSubmit, isLoading }: PromptInputProps) {
+export function PromptInput({ onSubmit, isLoading, className }: PromptInputProps) {
   const { theme } = useTheme();
   const [prompt, setPrompt] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -60,9 +61,9 @@ export function PromptInput({ onSubmit, isLoading }: PromptInputProps) {
             placeholder="Example: I need a Helm chart for a web application with Redis cache and PostgreSQL database..."
             className={`w-full px-4 py-3 rounded-lg border resize-none h-32 ${
               theme === 'dark'
-                ? 'bg-dark border-dark-border text-gray-300 placeholder-gray-500'
+                ? 'bg-surface border-dark-border text-gray-300 placeholder-gray-500'
                 : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
-            } focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50`}
+            } focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50 ${className || ''}`}
           />
           <button
             type="submit"

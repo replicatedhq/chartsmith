@@ -174,8 +174,7 @@ export default function WorkspacePage() {
     );
   }
 
-  if (!workspace.isInitialized) {
-    console.log(messages);
+  if (workspace.files.length === 0) {
     return (
       <EditorLayout>
         <div className="flex justify-center h-full w-full pt-8">
