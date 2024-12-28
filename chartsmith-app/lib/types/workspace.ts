@@ -1,10 +1,14 @@
-import { FileNode } from "./files";
-
 export interface Workspace {
   id: string;
   createdAt: Date;
   lastUpdatedAt: Date;
   name: string;
 
-  files: FileNode[];
+  files: File[];
+}
+
+export interface File {
+  path: string;
+  content: string;
+  name: string;
 }

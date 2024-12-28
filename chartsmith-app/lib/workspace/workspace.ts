@@ -1,14 +1,13 @@
 import { getDB } from "../data/db";
 import { getParam } from "../data/param";
 import { FileNode } from "../types/files";
-import { Workspace } from "../types/workspace";
+import { File, Workspace } from "../types/workspace";
 import * as srs from "secure-random-string";
 
 export async function createWorkspace(name: string, createdType: string, prompt: string | undefined, userId: string): Promise<Workspace> {
   try {
     const id = srs.default({ length: 12, alphanumeric: true });
     const db = getDB(await getParam("DB_URI"));
-    const initialFiles = getInitialWorkspaceFiles();
 
     // Start transaction
     const client = await db.connect();
@@ -20,14 +19,6 @@ export async function createWorkspace(name: string, createdType: string, prompt:
         VALUES ($1, now(), now(), $2, $3, $4, $5, 0)`,
         [id, name, userId, createdType, prompt]
       );
-
-      for (const file of initialFiles) {
-        await client.query(
-          `INSERT INTO workspace_file (workspace_id, file_path, revision_number, created_at, last_updated_at, content, name)
-          VALUES ($1, $2, 0, now(), now(), $3, $4)`,
-          [id, file.path, file.content, file.name]
-        );
-      }
 
       let chatId: string = srs.default({ length: 12, alphanumeric: true });
       if (createdType === "prompt") {
@@ -91,104 +82,57 @@ export async function getWorkspace(id: string): Promise<Workspace | undefined> {
 
     const row = result.rows[0];
 
-    return {
+    const w = {
       id: row.id,
       createdAt: row.created_at,
       lastUpdatedAt: row.last_updated_at,
       name: row.name,
       files: [],
     };
+
+    // get the files
+    const files = await listFilesForWorkspace(id, result.rows[0].current_revision_number);
+    w.files = files;
+
+    return w;
   } catch (err) {
     console.error(err);
     throw err;
   }
 }
 
-function getInitialWorkspaceFiles(): FileNode[] {
-  return [
-    {
-      name: 'Chart.yaml',
-      type: 'file',
-      path: 'Chart.yaml',
-      content: `apiVersion: v2
-name: my-helm-chart
-description: A Helm chart for Kubernetes
-type: application
-version: 0.1.0
-appVersion: "1.0.0"`
-    },
-    {
-      name: 'values.yaml',
-      type: 'file',
-      path: 'values.yaml',
-      content: `# Default values for my-helm-chart
-replicaCount: 1
-image:
-  repository: nginx
-  tag: "1.16.0"
-  pullPolicy: IfNotPresent
-service:
-  type: ClusterIP
-  port: 80`
-    },
-    {
-      name: 'deployment.yaml',
-      type: 'file',
-      path: 'templates/deployment.yaml',
-      content: `apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: {{ include "example-chart.fullname" . }}
-  labels:
-    {{- include "example-chart.labels" . | nindent 4 }}
-spec:
-  replicas: {{ .Values.replicaCount }}
-  selector:
-    matchLabels:
-      {{- include "example-chart.selectorLabels" . | nindent 6 }}
-  template:
-    metadata:
-      labels:
-        {{- include "example-chart.selectorLabels" . | nindent 8 }}
-    spec:
-      containers:
-        - name: {{ .Chart.Name }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
-          ports:
-            - name: http
-              containerPort: {{ .Values.service.port }}
-              protocol: TCP`
-    },
-    {
-      name: 'service.yaml',
-      type: 'file',
-      path: 'templates/service.yaml',
-      content: `apiVersion: v1
-kind: Service
-metadata:
-  name: {{ include "example-chart.fullname" . }}
-  labels:
-    {{- include "example-chart.labels" . | nindent 4 }}
-spec:
-  type: {{ .Values.service.type }}
-  ports:
-    - port: {{ .Values.service.port }}
-      targetPort: http
-      protocol: TCP
-      name: http
-  selector:
-    {{- include "example-chart.selectorLabels" . | nindent 4 }`
-    },
-    {
-      name: 'ingress.yaml',
-      type: 'file',
-      path: 'templates/ingress.yaml',
-      content: `apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: {{ include "my-helm-chart.fullname" . }}
-  labels:
-    {{- include "my-helm-chart.labels" . | nindent 4 }}`
+async function listFilesForWorkspace(workspaceID: string, revisionNumber: number): Promise<File[]> {
+  try {
+    const db = getDB(await getParam("DB_URI"));
+    const result = await db.query(
+      `
+            SELECT
+                workspace_file.file_path,
+                workspace_file.content,
+                workspace_file.name
+            FROM
+                workspace_file
+            WHERE
+                workspace_file.workspace_id = $1 AND workspace_file.revision_number = $2
+        `,
+      [workspaceID, revisionNumber]
+    );
+
+    if (result.rows.length === 0) {
+      return [];
     }
-  ];
+
+    const files: File[] = result.rows.map((row: any) => {
+      return {
+        path: row.file_path,
+        content: row.content,
+        name: row.name,
+      };
+    });
+
+    return files;
+  } catch (err) {
+    console.error(err);
+    throw err;
+  }
 }
