@@ -25,8 +25,10 @@ export default function WorkspacePage() {
 
   const { isChatVisible, isFileTreeVisible } = useWorkspaceUI();
   const [messages, setMessages] = useState<Message[]>([]);
+  const [selectedFile, setSelectedFile] = useState<FileNode | undefined>();
   const [editorContent, setEditorContent] = useState<string>('');
   const [isTyping, setIsTyping] = useState(false);
+  const followMode = true; // Always true for now
   const [centrifugoToken, setCentrifugoToken] = useState<string | null>(null);
   const centrifugeRef = useRef<Centrifuge | null>(null);
   const hasConnectedRef = useRef(false);
@@ -97,6 +99,7 @@ export default function WorkspacePage() {
           if (JSON.stringify(prev) === JSON.stringify(newWorkspace)) {
             return prev;
           }
+
           return newWorkspace;
         });
       }
@@ -120,6 +123,16 @@ export default function WorkspacePage() {
       centrifugeRef.current = null;
     };
   }, [centrifugoToken, session]);
+
+  // Handle auto-selecting new files in follow mode
+  useEffect(() => {
+    if (followMode && workspace?.files.length) {
+      const lastFile = workspace.files[workspace.files.length - 1];
+      setSelectedFile(lastFile);
+      setEditorContent(lastFile.content || '');
+      updateFileSelection(lastFile);
+    }
+  }, [workspace?.files.length, followMode]);
 
 
   const handleSendMessage = async (message: string) => {
@@ -175,8 +188,10 @@ export default function WorkspacePage() {
 
 
   const handleFileSelect = (file: FileNode) => {
-    return;
-  }
+    setSelectedFile(file);
+    setEditorContent(file.content || '');
+    updateFileSelection(file);
+  };
 
   const handleFileDelete = (path: string) => {
     return;
@@ -200,6 +215,7 @@ export default function WorkspacePage() {
         onViewChange={handleViewChange}
         files={workspace.files}
         renderedFiles={renderedFiles}
+        selectedFile={selectedFile}
         onFileSelect={handleFileSelect}
         onFileDelete={handleFileDelete}
         editorContent={editorContent}
