@@ -58,3 +58,17 @@ func (e WorkspaceUpdatedEvent) GetMessageData() (map[string]interface{}, error) 
 func (e WorkspaceUpdatedEvent) GetChannelName() string {
 	return e.Workspace.ID
 }
+
+type WorkspaceRevisionCreatedEvent struct {
+	Workspace *workspacetypes.Workspace `json:"workspace"`
+}
+
+func (e WorkspaceRevisionCreatedEvent) GetMessageData() (map[string]interface{}, error) {
+	return map[string]interface{}{
+		"workspace": e.Workspace,
+	}, nil
+}
+
+func (e WorkspaceRevisionCreatedEvent) GetChannelName() string {
+	return e.Workspace.ID
+}

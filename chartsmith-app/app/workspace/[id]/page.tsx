@@ -134,6 +134,16 @@ export default function WorkspacePage() {
     }
   }, [workspace?.files.length, followMode]);
 
+  // Keep editor content in sync with selected file's content
+  useEffect(() => {
+    if (selectedFile && workspace) {
+      const currentFile = workspace.files.find(f => f.path === selectedFile.path);
+      if (currentFile && currentFile.content !== editorContent) {
+        setEditorContent(currentFile.content || '');
+      }
+    }
+  }, [workspace, selectedFile]);
+
 
   const handleSendMessage = async (message: string) => {
     return;

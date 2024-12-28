@@ -94,6 +94,17 @@ func SendChatMessage(ctx context.Context, w *workspacetypes.Workspace, c *types.
 		return err
 	}
 
+	e := realtimetypes.WorkspaceRevisionCreatedEvent{
+		Workspace: w,
+	}
+	r := realtimetypes.Recipient{
+		UserIDs: userIDs,
+	}
+
+	if err := realtime.SendEvent(ctx, r, e); err != nil {
+		return err
+	}
+
 	return nil
 }
 
