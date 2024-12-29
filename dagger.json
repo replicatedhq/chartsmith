@@ -1,0 +1,6 @@
+{
+  "name": "chartsmith",
+  "engineVersion": "v0.15.1",
+  "sdk": "go",
+  "source": "dagger"
+}

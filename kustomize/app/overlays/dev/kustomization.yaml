@@ -1,0 +1,9 @@
+
+resources:
+  - ../../base
+  - ./clusterip.yaml
+  - ./secret.yaml
+
+patchesStrategicMerge:
+  - ./deployment.yaml
+

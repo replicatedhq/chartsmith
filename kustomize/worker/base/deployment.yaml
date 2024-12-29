@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chartsmith-worker
+spec:
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 100%
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: chartsmith-worker
+  template:
+    metadata:
+      labels:
+        app: chartsmith-worker
+    spec:
+      containers:
+        - name: chartsmith-worker
+          args: ["run"]
+          image: chartsmith-worker
+          imagePullPolicy: IfNotPresent

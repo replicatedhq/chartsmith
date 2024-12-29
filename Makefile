@@ -28,4 +28,26 @@ build-worker:
 .PHONY: run-worker
 run-worker: build-worker
 	@echo "Running $(WORKER_BINARY_NAME)..."
-	@./$(WORKER_BUILD_DIR)/$(WORKER_BINARY_NAME) run --pg-uri="$(CHARTSMITH_PG_URI)"
+	@./$(WORKER_BUILD_DIR)/$(WORKER_BINARY_NAME) run --pg-uri="$(PG_URI)"
+
+.PHONY: centrifugo
+centrifugo:
+	@echo "Starting centrifugo..."
+	docker run -d --rm \
+		--name centrifugo \
+		--ulimit nofile=262144:262144 \
+		-v ./hack/centrifugo:/centrifugo \
+		-p 8888:8000 centrifugo/centrifugo:v5 centrifugo \
+		-c config.json
+
+.PHONY: validate
+validate:
+	dagger call validate \
+		--op-service-account env:OP_SERVICE_ACCOUNT \
+		--progress plain
+
+.POHNY: okteto-dev
+okteto-dev:
+	@go mod download -x
+	@make build-worker
+	@printf "\n\n To build and run this project, run: \n\n   # make run-worker\n\n"

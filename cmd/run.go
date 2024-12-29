@@ -3,13 +3,13 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 
 	"github.com/replicatedhq/chartsmith/pkg/listener"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
+	"github.com/replicatedhq/chartsmith/pkg/realtime"
+	realtimetypes "github.com/replicatedhq/chartsmith/pkg/realtime/types"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -29,49 +29,24 @@ func RunCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			v := viper.GetViper()
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			realtime.Init(&realtimetypes.Config{
+				Address: v.GetString("centrifugo-address"),
+				APIKey:  v.GetString("centrifugo-api-key"),
+			})
 
-			sigs := make(chan os.Signal, 1)
-			signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+			ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+			defer stop()
 
-			var wg sync.WaitGroup
-			errChan := make(chan error, 1)
-
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				if err := runWorker(ctx, v.GetString("pg-uri")); err != nil {
-					select {
-					case errChan <- err:
-					default:
-						// Prevent blocking if error channel is full
-					}
-				}
-			}()
-
-			go func() {
-				wg.Wait()
-				close(errChan)
-			}()
-
-			select {
-			case <-sigs:
-				cancel()
-				wg.Wait()
-				return nil
-			case err, ok := <-errChan:
-				if ok {
-					cancel()
-					wg.Wait()
-					return fmt.Errorf("worker error: %w", err)
-				}
-				return nil
+			if err := runWorker(ctx, v.GetString("pg-uri")); err != nil {
+				return fmt.Errorf("worker error: %w", err)
 			}
+			return nil
 		},
 	}
 
 	runCmd.Flags().String("pg-uri", "", "Postgres URI")
+	runCmd.Flags().String("centrifugo-address", "http://localhost:8888/api", "centrifugo address")
+	runCmd.Flags().String("centrifugo-api-key", "api_key", "centrifugo api key")
 
 	return runCmd
 }

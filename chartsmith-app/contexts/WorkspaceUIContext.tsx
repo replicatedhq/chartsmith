@@ -1,6 +1,6 @@
-"use client"
+"use client";
 
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState } from "react";
 
 interface WorkspaceUIContextType {
   isChatVisible: boolean;
@@ -16,12 +16,14 @@ export function WorkspaceUIProvider({ children }: { children: React.ReactNode })
   const [isFileTreeVisible, setIsFileTreeVisible] = useState(true);
 
   return (
-    <WorkspaceUIContext.Provider value={{
-      isChatVisible,
-      setIsChatVisible,
-      isFileTreeVisible,
-      setIsFileTreeVisible
-    }}>
+    <WorkspaceUIContext.Provider
+      value={{
+        isChatVisible,
+        setIsChatVisible,
+        isFileTreeVisible,
+        setIsFileTreeVisible,
+      }}
+    >
       {children}
     </WorkspaceUIContext.Provider>
   );
@@ -30,7 +32,7 @@ export function WorkspaceUIProvider({ children }: { children: React.ReactNode })
 export function useWorkspaceUI() {
   const context = useContext(WorkspaceUIContext);
   if (context === undefined) {
-    throw new Error('useWorkspaceUI must be used within a WorkspaceUIProvider');
+    throw new Error("useWorkspaceUI must be used within a WorkspaceUIProvider");
   }
   return context;
 }

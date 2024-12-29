@@ -2,6 +2,8 @@ module github.com/replicatedhq/chartsmith
 
 go 1.23.0
 
+require go.uber.org/zap v1.21.0
+
 require (
 	github.com/anthropics/anthropic-sdk-go v0.2.0-alpha.5 // indirect
 	github.com/bytedance/sonic v1.11.6 // indirect
@@ -45,6 +47,7 @@ require (
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/tidwall/sjson v1.2.5 // indirect
+	github.com/tuvistavie/securerandom v0.0.0-20140719024926-15512123a948 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.2.12 // indirect
 	go.uber.org/atomic v1.9.0 // indirect

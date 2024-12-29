@@ -1,6 +1,6 @@
 export interface FileNode {
   name: string;
-  type: 'file' | 'folder';
+  type: "file" | "folder";
   children?: FileNode[];
   content?: string;
   path?: string;
@@ -11,13 +11,14 @@ export interface FileNode {
 }
 
 export interface Message {
-  role: 'user' | 'assistant';
-  content: string;
-  changes?: string;
+  id: string;
+  prompt: string;
+  response?: string;
   fileChanges?: {
     path: string;
     content: string;
   }[];
+  isComplete: boolean;
 }
 
 export interface ValuesScenario {

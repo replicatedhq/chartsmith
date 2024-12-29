@@ -3,21 +3,26 @@ package llm
 import (
 	"context"
 	"fmt"
+	"path/filepath"
+	"strings"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
-	"github.com/replicatedhq/chartsmith/pkg/chat/types"
+	"github.com/replicatedhq/chartsmith/pkg/chat"
+	chattypes "github.com/replicatedhq/chartsmith/pkg/chat/types"
+	"github.com/replicatedhq/chartsmith/pkg/realtime"
+	realtimetypes "github.com/replicatedhq/chartsmith/pkg/realtime/types"
+	"github.com/replicatedhq/chartsmith/pkg/workspace"
+	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 )
 
-func SendChatMessage(ctx context.Context, chat *types.Chat) error {
+func SendChatMessage(ctx context.Context, w *workspacetypes.Workspace, c *chattypes.Chat) error {
+	fmt.Printf("Sending chat message: %+v\n", c)
 	client, err := newAnthropicClient(ctx)
 	if err != nil {
 		return err
 	}
 
-	userMessage := chat.Prompt
-	if chat.IsInitialMessage {
-		userMessage = "generate a helm chart based on the following prompt: " + chat.Prompt
-	}
+	userMessage := "generate a helm chart based on the following prompt: " + c.Prompt
 
 	stream := client.Messages.NewStreaming(context.TODO(), anthropic.MessageNewParams{
 		Model:     anthropic.F(anthropic.ModelClaude3_5Sonnet20241022),
@@ -27,10 +32,17 @@ func SendChatMessage(ctx context.Context, chat *types.Chat) error {
 			anthropic.NewUserMessage(anthropic.NewTextBlock(userMessage)),
 		}),
 	})
+
+	userIDs, err := workspace.ListUserIDsForWorkspace(ctx, c.WorkspaceID)
 	if err != nil {
 		return err
 	}
 
+	// minimize database writes by keeping this message in memory while it's streaming back, only writing
+	// to the database when complete.  but still send the message as we receive it over the realtime socket
+	// to the client
+
+	fullResponseWithTags := ""
 	message := anthropic.Message{}
 	for stream.Next() {
 		event := stream.Current()
@@ -39,7 +51,43 @@ func SendChatMessage(ctx context.Context, chat *types.Chat) error {
 		switch delta := event.Delta.(type) {
 		case anthropic.ContentBlockDeltaEventDelta:
 			if delta.Text != "" {
-				fmt.Printf("update: %s\n", delta.Text)
+
+				// before adding to c.Response, we remove all of our <helmsmithArtifact and <helmsmithAction tags
+				// so that the response is just the text
+
+				fullResponseWithTags += delta.Text
+				c.Response = removeHelmsmithTags(ctx, fullResponseWithTags)
+
+				if strings.Contains(fullResponseWithTags, "<helmsmith") {
+					// parse all files and chart in the repsonse
+					if err := parseArtifactsInResponse(w, fullResponseWithTags); err != nil {
+						return err
+					}
+
+					e := realtimetypes.WorkspaceUpdatedEvent{
+						Workspace: w,
+					}
+					r := realtimetypes.Recipient{
+						UserIDs: userIDs,
+					}
+
+					if err := realtime.SendEvent(ctx, r, e); err != nil {
+						return err
+					}
+				} else {
+					e := realtimetypes.ChatMessageUpdatedEvent{
+						WorkspaceID: c.WorkspaceID,
+						Message:     c,
+						IsComplete:  false,
+					}
+					r := realtimetypes.Recipient{
+						UserIDs: userIDs,
+					}
+
+					if err := realtime.SendEvent(ctx, r, e); err != nil {
+						return err
+					}
+				}
 			}
 		}
 	}
@@ -48,5 +96,69 @@ func SendChatMessage(ctx context.Context, chat *types.Chat) error {
 		return stream.Err()
 	}
 
+	if err := chat.MarkComplete(ctx, c); err != nil {
+		return err
+	}
+
+	if len(w.Files) == 0 {
+		return nil
+	}
+
+	// write the final workspace and files to the database
+	if err := workspace.CreateWorkspaceRevision(ctx, w); err != nil {
+		return err
+	}
+
+	e := realtimetypes.WorkspaceRevisionCreatedEvent{
+		Workspace: w,
+	}
+	r := realtimetypes.Recipient{
+		UserIDs: userIDs,
+	}
+
+	if err := realtime.SendEvent(ctx, r, e); err != nil {
+		return err
+	}
+
 	return nil
+}
+
+func parseArtifactsInResponse(workspace *workspacetypes.Workspace, response string) error {
+	parser := NewParser()
+
+	parser.Parse(response)
+
+	result := parser.GetResult()
+
+	workspace.Name = result.Title
+
+	workspace.Files = []workspacetypes.File{}
+	for _, file := range result.Files {
+		workspace.Files = append(workspace.Files, workspacetypes.File{
+			Path:    file.Path,
+			Name:    filepath.Base(file.Path),
+			Content: file.Content,
+		})
+	}
+
+	return nil
+}
+
+func removeHelmsmithTags(ctx context.Context, input string) string {
+	artifactStart := strings.Index(input, "<helmsmithArtifact")
+	if artifactStart == -1 {
+		return input
+	}
+
+	// Get everything before first helmsmith tag
+	result := input[:artifactStart]
+
+	// Find last helmsmith tag
+	lastArtifactEnd := strings.LastIndex(input, "</helmsmithArtifact>")
+	if lastArtifactEnd != -1 {
+		// Add everything after the last closing tag
+		result += input[lastArtifactEnd+len("</helmsmithArtifact>"):]
+	}
+
+	return result
 }

@@ -1,11 +1,11 @@
-import React from 'react';
-import { EditorNav } from '../EditorNav';
-import { FileBrowser } from '../FileBrowser';
-import { RenderedFileBrowser } from '../RenderedFileBrowser';
-import { CodeEditor } from '../CodeEditor';
-import { useTheme } from '../../../contexts/ThemeContext';
-import { EditorView } from '../../../hooks/useEditorView';
-import { FileNode } from '@/lib/types/files';
+import React from "react";
+import { EditorNav } from "../EditorNav";
+import { FileBrowser } from "../FileBrowser";
+import { RenderedFileBrowser } from "../RenderedFileBrowser";
+import { CodeEditor } from "../CodeEditor";
+import { useTheme } from "../../../contexts/ThemeContext";
+import { EditorView } from "../../../hooks/useEditorView";
+import { FileNode } from "@/lib/types/files";
 
 interface WorkspaceContainerProps {
   view: EditorView;
@@ -20,48 +20,17 @@ interface WorkspaceContainerProps {
   isFileTreeVisible: boolean;
 }
 
-export function WorkspaceContainer({
-  view,
-  onViewChange,
-  files,
-  renderedFiles,
-  selectedFile,
-  onFileSelect,
-  onFileDelete,
-  editorContent,
-  onEditorChange,
-  isFileTreeVisible
-}: WorkspaceContainerProps) {
+export function WorkspaceContainer({ view, onViewChange, files, renderedFiles, selectedFile, onFileSelect, onFileDelete, editorContent, onEditorChange, isFileTreeVisible }: WorkspaceContainerProps) {
   const { theme } = useTheme();
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
       <EditorNav view={view} onViewChange={onViewChange} />
       <div className="flex-1 flex min-h-0">
-        {isFileTreeVisible && (
-          view === 'source' ? (
-            <FileBrowser
-              nodes={files}
-              onFileSelect={onFileSelect}
-              onFileDelete={onFileDelete}
-              selectedFile={selectedFile}
-            />
-          ) : (
-            <RenderedFileBrowser
-              nodes={renderedFiles}
-              onFileSelect={onFileSelect}
-              selectedFile={selectedFile}
-            />
-          )
-        )}
-        <div className={`w-px ${theme === 'dark' ? 'bg-dark-border' : 'bg-gray-200'} flex-shrink-0`} />
+        {isFileTreeVisible && (view === "source" ? <FileBrowser nodes={files} onFileSelect={onFileSelect} onFileDelete={onFileDelete} selectedFile={selectedFile} /> : <RenderedFileBrowser nodes={renderedFiles} onFileSelect={onFileSelect} selectedFile={selectedFile} />)}
+        <div className={`w-px ${theme === "dark" ? "bg-dark-border" : "bg-gray-200"} flex-shrink-0`} />
         <div className="flex-1 min-w-0 w-full">
-          <CodeEditor
-            file={selectedFile}
-            theme={theme}
-            value={editorContent}
-            onChange={onEditorChange}
-          />
+          <CodeEditor file={selectedFile} theme={theme} value={editorContent} onChange={onEditorChange} />
         </div>
       </div>
     </div>

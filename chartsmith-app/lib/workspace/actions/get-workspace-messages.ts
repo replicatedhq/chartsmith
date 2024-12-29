@@ -1,4 +1,4 @@
-"use server"
+"use server";
 
 import { Message } from "@/components/editor/types";
 import { Session } from "@/lib/types/session";

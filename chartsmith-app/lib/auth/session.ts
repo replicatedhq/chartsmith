@@ -1,16 +1,15 @@
-'use server'
+"use server";
 
-import { User } from '@/lib/types/user'
-import { Session } from '../types/session';
+import { User } from "@/lib/types/user";
+import { Session } from "../types/session";
 import * as srs from "secure-random-string";
 import jwt from "jsonwebtoken";
-import { getDB } from '../data/db';
-import { getParam } from '../data/param';
-import parse from 'parse-duration';
-import { getUser } from './user';
+import { getDB } from "../data/db";
+import { getParam } from "../data/param";
+import parse from "parse-duration";
+import { getUser } from "./user";
 
 const sessionDuration = "72h";
-
 
 export async function createSession(user: User): Promise<Session> {
   try {
@@ -22,7 +21,7 @@ export async function createSession(user: User): Promise<Session> {
             INSERT INTO session (id, user_id, expires_at)
             VALUES ($1, $2, now() + interval '24 hours')
         `,
-      [id, user.id]
+      [id, user.id],
     );
 
     return {
@@ -39,7 +38,7 @@ export async function createSession(user: User): Promise<Session> {
 export async function sessionToken(session: Session): Promise<string> {
   const options: jwt.SignOptions = {
     expiresIn: sessionDuration,
-    subject: session.user.id // Use user.id as the subject claim
+    subject: session.user.id, // Use user.id as the subject claim
   };
 
   // Generate the JWT using the payload, secret, and options
@@ -48,10 +47,10 @@ export async function sessionToken(session: Session): Promise<string> {
       id: session.id,
       name: session.user.name,
       email: session.user.email,
-      picture: session.user.imageUrl
+      picture: session.user.imageUrl,
     },
     process.env.HMAC_SECRET!,
-    options
+    options,
   );
   return token;
 }
@@ -77,7 +76,7 @@ export async function findSession(token: string): Promise<Session | undefined> {
             WHERE
                 session.id = $1
         `,
-      [id]
+      [id],
     );
 
     if (result.rows.length === 0) {
@@ -93,7 +92,7 @@ export async function findSession(token: string): Promise<Session | undefined> {
     return {
       id: row.id,
       user,
-      expiresAt: row.expires_at
+      expiresAt: row.expires_at,
     };
   } catch (err: unknown) {
     // if the error contains "jwt expired" just return undefined
@@ -115,7 +114,7 @@ export async function deleteSession(id: string): Promise<void> {
             WHERE
                 session.id = $1
         `,
-      [id]
+      [id],
     );
   } catch (err) {
     console.error(err);

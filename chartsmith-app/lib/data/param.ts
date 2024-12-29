@@ -8,7 +8,7 @@ interface Params {
 const params: Params = {
   isLoaded: false,
   DBUri: process.env["CHARTSMITH_PG_URI"] || process.env["DB_URI"]!,
-  DB_URI: process.env["CHARTSMITH_PG_URI"] || process.env["DB_URI"]!
+  DB_URI: process.env["CHARTSMITH_PG_URI"] || process.env["DB_URI"]!,
 };
 
 export async function loadParams() {

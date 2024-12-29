@@ -1,4 +1,4 @@
-"use server"
+"use server";
 
 import { Session } from "@/lib/types/session";
 import { findSession } from "../session";
@@ -20,4 +20,3 @@ export async function validateSession(token: string): Promise<Session | undefine
     throw err;
   }
 }
-

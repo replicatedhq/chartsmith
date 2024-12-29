@@ -1,8 +1,8 @@
-import React, { useRef, useEffect } from 'react';
-import { Message } from '../types';
-import { ChatMessage } from './ChatMessage';
-import { ChatInput } from './ChatInput';
-import { useTheme } from '../../../contexts/ThemeContext';
+import React, { useRef, useEffect } from "react";
+import { Message } from "../types";
+import { ChatMessage } from "./ChatMessage";
+import { ChatInput } from "./ChatInput";
+import { useTheme } from "../../../contexts/ThemeContext";
 
 interface ChatPanelProps {
   messages: Message[];
@@ -15,30 +15,18 @@ export function ChatPanel({ messages, onSendMessage, onUndoChanges }: ChatPanelP
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
-  // Find the last assistant message with changes
-  const lastAssistantMessageWithChanges = messages
-    .filter(m => m.role === 'assistant' && m.changes)
-    .pop();
-
   return (
     <>
-      <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${
-        theme === 'dark' ? 'bg-dark' : 'bg-gray-50'
-      }`}>
+      <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${theme === "dark" ? "bg-dark-surface" : "bg-gray-50"}`}>
         {messages.map((message, index) => (
-          <ChatMessage
-            key={index}
-            message={message}
-            isLastAssistantMessage={message === lastAssistantMessageWithChanges}
-            onUndo={() => onUndoChanges?.(message)}
-          />
+          <ChatMessage key={index} message={message} onUndo={() => onUndoChanges?.(message)} />
         ))}
         <div ref={messagesEndRef} />
       </div>
