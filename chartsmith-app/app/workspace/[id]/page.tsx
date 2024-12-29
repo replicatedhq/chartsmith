@@ -16,6 +16,7 @@ import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { Card } from '@/components/ui/Card';
 import { ChatMessage } from '@/components/editor/chat/ChatMessage';
 import { getCentrifugoTokenAction } from '@/lib/centrifugo/actions/get-centrifugo-token-action';
+import { sendChatMessageAction } from '@/lib/workspace/actions/send-chat-message';
 import { Centrifuge } from "centrifuge";
 
 export default function WorkspacePage() {
@@ -146,7 +147,8 @@ export default function WorkspacePage() {
 
 
   const handleSendMessage = async (message: string) => {
-    return;
+    if (!session || !workspace) return;
+    await sendChatMessageAction(session, workspace.id, message);
   };
 
 

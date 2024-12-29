@@ -15,3 +15,9 @@
 - Never update state of a component during render of another component
 - Move state updates that depend on prop/state changes into useEffect
 - Use stable IDs as React keys when available to preserve component state during updates
+
+# Theme
+
+- Use bg-dark-surface for dark mode input backgrounds
+- Use bg-dark for dark mode page backgrounds
+- Use border-dark-border for dark mode borders

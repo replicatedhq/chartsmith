@@ -37,7 +37,7 @@ export function ChatInput({ onSubmit }: ChatInputProps) {
           onKeyDown={handleKeyDown}
           placeholder="Type your message..."          className={`w-full px-4 py-3 rounded-lg ${
             theme === 'dark'
-              ? 'bg-dark border-dark-border text-gray-300 placeholder-gray-500'
+              ? 'bg-dark-surface border-dark-border text-gray-300 placeholder-gray-500'
               : 'bg-white border-gray-200 text-gray-700 placeholder-gray-400'
           } border focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent`}
         />
