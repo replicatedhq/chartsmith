@@ -1,22 +1,18 @@
-"use client"
+"use client";
 
-import { useSession } from '@/app/hooks/useSession';
-import { SideNav } from '@/components/SideNav';
-import { useTheme } from '@/contexts/ThemeContext';
-import { useWorkspace, WorkspaceProvider } from '@/contexts/WorkspaceContext';
-import { WorkspaceUIProvider, useWorkspaceUI } from '@/contexts/WorkspaceUIContext';
-import { Workspace } from '@/lib/types/workspace';
-import { getWorkspaceAction } from '@/lib/workspace/actions/get-workspace';
-import { useParams } from 'next/navigation';
-import React, { useEffect, useState } from 'react';
+import { useSession } from "@/app/hooks/useSession";
+import { SideNav } from "@/components/SideNav";
+import { useTheme } from "@/contexts/ThemeContext";
+import { useWorkspace, WorkspaceProvider } from "@/contexts/WorkspaceContext";
+import { WorkspaceUIProvider, useWorkspaceUI } from "@/contexts/WorkspaceUIContext";
 
-type WorkspaceChildProps = {
-  workspace: Workspace | undefined;
-};
+import { getWorkspaceAction } from "@/lib/workspace/actions/get-workspace";
+import { useParams } from "next/navigation";
+import React, { useEffect } from "react";
 
-interface LayoutProps {
-  children: React.ReactElement<WorkspaceChildProps>;
-}
+
+
+
 
 function WorkspaceLayoutContent({
   children,
@@ -31,25 +27,15 @@ function WorkspaceLayoutContent({
 
   useEffect(() => {
     if (!session || !params.id) return;
-    getWorkspaceAction(session, params.id as string).then(workspace => {
+    getWorkspaceAction(session, params.id as string).then((workspace) => {
       setWorkspace(workspace);
     });
   }, [session, params.id, setWorkspace]);
 
   return (
-    <div className={`min-h-screen ${theme === 'dark' ? 'bg-dark' : 'bg-white'} flex w-full`}>
-      {params.id && workspace && workspace.files.length > 0 && (
-        <SideNav
-          workspaceID={params.id as string}
-          isChatVisible={isChatVisible}
-          onToggleChat={() => setIsChatVisible(!isChatVisible)}
-          isFileTreeVisible={isFileTreeVisible}
-          onToggleFileTree={() => setIsFileTreeVisible(!isFileTreeVisible)}
-        />
-      )}
-      <div className="flex-1">
-        {children}
-      </div>
+    <div className={`min-h-screen ${theme === "dark" ? "bg-dark" : "bg-white"} flex w-full`}>
+      {params.id && workspace && workspace.files.length > 0 && <SideNav workspaceID={params.id as string} isChatVisible={isChatVisible} onToggleChat={() => setIsChatVisible(!isChatVisible)} isFileTreeVisible={isFileTreeVisible} onToggleFileTree={() => setIsFileTreeVisible(!isFileTreeVisible)} />}
+      <div className="flex-1">{children}</div>
     </div>
   );
 }
@@ -58,9 +44,7 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
   return (
     <WorkspaceUIProvider>
       <WorkspaceProvider>
-        <WorkspaceLayoutContent>
-          {children}
-        </WorkspaceLayoutContent>
+        <WorkspaceLayoutContent>{children}</WorkspaceLayoutContent>
       </WorkspaceProvider>
     </WorkspaceUIProvider>
   );

@@ -6,7 +6,7 @@ export interface YAMLError {
 export function validateYAMLIndentation(content: string): YAMLError[] {
   // Simple implementation that checks for basic indentation issues
   const errors: YAMLError[] = [];
-  const lines = content.split('\n');
+  const lines = content.split("\n");
   let previousIndent = 0;
 
   lines.forEach((line, index) => {
@@ -15,7 +15,7 @@ export function validateYAMLIndentation(content: string): YAMLError[] {
       if (indent > previousIndent + 2) {
         errors.push({
           line: index + 1,
-          message: 'Invalid indentation: too many spaces'
+          message: "Invalid indentation: too many spaces",
         });
       }
       previousIndent = indent;

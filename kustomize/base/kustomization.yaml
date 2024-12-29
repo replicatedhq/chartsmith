@@ -1,0 +1,4 @@
+resources:
+  - ../../kustomize/worker/overlays/dev
+  - ../../kustomize/app/overlays/dev
+  - ../../kustomize/migrations/overlays/dev

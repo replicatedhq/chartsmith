@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState } from "react";
 
 interface ValuesScenariosContextType {
   isOpen: boolean;
@@ -31,22 +31,24 @@ export function ValuesScenariosProvider({ children }: { children: React.ReactNod
   };
 
   const removeScenario = (id: string) => {
-    setScenarios(scenarios.filter(s => s.id !== id));
+    setScenarios(scenarios.filter((s) => s.id !== id));
     if (activeScenario?.id === id) {
       setActiveScenario(null);
     }
   };
 
   return (
-    <ValuesScenariosContext.Provider value={{
-      isOpen,
-      toggleScenarios,
-      scenarios,
-      addScenario,
-      removeScenario,
-      activeScenario,
-      setActiveScenario,
-    }}>
+    <ValuesScenariosContext.Provider
+      value={{
+        isOpen,
+        toggleScenarios,
+        scenarios,
+        addScenario,
+        removeScenario,
+        activeScenario,
+        setActiveScenario,
+      }}
+    >
       {children}
     </ValuesScenariosContext.Provider>
   );
@@ -55,7 +57,7 @@ export function ValuesScenariosProvider({ children }: { children: React.ReactNod
 export function useValuesScenarios() {
   const context = useContext(ValuesScenariosContext);
   if (context === undefined) {
-    throw new Error('useValuesScenarios must be used within a ValuesScenariosProvider');
+    throw new Error("useValuesScenarios must be used within a ValuesScenariosProvider");
   }
   return context;
 }

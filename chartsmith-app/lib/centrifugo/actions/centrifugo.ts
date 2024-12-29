@@ -13,7 +13,7 @@ export async function getCentrifugoToken(workspaceID: string): Promise<string> {
     const claims: CentrifugoClaims = {
       sub: workspaceID,
       exp: new Date().getTime() + 60 * 60,
-      iat: new Date().getTime()
+      iat: new Date().getTime(),
     };
 
     const jwtSigningKey = await getCentrifugoJwtSigningKey();

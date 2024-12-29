@@ -3,7 +3,6 @@ export interface Workspace {
   createdAt: Date;
   lastUpdatedAt: Date;
   name: string;
-
   files: File[];
 }
 

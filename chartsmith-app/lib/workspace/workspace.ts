@@ -1,6 +1,6 @@
 import { getDB } from "../data/db";
 import { getParam } from "../data/param";
-import { FileNode } from "../types/files";
+
 import { File, Workspace } from "../types/workspace";
 import * as srs from "secure-random-string";
 
@@ -12,26 +12,26 @@ export async function createWorkspace(name: string, createdType: string, prompt:
     // Start transaction
     const client = await db.connect();
     try {
-      await client.query('BEGIN');
+      await client.query("BEGIN");
 
       await client.query(
         `INSERT INTO workspace (id, created_at, last_updated_at, name, created_by_user_id, created_type, prompt, current_revision_number)
         VALUES ($1, now(), now(), $2, $3, $4, $5, 0)`,
-        [id, name, userId, createdType, prompt]
+        [id, name, userId, createdType, prompt],
       );
 
-      let chatId: string = srs.default({ length: 12, alphanumeric: true });
+      const chatId: string = srs.default({ length: 12, alphanumeric: true });
       if (createdType === "prompt") {
         await client.query(
           `INSERT INTO workspace_chat (id, workspace_id, created_at, sent_by, prompt, response, is_complete, is_initial_message)
           VALUES ($1, $2, now(), $3, $4, null, false, true)`,
-          [chatId, id, userId, prompt]
+          [chatId, id, userId, prompt],
         );
       }
 
-      await client.query(`SELECT pg_notify('new_chat', $1)`, [chatId]);
+      await client.query("COMMIT");
 
-      await client.query('COMMIT');
+      await client.query(`SELECT pg_notify('new_chat', $1)`, [chatId]);
 
       return {
         id: id,
@@ -42,7 +42,7 @@ export async function createWorkspace(name: string, createdType: string, prompt:
       };
     } catch (err) {
       // Rollback transaction on error
-      await client.query('ROLLBACK');
+      await client.query("ROLLBACK");
       throw err;
     } finally {
       // Release the client back to the pool
@@ -73,7 +73,7 @@ export async function getWorkspace(id: string): Promise<Workspace | undefined> {
             WHERE
                 workspace.id = $1
         `,
-      [id]
+      [id],
     );
 
     if (result.rows.length === 0) {
@@ -82,7 +82,7 @@ export async function getWorkspace(id: string): Promise<Workspace | undefined> {
 
     const row = result.rows[0];
 
-    const w = {
+    const w: Workspace = {
       id: row.id,
       createdAt: row.created_at,
       lastUpdatedAt: row.last_updated_at,
@@ -115,14 +115,14 @@ async function listFilesForWorkspace(workspaceID: string, revisionNumber: number
             WHERE
                 workspace_file.workspace_id = $1 AND workspace_file.revision_number = $2
         `,
-      [workspaceID, revisionNumber]
+      [workspaceID, revisionNumber],
     );
 
     if (result.rows.length === 0) {
       return [];
     }
 
-    const files: File[] = result.rows.map((row: any) => {
+    const files: File[] = result.rows.map((row: { file_path: string; content: string; name: string }) => {
       return {
         path: row.file_path,
         content: row.content,

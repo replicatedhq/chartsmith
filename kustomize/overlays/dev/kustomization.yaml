@@ -1,0 +1,4 @@
+resources:
+  - ../../base
+  - ./postgres/postgres.yaml
+  - ./centrifugo/centrifugo.yaml

@@ -1,4 +1,4 @@
-"use server"
+"use server";
 
 import { Session } from "@/lib/types/session";
 import { Workspace } from "@/lib/types/workspace";

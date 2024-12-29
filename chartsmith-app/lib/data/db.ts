@@ -1,6 +1,6 @@
-import { Pool, PoolConfig } from 'pg';
-import { parse } from 'url';
-import { parse as parseQueryString } from 'querystring';
+import { Pool, PoolConfig } from "pg";
+import { parse } from "url";
+import { parse as parseQueryString } from "querystring";
 
 let pool: Pool | null = null;
 
@@ -13,9 +13,9 @@ export function getDB(uri: string): Pool {
   const auth = params.auth?.split(":") || [];
 
   let ssl: boolean | { rejectUnauthorized: boolean } = {
-    rejectUnauthorized: false
+    rejectUnauthorized: false,
   };
-  const parsedQuery = parseQueryString(params.query || '');
+  const parsedQuery = parseQueryString(params.query || "");
   if (parsedQuery.sslmode === "disable") {
     ssl = false;
   }
@@ -23,13 +23,13 @@ export function getDB(uri: string): Pool {
   const config: PoolConfig = {
     user: auth[0],
     password: auth[1],
-    host: params.hostname || '',
-    port: parseInt(params.port || '5432'),
-    database: params.pathname?.split("/")[1] || '',
+    host: params.hostname || "",
+    port: parseInt(params.port || "5432"),
+    database: params.pathname?.split("/")[1] || "",
     ssl,
     max: 20,
     idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 2000
+    connectionTimeoutMillis: 2000,
   };
 
   pool = new Pool(config);

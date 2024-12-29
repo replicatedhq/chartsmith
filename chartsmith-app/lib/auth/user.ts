@@ -17,7 +17,7 @@ export async function upsertUser(email: string, name: string, imageUrl: string):
       `INSERT INTO chartsmith_user (id, email, name, image_url, created_at, last_login_at, last_active_at)
       VALUES ($1, $2, $3, $4, now(), now(), now())
         `,
-      [id, email, name, imageUrl]
+      [id, email, name, imageUrl],
     );
 
     return {
@@ -27,7 +27,7 @@ export async function upsertUser(email: string, name: string, imageUrl: string):
       imageUrl: imageUrl,
       createdAt: new Date(),
       lastLoginAt: new Date(),
-      lastActiveAt: new Date()
+      lastActiveAt: new Date(),
     };
   } catch (err) {
     console.error(err);
@@ -54,7 +54,7 @@ export async function findUser(email: string): Promise<User | undefined> {
             WHERE
                 chartsmith_user.email = $1
         `,
-      [email]
+      [email],
     );
 
     if (result.rows.length === 0) {
@@ -70,7 +70,7 @@ export async function findUser(email: string): Promise<User | undefined> {
       imageUrl: row.image_url,
       createdAt: row.created_at,
       lastLoginAt: row.last_login_at,
-      lastActiveAt: row.last_active_at
+      lastActiveAt: row.last_active_at,
     };
   } catch (err) {
     console.error(err);
@@ -96,7 +96,7 @@ export async function getUser(id: string): Promise<User | undefined> {
             WHERE
                 chartsmith_user.id = $1
         `,
-      [id]
+      [id],
     );
 
     if (result.rows.length === 0) {
@@ -112,7 +112,7 @@ export async function getUser(id: string): Promise<User | undefined> {
       imageUrl: row.image_url,
       createdAt: row.created_at,
       lastLoginAt: row.last_login_at,
-      lastActiveAt: row.last_active_at
+      lastActiveAt: row.last_active_at,
     };
   } catch (err) {
     console.error(err);

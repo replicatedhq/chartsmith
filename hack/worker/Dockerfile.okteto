@@ -1,0 +1,12 @@
+FROM golang:1.23
+
+WORKDIR /go/src/github.com/replicatedhq/chartsmith
+
+COPY go.mod go.sum ./
+RUN go mod download -x
+
+COPY . .
+
+RUN make build-worker
+
+CMD ["/go/src/github.com/replicatedhq/chartsmith/bin/chartsmith-worker"]

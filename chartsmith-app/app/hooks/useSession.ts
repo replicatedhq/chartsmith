@@ -13,7 +13,7 @@ export const useSession = (redirectIfNotLoggedIn: boolean = false) => {
   useEffect(() => {
     const token = document.cookie
       .split("; ")
-      .find(cookie => cookie.startsWith("session="))
+      .find((cookie) => cookie.startsWith("session="))
       ?.split("=")[1];
 
     if (!token) {
@@ -45,6 +45,6 @@ export const useSession = (redirectIfNotLoggedIn: boolean = false) => {
 
   return {
     isSessionLoading: isLoading,
-    session
+    session,
   };
 };
