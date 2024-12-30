@@ -1,11 +1,13 @@
 import { WorkspaceContent } from "@/components/editor/workspace/WorkspaceContent";
 import { getWorkspace } from "@/lib/workspace/workspace";
 
+interface PageProps {
+  params: Promise<{ id: string }>
+}
+
 export default async function WorkspacePage({
   params
-}: {
-  params: { id: string }
-}) {
+}: PageProps) {
   const { id } = await params;
   const workspace = await getWorkspace(id);
   if (!workspace) {
