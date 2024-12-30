@@ -47,3 +47,13 @@ Hydration:
 - Use suppressHydrationWarning on elements where hydration mismatches are expected and harmless (e.g. testing attributes, timestamps)
 - For dynamic content that differs between server and client, use useEffect to update the content after initial render
 - Avoid using browser-only APIs in the initial render (window, document, etc)
+
+React Hooks:
+- Call hooks at the top level of component
+- Don't call hooks inside conditionals, loops, or nested functions
+- Extract values from hooks before using in JSX conditionals
+
+Development:
+- Run lint/type checks before committing, not after every small change
+- For small changes that are obviously correct, skip the checks
+- Run full build before deploying or when making significant changes

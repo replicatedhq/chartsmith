@@ -9,7 +9,7 @@ import { FileNode } from "@/lib/types/files";
 
 interface WorkspaceContainerProps {
   view: EditorView;
-  onViewChange: () => void;
+  onViewChange: (newView: EditorView) => void;
   files: FileNode[];
   renderedFiles: FileNode[];
   selectedFile?: FileNode;
@@ -23,9 +23,14 @@ interface WorkspaceContainerProps {
 export function WorkspaceContainer({ view, onViewChange, files, renderedFiles, selectedFile, onFileSelect, onFileDelete, editorContent, onEditorChange, isFileTreeVisible }: WorkspaceContainerProps) {
   const { theme } = useTheme();
 
+  const handleViewChange = () => {
+    const newView = view === "source" ? "rendered" : "source";
+    onViewChange(newView);
+  };
+
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <EditorNav view={view} onViewChange={onViewChange} />
+      <EditorNav view={view} onViewChange={handleViewChange} />
       <div className="flex-1 flex min-h-0">
         {isFileTreeVisible && (view === "source" ? <FileBrowser nodes={files} onFileSelect={onFileSelect} onFileDelete={onFileDelete} selectedFile={selectedFile} /> : <RenderedFileBrowser nodes={renderedFiles} onFileSelect={onFileSelect} selectedFile={selectedFile} />)}
         <div className={`w-px ${theme === "dark" ? "bg-dark-border" : "bg-gray-200"} flex-shrink-0`} />

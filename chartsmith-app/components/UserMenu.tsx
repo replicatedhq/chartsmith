@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
+import { usePathname } from "next/navigation";
 import { SettingsModal } from "./SettingsModal";
 import { LogOut, Settings } from "lucide-react";
 import Image from "next/image";
@@ -10,6 +11,7 @@ import Image from "next/image";
 export function UserMenu() {
   const { user, signOut } = useAuth();
   const { theme } = useTheme();
+  const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -34,7 +36,7 @@ export function UserMenu() {
       </button>
 
       {isOpen && (
-        <div className={`absolute left-16 bottom-full mb-2 w-64 rounded-lg shadow-lg border py-1 z-50 ${theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"}`}>
+        <div className={`absolute ${pathname === '/' ? 'right-0 top-full mt-2' : 'left-16 bottom-full mb-2'} w-64 rounded-lg shadow-lg border py-1 z-50 ${theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"}`}>
           <div className={`px-4 py-2 border-b ${theme === "dark" ? "border-dark-border" : "border-gray-200"}`}>
             <div className={`font-medium ${theme === "dark" ? "text-white" : "text-gray-900"}`}>{user.name}</div>
             <div className={`text-sm ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>{user.email}</div>
