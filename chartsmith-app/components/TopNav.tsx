@@ -33,7 +33,7 @@ export function TopNav() {
   return (
     <>
       <nav className={`h-14 border-b flex items-center justify-between px-4 relative z-50 ${theme === "dark" ? "border-dark-border bg-dark-surface" : "border-gray-200 bg-white"}`}>
-        <Link href="/" className={`flex items-center space-x-2 w-[240px] ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
+        <Link href="/" className={`flex items-center space-x-2 min-w-[200px] ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <rect width="24" height="24" rx="4" fill="#6a77fb" />
             <path d="M7 7H11V11H7V7Z" fill="white" />
@@ -58,7 +58,7 @@ export function TopNav() {
           </div>
         </div>
 
-        <div className="flex items-center space-x-2 w-[240px] justify-end">
+        <div className="flex items-center space-x-2 min-w-[200px] justify-end">
           <StatusDropdown label="Eval" items={evalItems} showStatus={true} theme={theme} />
           <StatusDropdown label="Import/Export" items={importExportItems} showStatus={false} theme={theme} />
         </div>

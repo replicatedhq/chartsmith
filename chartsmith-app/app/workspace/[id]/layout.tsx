@@ -25,7 +25,7 @@ async function getSessionAndWorkspace(workspaceId: string) {
     redirect('/');
   }
 
-  return { session, workspace };
+  return { session };
 }
 
 export default async function WorkspaceLayout({
@@ -36,18 +36,12 @@ export default async function WorkspaceLayout({
   params: { id: string };
 }) {
   const { id } = await params;
-  const { workspace } = await getSessionAndWorkspace(id);
+  await getSessionAndWorkspace(id);
 
   return (
-    <WorkspaceUIProvider>
+    <WorkspaceUIProvider initialChatVisible={true} initialFileTreeVisible={true}>
       <div className="min-h-screen bg-[var(--background)] flex w-full" suppressHydrationWarning>
-        {workspace.files.length > 0 && (
-          <SideNav
-            workspaceID={id}
-            isChatVisible={true}
-            isFileTreeVisible={true}
-          />
-        )}
+        <SideNav workspaceID={id} />
         <div className="flex-1">
           {children}
         </div>

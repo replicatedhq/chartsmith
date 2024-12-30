@@ -18,7 +18,13 @@
 
 # Theme
 
-Theme colors:
+# Layout
+
+- Use min-w-[size] instead of w-[size] for fixed-width sections in flex layouts to prevent overflow
+- Keep flex-1 on growing sections between fixed-width elements
+- For nav bars with 3 sections (left, center, right), use min-width on outer sections to prevent squishing
+
+# Theme colors:
 
 Light theme:
 - Background: #ffffff (bg-light)
@@ -57,6 +63,7 @@ Development:
 - Run lint/type checks before committing, not after every small change
 - For small changes that are obviously correct, skip the checks
 - Run full build before deploying or when making significant changes
+- Hide dev indicators in next.config.ts with devIndicators: { buildActivity: false, buildActivityPosition: "bottom-right", appIsrStatus: false }
 
 State Management:
 - Prefer using centralized state from contexts over local component state when data is shared

@@ -14,7 +14,7 @@ export function EditorLayout({ children }: EditorLayoutProps) {
       <div className="flex-none">
         <TopNav />
       </div>
-      <div className="flex-1 flex min-h-0 w-full">{children}</div>
+      <div className="flex-1 flex min-h-0 w-full max-w-[100vw] overflow-hidden">{children}</div>
     </div>
   );
 }

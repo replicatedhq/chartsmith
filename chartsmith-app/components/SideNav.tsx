@@ -7,17 +7,15 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { usePathname } from "next/navigation";
 import { Tooltip } from "./ui/Tooltip";
 import Link from "next/link";
+import { useWorkspaceUI } from "@/contexts/WorkspaceUIContext";
 
 interface SideNavProps {
   workspaceID: string;
-  isChatVisible?: boolean;
-  onToggleChat?: () => void;
-  isFileTreeVisible?: boolean;
-  onToggleFileTree?: () => void;
 }
 
-export function SideNav({ workspaceID, isChatVisible = true, onToggleChat, isFileTreeVisible = true, onToggleFileTree }: SideNavProps) {
+export function SideNav({ workspaceID }: SideNavProps) {
   const { theme } = useTheme();
+  const { isChatVisible, setIsChatVisible, isFileTreeVisible, setIsFileTreeVisible } = useWorkspaceUI();
 
   return (
     <nav className={`w-16 flex-shrink-0 ${theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-light-surface border-light-border"} border-r flex flex-col justify-between`}>
@@ -34,7 +32,7 @@ export function SideNav({ workspaceID, isChatVisible = true, onToggleChat, isFil
 
         <div className="mt-4">
           <Tooltip content="Toggle Chat">
-            <button onClick={onToggleChat} className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${isChatVisible ? `${theme === "dark" ? "bg-dark-border/60" : "bg-light-border/60"} text-primary` : `text-neutral hover:${theme === "dark" ? "bg-dark-border/40" : "bg-light-border/40"}`}`}>
+            <button onClick={() => setIsChatVisible(!isChatVisible)} className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${isChatVisible ? `${theme === "dark" ? "bg-dark-border/60" : "bg-light-border/60"} text-primary` : `text-neutral hover:${theme === "dark" ? "bg-dark-border/40" : "bg-light-border/40"}`}`}>
               <MessageSquare className="w-5 h-5" />
             </button>
           </Tooltip>
@@ -43,7 +41,7 @@ export function SideNav({ workspaceID, isChatVisible = true, onToggleChat, isFil
         <div className="mt-2">
           <Tooltip content="Toggle File Explorer">
             <button
-              onClick={onToggleFileTree}
+              onClick={() => setIsFileTreeVisible(!isFileTreeVisible)}
               className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${isFileTreeVisible ? `${theme === "dark" ? "bg-dark-border/60" : "bg-light-border/60"} text-primary` : `text-neutral hover:${theme === "dark" ? "bg-dark-border/40" : "bg-light-border/40"}`}`}
             >
               <FolderKanban className="w-5 h-5" />

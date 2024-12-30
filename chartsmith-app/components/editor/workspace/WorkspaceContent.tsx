@@ -207,24 +207,26 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
 
   return (
     <EditorLayout>
-      {isChatVisible && <ChatContainer messages={messages} onSendMessage={handleSendMessage} onUndoChanges={handleUndoChanges} />}
-      <WorkspaceContainer
-        view={view}
-        onViewChange={handleViewChange}
-        files={workspace.files.map(file => ({
-          name: file.name,
-          path: file.path,
-          content: file.content,
-          type: 'file' as const
-        }))}
-        renderedFiles={renderedFiles}
-        selectedFile={selectedFile}
-        onFileSelect={handleFileSelect}
-        onFileDelete={handleFileDelete}
-        editorContent={editorContent}
-        onEditorChange={(value) => setEditorContent(value ?? "")}
-        isFileTreeVisible={isFileTreeVisible}
-      />
+      <div className="flex w-full overflow-hidden">
+        {isChatVisible && <ChatContainer messages={messages} onSendMessage={handleSendMessage} onUndoChanges={handleUndoChanges} />}
+        <WorkspaceContainer
+          view={view}
+          onViewChange={handleViewChange}
+          files={workspace.files.map(file => ({
+            name: file.name,
+            path: file.path,
+            content: file.content,
+            type: 'file' as const
+          }))}
+          renderedFiles={renderedFiles}
+          selectedFile={selectedFile}
+          onFileSelect={handleFileSelect}
+          onFileDelete={handleFileDelete}
+          editorContent={editorContent}
+          onEditorChange={(value) => setEditorContent(value ?? "")}
+          isFileTreeVisible={isFileTreeVisible}
+        />
+      </div>
     </EditorLayout>
   );
 }
