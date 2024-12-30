@@ -74,9 +74,7 @@ export function SideNav({ workspaceID, isChatVisible = true, onToggleChat, isFil
       </div>
 
       <div className="py-4 flex justify-center">
-        <Tooltip content="Account Settings">
-          <UserMenu />
-        </Tooltip>
+        <UserMenu />
       </div>
     </nav>
   );

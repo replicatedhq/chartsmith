@@ -18,6 +18,14 @@
 
 # Theme
 
-- Use bg-dark-surface for dark mode input backgrounds
-- Use bg-dark for dark mode page backgrounds
-- Use border-dark-border for dark mode borders
+Dark theme colors:
+- Background: #0f0f0f (bg-dark)
+- Surface: #1a1a1a (bg-dark-surface)
+- Border: #2f2f2f (border-dark-border)
+- Text: #ffffff (text-white)
+
+Usage:
+- Use bg-dark for main page backgrounds
+- Use bg-dark-surface for elevated surfaces like cards, inputs, dropdowns
+- Use border-dark-border for borders and dividers
+- Maintain strong contrast between layers in dark mode

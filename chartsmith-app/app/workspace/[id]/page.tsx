@@ -62,12 +62,12 @@ export default function WorkspacePage() {
 
       const cf = centrifugeRef.current;
 
-      cf.on("connected", (ctx) => {
-        // console.log("Connected to Centrifugo:", ctx);
+      cf.on("connected", () => {
+        // console.log("Connected to Centrifugo");
       });
 
-      cf.on("disconnected", (ctx) => {
-        // console.log("Disconnected from Centrifugo:", ctx);
+      cf.on("disconnected", () => {
+        // console.log("Disconnected from Centrifugo");
       });
 
       cf.on("error", (ctx) => {
@@ -103,8 +103,8 @@ export default function WorkspacePage() {
       }
     });
 
-    sub.on("subscribed", (ctx) => {
-      // console.log(`Subscribed to channel ${channel}:`, ctx);
+    sub.on("subscribed", () => {
+      // console.log(`Subscribed to channel ${channel}`);
     });
 
     sub.on("error", (ctx) => {

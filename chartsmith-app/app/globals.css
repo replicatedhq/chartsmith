@@ -10,9 +10,9 @@
 }
 
 :root.dark {
-  --background: #161616;
-  --surface: #1e1e1e;
-  --border: #2a2a2a;
+  --background: #0f0f0f;  /* Darker background */
+  --surface: #1a1a1a;    /* Darker surface */
+  --border: #2f2f2f;     /* More visible border */
   --text: #ffffff;
 }
 

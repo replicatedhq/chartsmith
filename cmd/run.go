@@ -45,7 +45,7 @@ func RunCmd() *cobra.Command {
 	}
 
 	runCmd.Flags().String("pg-uri", "", "Postgres URI")
-	runCmd.Flags().String("centrifugo-address", "http://localhost:8888/api", "centrifugo address")
+	runCmd.Flags().String("centrifugo-address", "http://localhost:8000/api", "centrifugo address")
 	runCmd.Flags().String("centrifugo-api-key", "api_key", "centrifugo api key")
 
 	return runCmd
