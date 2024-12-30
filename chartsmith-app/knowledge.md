@@ -18,7 +18,13 @@
 
 # Theme
 
-Theme colors:
+# Layout
+
+- Use min-w-[size] instead of w-[size] for fixed-width sections in flex layouts to prevent overflow
+- Keep flex-1 on growing sections between fixed-width elements
+- For nav bars with 3 sections (left, center, right), use min-width on outer sections to prevent squishing
+
+# Theme colors:
 
 Light theme:
 - Background: #ffffff (bg-light)
