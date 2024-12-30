@@ -57,6 +57,7 @@ Development:
 - Run lint/type checks before committing, not after every small change
 - For small changes that are obviously correct, skip the checks
 - Run full build before deploying or when making significant changes
+- Hide dev indicators in next.config.ts with devIndicators: { buildActivity: false }
 
 State Management:
 - Prefer using centralized state from contexts over local component state when data is shared
