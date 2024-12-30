@@ -4,9 +4,9 @@
 
 :root {
   --background: #ffffff;
-  --surface: #f5f5f5;
-  --border: #e5e5e5;
-  --text: #1a1a1a;
+  --surface: #f1f5f9;    /* Slightly more saturated surface */
+  --border: #e2e8f0;     /* More visible border */
+  --text: #0f172a;       /* Darker text for better contrast */
 }
 
 :root.dark {

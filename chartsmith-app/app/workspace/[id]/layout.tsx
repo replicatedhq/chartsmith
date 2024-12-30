@@ -33,7 +33,7 @@ function WorkspaceLayoutContent({
   }, [session, params.id, setWorkspace]);
 
   return (
-    <div className={`min-h-screen ${theme === "dark" ? "bg-dark" : "bg-white"} flex w-full`}>
+    <div className={`min-h-screen ${theme === "dark" ? "bg-dark" : "bg-white"} flex w-full`} suppressHydrationWarning>
       {params.id && workspace && workspace.files.length > 0 && <SideNav workspaceID={params.id as string} isChatVisible={isChatVisible} onToggleChat={() => setIsChatVisible(!isChatVisible)} isFileTreeVisible={isFileTreeVisible} onToggleFileTree={() => setIsFileTreeVisible(!isFileTreeVisible)} />}
       <div className="flex-1">{children}</div>
     </div>
