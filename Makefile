@@ -37,3 +37,11 @@ okteto-dev:
 	@go mod download -x
 	@make build-worker
 	@printf "\n\n To build and run this project, run: \n\n   # make run-worker\n\n"
+
+.PHONY: release
+release:
+	dagger call release \
+		--version $(version) \
+		--github-token env:GITHUB_TOKEN \
+		--op-service-account env:OP_SERVICE_ACCOUNT \
+		--progress plain

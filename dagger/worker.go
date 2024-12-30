@@ -5,6 +5,21 @@ import (
 	"dagger/chartsmith/internal/dagger"
 )
 
+func buildWorker(ctx context.Context, source *dagger.Directory) (*dagger.Container, *dagger.Container, error) {
+	binary := buildEnvWorker(source).
+		WithExec([]string{"make", "build-worker"}).
+		File("bin/chartsmith-worker")
+
+	// build a wolfi container
+	releaseContainer := buildEnvWorker(source).
+		WithFile("/chartsmith-worker", binary)
+	releaseContainer = releaseContainer.WithEntrypoint([]string{
+		"/chartsmith-worker",
+	})
+
+	return releaseContainer, releaseContainer, nil
+}
+
 func testWorker(source *dagger.Directory) (*ValidateResult, error) {
 	testContainer := buildEnvWorker(source).
 		WithExec([]string{"make", "test"})
