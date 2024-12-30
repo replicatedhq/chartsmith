@@ -57,3 +57,8 @@ Development:
 - Run lint/type checks before committing, not after every small change
 - For small changes that are obviously correct, skip the checks
 - Run full build before deploying or when making significant changes
+
+State Management:
+- Prefer using centralized state from contexts over local component state when data is shared
+- Files and workspace data come from Centrifugo real-time updates - don't maintain duplicate state
+- Explorer follows new files automatically - selects most recently added file

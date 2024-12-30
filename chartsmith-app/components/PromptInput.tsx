@@ -20,12 +20,7 @@ export function PromptInput({ onSubmit, isLoading, className }: PromptInputProps
     textareaRef.current?.focus();
   }, []);
 
-  // Reset prompt when loading state changes back to false
-  useEffect(() => {
-    if (!isLoading) {
-      setPrompt("");
-    }
-  }, [isLoading]);
+  // Don't reset the prompt - it will be cleared when component unmounts during navigation
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
