@@ -39,7 +39,7 @@ func (p *Parser) Parse(chunk string) {
 
 	// Extract title if we haven't already
 	if p.result.Title == "" {
-		titleRegex := regexp.MustCompile(`<helmsmithArtifact[^>]*title="([^"]*)"`)
+		titleRegex := regexp.MustCompile(`<helmsmithArtifact.*title="([^"]*)">`)
 		if match := titleRegex.FindStringSubmatch(p.buffer); len(match) > 1 {
 			p.result.Title = match[1]
 		}
@@ -65,11 +65,18 @@ func (p *Parser) Parse(chunk string) {
 		if !fileExists {
 			// Find where the content starts (after the closing >)
 			contentStart := strings.Index(p.buffer[match[0]:], ">") + match[0] + 1
+			contentEnd := strings.Index(p.buffer[contentStart:], "</helmsmithAction>")
 			if contentStart > match[0] {
-				p.result.Files = append(p.result.Files, HelmFile{
-					Path:    path,
-					Content: p.buffer[contentStart:],
-				})
+				helmFile := HelmFile{
+					Path: path,
+				}
+				if contentEnd > 0 {
+					helmFile.Content = p.buffer[contentStart : contentStart+contentEnd]
+				} else {
+					helmFile.Content = p.buffer[contentStart:]
+				}
+				helmFile.Content = strings.TrimSpace(helmFile.Content)
+				p.result.Files = append(p.result.Files, helmFile)
 			}
 		}
 	}
@@ -99,11 +106,6 @@ func (p *Parser) Parse(chunk string) {
 				file.Content = p.buffer[contentStart:]
 			}
 		}
-	}
-
-	// Trim buffer if it gets too large
-	if len(p.buffer) > 1000000 { // 1MB limit
-		p.buffer = p.buffer[len(p.buffer)-1000000:]
 	}
 }
 

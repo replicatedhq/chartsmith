@@ -26,7 +26,7 @@ func SendChatMessage(ctx context.Context, w *workspacetypes.Workspace, c *chatty
 
 	stream := client.Messages.NewStreaming(context.TODO(), anthropic.MessageNewParams{
 		Model:     anthropic.F(anthropic.ModelClaude3_5Sonnet20241022),
-		MaxTokens: anthropic.F(int64(1024)),
+		MaxTokens: anthropic.F(int64(8192)),
 		Messages: anthropic.F([]anthropic.MessageParam{
 			anthropic.NewAssistantMessage(anthropic.NewTextBlock(systemPrompt)),
 			anthropic.NewUserMessage(anthropic.NewTextBlock(userMessage)),
@@ -49,6 +49,8 @@ func SendChatMessage(ctx context.Context, w *workspacetypes.Workspace, c *chatty
 		message.Accumulate(event)
 
 		switch delta := event.Delta.(type) {
+		default:
+			fmt.Printf("Unknown delta type: %T: %#v\n", delta, delta)
 		case anthropic.ContentBlockDeltaEventDelta:
 			if delta.Text != "" {
 
@@ -58,7 +60,7 @@ func SendChatMessage(ctx context.Context, w *workspacetypes.Workspace, c *chatty
 				fullResponseWithTags += delta.Text
 				c.Response = removeHelmsmithTags(ctx, fullResponseWithTags)
 
-				if strings.Contains(fullResponseWithTags, "<helmsmith") {
+				if strings.Contains(fullResponseWithTags, "<helmsmith") || strings.Contains(fullResponseWithTags, "</helmsmith") {
 					// parse all files and chart in the repsonse
 					if err := parseArtifactsInResponse(w, fullResponseWithTags); err != nil {
 						return err
