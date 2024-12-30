@@ -1,51 +1,57 @@
-"use client";
+"use server"
 
-import { useSession } from "@/app/hooks/useSession";
 import { SideNav } from "@/components/SideNav";
-import { useTheme } from "@/contexts/ThemeContext";
-import { useWorkspace, WorkspaceProvider } from "@/contexts/WorkspaceContext";
-import { WorkspaceUIProvider, useWorkspaceUI } from "@/contexts/WorkspaceUIContext";
+import { WorkspaceUIProvider } from "@/contexts/WorkspaceUIContext";
+import { getWorkspace } from "@/lib/workspace/workspace";
+import { validateSession } from "@/lib/auth/actions/validate-session";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
-import { getWorkspaceAction } from "@/lib/workspace/actions/get-workspace";
-import { useParams } from "next/navigation";
-import React, { useEffect } from "react";
+async function getSessionAndWorkspace(workspaceId: string) {
+  const cookieStore = await cookies();
+  const sessionToken = cookieStore.get('session')?.value;
 
+  if (!sessionToken) {
+    redirect('/login');
+  }
 
+  const session = await validateSession(sessionToken);
+  if (!session) {
+    redirect('/login');
+  }
 
+  const workspace = await getWorkspace(workspaceId);
+  if (!workspace) {
+    redirect('/');
+  }
 
-
-function WorkspaceLayoutContent({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const { theme } = useTheme();
-  const params = useParams();
-  const { session } = useSession();
-  const { workspace, setWorkspace } = useWorkspace();
-  const { isChatVisible, setIsChatVisible, isFileTreeVisible, setIsFileTreeVisible } = useWorkspaceUI();
-
-  useEffect(() => {
-    if (!session || !params.id) return;
-    getWorkspaceAction(session, params.id as string).then((workspace) => {
-      setWorkspace(workspace);
-    });
-  }, [session, params.id, setWorkspace]);
-
-  return (
-    <div className={`min-h-screen ${theme === "dark" ? "bg-dark" : "bg-white"} flex w-full`} suppressHydrationWarning>
-      {params.id && workspace && workspace.files.length > 0 && <SideNav workspaceID={params.id as string} isChatVisible={isChatVisible} onToggleChat={() => setIsChatVisible(!isChatVisible)} isFileTreeVisible={isFileTreeVisible} onToggleFileTree={() => setIsFileTreeVisible(!isFileTreeVisible)} />}
-      <div className="flex-1">{children}</div>
-    </div>
-  );
+  return { session, workspace };
 }
 
-export default function WorkspaceLayout({ children }: { children: React.ReactNode }) {
+export default async function WorkspaceLayout({
+  children,
+  params
+}: {
+  children: React.ReactNode;
+  params: { id: string };
+}) {
+  const { id } = await params;
+  const { workspace } = await getSessionAndWorkspace(id);
+
   return (
     <WorkspaceUIProvider>
-      <WorkspaceProvider>
-        <WorkspaceLayoutContent>{children}</WorkspaceLayoutContent>
-      </WorkspaceProvider>
+      <div className="min-h-screen bg-[var(--background)] flex w-full" suppressHydrationWarning>
+        {workspace.files.length > 0 && (
+          <SideNav
+            workspaceID={id}
+            isChatVisible={true}
+            isFileTreeVisible={true}
+          />
+        )}
+        <div className="flex-1">
+          {children}
+        </div>
+      </div>
     </WorkspaceUIProvider>
   );
 }

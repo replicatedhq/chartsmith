@@ -1,3 +1,5 @@
+"use client"
+
 import React from "react";
 import { Home, FolderKanban, Lightbulb, MessageSquare, FileJson } from "lucide-react";
 import { UserMenu } from "./UserMenu";
