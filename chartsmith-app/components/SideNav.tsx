@@ -52,8 +52,8 @@ export function SideNav({ workspaceID, isChatVisible = true, onToggleChat, isFil
         <div className="mt-2">
           <Tooltip content="Values.yaml Scenarios">
             <Link
-              href="/values-scenarios"
-              className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${usePathname() === "/values-scenarios" ? `${theme === "dark" ? "bg-dark-border/60" : "bg-light-border/60"} text-primary` : `text-neutral hover:${theme === "dark" ? "bg-dark-border/40" : "bg-light-border/40"}`}`}
+              href={`/workspace/${workspaceID}/values`}
+              className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${usePathname() === "/values" ? `${theme === "dark" ? "bg-dark-border/60" : "bg-light-border/60"} text-primary` : `text-neutral hover:${theme === "dark" ? "bg-dark-border/40" : "bg-light-border/40"}`}`}
             >
               <FileJson className="w-5 h-5" />
             </Link>
@@ -74,9 +74,7 @@ export function SideNav({ workspaceID, isChatVisible = true, onToggleChat, isFil
       </div>
 
       <div className="py-4 flex justify-center">
-        <Tooltip content="Account Settings">
-          <UserMenu />
-        </Tooltip>
+        <UserMenu />
       </div>
     </nav>
   );

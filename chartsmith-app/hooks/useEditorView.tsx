@@ -10,8 +10,8 @@ interface ViewState {
   renderedFile?: FileNode;
 }
 
-export function useEditorView(defaultFile?: FileNode) {
-  const [view, setView] = useState<EditorView>("source");
+export function useEditorView(initialView: EditorView = "source", defaultFile?: FileNode) {
+  const [view, setView] = useState<EditorView>(initialView);
   const [viewState, setViewState] = useState<ViewState>(() => ({
     sourceFile: defaultFile,
   }));

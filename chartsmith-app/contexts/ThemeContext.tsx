@@ -12,13 +12,32 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>("dark");
+  // Start with a default theme that matches what we use server-side
+  const [theme, setThemeState] = useState<Theme>('dark');
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  // After mount, check for stored theme preference
+  useEffect(() => {
+    const themeCookie = document.cookie
+      .split('; ')
+      .find(row => row.startsWith('theme='));
+    const storedTheme = themeCookie ? (themeCookie.split('=')[1] as Theme) : 'dark';
+    setThemeState(storedTheme);
+    setIsInitialized(true);
+  }, []);
+
+  const setTheme = (newTheme: Theme) => {
+    // Set cookie with theme preference
+    document.cookie = `theme=${newTheme}; path=/; SameSite=Lax`;
+    setThemeState(newTheme);
+  };
 
   useEffect(() => {
-    // Update both HTML class and CSS variables
-    document.documentElement.classList.remove("light", "dark");
-    document.documentElement.classList.add(theme);
-  }, [theme]);
+    if (isInitialized) {
+      document.documentElement.classList.remove("light", "dark");
+      document.documentElement.classList.add(theme);
+    }
+  }, [theme, isInitialized]);
 
   return <ThemeContext.Provider value={{ theme, setTheme }}>{children}</ThemeContext.Provider>;
 }

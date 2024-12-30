@@ -11,3 +11,11 @@ export interface File {
   content: string;
   name: string;
 }
+
+export interface ValuesScenario {
+  id: string;
+  name: string;
+  description: string;
+  values: string;
+  enabled?: boolean;
+}

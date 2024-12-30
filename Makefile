@@ -5,13 +5,6 @@ WORKER_BUILD_DIR=bin
 GOOS?=$(shell go env GOOS)
 GOARCH?=$(shell go env GOARCH)
 
-.PHONY: postgres
-postgres:
-	docker run --name chartsmith-postgres \
-	    -e POSTGRES_PASSWORD=password \
-	    -d -p5433:5432 \
-	    postgres:16
-
 .PHONY: schema
 schema:
 	rm -rf ./db/generated-schema
@@ -28,17 +21,10 @@ build-worker:
 .PHONY: run-worker
 run-worker: build-worker
 	@echo "Running $(WORKER_BINARY_NAME)..."
-	@./$(WORKER_BUILD_DIR)/$(WORKER_BINARY_NAME) run --pg-uri="$(PG_URI)"
-
-.PHONY: centrifugo
-centrifugo:
-	@echo "Starting centrifugo..."
-	docker run -d --rm \
-		--name centrifugo \
-		--ulimit nofile=262144:262144 \
-		-v ./hack/centrifugo:/centrifugo \
-		-p 8888:8000 centrifugo/centrifugo:v5 centrifugo \
-		-c config.json
+	@./$(WORKER_BUILD_DIR)/$(WORKER_BINARY_NAME) run \
+		--pg-uri="$(PG_URI)" \
+		--centrifugo-address="http://chartsmith-centrifugo:8000/api" \
+		--centrifugo-api-key=api_key
 
 .PHONY: validate
 validate:

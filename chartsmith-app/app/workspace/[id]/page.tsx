@@ -6,7 +6,7 @@ import { EditorLayout } from "@/components/editor/layout/EditorLayout";
 import { WorkspaceContainer } from "@/components/editor/workspace/WorkspaceContainer";
 import { ChatContainer } from "@/components/editor/chat/ChatContainer";
 import { useWorkspaceUI } from "@/contexts/WorkspaceUIContext";
-import { useParams } from "next/navigation";
+import { useParams, usePathname } from "next/navigation";
 import { useSession } from "@/app/hooks/useSession";
 import { getWorkspaceMessagesAction } from "@/lib/workspace/actions/get-workspace-messages";
 import { Message } from "@/components/editor/types";
@@ -34,7 +34,9 @@ export default function WorkspacePage() {
   const centrifugeRef = useRef<Centrifuge | null>(null);
   const hasConnectedRef = useRef(false);
 
-  const { view, toggleView, updateFileSelection } = useEditorView();
+  const { view, toggleView, updateFileSelection } = useEditorView(
+    usePathname()?.endsWith('/rendered') ? 'rendered' : 'source'
+  );
 
   const renderedFiles: FileNode[] = [];
 
@@ -62,12 +64,12 @@ export default function WorkspacePage() {
 
       const cf = centrifugeRef.current;
 
-      cf.on("connected", (ctx) => {
-        // console.log("Connected to Centrifugo:", ctx);
+      cf.on("connected", () => {
+        // console.log("Connected to Centrifugo");
       });
 
-      cf.on("disconnected", (ctx) => {
-        // console.log("Disconnected from Centrifugo:", ctx);
+      cf.on("disconnected", () => {
+        // console.log("Disconnected from Centrifugo");
       });
 
       cf.on("error", (ctx) => {
@@ -103,8 +105,8 @@ export default function WorkspacePage() {
       }
     });
 
-    sub.on("subscribed", (ctx) => {
-      // console.log(`Subscribed to channel ${channel}:`, ctx);
+    sub.on("subscribed", () => {
+      // console.log(`Subscribed to channel ${channel}`);
     });
 
     sub.on("error", (ctx) => {

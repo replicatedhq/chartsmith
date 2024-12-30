@@ -64,8 +64,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = () => {
     setUser(null);
-    // Delete the session cookie by setting it to expire in the past
+    // Delete the session and theme cookies by setting them to expire in the past
     document.cookie = "session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax";
+    document.cookie = "theme=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax";
     // Redirect to home page after logout
     window.location.href = "/";
   };

@@ -15,6 +15,16 @@ export default {
           DEFAULT: "#6366f1",
           "50": "#eef2ff",
         },
+        dark: {
+          DEFAULT: "#0f0f0f",
+          surface: "#1a1a1a",
+          border: "#2f2f2f",
+        },
+        light: {
+          DEFAULT: "#ffffff",
+          surface: "#f1f5f9",
+          border: "#e2e8f0",
+        },
       },
     },
   },
