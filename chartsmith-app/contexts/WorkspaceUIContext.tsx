@@ -11,9 +11,17 @@ interface WorkspaceUIContextType {
 
 const WorkspaceUIContext = createContext<WorkspaceUIContextType | undefined>(undefined);
 
-export function WorkspaceUIProvider({ children }: { children: React.ReactNode }) {
-  const [isChatVisible, setIsChatVisible] = useState(true);
-  const [isFileTreeVisible, setIsFileTreeVisible] = useState(true);
+export function WorkspaceUIProvider({ 
+  children,
+  initialChatVisible = true,
+  initialFileTreeVisible = true
+}: { 
+  children: React.ReactNode;
+  initialChatVisible?: boolean;
+  initialFileTreeVisible?: boolean;
+}) {
+  const [isChatVisible, setIsChatVisible] = useState(initialChatVisible);
+  const [isFileTreeVisible, setIsFileTreeVisible] = useState(initialFileTreeVisible);
 
   return (
     <WorkspaceUIContext.Provider

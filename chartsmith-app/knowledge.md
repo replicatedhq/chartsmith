@@ -62,3 +62,23 @@ State Management:
 - Prefer using centralized state from contexts over local component state when data is shared
 - Files and workspace data come from Centrifugo real-time updates - don't maintain duplicate state
 - Explorer follows new files automatically - selects most recently added file
+- Server-side render layout components when possible to avoid loading states
+- Server-side fetch data in layout.tsx for initial render, then use client-side actions for updates
+- Move client-side state and effects into dedicated client components
+
+Next.js 15:
+- Dynamic APIs like params, searchParams, cookies(), headers() must be awaited in server components
+- Use React.use() to unwrap these promises in client components
+- Prefer awaiting as late as possible to allow more static rendering
+- Must await params in both layout.tsx and page.tsx when using dynamic routes
+- After awaiting params, pass the extracted values to child components rather than passing params directly
+- Server-side render layout components when possible to avoid loading states
+- Server-side fetch data in layout.tsx for initial render, then use client-side actions for updates
+- Move client-side state and effects into dedicated client components
+
+Next.js 15:
+- Dynamic APIs like params, searchParams, cookies(), headers() must be awaited in server components
+- Use React.use() to unwrap these promises in client components
+- Prefer awaiting as late as possible to allow more static rendering
+- Must await params in both layout.tsx and page.tsx when using dynamic routes
+- After awaiting params, pass the extracted values to child components rather than passing params directly
