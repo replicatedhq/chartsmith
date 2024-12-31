@@ -12,19 +12,25 @@ schema:
 	schemahero plan --driver postgres --uri $(CHARTSMITH_PG_URI) --spec-file ./db/schema/tables --spec-type table --out ./db/generated-schema/tables
 	schemahero apply --driver postgres --uri $(CHARTSMITH_PG_URI) --ddl ./db/generated-schema/tables
 
-.PHONY: build-worker
-build-worker:
+.PHONY: build
+build:
 	@echo "Building $(WORKER_BINARY_NAME)..."
 	@mkdir -p $(WORKER_BUILD_DIR)
 	@go build -o $(WORKER_BUILD_DIR)/$(WORKER_BINARY_NAME) main.go
 
 .PHONY: run-worker
-run-worker: build-worker
+run-worker: build
 	@echo "Running $(WORKER_BINARY_NAME)..."
 	@./$(WORKER_BUILD_DIR)/$(WORKER_BINARY_NAME) run \
 		--pg-uri="$(PG_URI)" \
 		--centrifugo-address="http://chartsmith-centrifugo:8000/api" \
 		--centrifugo-api-key=api_key
+
+.PHONY: bootstrap
+bootstrap:
+	@echo "Bootstrapping chart..."
+	@./$(WORKER_BUILD_DIR)/$(WORKER_BINARY_NAME) bootstrap \
+		--pg-uri="$(PG_URI)"
 
 .PHONY: validate
 validate:
@@ -35,7 +41,7 @@ validate:
 .POHNY: okteto-dev
 okteto-dev:
 	@go mod download -x
-	@make build-worker
+	@make build
 	@printf "\n\n To build and run this project, run: \n\n   # make run-worker\n\n"
 
 .PHONY: release

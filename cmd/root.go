@@ -12,6 +12,7 @@ func RootCmd() *cobra.Command {
 	}
 
 	rootCmd.AddCommand(RunCmd())
+	rootCmd.AddCommand(BootstrapCmd())
 
 	return rootCmd
 }

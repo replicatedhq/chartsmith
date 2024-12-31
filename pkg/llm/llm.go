@@ -14,7 +14,7 @@ import (
 	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 )
 
-func SendChatMessage(ctx context.Context, w *workspacetypes.Workspace, c *chattypes.Chat) error {
+func CreateNewChartFromMessage(ctx context.Context, w *workspacetypes.Workspace, c *chattypes.Chat) error {
 	client, err := newAnthropicClient(ctx)
 	if err != nil {
 		return err
@@ -40,6 +40,10 @@ func SendChatMessage(ctx context.Context, w *workspacetypes.Workspace, c *chatty
 	// to the database when complete.  but still send the message as we receive it over the realtime socket
 	// to the client
 
+	recipient := realtimetypes.Recipient{
+		UserIDs: userIDs,
+	}
+
 	fullResponseWithTags := ""
 	message := anthropic.Message{}
 	for stream.Next() {
@@ -49,27 +53,19 @@ func SendChatMessage(ctx context.Context, w *workspacetypes.Workspace, c *chatty
 		switch delta := event.Delta.(type) {
 		case anthropic.ContentBlockDeltaEventDelta:
 			if delta.Text != "" {
-
-				// before adding to c.Response, we remove all of our <helmsmithArtifact and <helmsmithAction tags
-				// so that the response is just the text
+				if err := parseArtifactsInResponse(w, fullResponseWithTags); err != nil {
+					return err
+				}
 
 				fullResponseWithTags += delta.Text
 				c.Response = removeHelmsmithTags(ctx, fullResponseWithTags)
 
 				if strings.Contains(fullResponseWithTags, "<helmsmith") || strings.Contains(fullResponseWithTags, "</helmsmith") {
-					// parse all files and chart in the repsonse
-					if err := parseArtifactsInResponse(w, fullResponseWithTags); err != nil {
-						return err
-					}
-
 					e := realtimetypes.WorkspaceUpdatedEvent{
 						Workspace: w,
 					}
-					r := realtimetypes.Recipient{
-						UserIDs: userIDs,
-					}
 
-					if err := realtime.SendEvent(ctx, r, e); err != nil {
+					if err := realtime.SendEvent(ctx, recipient, e); err != nil {
 						return err
 					}
 				} else {
@@ -78,11 +74,8 @@ func SendChatMessage(ctx context.Context, w *workspacetypes.Workspace, c *chatty
 						Message:     c,
 						IsComplete:  false,
 					}
-					r := realtimetypes.Recipient{
-						UserIDs: userIDs,
-					}
 
-					if err := realtime.SendEvent(ctx, r, e); err != nil {
+					if err := realtime.SendEvent(ctx, recipient, e); err != nil {
 						return err
 					}
 				}
@@ -132,11 +125,18 @@ func parseArtifactsInResponse(workspace *workspacetypes.Workspace, response stri
 
 	workspace.Files = []workspacetypes.File{}
 	for _, file := range result.Files {
-		workspace.Files = append(workspace.Files, workspacetypes.File{
-			Path:    file.Path,
-			Name:    filepath.Base(file.Path),
-			Content: file.Content,
-		})
+		f := workspacetypes.File{
+			Path: file.Path,
+			Name: filepath.Base(file.Path),
+		}
+
+		if file.Content != "" {
+			f.Content = file.Content
+		} else {
+			f.Content = file.PartialContent
+		}
+
+		workspace.Files = append(workspace.Files, f)
 	}
 
 	return nil

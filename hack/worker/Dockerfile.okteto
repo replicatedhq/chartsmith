@@ -7,6 +7,6 @@ RUN go mod download -x
 
 COPY . .
 
-RUN make build-worker
+RUN make build
 
 CMD ["/go/src/github.com/replicatedhq/chartsmith/bin/chartsmith-worker"]

@@ -1,0 +1,19 @@
+database: chartsmith
+name: bootstrap_file
+schema:
+  postgres:
+    primaryKey:
+    - file_path
+    columns:
+    - name: file_path
+      type: text
+      constraints:
+        notNull: true
+    - name: content
+      type: text
+      constraints:
+        notNull: true
+    - name: name
+      type: text
+      constraints:
+        notNull: true

@@ -8,6 +8,54 @@ import (
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 )
 
+func ListChatMessagesForWorkspace(ctx context.Context, workspaceID string) ([]types.Chat, error) {
+	conn := persistence.MustGetPooledPostgresSession()
+	defer conn.Release()
+
+	query := `SELECT
+		workspace_chat.id,
+		workspace_chat.workspace_id,
+		workspace_chat.prompt,
+		workspace_chat.response,
+		workspace_chat.is_complete
+	FROM
+		workspace_chat
+	WHERE
+		workspace_chat.workspace_id = $1`
+
+	rows, err := conn.Query(ctx, query, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	var chats []types.Chat
+	for rows.Next() {
+		var chat types.Chat
+		var response sql.NullString
+		err := rows.Scan(
+			&chat.ID,
+			&chat.WorkspaceID,
+			&chat.Prompt,
+			&response,
+			&chat.IsComplete,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		chat.Response = response.String
+		chats = append(chats, chat)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return chats, nil
+}
+
 func GetChatMessage(ctx context.Context, id string) (*types.Chat, error) {
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()

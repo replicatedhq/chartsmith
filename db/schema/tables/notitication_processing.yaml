@@ -1,0 +1,28 @@
+database: chartsmith
+name: notification_processing
+schema:
+  postgres:
+    primaryKey:
+     - notification_channel
+     - notification_id
+    columns:
+    - name: notification_channel
+      type: text
+      constraints:
+        notNull: true
+    - name: notification_id
+      type: text
+      constraints:
+        notNull: true
+    - name: claimed_at
+      type: timestamp
+      constraints:
+        notNull: true
+    - name: claimed_by
+      type: text
+      constraints:
+        notNull: true
+    - name: processed_at
+      type: timestamp
+    - name: error
+      type: text

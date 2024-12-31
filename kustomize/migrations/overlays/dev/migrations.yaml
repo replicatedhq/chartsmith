@@ -38,6 +38,13 @@ spec:
           - name: SCHEMAHERO_URI
             value: postgresql://chartsmith:password@chartsmith-postgres/chartsmith?connect_timeout=10&application_name=chartsmith&sslmode=disable
       initContainers:
+      - image: pgvector/pgvector:pg16
+        name: pgveector-init
+        command:
+          - sh
+          - -c
+          - |
+            psql "postgresql://chartsmith:password@chartsmith-postgres/chartsmith?connect_timeout=10&application_name=chartsmith&sslmode=disable" -c "CREATE EXTENSION IF NOT EXISTS vector"
       - image: migrations
         name: migrations-plan
         volumeMounts:
