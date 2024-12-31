@@ -102,6 +102,37 @@ func (m *Chartsmith) Release(
 		return err
 	}
 
+	// run the staging kustomize build
+	stagingManifests := dag.
+		Kustomize().
+		Build(source, dagger.KustomizeBuildOpts{
+			Dir: "kustomize/overlays/staging",
+		})
+	if err := pushYAMLToRepo(ctx, stagingManifests, PushFileOpts{
+		RepoFullName:    "replicatedcom/gitops-deploy",
+		Branch:          "main",
+		DestinationPath: "chartsmith.yaml",
+		CommitMessage:   fmt.Sprintf("Update Chartsmith manifests to %s", newVersion),
+		GithubToken:     githubToken,
+	}); err != nil {
+		return err
+	}
+
+	// productionMergedManifests := dag.
+	// 	Kustomize().
+	// 	Build(source, dagger.KustomizeBuildOpts{
+	// 		Dir: "kustomize/overlays/production",
+	// 	})
+	// if err := pushYAMLToRepo(ctx, productionMergedManifests, PushFileOpts{
+	// 	RepoFullName:    "replicatedcom/gitops-deploy",
+	// 	Branch:          "release",
+	// 	DestinationPath: "chartsmith.yaml",
+	// 	CommitMessage:   fmt.Sprintf("Update Chartsmith manifests to %s", newVersion),
+	// 	GithubToken:     githubToken,
+	// }); err != nil {
+	// 	return err
+	// }
+
 	// create a release on github
 	if err := dag.Gh().
 		WithToken(githubToken).

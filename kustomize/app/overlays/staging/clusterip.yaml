@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: chartsmith-app
+  labels:
+    app: chartsmith-app
+spec:
+  type: ClusterIP
+  ports:
+    - port: 3000
+      name: chartsmith-app
+      targetPort: http
+  selector:
+    app: chartsmith-app

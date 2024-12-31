@@ -1,4 +1,6 @@
 resources:
-  - ../../base
+  - ../../../kustomize/worker/overlays/dev
+  - ../../../kustomize/app/overlays/dev
+  - ../../../kustomize/migrations/overlays/dev
   - ./postgres/postgres.yaml
   - ./centrifugo/centrifugo.yaml
