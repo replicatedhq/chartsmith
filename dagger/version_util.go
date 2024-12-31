@@ -16,6 +16,11 @@ func processVersion(ctx context.Context, requestedVersion string, githubToken *d
 		return "", "", err
 	}
 
+	if latestVersion == "" {
+		latestVersion = "0.0.0"
+	}
+
+	fmt.Printf("Latest version: %s\n", latestVersion)
 	parsedLatestVersion, err := semver.NewVersion(latestVersion)
 	if err != nil {
 		return "", "", err

@@ -48,6 +48,11 @@ func buildChartsmithApp(ctx context.Context, source *dagger.Directory, opService
 		WithSecretVariable("CENTRIFUGO_TOKEN_HMAC_SECRET", mustGetSecret(context.Background(), opServiceAccount, "Staging - Chartsmith Centrifugo", "hmac_secret")).
 		WithEnvVariable("NEXT_PUBLIC_CENTRIFUGO_ADDRESS", mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Staging - Chartsmith Centrifugo", "address")).
 		WithExec([]string{"npm", "run", "build"})
+	stdout, err := stagingBuildContainer.Stdout(context.Background())
+	if err != nil {
+		return nil, nil, err
+	}
+	fmt.Printf("Staging build container stdout:\n%s\n", stdout)
 	stagingStandalone := stagingBuildContainer.Directory("/src/.next/standalone")
 	stagingStatic := stagingBuildContainer.Directory("/src/.next/static")
 	stagingStandalone = stagingStandalone.WithDirectory("/.next/static", stagingStatic)
@@ -73,6 +78,11 @@ func buildChartsmithApp(ctx context.Context, source *dagger.Directory, opService
 		WithSecretVariable("CENTRIFUGO_TOKEN_HMAC_SECRET", mustGetSecret(context.Background(), opServiceAccount, "Production - Chartsmith Centrifugo", "hmac_secret")).
 		WithEnvVariable("NEXT_PUBLIC_CENTRIFUGO_ADDRESS", mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Production - Chartsmith Centrifugo", "address")).
 		WithExec([]string{"npm", "run", "build"})
+	stdout, err = stagingBuildContainer.Stdout(context.Background())
+	if err != nil {
+		return nil, nil, err
+	}
+	fmt.Printf("Staging build container stdout:\n%s\n", stdout)
 	prodStandalone := prodBuildContainer.Directory("/src/.next/standalone")
 	prodStatic := prodBuildContainer.Directory("/src/.next/static")
 	prodStandalone = prodStandalone.WithDirectory("/.next/static", prodStatic)

@@ -2,5 +2,11 @@
   "name": "chartsmith",
   "engineVersion": "v0.15.1",
   "sdk": "go",
-  "source": "dagger"
+  "source": "dagger",
+  "dependencies": [
+    {
+      "name": "gh",
+      "source": "github.com/luanmtruong/daggerverse/gh@8b0cf4487018dff60c3c380aa1a1b29bbf2ca345"
+    }
+  ]
 }

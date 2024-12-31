@@ -49,7 +49,7 @@ func (m *Chartsmith) Release(
 	// publish all containers
 	ref, err := pushContainer(ctx, workerContainerStaging, PushContainerOpts{
 		Name:      "chartsmith-worker",
-		Tag:       "staging",
+		Tag:       newVersion,
 		AccountID: stagingAccountID,
 		Region:    "us-east-1",
 
@@ -63,7 +63,7 @@ func (m *Chartsmith) Release(
 
 	ref, err = pushContainer(ctx, workerContainerProd, PushContainerOpts{
 		Name:      "chartsmith-worker",
-		Tag:       "production",
+		Tag:       newVersion,
 		AccountID: productionAccountID,
 		Region:    "us-east-1",
 
@@ -77,7 +77,7 @@ func (m *Chartsmith) Release(
 
 	ref, err = pushContainer(ctx, appContainerStaging, PushContainerOpts{
 		Name:      "chartsmith-app",
-		Tag:       "staging",
+		Tag:       newVersion,
 		AccountID: stagingAccountID,
 		Region:    "us-east-1",
 
@@ -91,7 +91,7 @@ func (m *Chartsmith) Release(
 
 	ref, err = pushContainer(ctx, appContainerProd, PushContainerOpts{
 		Name:      "chartsmith-app",
-		Tag:       "production",
+		Tag:       newVersion,
 		AccountID: productionAccountID,
 		Region:    "us-east-1",
 
@@ -99,6 +99,16 @@ func (m *Chartsmith) Release(
 		SecretAccessKey: productionSecretAccessKey,
 	})
 	if err != nil {
+		return err
+	}
+
+	// create a release on github
+	if err := dag.Gh().
+		WithToken(githubToken).
+		WithRepo("replicatedhq/chartsmith").
+		WithSource(source).
+		Release().
+		Create(ctx, newVersion, newVersion); err != nil {
 		return err
 	}
 
