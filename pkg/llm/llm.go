@@ -2,7 +2,6 @@ package llm
 
 import (
 	"context"
-	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -16,7 +15,6 @@ import (
 )
 
 func SendChatMessage(ctx context.Context, w *workspacetypes.Workspace, c *chattypes.Chat) error {
-	fmt.Printf("Sending chat message: %+v\n", c)
 	client, err := newAnthropicClient(ctx)
 	if err != nil {
 		return err
@@ -49,8 +47,6 @@ func SendChatMessage(ctx context.Context, w *workspacetypes.Workspace, c *chatty
 		message.Accumulate(event)
 
 		switch delta := event.Delta.(type) {
-		default:
-			fmt.Printf("Unknown delta type: %T: %#v\n", delta, delta)
 		case anthropic.ContentBlockDeltaEventDelta:
 			if delta.Text != "" {
 

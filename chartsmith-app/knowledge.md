@@ -69,6 +69,13 @@ State Management:
 - Prefer using centralized state from contexts over local component state when data is shared
 - Files and workspace data come from Centrifugo real-time updates - don't maintain duplicate state
 - Explorer follows new files automatically - selects most recently added file
+- When handling real-time updates, append unknown messages rather than ignoring them
+- Check for undefined rather than falsy values when conditionally rendering responses
+- For streaming responses, validate isComplete as boolean type rather than checking for undefined
+- Backend sends snake_case (is_complete), normalize to camelCase (isComplete) before updating state
+- When using real-time APIs, define separate types for raw server messages vs normalized frontend types
+- For streaming message updates, exclude messages state from effect deps to avoid feedback loops
+- When updating state from real-time events, use functional updates to preserve existing state
 - Server-side render layout components when possible to avoid loading states
 - Server-side fetch data in layout.tsx for initial render, then use client-side actions for updates
 - Move client-side state and effects into dedicated client components

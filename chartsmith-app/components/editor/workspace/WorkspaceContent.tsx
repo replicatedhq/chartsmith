@@ -9,7 +9,7 @@ import { useWorkspaceUI } from "@/contexts/WorkspaceUIContext";
 import { usePathname } from "next/navigation";
 import { useSession } from "@/app/hooks/useSession";
 import { getWorkspaceMessagesAction } from "@/lib/workspace/actions/get-workspace-messages";
-import { Message } from "@/components/editor/types";
+import { Message, RawMessage } from "@/components/editor/types";
 import { FileNode } from "@/lib/types/files";
 import { Workspace } from "@/lib/types/workspace";
 import { Card } from "@/components/ui/Card";
@@ -49,10 +49,14 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
 
   useEffect(() => {
     if (!session) return;
-    getWorkspaceMessagesAction(session, workspaceId).then(setMessages);
-  }, [session, workspace, workspaceId]);
+    getWorkspaceMessagesAction(session, workspaceId).then(messages => {
+      setMessages(messages);
+    });
+  }, [session, workspaceId]); // Remove workspace from dependencies to prevent reloading
 
   useEffect(() => {
+    // Don't include messages in deps to avoid infinite loop with streaming updates
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     if (!centrifugoToken || !session || hasConnectedRef.current || !workspace) {
       return;
     }
@@ -82,24 +86,40 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     const channel = `${workspace?.id}#${session.user.id}`;
     const sub = cf.newSubscription(channel);
 
-    sub.on("publication", (message: { data: { workspace?: Workspace; message?: Message } }) => {
+    sub.on("publication", (message: { data: { workspace?: Workspace; message?: RawMessage } }) => {
       const isWorkspaceUpdatedEvent = message.data.workspace;
 
       if (!isWorkspaceUpdatedEvent) {
         const chatMessage = message.data.message;
-        if (!chatMessage?.id || !chatMessage.prompt || chatMessage.isComplete === undefined) return;
+        if (!chatMessage?.id || !chatMessage.prompt || typeof chatMessage.is_complete !== 'boolean') {
+          return;
+        }
+
+        // Convert snake_case to camelCase for our frontend types
+        const normalizedMessage: Message = {
+          ...chatMessage,
+          isComplete: chatMessage.is_complete,
+        };
 
         setMessages((prevMessages) => {
-          const index = prevMessages.findIndex((m) => m.id === chatMessage.id);
-          if (index === -1) return prevMessages;
+          const index = prevMessages.findIndex((m) => m.id === normalizedMessage.id);
+          if (index === -1) {
+            const newMessages = [...prevMessages, normalizedMessage];
+            return newMessages;
+          }
           const newMessages = [...prevMessages];
-          newMessages[index] = chatMessage;
+          newMessages[index] = normalizedMessage;
           return newMessages;
         });
+
       } else {
         const newWorkspace = message.data.workspace;
         if (newWorkspace) {
-          setWorkspace(newWorkspace);
+          // Preserve existing messages when updating workspace
+          setWorkspace(prev => ({
+            ...newWorkspace,
+            files: newWorkspace.files || prev.files
+          }));
         }
       }
     });
@@ -161,6 +181,15 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     setMessages((prevMessages) => [...prevMessages, m]);
   };
 
+  // Keep messages visible regardless of workspace state
+  const chatContent = (
+    <div className="space-y-4">
+      {messages.map((message, index) => {
+        return <ChatMessage key={message.id || index} message={message} />;
+      })}
+    </div>
+  );
+
   // Show chat-only view when workspace has no files yet
   if (!workspace || workspace.files.length === 0) {
     return (
@@ -168,11 +197,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
         <div className="flex justify-center h-full w-full pt-8">
           <div className="px-4 w-full max-w-3xl">
             <Card className="p-6 w-full">
-              <div className="space-y-4">
-                {messages.map((message, index) => (
-                  <ChatMessage key={message.id || index} message={message} />
-                ))}
-              </div>
+              {chatContent}
             </Card>
           </div>
         </div>
@@ -208,7 +233,13 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
   return (
     <EditorLayout>
       <div className="flex w-full overflow-hidden">
-        {isChatVisible && <ChatContainer messages={messages} onSendMessage={handleSendMessage} onUndoChanges={handleUndoChanges} />}
+        {isChatVisible && (
+          <ChatContainer
+            messages={messages}
+            onSendMessage={handleSendMessage}
+            onUndoChanges={handleUndoChanges}
+          />
+        )}
         <WorkspaceContainer
           view={view}
           onViewChange={handleViewChange}

@@ -22,11 +22,13 @@ export function ChatPanel({ messages, onSendMessage, onUndoChanges }: ChatPanelP
     scrollToBottom();
   }, [messages]);
 
+  console.log("ChatPanel rendering messages:", messages);
+
   return (
     <>
       <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${theme === "dark" ? "bg-dark-surface" : "bg-gray-50"}`}>
         {messages.map((message, index) => (
-          <ChatMessage key={index} message={message} onUndo={() => onUndoChanges?.(message)} />
+          <ChatMessage key={message.id || index} message={message} onUndo={() => onUndoChanges?.(message)} />
         ))}
         <div ref={messagesEndRef} />
       </div>

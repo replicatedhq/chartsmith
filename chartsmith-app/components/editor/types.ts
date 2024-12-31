@@ -21,6 +21,18 @@ export interface Message {
   isComplete: boolean;
 }
 
+// Interface for raw message from server before normalization
+export interface RawMessage {
+  id: string;
+  prompt: string;
+  response?: string;
+  fileChanges?: {
+    path: string;
+    content: string;
+  }[];
+  is_complete: boolean;
+}
+
 export interface ValuesScenario {
   id: string;
   name: string;

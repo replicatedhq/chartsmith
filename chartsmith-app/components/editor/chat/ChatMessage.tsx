@@ -16,6 +16,8 @@ export function ChatMessage({ message, onUndo }: ChatMessageProps) {
   const [showReportModal, setShowReportModal] = useState(false);
   const [showUndoModal, setShowUndoModal] = useState(false);
 
+  console.log("Rendering message:", message);
+
   return (
     <div className="space-y-2">
       {/* User Message */}
@@ -27,11 +29,11 @@ export function ChatMessage({ message, onUndo }: ChatMessageProps) {
       </div>
 
       {/* Assistant Message - only show if there's a response */}
-      {message.response && (
+      {message.response !== undefined && (
         <div className="px-4 py-2 mr-12">
           <div className={`p-4 rounded-2xl ${theme === "dark" ? "bg-dark-border/40" : "bg-gray-100"} rounded-tl-sm`}>
             <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"} mb-1`}>ChartSmith</div>
-            <div className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} text-sm`}>{message.response}</div>
+            <div className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} text-sm whitespace-pre-wrap`}>{message.response}</div>
             {message.isComplete && message.fileChanges && (
               <div className="mt-4 space-y-4 border-t border-gray-700/10 pt-4">
                 <ChatChanges changes={message.fileChanges} />
@@ -43,7 +45,6 @@ export function ChatMessage({ message, onUndo }: ChatMessageProps) {
       )}
 
       <ReportIssueModal isOpen={showReportModal} onClose={() => setShowReportModal(false)} message={message} />
-
       <UndoConfirmationModal isOpen={showUndoModal} onClose={() => setShowUndoModal(false)} onConfirm={() => onUndo?.()} />
     </div>
   );
