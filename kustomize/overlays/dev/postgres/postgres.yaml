@@ -40,7 +40,7 @@ spec:
     spec:
       containers:
       - name: chartsmith-postgres
-        image: postgres:16
+        image: pgvector/pgvector:pg16
         imagePullPolicy: IfNotPresent
         resources:
           requests:
