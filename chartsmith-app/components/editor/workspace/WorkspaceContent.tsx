@@ -49,7 +49,9 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
 
   useEffect(() => {
     if (!session) return;
+    console.log("Loading initial messages...");
     getWorkspaceMessagesAction(session, workspaceId).then(messages => {
+      console.log("Initial messages loaded:", messages);
       setMessages(messages);
     });
   }, [session, workspaceId]); // Remove workspace from dependencies to prevent reloading

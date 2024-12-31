@@ -53,6 +53,8 @@ Hydration:
 - Use suppressHydrationWarning on elements where hydration mismatches are expected and harmless (e.g. testing attributes, timestamps)
 - For dynamic content that differs between server and client, use useEffect to update the content after initial render
 - Avoid using browser-only APIs in the initial render (window, document, etc)
+- Prevent theme flash by setting both classList and color-scheme in inline script before React hydration
+- Use :root[class='theme'] for better CSS specificity than :root.theme
 
 React Hooks:
 - Call hooks at the top level of component
