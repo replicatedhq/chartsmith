@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chartsmith-app
+spec:
+  template:
+    spec:
+      containers:
+        - name: chartsmith-app
+          workingDir: /app
+          ports:
+            - containerPort: 3000
+              protocol: TCP
+              name: http
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+

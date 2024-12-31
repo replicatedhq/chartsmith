@@ -13,7 +13,7 @@ func functionalTests(source *dagger.Directory, opServiceAccount *dagger.Secret) 
 	}
 	stepResults["chartsmith_unit_tests"] = chartsmithUnitTestResults
 
-	chartsmithAppLintResults, err := lintChartsmithApp(source, opServiceAccount)
+	chartsmithAppLintResults, err := lintChartsmithApp(source.Directory("chartsmith-app"), opServiceAccount)
 	if err != nil {
 		return nil, err
 	}
