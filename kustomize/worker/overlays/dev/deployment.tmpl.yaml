@@ -36,6 +36,8 @@ spec:
       initContainers:
       - image: chartsmith-worker
         name: bootstrap
+        command:
+          - /go/src/github.com/replicatedhq/chartsmith/bin/chartsmith-worker
         args:
           - "bootstrap"
           - "--pg-uri=$(PG_URI)"
