@@ -1,0 +1,30 @@
+database: chartsmith
+name: bootstrap_gvk
+schema:
+  postgres:
+    primaryKey:
+     - id
+    indexes:
+    - columns:
+      - file_path
+    columns:
+    - name: id
+      type: text
+      constraints:
+        notNull: true
+    - name: gvk
+      type: text
+      constraints:
+        notNull: true
+    - name: file_path
+      type: text
+      constraints:
+        notNull: true
+    - name: content
+      type: text
+      constraints:
+        notNull: true
+    - name: summary
+      type: text
+    - name: embeddings
+      type: vector (1024)

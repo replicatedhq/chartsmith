@@ -7,7 +7,7 @@ import (
 
 func buildWorker(ctx context.Context, source *dagger.Directory) (*dagger.Container, *dagger.Container, error) {
 	binary := buildEnvWorker(source).
-		WithExec([]string{"make", "build-worker"}).
+		WithExec([]string{"make", "build"}).
 		File("bin/chartsmith-worker")
 
 	// build a wolfi container

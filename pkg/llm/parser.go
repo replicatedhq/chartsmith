@@ -7,8 +7,9 @@ import (
 )
 
 type HelmFile struct {
-	Path    string
-	Content string
+	Path           string
+	Content        string
+	PartialContent string
 }
 
 type HelmResponse struct {
@@ -103,7 +104,7 @@ func (p *Parser) Parse(chunk string) {
 				p.buffer = strings.Replace(p.buffer, fullContent, "", 1)
 			} else {
 				// Partial content - update with everything after the start tag
-				file.Content = p.buffer[contentStart:]
+				file.PartialContent = p.buffer[contentStart:]
 			}
 		}
 	}

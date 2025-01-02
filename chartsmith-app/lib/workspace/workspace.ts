@@ -31,7 +31,16 @@ export async function createWorkspace(name: string, createdType: string, prompt:
 
       await client.query("COMMIT");
 
-      await client.query(`SELECT pg_notify('new_chat', $1)`, [chatId]);
+      try {
+        const notifyResult = await client.query(`SELECT pg_notify('new_workspace', $1)`, [id]);
+        console.log('Notification sent:', {
+          channel: 'new_workspace',
+          payload: id,
+          pgResult: notifyResult
+        });
+      } catch (err) {
+        console.error('Failed to send notification:', err);
+      }
 
       return {
         id: id,

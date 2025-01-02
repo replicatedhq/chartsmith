@@ -16,3 +16,15 @@ type Workspace struct {
 
 	Files []File `json:"files"`
 }
+
+type GVK struct {
+	ID             string
+	WorkspaceID    string
+	GVK            string
+	RevisionNumber int
+	FilePath       string
+	CreatedAt      time.Time
+	Content        string
+	Summary        *string
+	Embeddings     []float64
+}
