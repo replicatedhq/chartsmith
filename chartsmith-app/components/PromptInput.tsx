@@ -8,9 +8,10 @@ interface PromptInputProps {
   onSubmit: (prompt: string) => void;
   isLoading?: boolean;
   className?: string;
+  label?: string;
 }
 
-export function PromptInput({ onSubmit, isLoading, className }: PromptInputProps) {
+export function PromptInput({ onSubmit, isLoading, className, label }: PromptInputProps) {
   const { theme } = useTheme();
   const [prompt, setPrompt] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -41,7 +42,7 @@ export function PromptInput({ onSubmit, isLoading, className }: PromptInputProps
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
-        <label className={`block text-sm font-medium mb-2 ${theme === "dark" ? "text-gray-300" : "text-gray-700"}`}>Describe Your Application</label>
+        <label className={`block text-sm font-medium mb-2 ${theme === "dark" ? "text-gray-300" : "text-gray-700"}`}>{label || "Describe Your Application"}</label>
         <div className="relative">
           <textarea
             ref={textareaRef}
@@ -49,7 +50,7 @@ export function PromptInput({ onSubmit, isLoading, className }: PromptInputProps
             onChange={(e) => setPrompt(e.target.value)}
             onKeyDown={handleKeyDown}
             disabled={isLoading}
-            placeholder="Example: I need a Helm chart for a web application with Redis cache and PostgreSQL database..."
+            placeholder="Enter your clarification here..."
             className={`w-full px-4 py-3 rounded-lg border resize-none h-32 ${
               theme === "dark" ? "bg-surface border-dark-border text-gray-300 placeholder-gray-500" : "bg-white border-gray-300 text-gray-900 placeholder-gray-400"
             } focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50 ${className || ""}`}

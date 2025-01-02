@@ -27,8 +27,6 @@ schema:
       type: text
       constraints:
         notNull: true
-    - name: prompt
-      type: text
     - name: current_revision_number
       type: integer
       constraints:

@@ -16,8 +16,6 @@ export function ChatMessage({ message, onUndo }: ChatMessageProps) {
   const [showReportModal, setShowReportModal] = useState(false);
   const [showUndoModal, setShowUndoModal] = useState(false);
 
-  console.log("Rendering message:", message);
-
   return (
     <div className="space-y-2">
       {/* User Message */}

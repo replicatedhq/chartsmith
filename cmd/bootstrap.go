@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/replicatedhq/chartsmith/pkg/embedding"
 	"github.com/replicatedhq/chartsmith/pkg/llm"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 	"github.com/replicatedhq/chartsmith/pkg/workspace"
@@ -37,7 +38,7 @@ func BootstrapCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			v := viper.GetViper()
 
-			if err := runBootstrap(cmd.Context(), v.GetString("pg-uri"), v.GetString("chart-dir")); err != nil {
+			if err := runBootstrap(cmd.Context(), v.GetString("pg-uri"), v.GetString("chart-dir"), v.GetBool("force")); err != nil {
 				return fmt.Errorf("failed to bootstrap chart: %w", err)
 			}
 
@@ -52,11 +53,12 @@ func BootstrapCmd() *cobra.Command {
 
 	bootstrapCmd.Flags().String("pg-uri", "", "Postgres URI")
 	bootstrapCmd.Flags().String("chart-dir", filepath.Join(wd, "bootstrap-chart"), "Chart directory")
+	bootstrapCmd.Flags().Bool("force", false, "Force bootstrap even if the directory is already bootstrapped")
 
 	return bootstrapCmd
 }
 
-func runBootstrap(ctx context.Context, pgURI string, chartDir string) error {
+func runBootstrap(ctx context.Context, pgURI string, chartDir string, force bool) error {
 	currentDirectoryHash, err := directoryHashDeterministic(chartDir)
 	if err != nil {
 		return fmt.Errorf("failed to hash chart directory: %w", err)
@@ -80,7 +82,7 @@ func runBootstrap(ctx context.Context, pgURI string, chartDir string) error {
 		return fmt.Errorf("failed to get last directory hash: %w", err)
 	}
 
-	if lastDirectoryHash.Valid && lastDirectoryHash.String == currentDirectoryHash {
+	if !force && lastDirectoryHash.Valid && lastDirectoryHash.String == currentDirectoryHash {
 		fmt.Printf("Bootstrap directory hash is the same as last time, skipping bootstrap\n")
 		return nil
 	}
@@ -121,7 +123,9 @@ func runBootstrap(ctx context.Context, pgURI string, chartDir string) error {
 		// insert the file
 		filePath := filepath.ToSlash(path)
 		// remove the chartDir from filePath, so make it relative to that
+
 		filePath = strings.TrimPrefix(filePath, chartDir)
+		filePath = strings.TrimPrefix(filePath, "/")
 
 		name := info.Name()
 
@@ -208,7 +212,7 @@ func runBootstrap(ctx context.Context, pgURI string, chartDir string) error {
 			return fmt.Errorf("failed to summarize GVK: %w", err)
 		}
 
-		embeddings, err := llm.Embeddings(summary.Content)
+		embeddings, err := embedding.Embeddings(summary.Content)
 		if err != nil {
 			return fmt.Errorf("failed to get embeddings: %w", err)
 		}

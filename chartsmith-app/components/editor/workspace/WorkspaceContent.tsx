@@ -9,14 +9,17 @@ import { useWorkspaceUI } from "@/contexts/WorkspaceUIContext";
 import { usePathname } from "next/navigation";
 import { useSession } from "@/app/hooks/useSession";
 import { getWorkspaceMessagesAction } from "@/lib/workspace/actions/get-workspace-messages";
-import { Message, RawMessage } from "@/components/editor/types";
+import { Message, CentrifugoMessageData } from "@/components/editor/types";
 import { FileNode } from "@/lib/types/files";
 import { Workspace } from "@/lib/types/workspace";
 import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
 import { ChatMessage } from "@/components/editor/chat/ChatMessage";
 import { getCentrifugoTokenAction } from "@/lib/centrifugo/actions/get-centrifugo-token-action";
 import { sendChatMessageAction } from "@/lib/workspace/actions/send-chat-message";
 import { Centrifuge } from "centrifuge";
+import { PromptInput } from "@/components/PromptInput";
+import { createRevisionAction } from "@/lib/workspace/actions/create-revision";
 
 interface WorkspaceContentProps {
   initialWorkspace: Workspace;
@@ -26,10 +29,13 @@ interface WorkspaceContentProps {
 export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceContentProps) {
   const { session } = useSession();
   const [workspace, setWorkspace] = useState<Workspace>(initialWorkspace);
-  const { isChatVisible, isFileTreeVisible } = useWorkspaceUI();
+  const { isFileTreeVisible, setIsFileTreeVisible } = useWorkspaceUI();
   const [messages, setMessages] = useState<Message[]>([]);
   const [selectedFile, setSelectedFile] = useState<FileNode | undefined>();
   const [editorContent, setEditorContent] = useState<string>("");
+  const [showClarificationInput, setShowClarificationInput] = useState(false);
+
+
 
   const followMode = true; // Always true for now
   const [centrifugoToken, setCentrifugoToken] = useState<string | null>(null);
@@ -88,19 +94,23 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     const channel = `${workspace?.id}#${session.user.id}`;
     const sub = cf.newSubscription(channel);
 
-    sub.on("publication", (message: { data: { workspace?: Workspace; message?: RawMessage } }) => {
+    sub.on("publication", (message: { data: CentrifugoMessageData }) => {
       const isWorkspaceUpdatedEvent = message.data.workspace;
 
       if (!isWorkspaceUpdatedEvent) {
-        const chatMessage = message.data.message;
-        if (!chatMessage?.id || !chatMessage.prompt || typeof chatMessage.is_complete !== 'boolean') {
+        const { message: chatMessage } = message.data;
+        if (!chatMessage?.id || !chatMessage.prompt) {
+          console.log("Invalid chat message format:", chatMessage);
           return;
         }
 
         // Convert snake_case to camelCase for our frontend types
         const normalizedMessage: Message = {
-          ...chatMessage,
-          isComplete: chatMessage.is_complete,
+          id: chatMessage.id,
+          prompt: chatMessage.prompt,
+          response: chatMessage.response,
+          fileChanges: chatMessage.fileChanges,
+          isComplete: message.data.is_complete === true,  // Only true if explicitly set to true
         };
 
         setMessages((prevMessages) => {
@@ -183,23 +193,84 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     setMessages((prevMessages) => [...prevMessages, m]);
   };
 
-  // Keep messages visible regardless of workspace state
-  const chatContent = (
-    <div className="space-y-4">
-      {messages.map((message, index) => {
-        return <ChatMessage key={message.id || index} message={message} />;
-      })}
-    </div>
-  );
+  const handleGenerateChart = async () => {
+    if (!session || !workspace) return;
+    const updatedWorkspace = await createRevisionAction(session, workspace.id);
+    if (!updatedWorkspace) return;
+    setWorkspace(updatedWorkspace);
+    setIsFileTreeVisible(true);
+  }
 
-  // Show chat-only view when workspace has no files yet
-  if (!workspace || workspace.files.length === 0) {
+  // Reference for auto-scrolling
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  // Scroll to bottom when messages update
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+
+
+  // Handle chat transition end
+  useEffect(() => {
+    const chatContainer = document.querySelector('.chat-container-wrapper');
+    if (!chatContainer) return;
+
+    const handleTransitionEnd = () => {
+      scrollToBottom();
+    };
+
+    chatContainer.addEventListener('transitionend', handleTransitionEnd);
+    return () => {
+      chatContainer.removeEventListener('transitionend', handleTransitionEnd);
+    };
+  }, []);
+
+  // Show chat-only view when there's no revision yet
+  if (!workspace?.currentRevisionNumber || workspace.currentRevisionNumber === 0) {
     return (
       <EditorLayout>
-        <div className="flex justify-center h-full w-full pt-8">
-          <div className="px-4 w-full max-w-3xl">
-            <Card className="p-6 w-full">
-              {chatContent}
+        <div className="flex justify-center h-full w-full overflow-auto transition-all duration-300 ease-in-out">
+          <div className="px-4 w-full max-w-3xl py-8 pb-16">
+            <Card className="p-6 w-full border-dark-border/40 shadow-lg">
+              <div className="space-y-4">
+                {messages.map((message, index) => (
+                  <ChatMessage key={message.id || index} message={message} />
+                ))}
+                {messages[messages.length - 1]?.isComplete && !showClarificationInput && (
+                  <div className="mt-8 flex justify-center space-x-4">
+                    <Button
+                      onClick={() => handleGenerateChart()}
+                      className="bg-primary hover:bg-primary/90 text-white"
+                    >
+                      Continue to the editor
+                    </Button>
+                    <Button
+                      onClick={() => setShowClarificationInput(true)}
+                      className="bg-primary hover:bg-primary/90 text-white"
+                    >
+                      Provide clarification
+                    </Button>
+                  </div>
+                )}
+                {showClarificationInput && (
+                  <div className="mt-8">
+                    <PromptInput
+                      onSubmit={(message) => {
+                        handleSendMessage(message);
+                        setShowClarificationInput(false);
+                      }}
+                      className="w-full"
+                      label="Add additional clarifying prompts"
+                    />
+                  </div>
+                )}
+              </div>
+              <div ref={messagesEndRef} />
             </Card>
           </div>
         </div>
@@ -234,31 +305,39 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
 
   return (
     <EditorLayout>
-      <div className="flex w-full overflow-hidden">
-        {isChatVisible && (
-          <ChatContainer
-            messages={messages}
-            onSendMessage={handleSendMessage}
-            onUndoChanges={handleUndoChanges}
-          />
+      <div className="flex w-full overflow-hidden relative">
+        <div className={`chat-container-wrapper transition-all duration-300 ease-in-out absolute inset-0 flex justify-center ${
+          !workspace?.currentRevisionNumber || workspace.currentRevisionNumber === 0 ? 'w-full' : 'w-[400px]'
+        }`}>
+          <div className={`w-full max-w-3xl ${!workspace?.currentRevisionNumber || workspace.currentRevisionNumber === 0 ? '' : 'w-full'}`}>
+            <ChatContainer
+              messages={messages}
+              onSendMessage={handleSendMessage}
+              onUndoChanges={handleUndoChanges}
+            />
+          </div>
+        </div>
+        {workspace?.currentRevisionNumber > 0 && (
+          <div className="flex-1 h-full translate-x-[400px] transition-opacity duration-100 ease-in-out opacity-0 animate-fadeIn">
+            <WorkspaceContainer
+              view={view}
+              onViewChange={handleViewChange}
+              files={workspace.files.map(file => ({
+                name: file.name,
+                path: file.path,
+                content: file.content,
+                type: 'file' as const
+              }))}
+              renderedFiles={renderedFiles}
+              selectedFile={selectedFile}
+              onFileSelect={handleFileSelect}
+              onFileDelete={handleFileDelete}
+              editorContent={editorContent}
+              onEditorChange={(value) => setEditorContent(value ?? "")}
+              isFileTreeVisible={isFileTreeVisible}
+            />
+          </div>
         )}
-        <WorkspaceContainer
-          view={view}
-          onViewChange={handleViewChange}
-          files={workspace.files.map(file => ({
-            name: file.name,
-            path: file.path,
-            content: file.content,
-            type: 'file' as const
-          }))}
-          renderedFiles={renderedFiles}
-          selectedFile={selectedFile}
-          onFileSelect={handleFileSelect}
-          onFileDelete={handleFileDelete}
-          editorContent={editorContent}
-          onEditorChange={(value) => setEditorContent(value ?? "")}
-          isFileTreeVisible={isFileTreeVisible}
-        />
       </div>
     </EditorLayout>
   );

@@ -30,7 +30,16 @@ export interface RawMessage {
     path: string;
     content: string;
   }[];
-  is_complete: boolean;
+}
+
+// Interface for Centrifugo message data
+import { Workspace } from "@/lib/types/workspace";
+
+export interface CentrifugoMessageData {
+  workspace?: Workspace;
+  message?: RawMessage;
+  is_complete?: boolean;
+  workspace_id: string;
 }
 
 export interface ValuesScenario {

@@ -3,6 +3,8 @@ package listener
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/replicatedhq/chartsmith/pkg/chat"
@@ -16,7 +18,7 @@ func Listen(ctx context.Context) error {
 	conn := persistence.MustGeUunpooledPostgresSession()
 	defer conn.Close(ctx)
 
-	channels := []string{"new_workspace", "new_chat", "new_gvk"}
+	channels := []string{"new_chat", "new_gvk", "new_revision"}
 	for _, channel := range channels {
 		_, err := conn.Exec(ctx, fmt.Sprintf("LISTEN %s", channel))
 		if err != nil {
@@ -45,13 +47,6 @@ func Listen(ctx context.Context) error {
 		}
 
 		switch notification.Channel {
-		case "new_workspace":
-			fmt.Printf("New workspace notification received: %+v\n", notification)
-			go func() {
-				if err := handleNewWorkspaceNotification(ctx, notification.Payload); err != nil {
-					fmt.Printf("Error handling new chat notification: %+v\n", err)
-				}
-			}()
 		case "new_gvk":
 			fmt.Printf("New GVK notification received: %+v\n", notification)
 			if err := handleGVKNotification(ctx, notification.Payload); err != nil {
@@ -59,10 +54,101 @@ func Listen(ctx context.Context) error {
 			}
 		case "new_chat":
 			fmt.Printf("New chat notification received: %+v\n", notification)
+			go func() {
+				if err := handleNewChatNotification(ctx, notification.Payload); err != nil {
+					fmt.Printf("Error handling new chat notification: %+v\n", err)
+				}
+			}()
+		case "new_revision":
+			fmt.Printf("New revision notification received: %+v\n", notification)
+			go func() {
+				if err := handleNewRevisionNotification(ctx, notification.Payload); err != nil {
+					fmt.Printf("Error handling new revision notification: %+v\n", err)
+				}
+			}()
 		default:
 			fmt.Printf("Unknown notification received: %+v\n", notification)
 		}
 	}
+}
+
+func handleNewRevisionNotification(ctx context.Context, id string) error {
+	conn := persistence.MustGeUunpooledPostgresSession()
+	defer conn.Close(ctx)
+
+	var processingErr error
+	defer func() {
+		var errorMsg *string
+		if processingErr != nil {
+			errStr := processingErr.Error()
+			errorMsg = &errStr
+		}
+
+		_, updateErr := conn.Exec(ctx, `
+            UPDATE notification_processing
+            SET processed_at = NOW(),
+                error = $1
+            WHERE notification_channel = $2 and notification_id = $3
+        `, errorMsg, "new_revision", id)
+
+		if updateErr != nil {
+			fmt.Printf("Failed to update notification status: %v\n", updateErr)
+		}
+	}()
+
+	fmt.Printf("Handling new revision notification: %s\n", id)
+
+	idParts := strings.Split(id, "/")
+	workspaceID := idParts[0]
+	revisionNumber, err := strconv.Atoi(idParts[1])
+	if err != nil {
+		return fmt.Errorf("error parsing revision number: %w", err)
+	}
+
+	w, err := workspace.GetWorkspace(ctx, workspaceID)
+	if err != nil {
+		return fmt.Errorf("error getting workspace: %w", err)
+	}
+
+	// this is here for when we have a full queue, no
+	// reason to process old messages
+	if w.CurrentRevision > revisionNumber {
+		fmt.Printf("Revision %d is not the current revision for workspace %s\n", revisionNumber, workspaceID)
+		return nil
+	}
+
+	rev, err := workspace.GetRevision(ctx, workspaceID, revisionNumber)
+	if err != nil {
+		return fmt.Errorf("error getting revision: %w", err)
+	}
+	if rev.IsComplete {
+		fmt.Printf("Revision %d is already complete for workspace %s\n", revisionNumber, workspaceID)
+		return nil
+	}
+
+	chatMessage, err := chat.GetChatMessage(ctx, rev.ChatMessageID)
+	if err != nil {
+		return fmt.Errorf("error getting chat message: %w", err)
+	}
+
+	// the response to the chat message on the revision should be a plan to
+	// execute on.
+	relevantGVKs, err := workspace.ChooseRelevantGVKsForChatMessage(ctx, w, rev, chatMessage)
+	if err != nil {
+		return fmt.Errorf("error choosing relevant GVKs: %w", err)
+	}
+
+	// get the files from the previous revision for those GVKs
+	files, err := workspace.GetFilesForGVKs(ctx, w.ID, rev.RevisionNumber-1, relevantGVKs)
+	if err != nil {
+		return fmt.Errorf("error getting files for GVKs: %w", err)
+	}
+
+	if err := llm.ApplyChangesToWorkspace(ctx, w, chatMessage, files); err != nil {
+		return fmt.Errorf("error applying changes to workspace: %w", err)
+	}
+
+	return nil
 }
 
 func handleGVKNotification(ctx context.Context, id string) error {
@@ -110,7 +196,7 @@ func handleGVKNotification(ctx context.Context, id string) error {
 	return nil
 }
 
-func handleNewWorkspaceNotification(ctx context.Context, id string) error {
+func handleNewChatNotification(ctx context.Context, chatID string) error {
 	conn := persistence.MustGeUunpooledPostgresSession()
 	defer conn.Close(ctx)
 
@@ -127,37 +213,53 @@ func handleNewWorkspaceNotification(ctx context.Context, id string) error {
             SET processed_at = NOW(),
                 error = $1
             WHERE notification_channel = $2 and notification_id = $3
-        `, errorMsg, "new_workspace", id)
+        `, errorMsg, "new_chat", chatID)
 
 		if updateErr != nil {
 			fmt.Printf("Failed to update notification status: %v\n", updateErr)
 		}
 	}()
 
-	fmt.Printf("Handling new workspace notification: %s\n", id)
+	fmt.Printf("Handling new chat notification: %s\n", chatID)
 
-	w, err := workspace.GetWorkspace(ctx, id)
+	chatMessage, err := chat.GetChatMessage(ctx, chatID)
 	if err != nil {
-		processingErr = err
-		return err
+		return fmt.Errorf("error getting chat message: %w", err)
 	}
 
-	chatMessages, err := chat.ListChatMessagesForWorkspace(ctx, w.ID)
+	w, err := workspace.GetWorkspace(ctx, chatMessage.WorkspaceID)
 	if err != nil {
-		fmt.Printf("Error listing chat messages for workspace %s: %v\n", w.ID, err)
-		return nil
+		return fmt.Errorf("error getting workspace: %w", err)
 	}
 
-	if len(chatMessages) == 0 {
-		return nil
-	}
-
-	go func(chatMessage chattypes.Chat) {
-		err := llm.CreateNewChartFromMessage(ctx, w, &chatMessage)
+	if w.CurrentRevision == 0 {
+		workspaceChatMessages, err := chat.ListChatMessagesForWorkspace(ctx, w.ID)
 		if err != nil {
-			fmt.Printf("Error sending chat message: %+v\n", err)
+			return fmt.Errorf("error listing previous chat messages: %w", err)
 		}
-	}(chatMessages[0])
+
+		// remove the chat message with ID == chatID from the list
+		previousChatMessages := []chattypes.Chat{}
+		for _, chat := range workspaceChatMessages {
+			if chat.ID != chatID {
+				previousChatMessages = append(previousChatMessages, chat)
+			}
+		}
+
+		if len(previousChatMessages) > 0 {
+			fmt.Printf("Handling clarification chat for new workspace %s\n", w.ID)
+			if err := llm.ClarificationChat(ctx, w, previousChatMessages, chatMessage); err != nil {
+				return fmt.Errorf("error creating new chart: %w", err)
+			}
+		} else {
+			fmt.Printf("Handling first chat for workspace %s\n", w.ID)
+			if err := llm.CreateNewChartFromMessage(ctx, w, chatMessage); err != nil {
+				return fmt.Errorf("error creating new chart: %w", err)
+			}
+		}
+	} else {
+		fmt.Printf("Handling new chat for workspace %s\n", w.ID)
+	}
 
 	return nil
 }
