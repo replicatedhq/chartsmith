@@ -33,3 +33,24 @@ spec:
             requests:
               cpu: 10m
               memory: 64Mi
+      initContainers:
+      - image: chartsmith-bootstrap
+        name: bootstrap
+        args:
+          - "bootstrap"
+          - "--pg-uri=$(PG_URI)"
+          - "--chart-dir=//go/src/github.com/replicatedhq/chartsmith/bootstrap-chart"
+        env:
+          - name: PG_URI
+            valueFrom:
+              secretKeyRef:
+                name: chartsmith-postgres
+                key: uri
+        envFrom:
+          - secretRef:
+              name: chartsmith-postgres
+        readinessProbe: ~
+        resources:
+          requests:
+            cpu: 10m
+            memory: 64Mi
