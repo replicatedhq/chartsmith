@@ -2,11 +2,17 @@ package cmd
 
 import (
 	"context"
+	"crypto/sha256"
+	"database/sql"
+	"encoding/hex"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/replicatedhq/chartsmith/pkg/llm"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 	"github.com/replicatedhq/chartsmith/pkg/workspace"
@@ -31,12 +37,6 @@ func BootstrapCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			v := viper.GetViper()
 
-			// list all viper fields
-			fmt.Printf("viper fields:\n")
-			for _, field := range v.AllKeys() {
-				fmt.Printf("  %s: %s\n", field, v.Get(field))
-			}
-
 			if err := runBootstrap(cmd.Context(), v.GetString("pg-uri"), v.GetString("chart-dir")); err != nil {
 				return fmt.Errorf("failed to bootstrap chart: %w", err)
 			}
@@ -57,7 +57,10 @@ func BootstrapCmd() *cobra.Command {
 }
 
 func runBootstrap(ctx context.Context, pgURI string, chartDir string) error {
-	fmt.Printf("Bootstrapping initial chart data from %s...\n", chartDir)
+	currentDirectoryHash, err := directoryHashDeterministic(chartDir)
+	if err != nil {
+		return fmt.Errorf("failed to hash chart directory: %w", err)
+	}
 
 	pgOpts := persistence.PostgresOpts{
 		URI: pgURI,
@@ -68,6 +71,21 @@ func runBootstrap(ctx context.Context, pgURI string, chartDir string) error {
 
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
+
+	query := `select value from bootstrap_meta where key = 'current_directory_hash'`
+	row := conn.QueryRow(ctx, query)
+	var lastDirectoryHash sql.NullString
+	err = row.Scan(&lastDirectoryHash)
+	if err != nil && err != pgx.ErrNoRows {
+		return fmt.Errorf("failed to get last directory hash: %w", err)
+	}
+
+	if lastDirectoryHash.Valid && lastDirectoryHash.String == currentDirectoryHash {
+		fmt.Printf("Bootstrap directory hash is the same as last time, skipping bootstrap\n")
+		return nil
+	}
+
+	fmt.Printf("Bootstrapping initial chart data from %s...\n", chartDir)
 
 	tx, err := conn.Begin(ctx)
 	if err != nil {
@@ -205,5 +223,79 @@ func runBootstrap(ctx context.Context, pgURI string, chartDir string) error {
 		}
 	}
 
+	// store the current directory hash
+	_, err = conn.Exec(ctx, `
+        INSERT INTO bootstrap_meta (key, value)
+        VALUES ('current_directory_hash', $1)
+		ON CONFLICT (key) DO UPDATE SET value = $1
+    `, currentDirectoryHash)
+	if err != nil {
+		return fmt.Errorf("failed to store current directory hash: %w", err)
+	}
+
 	return nil
+}
+
+func directoryHashDeterministic(path string) (string, error) {
+	var files []string
+	err := filepath.Walk(path, func(filePath string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		relPath, err := filepath.Rel(path, filePath)
+		if err != nil {
+			return err
+		}
+		if relPath != "." {
+			files = append(files, relPath)
+		}
+		return nil
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to walk directory: %w", err)
+	}
+
+	// Sort files for deterministic ordering
+	sort.Strings(files)
+
+	hasher := sha256.New()
+	for _, relPath := range files {
+		filePath := filepath.Join(path, relPath)
+		info, err := os.Stat(filePath)
+		if err != nil {
+			return "", fmt.Errorf("failed to stat file %s: %w", filePath, err)
+		}
+
+		// Hash the relative path
+		if _, err := hasher.Write([]byte(relPath)); err != nil {
+			return "", fmt.Errorf("failed to hash path: %w", err)
+		}
+
+		// If it's a regular file, hash its contents
+		if info.Mode().IsRegular() {
+			file, err := os.Open(filePath)
+			if err != nil {
+				return "", fmt.Errorf("failed to open file %s: %w", filePath, err)
+			}
+
+			if _, err := io.Copy(hasher, file); err != nil {
+				file.Close()
+				return "", fmt.Errorf("failed to hash file %s: %w", filePath, err)
+			}
+			file.Close()
+		}
+
+		// Hash file metadata
+		modeBytes := []byte(fmt.Sprintf("%v", info.Mode()))
+		sizeBytes := []byte(fmt.Sprintf("%d", info.Size()))
+
+		if _, err := hasher.Write(modeBytes); err != nil {
+			return "", fmt.Errorf("failed to hash file mode: %w", err)
+		}
+		if _, err := hasher.Write(sizeBytes); err != nil {
+			return "", fmt.Errorf("failed to hash file size: %w", err)
+		}
+	}
+
+	return hex.EncodeToString(hasher.Sum(nil)), nil
 }
