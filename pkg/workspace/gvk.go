@@ -3,6 +3,7 @@ package workspace
 import (
 	"context"
 	"database/sql"
+	"fmt"
 
 	"github.com/replicatedhq/chartsmith/pkg/embedding"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
@@ -15,6 +16,7 @@ type GVKWithRelevance struct {
 }
 
 func FindRelevantGVKsForPrompt(ctx context.Context, id string, revision int, prompt string) ([]types.GVK, error) {
+	fmt.Printf("Finding relevant GVKs for workspace id: %s, revision: %d, prompt: %s\n", id, revision, prompt)
 	promptEmbeddings, err := embedding.Embeddings(prompt)
 	if err != nil {
 		return nil, err
@@ -62,6 +64,7 @@ SELECT
 	for rows.Next() {
 		var gvk GVKWithRelevance
 
+		var relevance sql.NullFloat64
 		err := rows.Scan(
 			&gvk.ID,
 			&gvk.WorkspaceID,
@@ -71,11 +74,13 @@ SELECT
 			&gvk.CreatedAt,
 			&gvk.Content,
 			&gvk.Summary,
-			&gvk.Relevance,
+			&relevance,
 		)
 		if err != nil {
 			return nil, err
 		}
+
+		gvk.Relevance = relevance.Float64
 		gvks = append(gvks, gvk)
 	}
 
