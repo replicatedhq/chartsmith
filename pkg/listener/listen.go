@@ -135,7 +135,7 @@ func handleNewRevisionNotification(ctx context.Context, id string) error {
 
 	// the response to the chat message on the revision should be a plan to
 	// execute on.
-	relevantGVKs, err := workspace.ChooseRelevantGVKsForChatMessage(ctx, w, rev, chatMessage)
+	relevantGVKs, err := workspace.ChooseRelevantGVKsForChatMessage(ctx, w, rev.RevisionNumber-1, chatMessage)
 	if err != nil {
 		return fmt.Errorf("error choosing relevant GVKs: %w", err)
 	}
@@ -259,6 +259,43 @@ func handleNewChatNotification(ctx context.Context, chatID string) error {
 		}
 	} else {
 		fmt.Printf("Handling new chat for workspace %s\n", w.ID)
+
+		workspaceChatMessages, err := chat.ListChatMessagesForWorkspaceSinceRevision(ctx, w.ID, w.CurrentRevision)
+		if err != nil {
+			return fmt.Errorf("error listing previous chat messages: %w", err)
+		}
+
+		if len(workspaceChatMessages) == 0 {
+			return nil
+		}
+
+		// we want to include all chat messages since the last revision, but not this one
+		previousChatMessages := []chattypes.Chat{}
+		for _, chat := range workspaceChatMessages {
+			if chat.ID != chatMessage.ID {
+				previousChatMessages = append(previousChatMessages, chat)
+			}
+		}
+
+		rev, err := workspace.GetRevision(ctx, w.ID, w.CurrentRevision)
+		if err != nil {
+			return fmt.Errorf("error getting revision: %w", err)
+		}
+
+		relevantGVKs, err := workspace.ChooseRelevantGVKsForChatMessage(ctx, w, rev.RevisionNumber, chatMessage)
+		if err != nil {
+			return fmt.Errorf("error choosing relevant GVKs: %w", err)
+		}
+
+		// get the files from the previous revision for those GVKs
+		files, err := workspace.GetFilesForGVKs(ctx, w.ID, rev.RevisionNumber, relevantGVKs)
+		if err != nil {
+			return fmt.Errorf("error getting files for GVKs: %w", err)
+		}
+
+		if err := llm.IterationChat(ctx, w, previousChatMessages, chatMessage, files); err != nil {
+			return fmt.Errorf("error creating new chart: %w", err)
+		}
 	}
 
 	return nil

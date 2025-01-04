@@ -125,6 +125,90 @@ func ApplyChangesToWorkspace(ctx context.Context, w *workspacetypes.Workspace, r
 	return nil
 }
 
+func IterationChat(ctx context.Context, w *workspacetypes.Workspace, previousChatMessages []chattypes.Chat, c *chattypes.Chat, relevantFiles []workspacetypes.File) error {
+	client, err := newAnthropicClient(ctx)
+	if err != nil {
+		return err
+	}
+
+	messages := []anthropic.MessageParam{
+		anthropic.NewAssistantMessage(anthropic.NewTextBlock(systemPrompt)),
+		anthropic.NewUserMessage(anthropic.NewTextBlock(planKnowledge)),
+	}
+
+	for _, chat := range previousChatMessages {
+		messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(chat.Prompt)))
+		if chat.Response != "" {
+			messages = append(messages, anthropic.NewAssistantMessage(anthropic.NewTextBlock(chat.Response)))
+		}
+	}
+
+	relevantFileWithPaths := []string{}
+	for _, file := range relevantFiles {
+		relevantFileWithPaths = append(relevantFileWithPaths, fmt.Sprintf("%s: %s", file.Path, file.Content))
+	}
+
+	newPrompt := fmt.Sprintf("Describe the plan only (do not write code) to create a helm chart based on the following prompt. Here are some relevant files:\n\n%s\n\n%s\n", strings.Join(relevantFileWithPaths, "\n\n"), c.Prompt)
+	messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(newPrompt)))
+
+	stream := client.Messages.NewStreaming(context.TODO(), anthropic.MessageNewParams{
+		Model:     anthropic.F(anthropic.ModelClaude3_5Sonnet20241022),
+		MaxTokens: anthropic.F(int64(8192)),
+		Messages:  anthropic.F(messages),
+	})
+
+	userIDs, err := workspace.ListUserIDsForWorkspace(ctx, c.WorkspaceID)
+	if err != nil {
+		return err
+	}
+	recipient := realtimetypes.Recipient{
+		UserIDs: userIDs,
+	}
+
+	message := anthropic.Message{}
+	for stream.Next() {
+		event := stream.Current()
+		message.Accumulate(event)
+
+		switch delta := event.Delta.(type) {
+		case anthropic.ContentBlockDeltaEventDelta:
+			if delta.Text != "" {
+				c.Response += delta.Text
+
+				e := realtimetypes.ChatMessageUpdatedEvent{
+					WorkspaceID: c.WorkspaceID,
+					Message:     c,
+					IsComplete:  false,
+				}
+
+				if err := realtime.SendEvent(ctx, recipient, e); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	if stream.Err() != nil {
+		return stream.Err()
+	}
+
+	if err := chat.MarkComplete(ctx, c); err != nil {
+		return err
+	}
+
+	e := realtimetypes.ChatMessageUpdatedEvent{
+		WorkspaceID: c.WorkspaceID,
+		Message:     c,
+		IsComplete:  true,
+	}
+
+	if err := realtime.SendEvent(ctx, recipient, e); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func ClarificationChat(ctx context.Context, w *workspacetypes.Workspace, previousChatMessages []chattypes.Chat, c *chattypes.Chat) error {
 	client, err := newAnthropicClient(ctx)
 	if err != nil {
