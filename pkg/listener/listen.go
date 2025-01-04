@@ -49,9 +49,11 @@ func Listen(ctx context.Context) error {
 		switch notification.Channel {
 		case "new_gvk":
 			fmt.Printf("New GVK notification received: %+v\n", notification)
-			if err := handleGVKNotification(ctx, notification.Payload); err != nil {
-				fmt.Printf("Error handling new GVK notification: %+v\n", err)
-			}
+			go func() {
+				if err := handleGVKNotification(ctx, notification.Payload); err != nil {
+					fmt.Printf("Error handling new GVK notification: %+v\n", err)
+				}
+			}()
 		case "new_chat":
 			fmt.Printf("New chat notification received: %+v\n", notification)
 			go func() {
@@ -144,7 +146,7 @@ func handleNewRevisionNotification(ctx context.Context, id string) error {
 		return fmt.Errorf("error getting files for GVKs: %w", err)
 	}
 
-	if err := llm.ApplyChangesToWorkspace(ctx, w, chatMessage, files); err != nil {
+	if err := llm.ApplyChangesToWorkspace(ctx, w, rev.RevisionNumber, chatMessage, files); err != nil {
 		return fmt.Errorf("error applying changes to workspace: %w", err)
 	}
 
@@ -190,8 +192,6 @@ func handleGVKNotification(ctx context.Context, id string) error {
 	}
 
 	gvk.Summary = &summary
-
-	fmt.Printf("Summary: %s\n", summary)
 
 	return nil
 }

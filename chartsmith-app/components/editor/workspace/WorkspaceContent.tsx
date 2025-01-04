@@ -35,8 +35,6 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
   const [editorContent, setEditorContent] = useState<string>("");
   const [showClarificationInput, setShowClarificationInput] = useState(false);
 
-
-
   const followMode = true; // Always true for now
   const [centrifugoToken, setCentrifugoToken] = useState<string | null>(null);
   const centrifugeRef = useRef<Centrifuge | null>(null);
@@ -95,6 +93,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     const sub = cf.newSubscription(channel);
 
     sub.on("publication", (message: { data: CentrifugoMessageData }) => {
+      console.log("Received message:", message.data);
       const isWorkspaceUpdatedEvent = message.data.workspace;
 
       if (!isWorkspaceUpdatedEvent) {
@@ -127,11 +126,22 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
       } else {
         const newWorkspace = message.data.workspace;
         if (newWorkspace) {
+          console.log("Received workspace update:", newWorkspace);
           // Preserve existing messages when updating workspace
-          setWorkspace(prev => ({
-            ...newWorkspace,
-            files: newWorkspace.files || prev.files
-          }));
+          setWorkspace(prev => {
+            console.log("Previous workspace state:", prev);
+            const updated: Workspace = {
+              id: newWorkspace.id,
+              createdAt: new Date(newWorkspace.created_at),
+              lastUpdatedAt: new Date(newWorkspace.last_updated_at),
+              name: newWorkspace.name,
+              files: newWorkspace.files || prev.files,
+              currentRevisionNumber: newWorkspace.current_revision,
+              incompleteRevisionNumber: newWorkspace.incomplete_revision_number
+            };
+            console.log("Updated workspace state:", updated);
+            return updated;
+          });
         }
       }
     });
@@ -197,6 +207,8 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     if (!session || !workspace) return;
     const updatedWorkspace = await createRevisionAction(session, workspace.id);
     if (!updatedWorkspace) return;
+
+    console.log(updatedWorkspace);
     setWorkspace(updatedWorkspace);
     setIsFileTreeVisible(true);
   }
@@ -230,8 +242,10 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     };
   }, []);
 
+  const showEditor = workspace?.currentRevisionNumber > 0 || workspace?.incompleteRevisionNumber;
+
   // Show chat-only view when there's no revision yet
-  if (!workspace?.currentRevisionNumber || workspace.currentRevisionNumber === 0) {
+  if (!showEditor) {
     return (
       <EditorLayout>
         <div className="flex justify-center h-full w-full overflow-auto transition-all duration-300 ease-in-out">
@@ -317,7 +331,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
             />
           </div>
         </div>
-        {workspace?.currentRevisionNumber > 0 && (
+        {showEditor && (
           <div className="flex-1 h-full translate-x-[400px] transition-opacity duration-100 ease-in-out opacity-0 animate-fadeIn">
             <WorkspaceContainer
               view={view}

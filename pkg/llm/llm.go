@@ -15,7 +15,7 @@ import (
 	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 )
 
-func ApplyChangesToWorkspace(ctx context.Context, w *workspacetypes.Workspace, c *chattypes.Chat, relevantFiles []workspacetypes.File) error {
+func ApplyChangesToWorkspace(ctx context.Context, w *workspacetypes.Workspace, revisionNumber int, c *chattypes.Chat, relevantFiles []workspacetypes.File) error {
 	client, err := newAnthropicClient(ctx)
 	if err != nil {
 		return err
@@ -26,13 +26,13 @@ func ApplyChangesToWorkspace(ctx context.Context, w *workspacetypes.Workspace, c
 		relevantFileWithPaths = append(relevantFileWithPaths, fmt.Sprintf("%s: %s", file.Path, file.Content))
 	}
 
-	newPrompt := fmt.Sprintf("Proceed with the implementation of the changes to this Helm chart. Keep current dependency and modify this chart to meet the plan. Here are some relevant files:\n\n%s\n\n%s\n", strings.Join(relevantFileWithPaths, "\n\n"), c.Response)
-	fmt.Printf("New prompt: %s\n", newPrompt)
-	stream := client.Messages.NewStreaming(context.TODO(), anthropic.MessageNewParams{
+	newPrompt := fmt.Sprintf("Proceed with the implementation of the changes to this Helm chart. Here are some relevant files:\n\n%s\n\n%s\n", strings.Join(relevantFileWithPaths, "\n\n"), c.Response)
+	stream := client.Messages.NewStreaming(ctx, anthropic.MessageNewParams{
 		Model:     anthropic.F(anthropic.ModelClaude3_5Sonnet20241022),
 		MaxTokens: anthropic.F(int64(8192)),
 		Messages: anthropic.F([]anthropic.MessageParam{
 			anthropic.NewAssistantMessage(anthropic.NewTextBlock(systemPrompt)),
+			anthropic.NewUserMessage(anthropic.NewTextBlock(createKnowledge)),
 			anthropic.NewUserMessage(anthropic.NewTextBlock(newPrompt)),
 		}),
 	})
@@ -71,6 +71,7 @@ func ApplyChangesToWorkspace(ctx context.Context, w *workspacetypes.Workspace, c
 						Workspace: w,
 					}
 
+					fmt.Printf("sending workspace update event to %s\n", recipient.GetUserIDs())
 					if err := realtime.SendEvent(ctx, recipient, e); err != nil {
 						return err
 					}
@@ -89,7 +90,6 @@ func ApplyChangesToWorkspace(ctx context.Context, w *workspacetypes.Workspace, c
 		}
 	}
 
-	fmt.Printf("Response: %s\n", fullResponseWithTags)
 	if stream.Err() != nil {
 		return stream.Err()
 	}
@@ -102,13 +102,17 @@ func ApplyChangesToWorkspace(ctx context.Context, w *workspacetypes.Workspace, c
 		return nil
 	}
 
-	// write the final workspace and files to the database
-	if err := workspace.CreateWorkspaceRevision(ctx, w); err != nil {
-		return err
+	if err := workspace.AddFilesToWorkspace(ctx, w, revisionNumber); err != nil {
+		return fmt.Errorf("error adding files to workspace: %w", err)
 	}
 
-	e := realtimetypes.WorkspaceRevisionCreatedEvent{
-		Workspace: w,
+	updatedWorkspace, err := workspace.SetCurrentRevision(ctx, w, revisionNumber)
+	if err != nil {
+		return fmt.Errorf("error setting current revision: %w", err)
+	}
+
+	e := realtimetypes.WorkspaceRevisionCompletedEvent{
+		Workspace: updatedWorkspace,
 	}
 	r := realtimetypes.Recipient{
 		UserIDs: userIDs,
@@ -129,6 +133,7 @@ func ClarificationChat(ctx context.Context, w *workspacetypes.Workspace, previou
 
 	messages := []anthropic.MessageParam{
 		anthropic.NewAssistantMessage(anthropic.NewTextBlock(systemPrompt)),
+		anthropic.NewUserMessage(anthropic.NewTextBlock(planKnowledge)),
 	}
 
 	for _, chat := range previousChatMessages {
@@ -219,6 +224,7 @@ func CreateNewChartFromMessage(ctx context.Context, w *workspacetypes.Workspace,
 		MaxTokens: anthropic.F(int64(8192)),
 		Messages: anthropic.F([]anthropic.MessageParam{
 			anthropic.NewAssistantMessage(anthropic.NewTextBlock(systemPrompt)),
+			anthropic.NewUserMessage(anthropic.NewTextBlock(planKnowledge)),
 			anthropic.NewUserMessage(anthropic.NewTextBlock(initialUserMessage(c.Prompt))),
 		}),
 	})
