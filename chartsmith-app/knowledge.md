@@ -23,6 +23,26 @@
 - Use min-w-[size] instead of w-[size] for fixed-width sections in flex layouts to prevent overflow
 - Keep flex-1 on growing sections between fixed-width elements
 - For nav bars with 3 sections (left, center, right), use min-width on outer sections to prevent squishing
+- For full-height scrollable containers, use h-full with overflow-auto on parent and py-8 on child for padding
+- For layout transitions between states, add transition-all duration-300 ease-in-out to parent containers
+- For smooth width transitions in flex layouts:
+  - Use flex-shrink-0 instead of flex-none
+  - Add transitions to both parent and child containers
+  - Maintain consistent transition properties (duration and timing function)
+  - For sequenced transitions, use longer duration (500ms) and transitionDelay on second element
+  - For major layout transitions, consider mounting second element after delay rather than transitioning opacity
+  - For sequenced transitions, use useState + useEffect with setTimeout instead of CSS transition-delay
+  - For sequenced transitions, use transitionend event to trigger next animation instead of fixed delays
+  - For major layout transitions, consider mounting second element after delay rather than transitioning opacity
+  - When transitioning between layouts, update all related UI state (e.g. sidebar visibility) before starting transition
+- Don't reset loading states when redirecting to a new page, only reset on error
+
+# Database
+
+- When scanning pgvector columns into Go slices, cast vector to float[] with `column::float[]`
+- Vector similarity searches use `<=>` operator
+- Vectors are stored in native pgvector format but must be cast when scanning to application
+- For array parameters with pgx, use `&pgtype.Array[T]{Elements: slice, Valid: true}`
 
 # Theme colors:
 
@@ -43,6 +63,8 @@ Usage:
 - Use bg-dark-surface for elevated surfaces like cards, inputs, dropdowns
 - Use border-dark-border for borders and dividers
 - Maintain strong contrast between layers in dark mode
+- Use opacity modifiers (e.g. border-dark-border/40) for subtle borders
+- Add extra padding at page bottom (pb-16) for better mobile spacing
 
 Persistence:
 - Theme preference is stored in 'theme' cookie
@@ -74,10 +96,22 @@ State Management:
 - When handling real-time updates, append unknown messages rather than ignoring them
 - Check for undefined rather than falsy values when conditionally rendering responses
 - For streaming responses, validate isComplete as boolean type rather than checking for undefined
+- For streaming UI transitions, check isComplete on last message before showing next step
 - Backend sends snake_case (is_complete), normalize to camelCase (isComplete) before updating state
 - When using real-time APIs, define separate types for raw server messages vs normalized frontend types
 - For streaming message updates, exclude messages state from effect deps to avoid feedback loops
 - When updating state from real-time events, use functional updates to preserve existing state
+- When handling real-time updates, append unknown messages rather than ignoring them
+- Check for undefined rather than falsy values when conditionally rendering responses
+- For streaming responses, validate isComplete as boolean type rather than checking for undefined
+- For streaming UI transitions, check isComplete on last message before showing next step
+- When normalizing Centrifugo messages, get top-level fields like is_complete from message.data, not from nested objects
+- For streaming responses, validate isComplete as boolean type rather than checking for undefined
+- Backend sends snake_case (is_complete), normalize to camelCase (isComplete) before updating state
+- For auto-scrolling chat, add empty div with ref at end of messages and scroll on message updates
+- For streaming UI transitions, check isComplete on last message before showing next step
+- For auto-scrolling chat, add empty div with ref at end of messages and scroll on message updates
+- For streaming UI transitions, check isComplete on last message before showing next step
 - Server-side render layout components when possible to avoid loading states
 - Server-side fetch data in layout.tsx for initial render, then use client-side actions for updates
 - Move client-side state and effects into dedicated client components

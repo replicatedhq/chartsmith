@@ -53,20 +53,19 @@ func GetWorkspace(ctx context.Context, id string) (*types.Workspace, error) {
 
 	row := conn.QueryRow(ctx, query, id)
 	var workspace types.Workspace
-	currentRevisionNumber := 0
 	err := row.Scan(
 		&workspace.ID,
 		&workspace.CreatedAt,
 		&workspace.LastUpdatedAt,
 		&workspace.Name,
-		&currentRevisionNumber,
+		&workspace.CurrentRevision,
 	)
 
 	if err != nil {
 		return nil, err
 	}
 
-	files, err := listFilesForWorkspace(ctx, id, currentRevisionNumber)
+	files, err := listFilesForWorkspace(ctx, id, workspace.CurrentRevision)
 	if err != nil {
 		return nil, err
 	}

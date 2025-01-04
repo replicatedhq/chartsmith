@@ -12,10 +12,8 @@ interface ChatContainerProps {
 export function ChatContainer({ messages, onSendMessage, onUndoChanges }: ChatContainerProps) {
   const { theme } = useTheme();
 
-  console.log("ChatContainer rendering messages:", messages);
-
   return (
-    <div className={`w-[400px] flex-none border-r flex flex-col min-h-0 overflow-hidden ${theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"}`}>
+    <div className={`h-full border-r flex flex-col min-h-0 overflow-hidden transition-all duration-300 ease-in-out w-full ${theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"}`}>
       <ChatPanel messages={messages} onSendMessage={onSendMessage} onUndoChanges={onUndoChanges} />
     </div>
   );

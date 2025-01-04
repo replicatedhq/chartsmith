@@ -14,7 +14,7 @@ const WorkspaceUIContext = createContext<WorkspaceUIContextType | undefined>(und
 export function WorkspaceUIProvider({ 
   children,
   initialChatVisible = true,
-  initialFileTreeVisible = true
+  initialFileTreeVisible = false
 }: { 
   children: React.ReactNode;
   initialChatVisible?: boolean;

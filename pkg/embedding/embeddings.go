@@ -1,4 +1,4 @@
-package llm
+package embedding
 
 import (
 	"bytes"

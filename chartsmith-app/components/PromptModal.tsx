@@ -61,13 +61,13 @@ export function PromptModal({ isOpen, onClose }: PromptModalProps) {
       setError(null);
 
       const workspaceId = await createWorkspaceAction(session!, "prompt", prompt);
-
+      
+      // Don't reset loading state, let it persist through redirect
       router.push(`/workspace/${workspaceId}`);
     } catch (err) {
       console.error("Failed to create workspace:", err);
       setError(err instanceof Error ? err.message : "Failed to create workspace");
-    } finally {
-      setIsLoading(false);
+      setIsLoading(false);  // Only reset loading on error
     }
   };
 

@@ -4,6 +4,7 @@ export interface Workspace {
   lastUpdatedAt: Date;
   name: string;
   files: File[];
+  currentRevisionNumber: number;
 }
 
 export interface File {

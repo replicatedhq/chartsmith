@@ -2,6 +2,7 @@ package llm
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -14,24 +15,29 @@ import (
 	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 )
 
-func CreateNewChartFromMessage(ctx context.Context, w *workspacetypes.Workspace, c *chattypes.Chat) error {
+func ApplyChangesToWorkspace(ctx context.Context, w *workspacetypes.Workspace, c *chattypes.Chat, relevantFiles []workspacetypes.File) error {
 	client, err := newAnthropicClient(ctx)
 	if err != nil {
 		return err
 	}
 
-	userMessage := "generate a helm chart based on the following prompt: " + c.Prompt
+	relevantFileWithPaths := []string{}
+	for _, file := range relevantFiles {
+		relevantFileWithPaths = append(relevantFileWithPaths, fmt.Sprintf("%s: %s", file.Path, file.Content))
+	}
 
+	newPrompt := fmt.Sprintf("Proceed with the implementation of the changes to this Helm chart. Keep current dependency and modify this chart to meet the plan. Here are some relevant files:\n\n%s\n\n%s\n", strings.Join(relevantFileWithPaths, "\n\n"), c.Response)
+	fmt.Printf("New prompt: %s\n", newPrompt)
 	stream := client.Messages.NewStreaming(context.TODO(), anthropic.MessageNewParams{
 		Model:     anthropic.F(anthropic.ModelClaude3_5Sonnet20241022),
 		MaxTokens: anthropic.F(int64(8192)),
 		Messages: anthropic.F([]anthropic.MessageParam{
 			anthropic.NewAssistantMessage(anthropic.NewTextBlock(systemPrompt)),
-			anthropic.NewUserMessage(anthropic.NewTextBlock(userMessage)),
+			anthropic.NewUserMessage(anthropic.NewTextBlock(newPrompt)),
 		}),
 	})
 
-	userIDs, err := workspace.ListUserIDsForWorkspace(ctx, c.WorkspaceID)
+	userIDs, err := workspace.ListUserIDsForWorkspace(ctx, w.ID)
 	if err != nil {
 		return err
 	}
@@ -83,6 +89,7 @@ func CreateNewChartFromMessage(ctx context.Context, w *workspacetypes.Workspace,
 		}
 	}
 
+	fmt.Printf("Response: %s\n", fullResponseWithTags)
 	if stream.Err() != nil {
 		return stream.Err()
 	}
@@ -108,6 +115,165 @@ func CreateNewChartFromMessage(ctx context.Context, w *workspacetypes.Workspace,
 	}
 
 	if err := realtime.SendEvent(ctx, r, e); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func ClarificationChat(ctx context.Context, w *workspacetypes.Workspace, previousChatMessages []chattypes.Chat, c *chattypes.Chat) error {
+	client, err := newAnthropicClient(ctx)
+	if err != nil {
+		return err
+	}
+
+	messages := []anthropic.MessageParam{
+		anthropic.NewAssistantMessage(anthropic.NewTextBlock(systemPrompt)),
+	}
+
+	for _, chat := range previousChatMessages {
+		messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(chat.Prompt)))
+		if chat.Response != "" {
+			messages = append(messages, anthropic.NewAssistantMessage(anthropic.NewTextBlock(chat.Response)))
+		}
+	}
+
+	messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(initialUserMessage(c.Prompt))))
+
+	stream := client.Messages.NewStreaming(context.TODO(), anthropic.MessageNewParams{
+		Model:     anthropic.F(anthropic.ModelClaude3_5Sonnet20241022),
+		MaxTokens: anthropic.F(int64(8192)),
+		Messages:  anthropic.F(messages),
+	})
+
+	userIDs, err := workspace.ListUserIDsForWorkspace(ctx, c.WorkspaceID)
+	if err != nil {
+		return err
+	}
+
+	// minimize database writes by keeping this message in memory while it's streaming back, only writing
+	// to the database when complete.  but still send the message as we receive it over the realtime socket
+	// to the client
+
+	recipient := realtimetypes.Recipient{
+		UserIDs: userIDs,
+	}
+
+	message := anthropic.Message{}
+	for stream.Next() {
+		event := stream.Current()
+		message.Accumulate(event)
+
+		switch delta := event.Delta.(type) {
+		case anthropic.ContentBlockDeltaEventDelta:
+			if delta.Text != "" {
+				c.Response += delta.Text
+
+				e := realtimetypes.ChatMessageUpdatedEvent{
+					WorkspaceID: c.WorkspaceID,
+					Message:     c,
+					IsComplete:  false,
+				}
+
+				if err := realtime.SendEvent(ctx, recipient, e); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	if stream.Err() != nil {
+		return stream.Err()
+	}
+
+	if err := chat.MarkComplete(ctx, c); err != nil {
+		return err
+	}
+
+	e := realtimetypes.ChatMessageUpdatedEvent{
+		WorkspaceID: c.WorkspaceID,
+		Message:     c,
+		IsComplete:  true,
+	}
+
+	if err := realtime.SendEvent(ctx, recipient, e); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func initialUserMessage(prompt string) string {
+	userMessage := "Describe the plan only (do not write code) to create a helm chart based on the following prompt. Do not ask if you should proceed. " + prompt
+	return userMessage
+}
+
+func CreateNewChartFromMessage(ctx context.Context, w *workspacetypes.Workspace, c *chattypes.Chat) error {
+	client, err := newAnthropicClient(ctx)
+	if err != nil {
+		return err
+	}
+
+	stream := client.Messages.NewStreaming(context.TODO(), anthropic.MessageNewParams{
+		Model:     anthropic.F(anthropic.ModelClaude3_5Sonnet20241022),
+		MaxTokens: anthropic.F(int64(8192)),
+		Messages: anthropic.F([]anthropic.MessageParam{
+			anthropic.NewAssistantMessage(anthropic.NewTextBlock(systemPrompt)),
+			anthropic.NewUserMessage(anthropic.NewTextBlock(initialUserMessage(c.Prompt))),
+		}),
+	})
+
+	userIDs, err := workspace.ListUserIDsForWorkspace(ctx, c.WorkspaceID)
+	if err != nil {
+		return err
+	}
+
+	// minimize database writes by keeping this message in memory while it's streaming back, only writing
+	// to the database when complete.  but still send the message as we receive it over the realtime socket
+	// to the client
+
+	recipient := realtimetypes.Recipient{
+		UserIDs: userIDs,
+	}
+
+	message := anthropic.Message{}
+	for stream.Next() {
+		event := stream.Current()
+		message.Accumulate(event)
+
+		switch delta := event.Delta.(type) {
+		case anthropic.ContentBlockDeltaEventDelta:
+			if delta.Text != "" {
+				c.Response += delta.Text
+
+				e := realtimetypes.ChatMessageUpdatedEvent{
+					WorkspaceID: c.WorkspaceID,
+					Message:     c,
+					IsComplete:  false,
+				}
+
+				if err := realtime.SendEvent(ctx, recipient, e); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	if stream.Err() != nil {
+		return stream.Err()
+	}
+
+	if err := chat.MarkComplete(ctx, c); err != nil {
+		return err
+	}
+
+	e := realtimetypes.ChatMessageUpdatedEvent{
+		WorkspaceID: c.WorkspaceID,
+		Message:     c,
+		IsComplete:  true,
+	}
+
+	if err := realtime.SendEvent(ctx, recipient, e); err != nil {
 		return err
 	}
 

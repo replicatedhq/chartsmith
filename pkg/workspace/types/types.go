@@ -14,7 +14,19 @@ type Workspace struct {
 	LastUpdatedAt time.Time `json:"last_updated_at"`
 	Name          string    `json:"name"`
 
+	CurrentRevision int `json:"current_revision"`
+
 	Files []File `json:"files"`
+}
+
+type Revision struct {
+	WorkspaceID     string
+	RevisionNumber  int
+	CreatedAt       time.Time
+	ChatMessageID   string
+	CreatedByUserID string
+	CreatedType     string
+	IsComplete      bool
 }
 
 type GVK struct {
@@ -26,5 +38,4 @@ type GVK struct {
 	CreatedAt      time.Time
 	Content        string
 	Summary        *string
-	Embeddings     []float64
 }

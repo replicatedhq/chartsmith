@@ -30,7 +30,8 @@ run-worker: build
 bootstrap:
 	@echo "Bootstrapping chart..."
 	@./$(WORKER_BUILD_DIR)/$(WORKER_BINARY_NAME) bootstrap \
-		--pg-uri="$(PG_URI)"
+		--pg-uri="$(PG_URI)" \
+		--force
 
 .PHONY: validate
 validate:

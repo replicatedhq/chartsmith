@@ -1,6 +1,6 @@
 "use server"
 
-import { SideNav } from "@/components/SideNav";
+import { SideNavWrapper } from "@/components/SideNavWrapper";
 import { WorkspaceUIProvider } from "@/contexts/WorkspaceUIContext";
 import { getWorkspace } from "@/lib/workspace/workspace";
 import { validateSession } from "@/lib/auth/actions/validate-session";
@@ -25,7 +25,7 @@ async function getSessionAndWorkspace(workspaceId: string) {
     redirect('/');
   }
 
-  return { session };
+  return { session, workspace };
 }
 
 export default async function WorkspaceLayout({
@@ -36,12 +36,13 @@ export default async function WorkspaceLayout({
   params: { id: string };
 }) {
   const { id } = await params;
-  await getSessionAndWorkspace(id);
+  const { workspace } = await getSessionAndWorkspace(id);
+  const hasRevision = workspace.currentRevisionNumber > 0;
 
   return (
-    <WorkspaceUIProvider initialChatVisible={true} initialFileTreeVisible={true}>
+    <WorkspaceUIProvider initialChatVisible={true} initialFileTreeVisible={hasRevision}>
       <div className="min-h-screen bg-[var(--background)] flex w-full" suppressHydrationWarning>
-        <SideNav workspaceID={id} />
+        <SideNavWrapper workspaceID={id} />
         <div className="flex-1">
           {children}
         </div>

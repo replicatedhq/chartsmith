@@ -1,0 +1,34 @@
+database: chartsmith
+name: workspace_revision
+schema:
+  postgres:
+    primaryKey:
+      - workspace_id
+      - revision_number
+    columns:
+      - name: workspace_id
+        type: text
+        constraints:
+          notNull: true
+      - name: revision_number
+        type: integer
+        constraints:
+          notNull: true
+      - name: created_at
+        type: timestamp
+        constraints:
+          notNull: true
+      - name: chat_message_id
+        type: text
+      - name: created_by_user_id
+        type: text
+        constraints:
+          notNull: true
+      - name: created_type
+        type: text
+        constraints:
+          notNull: true
+      - name: is_complete
+        type: boolean
+        constraints:
+          notNull: true
