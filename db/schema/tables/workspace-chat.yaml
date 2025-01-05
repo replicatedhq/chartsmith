@@ -35,3 +35,5 @@ schema:
       type: boolean
       constraints:
         notNull: true
+    - name: files_sent
+      type: text[]

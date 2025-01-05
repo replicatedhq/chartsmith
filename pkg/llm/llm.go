@@ -21,9 +21,15 @@ func ApplyChangesToWorkspace(ctx context.Context, w *workspacetypes.Workspace, r
 		return err
 	}
 
+	filenamesSent := []string{}
 	relevantFileWithPaths := []string{}
 	for _, file := range relevantFiles {
+		filenamesSent = append(filenamesSent, file.Path)
 		relevantFileWithPaths = append(relevantFileWithPaths, fmt.Sprintf("%s: %s", file.Path, file.Content))
+	}
+
+	if err := chat.SetFilesSentForChatMessage(ctx, w.ID, c.ID, filenamesSent); err != nil {
+		return err
 	}
 
 	newPrompt := fmt.Sprintf("Proceed with the implementation of the changes to this Helm chart. Here are some relevant files:\n\n%s\n\n%s\n", strings.Join(relevantFileWithPaths, "\n\n"), c.Response)
@@ -143,9 +149,15 @@ func IterationChat(ctx context.Context, w *workspacetypes.Workspace, previousCha
 		}
 	}
 
+	filenamesSent := []string{}
 	relevantFileWithPaths := []string{}
 	for _, file := range relevantFiles {
+		filenamesSent = append(filenamesSent, file.Path)
 		relevantFileWithPaths = append(relevantFileWithPaths, fmt.Sprintf("%s: %s", file.Path, file.Content))
+	}
+
+	if err := chat.SetFilesSentForChatMessage(ctx, w.ID, c.ID, filenamesSent); err != nil {
+		return err
 	}
 
 	newPrompt := fmt.Sprintf("Describe the plan only (do not write code) to create a helm chart based on the following prompt. Here are some relevant files:\n\n%s\n\n%s\n", strings.Join(relevantFileWithPaths, "\n\n"), c.Prompt)

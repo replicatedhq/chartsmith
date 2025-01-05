@@ -9,6 +9,29 @@ import (
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 )
 
+func SetFilesSentForChatMessage(ctx context.Context, workspaceID string, chatID string, files []string) error {
+	conn := persistence.MustGetPooledPostgresSession()
+	defer conn.Release()
+
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("error starting transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	query := `UPDATE workspace_chat SET files_sent = $1 WHERE workspace_id = $2 AND id = $3`
+	_, err = conn.Exec(ctx, query, files, workspaceID, chatID)
+	if err != nil {
+		return fmt.Errorf("error updating files sent: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("error committing transaction: %w", err)
+	}
+
+	return nil
+}
+
 func ListChatMessagesForWorkspaceSinceRevision(ctx context.Context, workspaceID string, revision int) ([]types.Chat, error) {
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()

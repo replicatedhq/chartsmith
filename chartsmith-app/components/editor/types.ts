@@ -10,6 +10,11 @@ export interface FileNode {
   scenarioId?: string;
 }
 
+export interface Prompt {
+  message: Message;
+  filesSent: string[];
+}
+
 export interface Message {
   id: string;
   prompt: string;

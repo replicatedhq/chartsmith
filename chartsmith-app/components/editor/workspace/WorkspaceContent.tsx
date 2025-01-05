@@ -244,6 +244,8 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
 
   const showEditor = workspace?.currentRevisionNumber > 0 || workspace?.incompleteRevisionNumber;
 
+  if (!session) return null;
+
   // Show chat-only view when there's no revision yet
   if (!showEditor) {
     return (
@@ -253,7 +255,12 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
             <Card className="p-6 w-full border-dark-border/40 shadow-lg">
               <div className="space-y-4">
                 {messages.map((message, index) => (
-                  <ChatMessage key={message.id || index} message={message} />
+                  <ChatMessage 
+                    key={message.id || index} 
+                    message={message} 
+                    session={session}
+                    workspaceId={workspaceId}
+                  />
                 ))}
                 {messages[messages.length - 1]?.isComplete && !showClarificationInput && (
                   <div className="mt-8 flex justify-center space-x-4">
@@ -328,6 +335,8 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
               messages={messages}
               onSendMessage={handleSendMessage}
               onUndoChanges={handleUndoChanges}
+              session={session}
+              workspaceId={workspaceId}
             />
           </div>
         </div>
