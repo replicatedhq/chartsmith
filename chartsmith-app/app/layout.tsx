@@ -4,7 +4,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { Toaster } from "@/components/toast/toaster";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import type { Theme } from "@/contexts/ThemeContext";
 
 const geistSans = Geist({
@@ -28,7 +28,10 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const cookieStore = await cookies();
-  const theme = (cookieStore.get('theme')?.value || 'dark') as Theme;
+  const savedTheme = (cookieStore.get('theme')?.value || 'auto') as Theme;
+  const headersList = await headers();
+  const systemTheme = headersList.get('Sec-CH-Prefers-Color-Scheme') === 'dark' ? 'dark' : 'light';
+  const theme = savedTheme === 'auto' ? systemTheme : savedTheme;
 
   return (
     <html lang="en" className={theme} suppressHydrationWarning>

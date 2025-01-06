@@ -21,10 +21,7 @@ build:
 .PHONY: run-worker
 run-worker: build
 	@echo "Running $(WORKER_BINARY_NAME)..."
-	@./$(WORKER_BUILD_DIR)/$(WORKER_BINARY_NAME) run \
-		--pg-uri="$(PG_URI)" \
-		--centrifugo-address="http://chartsmith-centrifugo:8000/api" \
-		--centrifugo-api-key=api_key
+	@./$(WORKER_BUILD_DIR)/$(WORKER_BINARY_NAME) run
 
 .PHONY: bootstrap
 bootstrap:
