@@ -81,3 +81,44 @@ export async function addChatMessage(workspaceID: string, userID: string, messag
     throw err;
   }
 }
+
+export async function getChatMessage(workspaceID: string, chatID: string): Promise<Message> {
+  try {
+    const db = getDB(await getParam("DB_URI"));
+    const result = await db.query(
+      `
+        SELECT
+          workspace_chat.id,
+          workspace_chat.workspace_id,
+          workspace_chat.created_at,
+          workspace_chat.sent_by,
+          workspace_chat.prompt,
+          workspace_chat.response,
+          workspace_chat.is_complete
+        FROM
+          workspace_chat
+        WHERE
+          workspace_chat.id = $1
+      `,
+      [chatID],
+    );
+
+    if (result.rows.length === 0) {
+      throw new Error("no chat message found");
+    }
+
+    const row = result.rows[0];
+    const message: Message = {
+      id: row.id,
+      prompt: row.prompt,
+      response: row.response,
+      fileChanges: undefined,
+      isComplete: row.is_complete,
+    };
+
+    return message;
+  } catch (err) {
+    console.error(err);
+    throw err;
+  }
+}

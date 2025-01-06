@@ -10,6 +10,11 @@ export interface FileNode {
   scenarioId?: string;
 }
 
+export interface Prompt {
+  message: Message;
+  filesSent: string[];
+}
+
 export interface Message {
   id: string;
   prompt: string;
@@ -33,10 +38,26 @@ export interface RawMessage {
 }
 
 // Interface for Centrifugo message data
-import { Workspace } from "@/lib/types/workspace";
+
+// Raw workspace data from server before normalization
+export interface RawFile {
+  path: string;
+  content: string;
+  name: string;
+}
+
+export interface RawWorkspace {
+  id: string;
+  created_at: string;
+  last_updated_at: string;
+  name: string;
+  files: RawFile[];
+  current_revision: number;
+  incomplete_revision_number?: number;
+}
 
 export interface CentrifugoMessageData {
-  workspace?: Workspace;
+  workspace?: RawWorkspace;
   message?: RawMessage;
   is_complete?: boolean;
   workspace_id: string;

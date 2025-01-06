@@ -1,17 +1,20 @@
 import React, { useState } from "react";
 import { Message } from "../types";
+import { Session } from "@/lib/types/session";
 import { useTheme } from "../../../contexts/ThemeContext";
-import { ChatActions } from "./ChatActions";
 import { ChatChanges } from "./ChatChanges";
+import { Button } from "@/components/ui/Button";
 import { UndoConfirmationModal } from "@/components/UndoConfirmationModal";
-import { ReportIssueModal } from "@/components/ReportIssueModal";
+import { FeedbackModal } from "@/components/FeedbackModal";
 
 interface ChatMessageProps {
   message: Message;
   onUndo?: () => void;
+  session: Session;
+  workspaceId: string;
 }
 
-export function ChatMessage({ message, onUndo }: ChatMessageProps) {
+export function ChatMessage({ message, onUndo, session, workspaceId }: ChatMessageProps) {
   const { theme } = useTheme();
   const [showReportModal, setShowReportModal] = useState(false);
   const [showUndoModal, setShowUndoModal] = useState(false);
@@ -32,17 +35,40 @@ export function ChatMessage({ message, onUndo }: ChatMessageProps) {
           <div className={`p-4 rounded-2xl ${theme === "dark" ? "bg-dark-border/40" : "bg-gray-100"} rounded-tl-sm`}>
             <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"} mb-1`}>ChartSmith</div>
             <div className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} text-sm whitespace-pre-wrap`}>{message.response}</div>
-            {message.isComplete && message.fileChanges && (
+            {message.isComplete && (
               <div className="mt-4 space-y-4 border-t border-gray-700/10 pt-4">
-                <ChatChanges changes={message.fileChanges} />
-                <ChatActions onUndo={() => setShowUndoModal(true)} onReport={() => setShowReportModal(true)} />
+                {message.fileChanges && <ChatChanges changes={message.fileChanges} />}
+                {onUndo && (
+                  <div className="flex justify-between mt-4">
+                    <Button
+                      onClick={() => setShowReportModal(true)}
+                      variant="outline"
+                      className={`${theme === "dark" ? "border-dark-border hover:bg-dark-border/40" : ""}`}
+                    >
+                      Give feedback
+                    </Button>
+                    <Button
+                      onClick={() => onUndo()}
+                      className="bg-primary hover:bg-primary/90 text-white"
+                    >
+                      Apply changes
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </div>
         </div>
       )}
 
-      <ReportIssueModal isOpen={showReportModal} onClose={() => setShowReportModal(false)} message={message} />
+      <FeedbackModal 
+        isOpen={showReportModal} 
+        onClose={() => setShowReportModal(false)} 
+        message={message}
+        chatId={message.id}
+        workspaceId={workspaceId}
+        session={session}
+      />
       <UndoConfirmationModal isOpen={showUndoModal} onClose={() => setShowUndoModal(false)} onConfirm={() => onUndo?.()} />
     </div>
   );

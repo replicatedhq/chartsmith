@@ -59,16 +59,16 @@ func (e WorkspaceUpdatedEvent) GetChannelName() string {
 	return e.Workspace.ID
 }
 
-type WorkspaceRevisionCreatedEvent struct {
+type WorkspaceRevisionCompletedEvent struct {
 	Workspace *workspacetypes.Workspace `json:"workspace"`
 }
 
-func (e WorkspaceRevisionCreatedEvent) GetMessageData() (map[string]interface{}, error) {
+func (e WorkspaceRevisionCompletedEvent) GetMessageData() (map[string]interface{}, error) {
 	return map[string]interface{}{
 		"workspace": e.Workspace,
 	}, nil
 }
 
-func (e WorkspaceRevisionCreatedEvent) GetChannelName() string {
+func (e WorkspaceRevisionCompletedEvent) GetChannelName() string {
 	return e.Workspace.ID
 }

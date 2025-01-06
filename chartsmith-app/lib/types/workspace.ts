@@ -5,6 +5,7 @@ export interface Workspace {
   name: string;
   files: File[];
   currentRevisionNumber: number;
+  incompleteRevisionNumber?: number;
 }
 
 export interface File {

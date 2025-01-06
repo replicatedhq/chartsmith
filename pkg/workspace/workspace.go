@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 	"github.com/replicatedhq/chartsmith/pkg/workspace/types"
 	"github.com/tuvistavie/securerandom"
@@ -72,6 +73,34 @@ func GetWorkspace(ctx context.Context, id string) (*types.Workspace, error) {
 
 	workspace.Files = files
 
+	// look for an incomplete revision
+	query = `
+		SELECT
+			workspace_revision.revision_number
+		FROM
+			workspace_revision
+		WHERE
+			workspace_revision.workspace_id = $1 AND
+			workspace_revision.is_complete = false AND
+			workspace_revision.revision_number > $2
+		ORDER BY
+			workspace_revision.revision_number DESC
+		LIMIT 1
+	`
+
+	row = conn.QueryRow(ctx, query, id, workspace.CurrentRevision)
+	var incompleteRevisionNumber int
+	err = row.Scan(&incompleteRevisionNumber)
+	if err != nil {
+		if err != pgx.ErrNoRows {
+			return nil, err
+		}
+	}
+
+	if incompleteRevisionNumber > 0 {
+		workspace.IncompleteRevisionNumber = &incompleteRevisionNumber
+	}
+
 	return &workspace, nil
 }
 
@@ -112,7 +141,39 @@ func listFilesForWorkspace(ctx context.Context, workspaceID string, revisionNumb
 	return files, nil
 }
 
-func CreateWorkspaceRevision(ctx context.Context, workspace *types.Workspace) error {
+func SetCurrentRevision(ctx context.Context, workspace *types.Workspace, revision int) (*types.Workspace, error) {
+	conn := persistence.MustGetPooledPostgresSession()
+	defer conn.Release()
+
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("error starting transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	query := `UPDATE workspace
+	SET current_revision_number = $1
+	WHERE id = $2`
+
+	_, err = conn.Exec(ctx, query, revision, workspace.ID)
+	if err != nil {
+		return nil, fmt.Errorf("error updating workspace: %w", err)
+	}
+
+	query = `UPDATE workspace_revision set is_complete = true WHERE workspace_id = $1 AND revision_number = $2`
+	_, err = conn.Exec(ctx, query, workspace.ID, revision)
+	if err != nil {
+		return nil, fmt.Errorf("error updating workspace revision: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("error committing transaction: %w", err)
+	}
+
+	return GetWorkspace(ctx, workspace.ID)
+}
+
+func AddFilesToWorkspace(ctx context.Context, workspace *types.Workspace, revision int) error {
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
 
@@ -122,43 +183,12 @@ func CreateWorkspaceRevision(ctx context.Context, workspace *types.Workspace) er
 	}
 	defer tx.Rollback(ctx)
 
-	// get the current revision number
-	query := `SELECT
-		workspace.current_revision_number
-	FROM
-		workspace
-	WHERE
-		workspace.id = $1`
-
-	row := tx.QueryRow(ctx, query, workspace.ID)
-	var currentRevisionNumber int
-	err = row.Scan(&currentRevisionNumber)
-	if err != nil {
-		return err
-	}
-
-	newRevisionNumber := currentRevisionNumber + 1
-
-	// update the workspace
-	query = `UPDATE workspace
-	SET
-		name = $1,
-		last_updated_at = now(),
-		current_revision_number = $2
-	WHERE
-		id = $3`
-
-	_, err = conn.Exec(ctx, query, workspace.Name, newRevisionNumber, workspace.ID)
-	if err != nil {
-		return err
-	}
-
 	for _, file := range workspace.Files {
 		// insert the file
-		query = `INSERT INTO workspace_file (workspace_id, file_path, revision_number, created_at, last_updated_at, content, name)
+		query := `INSERT INTO workspace_file (workspace_id, file_path, revision_number, created_at, last_updated_at, content, name)
 		VALUES ($1, $2, $3, now(), now(), $4, $5)`
 
-		_, err = conn.Exec(ctx, query, workspace.ID, file.Path, newRevisionNumber, file.Content, file.Name)
+		_, err = conn.Exec(ctx, query, workspace.ID, file.Path, revision, file.Content, file.Name)
 		if err != nil {
 			return err
 		}
@@ -188,7 +218,7 @@ func CreateWorkspaceRevision(ctx context.Context, workspace *types.Workspace) er
 			query = `INSERT INTO workspace_gvk (id, workspace_id, gvk, revision_number, file_path, created_at, content)
 			VALUES ($1, $2, $3, $4, $5, now(), $6)`
 
-			_, err = conn.Exec(ctx, query, gvkID, workspace.ID, gvk, newRevisionNumber, file.Path, document)
+			_, err = conn.Exec(ctx, query, gvkID, workspace.ID, gvk, revision, file.Path, document)
 			if err != nil {
 				return err
 			}

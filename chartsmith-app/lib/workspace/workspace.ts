@@ -7,6 +7,7 @@ import * as srs from "secure-random-string";
 export async function createWorkspace(name: string, createdType: string, prompt: string | undefined, userId: string): Promise<Workspace> {
   try {
     const id = srs.default({ length: 12, alphanumeric: true });
+
     const db = getDB(await getParam("DB_URI"));
 
     // Start transaction
@@ -38,6 +39,12 @@ export async function createWorkspace(name: string, createdType: string, prompt:
         );
       }
 
+      await client.query(
+        `INSERT INTO workspace_revision (workspace_id, revision_number, created_at, created_by_user_id, created_type, is_complete)
+        VALUES ($1, 0, now(), $2, $3, true)`,
+        [id, userId, "manual"],
+      );
+
       // commit before sending the notification
       await client.query("COMMIT");
     } catch (err) {
@@ -49,8 +56,8 @@ export async function createWorkspace(name: string, createdType: string, prompt:
       client.release();
     }
 
-    const chatClient = await db.connect();
     const chatId: string = srs.default({ length: 12, alphanumeric: true });
+    const chatClient = await db.connect();
     if (createdType === "prompt") {
       await chatClient.query(
         `INSERT INTO workspace_chat (id, workspace_id, created_at, sent_by, prompt, response, is_complete, is_initial_message)
@@ -118,6 +125,28 @@ export async function getWorkspace(id: string): Promise<Workspace | undefined> {
       w.files = files;
     }
 
+    // look for an incomplete revision
+    const result2 = await db.query(
+      `
+        SELECT
+          workspace_revision.revision_number
+        FROM
+          workspace_revision
+        WHERE
+          workspace_revision.workspace_id = $1 AND
+          workspace_revision.is_complete = false AND
+          workspace_revision.revision_number > $2
+        ORDER BY
+          workspace_revision.revision_number DESC
+        LIMIT 1
+      `,
+      [id, w.currentRevisionNumber],
+    );
+
+    if (result2.rows.length > 0) {
+      w.incompleteRevisionNumber = result2.rows[0].revision_number;
+    }
+
     return w;
   } catch (err) {
     console.error(err);
@@ -162,8 +191,6 @@ export async function createRevision(workspaceID: string, chatMessageID: string,
     );
 
     const newRevisionNumber = result.rows[0].revision_number;
-
-    await db.query(`UPDATE workspace SET current_revision_number = $1 WHERE id = $2`, [newRevisionNumber, workspaceID]);
 
     await db.query(`SELECT pg_notify('new_revision', $1)`, [`${workspaceID}/${newRevisionNumber}`]);
     return newRevisionNumber;

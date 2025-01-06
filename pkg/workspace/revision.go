@@ -52,7 +52,7 @@ func GetFilesForGVKs(ctx context.Context, workspaceID string, revisionNumber int
 		ids[i] = gvk.ID
 	}
 
-	query := fmt.Sprintf(`
+	query := `
     SELECT f.file_path, f.content, f.name
     FROM workspace_gvk g
     JOIN workspace_file f ON
@@ -61,7 +61,7 @@ func GetFilesForGVKs(ctx context.Context, workspaceID string, revisionNumber int
         f.file_path = g.file_path
     WHERE g.workspace_id = $1
     AND g.revision_number = $2
-    AND g.id = ANY($3::text[])`)
+    AND g.id = ANY($3::text[])`
 
 	rows, err := conn.Query(ctx, query, workspaceID, revisionNumber, ids)
 	if err != nil {
@@ -72,11 +72,10 @@ func GetFilesForGVKs(ctx context.Context, workspaceID string, revisionNumber int
 	files := make([]types.File, 0, len(gvks))
 	for rows.Next() {
 		var file types.File
-		var gvkID string
 		if err := rows.Scan(&file.Path, &file.Content, &file.Name); err != nil {
 			return nil, fmt.Errorf("scan error: %w", err)
 		}
-		fmt.Printf("Found file for GVK %s: %s\n", gvkID, file.Path)
+
 		files = append(files, file)
 	}
 
@@ -84,14 +83,5 @@ func GetFilesForGVKs(ctx context.Context, workspaceID string, revisionNumber int
 		return nil, fmt.Errorf("rows error: %w", err)
 	}
 
-	fmt.Printf("Found %d files for %d GVKs\n", len(files), len(gvks))
 	return files, nil
-}
-
-func gvkIDsFromGVKs(gvks []types.GVK) []string {
-	ids := make([]string, len(gvks))
-	for i, gvk := range gvks {
-		ids[i] = gvk.ID
-	}
-	return ids
 }

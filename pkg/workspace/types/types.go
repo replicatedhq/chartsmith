@@ -14,7 +14,8 @@ type Workspace struct {
 	LastUpdatedAt time.Time `json:"last_updated_at"`
 	Name          string    `json:"name"`
 
-	CurrentRevision int `json:"current_revision"`
+	CurrentRevision          int  `json:"current_revision"`
+	IncompleteRevisionNumber *int `json:"incomplete_revision_number,omitempty"`
 
 	Files []File `json:"files"`
 }
