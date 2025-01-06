@@ -12,9 +12,12 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/jackc/pgx/v5"
 	"github.com/replicatedhq/chartsmith/pkg/embedding"
 	"github.com/replicatedhq/chartsmith/pkg/llm"
+	"github.com/replicatedhq/chartsmith/pkg/param"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 	"github.com/replicatedhq/chartsmith/pkg/workspace"
 	"github.com/replicatedhq/chartsmith/pkg/workspace/types"
@@ -33,12 +36,23 @@ func BootstrapCmd() *cobra.Command {
 				return fmt.Errorf("failed to bind flags: %w", err)
 			}
 
+			sess, err := session.NewSession(aws.NewConfig().WithCredentialsChainVerboseErrors(true))
+			if err != nil {
+				// previous use of session.New did not fail on error
+				// we have not yet initialized logging, so we cannot use saaskit/log
+				fmt.Printf("Failed to create aws session: %v\n", err)
+			}
+
+			if err := param.Init(sess); err != nil {
+				return fmt.Errorf("failed to init params: %w", err)
+			}
+
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			v := viper.GetViper()
 
-			if err := runBootstrap(cmd.Context(), v.GetString("pg-uri"), v.GetString("chart-dir"), v.GetBool("force")); err != nil {
+			if err := runBootstrap(cmd.Context(), param.Get().PGURI, v.GetString("chart-dir"), v.GetBool("force")); err != nil {
 				return fmt.Errorf("failed to bootstrap chart: %w", err)
 			}
 
@@ -51,7 +65,6 @@ func BootstrapCmd() *cobra.Command {
 		return nil
 	}
 
-	bootstrapCmd.Flags().String("pg-uri", "", "Postgres URI")
 	bootstrapCmd.Flags().String("chart-dir", filepath.Join(wd, "bootstrap-chart"), "Chart directory")
 	bootstrapCmd.Flags().Bool("force", false, "Force bootstrap even if the directory is already bootstrapped")
 

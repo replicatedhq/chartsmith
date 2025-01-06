@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"os"
 	"strings"
+
+	"github.com/replicatedhq/chartsmith/pkg/param"
 )
 
 const VOYAGE_API_URL = "https://api.voyageai.com/v1/embeddings"
@@ -25,7 +26,7 @@ type embeddingResponse struct {
 
 // Embeddings generates embeddings and returns them in PostgreSQL vector format
 func Embeddings(content string) (string, error) {
-	if os.Getenv("VOYAGE_API_KEY") == "" {
+	if param.Get().VoyageAPIKey == "" {
 		return "", fmt.Errorf("VOYAGE_API_KEY environment variable not set")
 	}
 
@@ -45,7 +46,7 @@ func Embeddings(content string) (string, error) {
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", os.Getenv("VOYAGE_API_KEY")))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", param.Get().VoyageAPIKey))
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

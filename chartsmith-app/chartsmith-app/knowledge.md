@@ -17,6 +17,8 @@
 - Use resolvedTheme from ThemeContext when component needs actual 'light'/'dark' value
 - System theme detection uses matchMedia('(prefers-color-scheme: dark)')
 - Server-side theme detection uses Sec-CH-Prefers-Color-Scheme header
+- Components that expect only 'light'/'dark' (like editors, UI components) must use resolvedTheme
+- For client components using theme, add "use client" directive and useTheme hook
 
 # Layout
 
