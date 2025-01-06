@@ -11,6 +11,13 @@
 - Backend sends snake_case (is_complete), normalize to camelCase (isComplete) before updating state
 - When using real-time APIs, define separate types for raw server messages vs normalized frontend types
 
+# Theme
+
+- Theme can be 'light', 'dark', or 'auto'
+- Use resolvedTheme from ThemeContext when component needs actual 'light'/'dark' value
+- System theme detection uses matchMedia('(prefers-color-scheme: dark)')
+- Server-side theme detection uses Sec-CH-Prefers-Color-Scheme header
+
 # Layout
 
 - Use min-w-[size] instead of w-[size] for fixed-width sections in flex layouts to prevent overflow

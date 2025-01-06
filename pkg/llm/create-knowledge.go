@@ -15,4 +15,5 @@ const createKnowledge = `
 - Ensure that all images can be pulled with an image pull secret. Assume that the user may have a local repository to pull from.
 - The default location of images will be "proxy.replicated.com/appslug"
 - Never include multiple YAML documents in the same file. Split them into separate files.
+- Don't include more than 5-7 env vars in a deployment. If they get longer, mount from a configmap or secret.
 `

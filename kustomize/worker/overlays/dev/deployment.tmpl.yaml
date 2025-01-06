@@ -25,6 +25,10 @@ spec:
               value: $CHARTSMITH_ANTHROPIC_API_KEY
             - name: VOYAGE_API_KEY
               value: $VOYAGE_API_KEY
+            - name: CENTRIFUGO_ADDRESS
+              value: http://chartsmith-centrifugo:8000/api
+            - name: CENTRIFUGO_API_KEY
+              value: api_key
           envFrom:
             - secretRef:
                 name: chartsmith-postgres

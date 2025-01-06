@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, Trash2, Key } from 'lucide-react';
-import { useTheme } from '@/contexts/ThemeContext';
+import { useTheme, Theme } from '@/contexts/ThemeContext';
 
 
 interface SettingsModalProps {
@@ -120,19 +120,19 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Theme
-            </label>
-            <select
-              value={theme}
-              onChange={(e) => setTheme(e.target.value as 'light' | 'dark')}
-              className={`w-full px-3 py-2 rounded-lg transition-colors ${
-                theme === 'dark'
-                  ? 'bg-dark border-dark-border text-gray-300'
-                  : 'bg-white border-gray-300 text-gray-900'
-              } border focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent`}
-            >
-              <option value="dark">Dark</option>
-              <option value="light">Light</option>
-            </select>
+            </label>              <select
+                value={theme}
+                onChange={(e) => setTheme(e.target.value as Theme)}
+                className={`w-full px-3 py-2 rounded-lg transition-colors ${
+                  theme === 'dark'
+                    ? 'bg-dark border-dark-border text-gray-300'
+                    : 'bg-white border-gray-300 text-gray-900'
+                } border focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent`}
+              >
+                <option value="auto">Auto (System)</option>
+                <option value="dark">Dark</option>
+                <option value="light">Light</option>
+              </select>
           </div>
         </div>
       ),

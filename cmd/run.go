@@ -6,7 +6,10 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/replicatedhq/chartsmith/pkg/listener"
+	"github.com/replicatedhq/chartsmith/pkg/param"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 	"github.com/replicatedhq/chartsmith/pkg/realtime"
 	realtimetypes "github.com/replicatedhq/chartsmith/pkg/realtime/types"
@@ -24,29 +27,34 @@ func RunCmd() *cobra.Command {
 				return fmt.Errorf("failed to bind flags: %w", err)
 			}
 
+			sess, err := session.NewSession(aws.NewConfig().WithCredentialsChainVerboseErrors(true))
+			if err != nil {
+				// previous use of session.New did not fail on error
+				// we have not yet initialized logging, so we cannot use saaskit/log
+				fmt.Printf("Failed to create aws session: %v\n", err)
+			}
+
+			if err := param.Init(sess); err != nil {
+				return fmt.Errorf("failed to init params: %w", err)
+			}
+
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			v := viper.GetViper()
-
 			realtime.Init(&realtimetypes.Config{
-				Address: v.GetString("centrifugo-address"),
-				APIKey:  v.GetString("centrifugo-api-key"),
+				Address: param.Get().CentrifugoAddress,
+				APIKey:  param.Get().CentrifugoAPIKey,
 			})
 
 			ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 			defer stop()
 
-			if err := runWorker(ctx, v.GetString("pg-uri")); err != nil {
+			if err := runWorker(ctx, param.Get().PGURI); err != nil {
 				return fmt.Errorf("worker error: %w", err)
 			}
 			return nil
 		},
 	}
-
-	runCmd.Flags().String("pg-uri", "", "Postgres URI")
-	runCmd.Flags().String("centrifugo-address", "http://localhost:8000/api", "centrifugo address")
-	runCmd.Flags().String("centrifugo-api-key", "api_key", "centrifugo api key")
 
 	return runCmd
 }

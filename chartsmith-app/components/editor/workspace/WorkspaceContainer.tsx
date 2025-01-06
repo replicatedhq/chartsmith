@@ -21,7 +21,7 @@ interface WorkspaceContainerProps {
 }
 
 export function WorkspaceContainer({ view, onViewChange, files, renderedFiles, selectedFile, onFileSelect, onFileDelete, editorContent, onEditorChange, isFileTreeVisible }: WorkspaceContainerProps) {
-  const { theme } = useTheme();
+  const { resolvedTheme } = useTheme();
 
   const handleViewChange = () => {
     const newView = view === "source" ? "rendered" : "source";
@@ -33,9 +33,9 @@ export function WorkspaceContainer({ view, onViewChange, files, renderedFiles, s
       <EditorNav view={view} onViewChange={handleViewChange} />
       <div className="flex-1 flex min-h-0">
         {isFileTreeVisible && (view === "source" ? <FileBrowser nodes={files} onFileSelect={onFileSelect} onFileDelete={onFileDelete} selectedFile={selectedFile} /> : <RenderedFileBrowser nodes={renderedFiles} onFileSelect={onFileSelect} selectedFile={selectedFile} />)}
-        <div className={`w-px ${theme === "dark" ? "bg-dark-border" : "bg-gray-200"} flex-shrink-0`} />
+        <div className={`w-px ${resolvedTheme === "dark" ? "bg-dark-border" : "bg-gray-200"} flex-shrink-0`} />
         <div className="flex-1 min-w-0 w-full">
-          <CodeEditor file={selectedFile} theme={theme} value={editorContent} onChange={onEditorChange} />
+          <CodeEditor file={selectedFile} theme={resolvedTheme} value={editorContent} onChange={onEditorChange} />
         </div>
       </div>
     </div>
