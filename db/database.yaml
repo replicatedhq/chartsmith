@@ -1,0 +1,14 @@
+apiVersion: databases.schemahero.io/v1alpha4
+kind: Database
+metadata:
+  name: chartsmith
+  namespace: default
+spec:
+  connection:
+    postgres:
+      uri:
+        valueFrom:
+          ssm:
+            name: "/chartsmith/pg_uri"
+            withDecryption: true
+            region: "us-east-1"

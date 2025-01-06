@@ -102,16 +102,43 @@ func (m *Chartsmith) Release(
 		return err
 	}
 
-	// run the staging kustomize build
-	stagingManifests := dag.
+	migrations := getChartsmithMigrations(ctx, source)
+	if err := pushYAMLsToRepo(ctx, migrations, PushFileOpts{
+		RepoFullName:    "replicatedhq/chartsmith",
+		Branch:          "main",
+		DestinationPath: "db/database.yaml",
+		CommitMessage:   fmt.Sprintf("Update Chartsmith database to %s", newVersion),
+		GithubToken:     githubToken,
+	}); err != nil {
+		return err
+	}
+
+	stagingHostname := fmt.Sprintf("%s.dkr.ecr.%s.amazonaws.com", stagingAccountID, "us-east-1")
+	appImageName := fmt.Sprintf("%s/%s:%s", stagingHostname, "chartsmith-app", newVersion)
+	workerImageName := fmt.Sprintf("%s/%s:%s", stagingHostname, "chartsmith-worker", newVersion)
+
+	stagingEditedSource := dag.
 		Kustomize().
-		Build(source, dagger.KustomizeBuildOpts{
+		Edit(source, dagger.KustomizeEditOpts{
 			Dir: "kustomize/overlays/staging",
-		})
+		}).
+		Set().
+		Image(fmt.Sprintf("chartsmith-worker=%s", workerImageName)).
+		Set().
+		Image(fmt.Sprintf("chartsmith-app=%s", appImageName)).
+		Directory()
+
+	stagingManifests := dag.Kustomize().Build(
+		stagingEditedSource,
+		dagger.KustomizeBuildOpts{
+			Dir: "kustomize/overlays/staging",
+		},
+	)
+
 	if err := pushYAMLToRepo(ctx, stagingManifests, PushFileOpts{
 		RepoFullName:    "replicatedcom/gitops-deploy",
 		Branch:          "main",
-		DestinationPath: "chartsmith.yaml",
+		DestinationPath: "chartsmith/chartsmith.yaml",
 		CommitMessage:   fmt.Sprintf("Update Chartsmith manifests to %s", newVersion),
 		GithubToken:     githubToken,
 	}); err != nil {
