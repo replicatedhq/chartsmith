@@ -14,10 +14,32 @@ type PushFileOpts struct {
 	GithubToken     *dagger.Secret
 }
 
+func pushYAMLsToRepo(ctx context.Context, yamlFiles *dagger.Directory, opts PushFileOpts) error {
+	// join all files into a single yaml file with --- separators
+
+	merged := ""
+
+	entries, err := yamlFiles.Entries(ctx)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		contents, err := yamlFiles.File(entry).Contents(ctx)
+		if err != nil {
+			return err
+		}
+
+		merged += fmt.Sprintf("---\n%s\n", contents)
+	}
+
+	yamlFile := dagger.Connect().Directory().WithNewFile("merged.yaml", merged).File("merged.yaml")
+
+	return pushYAMLToRepo(ctx, yamlFile, opts)
+}
+
 func pushYAMLToRepo(ctx context.Context, yamlFile *dagger.File, opts PushFileOpts) error {
 	client := dagger.Connect()
 
-	// Create a container with git and necessary tools
 	container := client.Container().
 		From("alpine/git").
 		WithMountedFile("/tmp/file.yaml", yamlFile).
@@ -30,7 +52,7 @@ func pushYAMLToRepo(ctx context.Context, yamlFile *dagger.File, opts PushFileOpt
 	container = container.WithSecretVariable("GITHUB_TOKEN", opts.GithubToken)
 
 	// Clone, add file, commit and push
-	_, err := container.WithExec([]string{
+	stdout, err := container.WithExec([]string{
 		"sh", "-c",
 		fmt.Sprintf(`
             git clone https://oauth2:${GITHUB_TOKEN}@github.com/%s.git repo &&
@@ -40,13 +62,14 @@ func pushYAMLToRepo(ctx context.Context, yamlFile *dagger.File, opts PushFileOpt
             git commit -m "%s" &&
             git push origin %s
         `,
-			opts.RepoFullName,    // e.g. "org/repo"
-			opts.DestinationPath, // where to put the file in the repo
-			opts.DestinationPath, // file to add
-			opts.CommitMessage,   // commit message
-			opts.Branch,          // branch name
+			opts.RepoFullName,
+			opts.DestinationPath,
+			opts.DestinationPath,
+			opts.CommitMessage,
+			opts.Branch,
 		),
-	}).Sync()
+	}).Stdout(ctx)
+	fmt.Printf("%s\n", stdout)
 
 	return err
 }
