@@ -10,3 +10,14 @@
 - For streaming UI transitions, check isComplete on last message before showing next step
 - Backend sends snake_case (is_complete), normalize to camelCase (isComplete) before updating state
 - When using real-time APIs, define separate types for raw server messages vs normalized frontend types
+
+# Layout
+
+- Use min-w-[size] instead of w-[size] for fixed-width sections in flex layouts to prevent overflow
+- Keep flex-1 on growing sections between fixed-width elements
+- For nav bars with 3 sections (left, center, right), use min-width on outer sections to prevent squishing
+- For full-height scrollable containers, use h-full with overflow-auto on parent and py-8 on child for padding
+- For modals:
+  - Handle click outside with e.target === e.currentTarget check
+  - Add ESC key listener when modal opens, remove on close
+  - Use stopPropagation on modal content to prevent click-outside from triggering
