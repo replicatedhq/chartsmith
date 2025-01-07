@@ -11,9 +11,6 @@ spec:
             - /go/src/github.com/replicatedhq/chartsmith/bin/chartsmith-worker
           args:
             - "run"
-            - "--pg-uri=$(PG_URI)"
-            - "--centrifugo-address=http://chartsmith-centrifugo:8000/api"
-            - "--centrifugo-api-key=api_key"
           workingDir: /go/src/github.com/replicatedhq/chartsmith
           env:
             - name: PG_URI
