@@ -17,3 +17,16 @@ spec:
               value: "true"
             - name: AWS_REGION
               value: us-east-1
+      initContainers:
+      - image: chartsmith-worker
+        name: bootstrap
+        command:
+          - /go/src/github.com/replicatedhq/chartsmith/bin/chartsmith-worker
+        args:
+          - "bootstrap"
+          - "--chart-dir=/chart"
+        env:
+          - name: USE_EC2_PARAMETERS
+            value: "true"
+          - name: AWS_REGION
+            value: us-east-1

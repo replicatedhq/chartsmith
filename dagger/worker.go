@@ -13,6 +13,10 @@ func buildWorker(ctx context.Context, source *dagger.Directory) (*dagger.Contain
 	// build a wolfi container
 	releaseContainer := buildEnvWorker(source).
 		WithFile("/chartsmith-worker", binary)
+
+	// add the bootstrap chart in so that our init container can use it
+	releaseContainer = releaseContainer.WithDirectory("/chart", source.Directory("bootstrap-chart"))
+
 	releaseContainer = releaseContainer.WithEntrypoint([]string{
 		"/chartsmith-worker",
 	})
