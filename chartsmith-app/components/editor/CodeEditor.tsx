@@ -1,4 +1,4 @@
-import React, { memo } from "react";
+import React, { memo, useRef, useEffect } from "react";
 import Editor from "@monaco-editor/react";
 import type { FileNode } from "./types";
 import { useMonacoEditor } from "../../hooks/useMonacoEditor";
@@ -11,7 +11,16 @@ interface CodeEditorProps {
 }
 
 export const CodeEditor = memo(function CodeEditor({ file, theme = "light", value, onChange }: CodeEditorProps) {
-  const { handleEditorInit } = useMonacoEditor(file);
+  const { handleEditorInit, applyIncrementalUpdate } = useMonacoEditor(file);
+  const prevValueRef = useRef(value);
+
+  // Handle external value changes using incremental updates
+  useEffect(() => {
+    if (value !== prevValueRef.current && applyIncrementalUpdate) {
+      applyIncrementalUpdate(value ?? "");
+      prevValueRef.current = value;
+    }
+  }, [value, applyIncrementalUpdate]);
 
   return (
     <div className="flex-1 h-full">
@@ -19,7 +28,7 @@ export const CodeEditor = memo(function CodeEditor({ file, theme = "light", valu
         height="100%"
         defaultLanguage="yaml"
         language="yaml"
-        value={value ?? ""}
+        defaultValue={value ?? ""}
         onChange={onChange}
         theme={theme === "light" ? "vs" : "vs-dark"}
         options={{
