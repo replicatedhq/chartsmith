@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useEditorView } from "@/hooks/useEditorView";
 import { EditorLayout } from "@/components/editor/layout/EditorLayout";
 import { WorkspaceContainer } from "@/components/editor/workspace/WorkspaceContainer";
@@ -44,7 +44,19 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     usePathname()?.endsWith('/rendered') ? 'rendered' : 'source'
   );
 
-  const renderedFiles: FileNode[] = [];
+  // Memoize the transformed files array
+  const sourceFiles = useMemo(() => {
+    if (!workspace?.files) return [];
+    return workspace.files.map(file => ({
+      name: file.name,
+      path: file.path,
+      content: file.content,
+      type: 'file' as const
+    }));
+  }, [workspace?.files]);
+
+  // Memoize rendered files array (currently empty but prepared for future use)
+  const renderedFiles = useMemo<FileNode[]>(() => [], []);
 
   useEffect(() => {
     if (!session) return;
@@ -332,12 +344,8 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
 
   const handleViewChange = () => {
     const newView = view === "source" ? "rendered" : "source";
-    const newFiles = newView === "rendered" ? renderedFiles : workspace.files.map(file => ({
-      name: file.name,
-      path: file.path,
-      content: file.content,
-      type: 'file' as const
-    }));
+    // Use memoized arrays instead of creating new ones
+    const newFiles = newView === "rendered" ? renderedFiles : sourceFiles;
     toggleView(newFiles);
   };
 
@@ -376,12 +384,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
             <WorkspaceContainer
               view={view}
               onViewChange={handleViewChange}
-              files={workspace.files.map(file => ({
-                name: file.name,
-                path: file.path,
-                content: file.content,
-                type: 'file' as const
-              }))}
+              files={sourceFiles}
               renderedFiles={renderedFiles}
               selectedFile={selectedFile}
               onFileSelect={handleFileSelect}

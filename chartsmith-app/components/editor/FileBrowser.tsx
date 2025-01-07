@@ -1,4 +1,4 @@
-import React from "react";
+import React, { memo } from "react";
 import { FileTree } from "./FileTree";
 import { useTheme } from "../../contexts/ThemeContext";
 import { FolderPlus, FilePlus } from "lucide-react";
@@ -11,7 +11,7 @@ interface FileBrowserProps {
   selectedFile?: FileNode;
 }
 
-export function FileBrowser({ nodes, onFileSelect, onFileDelete, selectedFile }: FileBrowserProps) {
+export const FileBrowser = memo(function FileBrowser({ nodes, onFileSelect, onFileDelete, selectedFile }: FileBrowserProps) {
   const { theme } = useTheme();
 
   const handleNewFile = () => {
@@ -42,4 +42,4 @@ export function FileBrowser({ nodes, onFileSelect, onFileDelete, selectedFile }:
       </div>
     </div>
   );
-}
+});

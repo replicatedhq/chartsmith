@@ -1,4 +1,4 @@
-import React from "react";
+import React, { memo } from "react";
 import Editor from "@monaco-editor/react";
 import type { FileNode } from "./types";
 import { useMonacoEditor } from "../../hooks/useMonacoEditor";
@@ -10,7 +10,7 @@ interface CodeEditorProps {
   onChange?: (value: string | undefined) => void;
 }
 
-export function CodeEditor({ file, theme = "light", value, onChange }: CodeEditorProps) {
+export const CodeEditor = memo(function CodeEditor({ file, theme = "light", value, onChange }: CodeEditorProps) {
   const { handleEditorInit } = useMonacoEditor(file);
 
   return (
@@ -42,8 +42,9 @@ export function CodeEditor({ file, theme = "light", value, onChange }: CodeEdito
           hideCursorInOverviewRuler: true,
         }}
         onMount={handleEditorInit}
-        key={`${file?.path}-${theme}`} // Force re-mount when file or theme changes
+        // Removed key prop to prevent unnecessary remounts
+        // The editor should handle file/theme changes internally
       />
     </div>
   );
-}
+});

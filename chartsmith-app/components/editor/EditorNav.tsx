@@ -1,4 +1,4 @@
-import React from "react";
+import React, { memo } from "react";
 import { Code, FileJson } from "lucide-react";
 import { useTheme } from "../../contexts/ThemeContext";
 import { EditorView } from "../../hooks/useEditorView";
@@ -8,7 +8,7 @@ interface EditorNavProps {
   onViewChange: () => void;
 }
 
-export function EditorNav({ view, onViewChange }: EditorNavProps) {
+export const EditorNav = memo(function EditorNav({ view, onViewChange }: EditorNavProps) {
   const { theme } = useTheme();
 
   return (
@@ -31,4 +31,4 @@ export function EditorNav({ view, onViewChange }: EditorNavProps) {
       </div>
     </div>
   );
-}
+});

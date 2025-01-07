@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, memo } from "react";
 import { FileText, ChevronRight, ChevronDown } from "lucide-react";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useValuesScenarios } from "@/app/contexts/ValuesScenariosContext";
@@ -12,7 +12,7 @@ interface RenderedFileBrowserProps {
   selectedFile?: FileNode;
 }
 
-export function RenderedFileBrowser({ nodes, onFileSelect, selectedFile }: RenderedFileBrowserProps) {
+export const RenderedFileBrowser = memo(function RenderedFileBrowser({ nodes, onFileSelect, selectedFile }: RenderedFileBrowserProps) {
   const { theme } = useTheme();
   const { scenarios } = useValuesScenarios();
   const [expandedScenarios, setExpandedScenarios] = useState<Set<string>>(new Set(["default"]));
@@ -70,4 +70,4 @@ export function RenderedFileBrowser({ nodes, onFileSelect, selectedFile }: Rende
       </div>
     </div>
   );
-}
+});
