@@ -93,7 +93,7 @@ func buildChartsmithApp(ctx context.Context, source *dagger.Directory, opService
 		WithSecretVariable("DB_URI", mustGetSecret(context.Background(), opServiceAccount, "Production - Postgres", "uri")).
 		WithSecretVariable("HMAC_SECRET", mustGetSecret(context.Background(), opServiceAccount, "Production - Chartsmith", "hmac_secret")).
 		WithSecretVariable("CENTRIFUGO_TOKEN_HMAC_SECRET", mustGetSecret(context.Background(), opServiceAccount, "Production - Chartsmith Centrifugo", "hmac_secret")).
-		WithEnvVariable("NEXT_PUBLIC_CENTRIFUGO_ADDRESS", mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Production - Chartsmith Centrifugo", "address")).
+		WithEnvVariable("NEXT_PUBLIC_CENTRIFUGO_ADDRESS", mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Production - Chartsmith Centrifugo", "client_address")).
 		WithExec([]string{"npm", "run", "build"})
 	stdout, err = stagingBuildContainer.Stdout(context.Background())
 	if err != nil {
