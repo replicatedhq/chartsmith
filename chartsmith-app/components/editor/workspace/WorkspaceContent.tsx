@@ -148,14 +148,18 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
                 if (existingFileIndex >= 0) {
                   // Only update if content has changed
                   if (updatedFiles[existingFileIndex].content !== newFile.content) {
+                    console.log(`Updating file ${newFile.path} - content changed`);
                     updatedFiles[existingFileIndex] = {
                       ...updatedFiles[existingFileIndex],
                       content: newFile.content
                     };
+                  } else {
+                    console.log(`Preserving file ${newFile.path} - content unchanged`);
                   }
                   // Existing file reference is preserved if content hasn't changed
                 } else {
                   // Append new file
+                  console.log(`Adding new file ${newFile.path}`);
                   updatedFiles.push({
                     name: newFile.name,
                     path: newFile.path,
