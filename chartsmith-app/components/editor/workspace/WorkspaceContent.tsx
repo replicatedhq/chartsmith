@@ -126,19 +126,46 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
       } else {
         const newWorkspace = message.data.workspace;
         if (newWorkspace) {
-          console.log("Received workspace update:", newWorkspace);
-          // Preserve existing messages when updating workspace
+          console.log("Received workspace update. Processing changes selectively...");
+          // Selectively merge workspace updates to prevent unnecessary re-renders
           setWorkspace(prev => {
-            console.log("Previous workspace state:", prev);
+            // Start with a shallow copy of the previous state
             const updated: Workspace = {
+              ...prev,
               id: newWorkspace.id,
               createdAt: new Date(newWorkspace.created_at),
               lastUpdatedAt: new Date(newWorkspace.last_updated_at),
               name: newWorkspace.name,
-              files: newWorkspace.files || prev.files,
               currentRevisionNumber: newWorkspace.current_revision,
               incompleteRevisionNumber: newWorkspace.incomplete_revision_number
             };
+
+            // Only update files that have changed or are new
+            if (newWorkspace.files) {
+              const updatedFiles = [...prev.files];
+              newWorkspace.files.forEach(newFile => {
+                const existingFileIndex = updatedFiles.findIndex(f => f.path === newFile.path);
+                if (existingFileIndex >= 0) {
+                  // Only update if content has changed
+                  if (updatedFiles[existingFileIndex].content !== newFile.content) {
+                    updatedFiles[existingFileIndex] = {
+                      ...updatedFiles[existingFileIndex],
+                      content: newFile.content
+                    };
+                  }
+                  // Existing file reference is preserved if content hasn't changed
+                } else {
+                  // Append new file
+                  updatedFiles.push({
+                    name: newFile.name,
+                    path: newFile.path,
+                    content: newFile.content
+                  });
+                }
+              });
+              updated.files = updatedFiles;
+            }
+
             console.log("Updated workspace state:", updated);
             return updated;
           });
