@@ -1,5 +1,4 @@
 resources:
   - ../../worker/overlays/staging
   - ../../app/overlays/staging
-  - ../../migrations/overlays/staging
 

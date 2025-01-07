@@ -40,6 +40,17 @@ func mustGetItemUUID(ctx context.Context, opServiceAccount *dagger.Secret, itemN
 	}
 }
 
+func mustGetSecretAsPlaintext(ctx context.Context, opServiceAccount *dagger.Secret, itemName string, field string) string {
+	secret := mustGetSecret(ctx, opServiceAccount, itemName, field)
+
+	pt, err := secret.Plaintext(ctx)
+	if err != nil {
+		panic(err)
+	}
+
+	return pt
+}
+
 func mustGetSecret(ctx context.Context, opServiceAccount *dagger.Secret, itemName string, field string) *dagger.Secret {
 	opItemUUID := mustGetItemUUID(ctx, opServiceAccount, itemName)
 

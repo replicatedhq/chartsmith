@@ -46,12 +46,13 @@ func buildChartsmithApp(ctx context.Context, source *dagger.Directory, opService
 		WithSecretVariable("DB_URI", mustGetSecret(context.Background(), opServiceAccount, "Staging - Postgres", "uri")).
 		WithSecretVariable("HMAC_SECRET", mustGetSecret(context.Background(), opServiceAccount, "Staging - Chartsmith", "hmac_secret")).
 		WithSecretVariable("CENTRIFUGO_TOKEN_HMAC_SECRET", mustGetSecret(context.Background(), opServiceAccount, "Staging - Chartsmith Centrifugo", "hmac_secret")).
-		WithEnvVariable("NEXT_PUBLIC_CENTRIFUGO_ADDRESS", mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Staging - Chartsmith Centrifugo", "address")).
+		WithEnvVariable("NEXT_PUBLIC_CENTRIFUGO_ADDRESS", mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Staging - Chartsmith Centrifugo", "client_address")).
 		WithExec([]string{"npm", "run", "build"})
 	stdout, err := stagingBuildContainer.Stdout(context.Background())
 	if err != nil {
 		return nil, nil, err
 	}
+
 	fmt.Printf("Staging build container stdout:\n%s\n", stdout)
 	stagingStandalone := stagingBuildContainer.Directory("/src/.next/standalone")
 	stagingStatic := stagingBuildContainer.Directory("/src/.next/static")
@@ -68,6 +69,22 @@ func buildChartsmithApp(ctx context.Context, source *dagger.Directory, opService
 	stagingReleaseContainer = stagingReleaseContainer.WithDefaultArgs([]string{
 		"/app/server.js",
 	})
+	stagingReleaseContainer = stagingReleaseContainer.WithNewFile("/app/.env.local", fmt.Sprintf(
+		`NEXT_PUBLIC_GOOGLE_CLIENT_ID=%s
+    NEXT_PUBLIC_GOOGLE_REDIRECT_URI=%s
+    GOOGLE_CLIENT_SECRET=%s
+    DB_URI=%s
+    HMAC_SECRET=%s
+    CENTRIFUGO_TOKEN_HMAC_SECRET=%s
+    NEXT_PUBLIC_CENTRIFUGO_ADDRESS=%s
+`, mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Staging - Chartsmith Oauth Credentials", "client_id"),
+		mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Staging - Chartsmith Oauth Credentials", "redirect_uri"),
+		mustGetSecretAsPlaintext(context.Background(), opServiceAccount, "Staging - Chartsmith Oauth Credentials", "client_secret"),
+		mustGetSecretAsPlaintext(context.Background(), opServiceAccount, "Staging - Postgres", "uri"),
+		mustGetSecretAsPlaintext(context.Background(), opServiceAccount, "Staging - Chartsmith", "hmac_secret"),
+		mustGetSecretAsPlaintext(context.Background(), opServiceAccount, "Staging - Chartsmith Centrifugo", "hmac_secret"),
+		mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Staging - Chartsmith Centrifugo", "client_address"),
+	))
 
 	prodBuildContainer := buildContainer.
 		WithEnvVariable("NEXT_PUBLIC_GOOGLE_CLIENT_ID", mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Production - Chartsmith Oauth Credentials", "client_id")).

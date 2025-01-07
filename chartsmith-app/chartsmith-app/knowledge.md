@@ -19,6 +19,10 @@
 - Server-side theme detection uses Sec-CH-Prefers-Color-Scheme header
 - Components that expect only 'light'/'dark' (like editors, UI components) must use resolvedTheme
 - For client components using theme, add "use client" directive and useTheme hook
+- Use CSS variables for theme colors:
+  - Use bg-[var(--background)] instead of bg-white/bg-dark
+  - Define variables in :root and :root[class='light'/'dark']
+  - Set default light theme in :root:not([class]) for SSR
 
 # Layout
 

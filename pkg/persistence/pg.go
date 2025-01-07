@@ -2,6 +2,7 @@ package persistence
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
@@ -19,7 +20,7 @@ var (
 
 func InitPostgres(opts PostgresOpts) error {
 	if opts.URI == "" {
-		return fmt.Errorf("Postgres URI is required")
+		return errors.New("Postgres URI is required")
 	}
 
 	conn, err := pgx.Connect(context.Background(), opts.URI)

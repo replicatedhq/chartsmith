@@ -2,7 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
-:root,
+:root {
+  color-scheme: light;
+}
+
 :root[class='light'] {
   --background: #ffffff;
   --surface: #f1f5f9;    /* Slightly more saturated surface */
@@ -17,6 +20,14 @@
   --border: #2f2f2f;     /* More visible border */
   --text: #ffffff;
   color-scheme: dark;
+}
+
+/* Ensure theme variables are set even before JS loads */
+:root:not([class]) {
+  --background: #ffffff;
+  --surface: #f1f5f9;
+  --border: #e2e8f0;
+  --text: #0f172a;
 }
 
 body {

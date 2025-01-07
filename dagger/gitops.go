@@ -59,8 +59,13 @@ func pushYAMLToRepo(ctx context.Context, yamlFile *dagger.File, opts PushFileOpt
             cd repo &&
             cp /tmp/file.yaml %s &&
             git add %s &&
-            git commit -m "%s" &&
-            git push origin %s
+            if git diff --cached --quiet; then
+                echo "No changes to commit"
+                exit 0
+            else
+                git commit -m "%s" &&
+                git push origin %s
+            fi
         `,
 			opts.RepoFullName,
 			opts.DestinationPath,

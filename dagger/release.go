@@ -102,11 +102,22 @@ func (m *Chartsmith) Release(
 		return err
 	}
 
+	databaseFile := source.File("db/database.yaml")
+	if err := pushYAMLToRepo(ctx, databaseFile, PushFileOpts{
+		RepoFullName:    "replicatedcom/gitops-deploy",
+		Branch:          "main",
+		DestinationPath: "chartsmith/database.yaml",
+		CommitMessage:   fmt.Sprintf("Update Chartsmith database to %s", newVersion),
+		GithubToken:     githubToken,
+	}); err != nil {
+		return err
+	}
+
 	migrations := getChartsmithMigrations(ctx, source)
 	if err := pushYAMLsToRepo(ctx, migrations, PushFileOpts{
-		RepoFullName:    "replicatedhq/chartsmith",
+		RepoFullName:    "replicatedcom/gitops-deploy",
 		Branch:          "main",
-		DestinationPath: "db/database.yaml",
+		DestinationPath: "chartsmith/migrations.yaml",
 		CommitMessage:   fmt.Sprintf("Update Chartsmith database to %s", newVersion),
 		GithubToken:     githubToken,
 	}); err != nil {
@@ -122,6 +133,8 @@ func (m *Chartsmith) Release(
 		Edit(source, dagger.KustomizeEditOpts{
 			Dir: "kustomize/overlays/staging",
 		}).
+		Set().
+		Namespace("chartsmith").
 		Set().
 		Image(fmt.Sprintf("chartsmith-worker=%s", workerImageName)).
 		Set().

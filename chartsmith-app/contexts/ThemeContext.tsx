@@ -50,6 +50,18 @@ export function ThemeProvider({
     document.documentElement.classList.remove('light', 'dark');
     document.documentElement.classList.add(activeTheme);
     document.documentElement.style.setProperty('color-scheme', activeTheme);
+    // Set CSS variables for theme
+    if (activeTheme === 'dark') {
+      document.documentElement.style.setProperty('--background', '#0f0f0f');
+      document.documentElement.style.setProperty('--surface', '#1a1a1a');
+      document.documentElement.style.setProperty('--border', '#2f2f2f');
+      document.documentElement.style.setProperty('--text', '#ffffff');
+    } else {
+      document.documentElement.style.setProperty('--background', '#ffffff');
+      document.documentElement.style.setProperty('--surface', '#f1f5f9');
+      document.documentElement.style.setProperty('--border', '#e2e8f0');
+      document.documentElement.style.setProperty('--text', '#0f172a');
+    }
   }, [theme, systemTheme]);
 
   const resolvedTheme = theme === 'auto' ? systemTheme : theme;

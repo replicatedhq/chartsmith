@@ -2,8 +2,9 @@ apiVersion: databases.schemahero.io/v1alpha4
 kind: Database
 metadata:
   name: chartsmith
-  namespace: default
+  namespace: chartsmith
 spec:
+  immediateDeploy: true
   connection:
     postgres:
       uri:
