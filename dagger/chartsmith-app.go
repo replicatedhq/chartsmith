@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"strings"
 	"time"
-
-	"dagger.io/dagger/dag"
 )
 
 func lintChartsmithApp(
