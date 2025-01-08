@@ -1,0 +1,25 @@
+database: chartsmith
+name: slack_notification
+schema:
+  postgres:
+    primaryKey:
+      - id
+    columns:
+      - name: id
+        type: text
+        constraints:
+          notNull: true
+      - name: created_at
+        type: timestamp
+        constraints:
+          notNull: true
+      - name: user_id
+        type: text
+      - name: workspace_id
+        type: text
+      - name: notification_type
+        type: text
+        constraints:
+          notNull: true
+      - name: additional_data
+        type: text
