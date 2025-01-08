@@ -19,6 +19,7 @@ var paramLookup = map[string]string{
 	"PG_URI":             "/chartsmith/pg_uri",
 	"CENTRIFUGO_ADDRESS": "/chartsmith/centrifugo_address",
 	"CENTRIFUGO_API_KEY": "/chartsmith/centrifugo_api_key",
+	"TOKEN_ENCRYPTION":   "/chartsmith/token_encryption",
 }
 
 type Params struct {
@@ -27,6 +28,7 @@ type Params struct {
 	PGURI             string
 	CentrifugoAddress string
 	CentrifugoAPIKey  string
+	TokenEncryption   string
 }
 
 func Get() Params {
@@ -56,6 +58,7 @@ func Init(sess *session.Session) error {
 		PGURI:             paramsMap["PG_URI"],
 		CentrifugoAddress: paramsMap["CENTRIFUGO_ADDRESS"],
 		CentrifugoAPIKey:  paramsMap["CENTRIFUGO_API_KEY"],
+		TokenEncryption:   paramsMap["TOKEN_ENCRYPTION"],
 	}
 
 	return nil
