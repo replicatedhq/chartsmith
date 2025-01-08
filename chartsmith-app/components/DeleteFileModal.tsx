@@ -3,6 +3,7 @@
 import React from "react";
 import { X, AlertTriangle } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
+import { createPortal } from "react-dom";
 
 interface DeleteFileModalProps {
   isOpen: boolean;
@@ -17,8 +18,11 @@ export function DeleteFileModal({ isOpen, onClose, filePath, isRequired, onConfi
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
+  const modal = (
+    <div 
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]" 
+      style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}
+    >
       <div className={`w-full max-w-md rounded-lg shadow-lg border ${theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"}`}>
         <div className={`flex items-center justify-between p-4 border-b ${theme === "dark" ? "border-dark-border" : "border-gray-200"}`}>
           <div className="flex items-center gap-2">
@@ -53,4 +57,7 @@ export function DeleteFileModal({ isOpen, onClose, filePath, isRequired, onConfi
       </div>
     </div>
   );
+
+  // Render the modal at the root level using a portal
+  return createPortal(modal, document.body);
 }

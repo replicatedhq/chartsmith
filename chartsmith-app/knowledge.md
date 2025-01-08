@@ -28,7 +28,18 @@
   - Always reserve space for the element with fixed width/height
   - Use opacity for show/hide instead of conditional rendering
   - Use flex layout with fixed dimensions to prevent layout shifts
+- For modal dialogs:
+  - Use fixed positioning with inset-0 to cover entire viewport
+  - Set z-index high enough to appear above all other UI (z-[9999])
+  - Add explicit position styles to override any parent positioning context
+  - Center content with flex layout
+  - Render at root level to avoid inheriting positioning context
 - For layout transitions between states, add transition-all duration-300 ease-in-out to parent containers
+- For modal dialogs:
+  - Use fixed positioning with inset-0 to cover entire viewport
+  - Set z-index high enough to appear above all other UI (z-[9999])
+  - Add explicit position styles to override any parent positioning context
+  - Center content with flex layout
 - For smooth width transitions in flex layouts:
   - Use flex-shrink-0 instead of flex-none
   - Add transitions to both parent and child containers
