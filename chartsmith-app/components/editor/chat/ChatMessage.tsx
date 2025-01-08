@@ -45,7 +45,7 @@ export function ChatMessage({ message, onUndo, session, workspaceId }: ChatMessa
                           className={`text-sm flex items-center gap-1.5 ${theme === "dark" ? "text-gray-400 hover:text-gray-300" : "text-gray-600 hover:text-gray-900"}`}
                         >
                           <MessageSquarePlus className="w-4 h-4" />
-                          Give feedback
+                          Feedback?
                         </button>
                         <Button
                           onClick={() => onUndo()}
@@ -63,9 +63,9 @@ export function ChatMessage({ message, onUndo, session, workspaceId }: ChatMessa
         </div>
       )}
 
-      <FeedbackModal 
-        isOpen={showReportModal} 
-        onClose={() => setShowReportModal(false)} 
+      <FeedbackModal
+        isOpen={showReportModal}
+        onClose={() => setShowReportModal(false)}
         message={message}
         chatId={message.id}
         workspaceId={workspaceId}
