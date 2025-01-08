@@ -40,6 +40,11 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     });
   };
 
+  const handleReplicatedConnect = () => {
+    const redirectUri = process.env.NEXT_PUBLIC_REPLICATED_REDIRECT_URI || "";
+    window.location.href = redirectUri;
+  };
+
   const sections: SettingsSection[] = [
     {
       id: 'general',
@@ -63,13 +68,32 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       label: 'Replicated',
       icon: <Key className="w-4 h-4" />,
       content: (
-        <div className="space-y-4">
-          <div>
-            <label className={`block text-sm font-medium mb-2 ${
-              theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-            }`}>
-              API Token
-            </label>
+        <div className="space-y-6">
+          <div className={`p-4 rounded-lg ${theme === 'dark' ? 'bg-dark border-dark-border' : 'bg-gray-50 border-gray-200'} border`}>
+            <h3 className={`text-sm font-medium mb-2 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+              Link Replicated Account
+            </h3>
+            <p className={`text-sm mb-4 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+              Connect your Replicated account to access your application.
+            </p>
+            <button
+              onClick={handleReplicatedConnect}
+              className="w-full px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
+            >
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 4L10.59 5.41L16.17 11H4V13H16.17L10.59 18.59L12 20L20 12L12 4Z" fill="currentColor"/>
+              </svg>
+              Connect to Replicated
+            </button>
+          </div>
+
+          <div className={`p-4 rounded-lg ${theme === 'dark' ? 'bg-dark border-dark-border' : 'bg-gray-50 border-gray-200'} border`}>
+            <h3 className={`text-sm font-medium mb-2 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+              Replicated API Token
+            </h3>
+            <p className={`text-sm mb-4 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+              Alternatively, you can manually enter your Replicated API token.
+            </p>
             <div className="space-y-2">
               <input
                 type="password"
@@ -82,21 +106,18 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
                 } border focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent`}
               />
-              <p className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-                You can find your API token in the Replicated vendor portal under Account Settings.
-              </p>
+              <button
+                onClick={handleSaveToken}
+                disabled={!apiToken}
+                className={`w-full px-4 py-2 rounded-lg text-white transition-colors ${
+                  apiToken
+                    ? 'bg-primary hover:bg-primary/90'
+                    : 'bg-gray-500 cursor-not-allowed'
+                }`}
+              >
+                Save Token
+              </button>
             </div>
-            <button
-              onClick={handleSaveToken}
-              disabled={!apiToken}
-              className={`mt-4 px-4 py-2 rounded-lg text-white transition-colors ${
-                apiToken
-                  ? 'bg-primary hover:bg-primary/90'
-                  : 'bg-gray-500 cursor-not-allowed'
-              }`}
-            >
-              Save Token
-            </button>
           </div>
         </div>
       ),

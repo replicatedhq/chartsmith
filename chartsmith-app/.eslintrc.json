@@ -1,4 +1,7 @@
 {
+  "rules": {
+    "@typescript-eslint/no-implicit-any": "off"
+  },
   "extends": [
     "next/core-web-vitals",
     "next/typescript"

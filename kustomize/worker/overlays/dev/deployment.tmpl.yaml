@@ -52,6 +52,8 @@ spec:
             value: $CHARTSMITH_ANTHROPIC_API_KEY
           - name: VOYAGE_API_KEY
             value: $VOYAGE_API_KEY
+          - name: TOKEN_ENCRYPTION
+            value: $CHARTSMITH_TOKEN_ENCRYPTION
         envFrom:
           - secretRef:
               name: chartsmith-postgres

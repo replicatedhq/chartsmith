@@ -29,3 +29,5 @@ schema:
       type: timestamp
     - name: last_active_at
       type: timestamp
+    - name: replicated_token
+      type: text
