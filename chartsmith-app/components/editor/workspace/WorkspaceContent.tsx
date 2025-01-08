@@ -280,6 +280,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
                     message={message}
                     session={session}
                     workspaceId={workspaceId}
+                    isLastMessage={index === messages.length - 1}
                   />
                 ))}
                 {messages[messages.length - 1]?.isComplete && !showClarificationInput && (

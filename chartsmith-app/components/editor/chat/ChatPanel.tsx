@@ -35,6 +35,7 @@ export function ChatPanel({ messages, onSendMessage, onUndoChanges, session, wor
             onUndo={() => onUndoChanges?.(message)}
             session={session}
             workspaceId={workspaceId}
+            isLastMessage={index === messages.length - 1}
           />
         ))}
         <div ref={messagesEndRef} />

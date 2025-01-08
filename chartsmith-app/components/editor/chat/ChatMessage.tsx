@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import { Message } from "../types";
 import { Session } from "@/lib/types/session";
 import { useTheme } from "../../../contexts/ThemeContext";
-import { ChatChanges } from "./ChatChanges";
 import { Button } from "@/components/ui/Button";
 import { UndoConfirmationModal } from "@/components/UndoConfirmationModal";
 import { FeedbackModal } from "@/components/FeedbackModal";
@@ -13,9 +12,10 @@ interface ChatMessageProps {
   onUndo?: () => void;
   session: Session;
   workspaceId: string;
+  isLastMessage?: boolean;
 }
 
-export function ChatMessage({ message, onUndo, session, workspaceId }: ChatMessageProps) {
+export function ChatMessage({ message, onUndo, session, workspaceId, isLastMessage }: ChatMessageProps) {
   const { theme } = useTheme();
   const [showReportModal, setShowReportModal] = useState(false);
   const [showUndoModal, setShowUndoModal] = useState(false);
@@ -34,11 +34,10 @@ export function ChatMessage({ message, onUndo, session, workspaceId }: ChatMessa
       {message.response !== undefined && (
         <div className="px-4 py-2 mr-12">
           <div className={`p-4 rounded-2xl ${theme === "dark" ? "bg-dark-border/40" : "bg-gray-100"} rounded-tl-sm`}>
-            <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"} mb-1`}>ChartSmith</div>
-            <div className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} text-sm whitespace-pre-wrap`}>{message.response}</div>                {message.isComplete && (
-                  <div className="mt-4 space-y-4 border-t border-gray-700/10 pt-4">
-                    {message.fileChanges && <ChatChanges changes={message.fileChanges} />}
-                    {onUndo && (
+            <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"} mb-1`}>ChartSmith</div>            <div className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} text-sm whitespace-pre-wrap`}>{message.response}</div>
+            {message.isComplete && isLastMessage && (
+              <div className="mt-4 space-y-4 border-t border-gray-700/10 pt-4">
+                {onUndo && (
                       <div className="flex items-center justify-between mt-4">
                         <button
                           onClick={() => setShowReportModal(true)}
