@@ -34,8 +34,6 @@ export async function listMessagesForWorkspace(workspaceID: string): Promise<Mes
     for (let i = 0; i < queryResult.rows.length; i++) {
       const row = queryResult.rows[i];
 
-      console.log("Processing message row:", row);
-
       const message: Message = {
         id: row.id,
         prompt: row.prompt,
@@ -45,8 +43,6 @@ export async function listMessagesForWorkspace(workspaceID: string): Promise<Mes
       };
       messages.push(message);
     }
-
-    console.log("Returning messages:", messages);
 
     return messages;
   } catch (err) {
