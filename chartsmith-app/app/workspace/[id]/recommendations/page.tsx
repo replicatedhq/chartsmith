@@ -127,6 +127,12 @@ export default function RecommendationsPage() {
   return (
     <div className={`h-screen flex flex-col ${theme === "dark" ? "bg-dark" : "bg-white"}`}>
       <TopNav />
+      <div className="bg-yellow-500/10 border-b border-yellow-500/20">
+        <div className="max-w-6xl mx-auto px-6 py-3 text-yellow-500 flex items-center gap-2">
+          <AlertTriangle className="w-5 h-5" />
+          <p>This recommendations page contains mock data and is not yet implemented. The real recommendations feature is coming soon!</p>
+        </div>
+      </div>
       <div className="flex-1 overflow-auto p-6">
         <div className="max-w-6xl mx-auto">
           <div className="flex justify-between items-center mb-6">

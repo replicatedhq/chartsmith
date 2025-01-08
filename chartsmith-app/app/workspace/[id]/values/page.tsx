@@ -7,7 +7,7 @@ import { ValuesTable } from '@/components/values/ValuesTable';
 import { ViewValuesModal } from '@/components/values/ViewValuesModal';
 import { CreateScenarioModal } from '@/components/values/CreateScenarioModal';
 import { DeleteScenarioModal } from '@/components/values/DeleteScenarioModal';
-import { Plus, ArrowLeft } from 'lucide-react';
+import { Plus, ArrowLeft, AlertTriangle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { ValuesScenario } from '@/lib/types/workspace';
 
@@ -61,6 +61,12 @@ export default function ValuesPage() {
   return (
     <div className={`h-screen flex flex-col ${theme === 'dark' ? 'bg-dark' : 'bg-white'}`}>
       <TopNav />
+      <div className="bg-yellow-500/10 border-b border-yellow-500/20">
+        <div className="max-w-6xl mx-auto px-6 py-3 text-yellow-500 flex items-center gap-2">
+          <AlertTriangle className="w-5 h-5" />
+          <p>This values scenarios page contains mock data and is not yet implemented. The real values scenarios feature is coming soon!</p>
+        </div>
+      </div>
       <div className="flex-1 overflow-auto p-6">
         <div className="max-w-6xl mx-auto">
           <div className="flex items-center gap-4 mb-6">
