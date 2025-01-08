@@ -8,12 +8,12 @@ import { useTheme } from "../../../contexts/ThemeContext";
 interface ChatPanelProps {
   messages: Message[];
   onSendMessage: (message: string) => void;
-  onUndoChanges?: (message: Message) => void;
+  onApplyChanges?: (message: Message) => void;
   session: Session;
   workspaceId: string;
 }
 
-export function ChatPanel({ messages, onSendMessage, onUndoChanges, session, workspaceId }: ChatPanelProps) {
+export function ChatPanel({ messages, onSendMessage, onApplyChanges, session, workspaceId }: ChatPanelProps) {
   const { theme } = useTheme();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -29,12 +29,13 @@ export function ChatPanel({ messages, onSendMessage, onUndoChanges, session, wor
     <>
       <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${theme === "dark" ? "bg-dark-surface" : "bg-gray-50"}`}>
         {messages.map((message, index) => (
-          <ChatMessage 
-            key={message.id || index} 
-            message={message} 
-            onUndo={() => onUndoChanges?.(message)}
+          <ChatMessage
+            key={message.id || index}
+            message={message}
+            onApplyChanges={() => onApplyChanges?.(message)}
             session={session}
             workspaceId={workspaceId}
+            showActions={index === messages.length - 1}
           />
         ))}
         <div ref={messagesEndRef} />

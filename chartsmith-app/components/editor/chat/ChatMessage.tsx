@@ -9,12 +9,13 @@ import { FeedbackModal } from "@/components/FeedbackModal";
 
 interface ChatMessageProps {
   message: Message;
-  onUndo?: () => void;
+  onApplyChanges?: () => void;
   session: Session;
   workspaceId: string;
+  showActions?: boolean;
 }
 
-export function ChatMessage({ message, onUndo, session, workspaceId }: ChatMessageProps) {
+export function ChatMessage({ message, onApplyChanges, session, workspaceId, showActions = true }: ChatMessageProps) {
   const { theme } = useTheme();
   const [showReportModal, setShowReportModal] = useState(false);
   const [showUndoModal, setShowUndoModal] = useState(false);
@@ -38,7 +39,7 @@ export function ChatMessage({ message, onUndo, session, workspaceId }: ChatMessa
             {message.isComplete && (
               <div className="mt-4 space-y-4 border-t border-gray-700/10 pt-4">
                 {message.fileChanges && <ChatChanges changes={message.fileChanges} />}
-                {onUndo && (
+                {showActions && onApplyChanges && (
                   <div className="flex justify-between mt-4">
                     <Button
                       onClick={() => setShowReportModal(true)}
@@ -48,7 +49,7 @@ export function ChatMessage({ message, onUndo, session, workspaceId }: ChatMessa
                       Give feedback
                     </Button>
                     <Button
-                      onClick={() => onUndo()}
+                      onClick={() => onApplyChanges()}
                       className="bg-primary hover:bg-primary/90 text-white"
                     >
                       Apply changes

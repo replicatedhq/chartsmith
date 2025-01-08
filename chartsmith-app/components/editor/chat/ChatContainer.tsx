@@ -7,12 +7,12 @@ import { Session } from "@/lib/types/session";
 interface ChatContainerProps {
   messages: Message[];
   onSendMessage: (message: string) => void;
-  onUndoChanges: (message: Message) => void;
+  onApplyChanges: (message: Message) => void;
   session: Session;
   workspaceId: string;
 }
 
-export function ChatContainer({ messages, onSendMessage, onUndoChanges, session, workspaceId }: ChatContainerProps) {
+export function ChatContainer({ messages, onSendMessage, onApplyChanges, session, workspaceId }: ChatContainerProps) {
   const { theme } = useTheme();
 
   return (
@@ -20,7 +20,7 @@ export function ChatContainer({ messages, onSendMessage, onUndoChanges, session,
       <ChatPanel 
         messages={messages} 
         onSendMessage={onSendMessage} 
-        onUndoChanges={onUndoChanges}
+        onApplyChanges={onApplyChanges}
         session={session}
         workspaceId={workspaceId}
       />
