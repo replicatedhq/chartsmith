@@ -19,6 +19,7 @@ export async function listMessagesForWorkspace(workspaceID: string): Promise<Mes
                 workspace_chat
             WHERE
                 workspace_chat.workspace_id = $1
+            ORDER BY workspace_chat.created_at ASC
         `,
       [workspaceID],
     );

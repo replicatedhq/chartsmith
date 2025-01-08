@@ -61,9 +61,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
 
   useEffect(() => {
     if (!session) return;
-    console.log("Loading initial messages...");
     getWorkspaceMessagesAction(session, workspaceId).then(messages => {
-      console.log("Initial messages loaded:", messages);
       setMessages(messages);
     });
   }, [session, workspaceId]); // Remove workspace from dependencies to prevent reloading
@@ -277,9 +275,9 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
             <Card className="p-6 w-full border-dark-border/40 shadow-lg">
               <div className="space-y-4">
                 {messages.map((message, index) => (
-                  <ChatMessage 
-                    key={message.id || index} 
-                    message={message} 
+                  <ChatMessage
+                    key={message.id || index}
+                    message={message}
                     session={session}
                     workspaceId={workspaceId}
                   />
