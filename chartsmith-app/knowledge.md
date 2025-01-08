@@ -33,7 +33,13 @@
   - Set z-index high enough to appear above all other UI (z-[9999])
   - Add explicit position styles to override any parent positioning context
   - Center content with flex layout
-  - Render at root level to avoid inheriting positioning context
+  - Render at root level using createPortal(modal, document.body)
+  - Don't render modals inside other positioned elements
+  - Use portals for any UI that needs to break out of parent containers
+  - For modals:
+    - Handle click outside with e.target === e.currentTarget check
+    - Add ESC key listener when modal opens, remove on close
+    - Use stopPropagation on modal content to prevent click-outside from triggering
 - For layout transitions between states, add transition-all duration-300 ease-in-out to parent containers
 - For modal dialogs:
   - Use fixed positioning with inset-0 to cover entire viewport
