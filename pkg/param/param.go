@@ -20,6 +20,8 @@ var paramLookup = map[string]string{
 	"CENTRIFUGO_ADDRESS": "/chartsmith/centrifugo_address",
 	"CENTRIFUGO_API_KEY": "/chartsmith/centrifugo_api_key",
 	"TOKEN_ENCRYPTION":   "/chartsmith/token_encryption",
+	"SLACK_TOKEN":        "/chartsmith/slack_token",
+	"SLACK_CHANNEL":      "/chartsmith/slack_channel",
 }
 
 type Params struct {
@@ -29,6 +31,8 @@ type Params struct {
 	CentrifugoAddress string
 	CentrifugoAPIKey  string
 	TokenEncryption   string
+	SlackToken        string
+	SlackChannel      string
 }
 
 func Get() Params {
@@ -59,6 +63,8 @@ func Init(sess *session.Session) error {
 		CentrifugoAddress: paramsMap["CENTRIFUGO_ADDRESS"],
 		CentrifugoAPIKey:  paramsMap["CENTRIFUGO_API_KEY"],
 		TokenEncryption:   paramsMap["TOKEN_ENCRYPTION"],
+		SlackToken:        paramsMap["SLACK_TOKEN"],
+		SlackChannel:      paramsMap["SLACK_CHANNEL"],
 	}
 
 	return nil

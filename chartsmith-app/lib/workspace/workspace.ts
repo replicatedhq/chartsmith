@@ -68,6 +68,14 @@ export async function createWorkspace(name: string, createdType: string, prompt:
 
     await chatClient.query(`SELECT pg_notify('new_chat', $1)`, [chatId]);
 
+    const slackNottificationId = srs.default({ length: 12, alphanumeric: true });
+    await chatClient.query(
+      `INSERT INTO slack_notification (id, created_at, user_id, workspace_id, notification_type, additional_data)
+      VALUES ($1, now(), $2, $3, 'new_workspace', $4)`,
+      [slackNottificationId, userId, id, JSON.stringify({ createdType: createdType, prompt: prompt })],
+    );
+    await chatClient.query(`SELECT pg_notify('new_slack_notification', $1)`, [slackNottificationId]);
+
     return {
       id: id,
       createdAt: new Date(),
