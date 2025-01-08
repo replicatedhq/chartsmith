@@ -14,7 +14,6 @@ interface FileTreeProps {
 export function FileTree({ nodes, onFileSelect, onFileDelete, selectedFile }: FileTreeProps) {
   const { theme } = useTheme();
   const [expandedFolders, setExpandedFolders] = React.useState<Set<string>>(new Set(["templates"]));
-  const [hoveredItem, setHoveredItem] = React.useState<string | null>(null);
   const [deleteModal, setDeleteModal] = React.useState<{
     isOpen: boolean;
     filePath: string;
@@ -113,8 +112,7 @@ export function FileTree({ nodes, onFileSelect, onFileDelete, selectedFile }: Fi
             onFileSelect(node);
           }
         }}
-        onMouseEnter={() => setHoveredItem(node.path)}
-        onMouseLeave={() => setHoveredItem(null)}
+
       >
         <span className="w-4 h-4 mr-1">{node.type === "folder" && (expandedFolders.has(node.path) ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />)}</span>
         {node.type === "folder" ? (
@@ -123,8 +121,11 @@ export function FileTree({ nodes, onFileSelect, onFileDelete, selectedFile }: Fi
           <FileText className={`w-4 h-4 mr-2 ${selectedFile?.path === node.path ? "text-primary" : theme === "dark" ? "text-gray-400" : "text-gray-500"}`} />
         )}
         <span className="text-sm flex-1">{node.name}</span>
-        {hoveredItem === node.path && node.type === "file" && (
-          <button onClick={(e) => handleDelete(node, e)} className={`p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity ${theme === "dark" ? "hover:bg-dark-border/60 text-gray-400 hover:text-white" : "hover:bg-gray-200 text-gray-500 hover:text-gray-700"}`}>
+        {node.type === "file" && (
+          <button 
+            onClick={(e) => handleDelete(node, e)} 
+            className={`p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 flex items-center justify-center ${theme === "dark" ? "hover:bg-dark-border/60 text-gray-400 hover:text-white" : "hover:bg-gray-200 text-gray-500 hover:text-gray-700"}`}
+          >
             <Trash2 className="w-3 h-3" />
           </button>
         )}

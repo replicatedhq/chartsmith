@@ -6,6 +6,7 @@ import { ChatChanges } from "./ChatChanges";
 import { Button } from "@/components/ui/Button";
 import { UndoConfirmationModal } from "@/components/UndoConfirmationModal";
 import { FeedbackModal } from "@/components/FeedbackModal";
+import { MessageSquarePlus, Check } from "lucide-react";
 
 interface ChatMessageProps {
   message: Message;
@@ -34,29 +35,30 @@ export function ChatMessage({ message, onUndo, session, workspaceId }: ChatMessa
         <div className="px-4 py-2 mr-12">
           <div className={`p-4 rounded-2xl ${theme === "dark" ? "bg-dark-border/40" : "bg-gray-100"} rounded-tl-sm`}>
             <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"} mb-1`}>ChartSmith</div>
-            <div className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} text-sm whitespace-pre-wrap`}>{message.response}</div>
-            {message.isComplete && (
-              <div className="mt-4 space-y-4 border-t border-gray-700/10 pt-4">
-                {message.fileChanges && <ChatChanges changes={message.fileChanges} />}
-                {onUndo && (
-                  <div className="flex justify-between mt-4">
-                    <Button
-                      onClick={() => setShowReportModal(true)}
-                      variant="outline"
-                      className={`${theme === "dark" ? "border-dark-border hover:bg-dark-border/40" : ""}`}
-                    >
-                      Give feedback
-                    </Button>
-                    <Button
-                      onClick={() => onUndo()}
-                      className="bg-primary hover:bg-primary/90 text-white"
-                    >
-                      Apply changes
-                    </Button>
+            <div className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} text-sm whitespace-pre-wrap`}>{message.response}</div>                {message.isComplete && (
+                  <div className="mt-4 space-y-4 border-t border-gray-700/10 pt-4">
+                    {message.fileChanges && <ChatChanges changes={message.fileChanges} />}
+                    {onUndo && (
+                      <div className="flex items-center justify-between mt-4">
+                        <button
+                          onClick={() => setShowReportModal(true)}
+                          className={`text-sm flex items-center gap-1.5 ${theme === "dark" ? "text-gray-400 hover:text-gray-300" : "text-gray-600 hover:text-gray-900"}`}
+                        >
+                          <MessageSquarePlus className="w-4 h-4" />
+                          Give feedback
+                        </button>
+                        <Button
+                          onClick={() => onUndo()}
+                          size="sm"
+                          className="bg-primary hover:bg-primary/90 text-white flex items-center gap-1.5"
+                        >
+                          <Check className="w-4 h-4" />
+                          Apply
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 )}
-              </div>
-            )}
           </div>
         </div>
       )}

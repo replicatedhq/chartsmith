@@ -28,12 +28,20 @@ interface WorkspaceContentProps {
 
 export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceContentProps) {
   const { session } = useSession();
-  const [workspace, setWorkspace] = useState<Workspace>(initialWorkspace);
+  // Start with null during SSR to avoid hydration mismatches from dates/dynamic data
+  const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const { isFileTreeVisible, setIsFileTreeVisible } = useWorkspaceUI();
   const [messages, setMessages] = useState<Message[]>([]);
   const [selectedFile, setSelectedFile] = useState<FileNode | undefined>();
   const [editorContent, setEditorContent] = useState<string>("");
   const [showClarificationInput, setShowClarificationInput] = useState(false);
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+    // Initialize workspace after hydration to avoid date mismatches
+    setWorkspace(initialWorkspace);
+  }, [initialWorkspace]);
 
   const followMode = true; // Always true for now
   const [centrifugoToken, setCentrifugoToken] = useState<string | null>(null);
@@ -135,7 +143,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
               createdAt: new Date(newWorkspace.created_at),
               lastUpdatedAt: new Date(newWorkspace.last_updated_at),
               name: newWorkspace.name,
-              files: newWorkspace.files || prev.files,
+              files: newWorkspace.files || prev?.files || [],
               currentRevisionNumber: newWorkspace.current_revision,
               incompleteRevisionNumber: newWorkspace.incomplete_revision_number
             };
@@ -225,8 +233,6 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     scrollToBottom();
   }, [messages]);
 
-
-
   // Handle chat transition end
   useEffect(() => {
     const chatContainer = document.querySelector('.chat-container-wrapper');
@@ -246,7 +252,23 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
 
   if (!session) return null;
 
-  // Show chat-only view when there's no revision yet
+  // During SSR and initial client render, show a loading state
+  if (!isClient || !workspace) {
+    return (
+      <EditorLayout>
+        <div className="flex justify-center h-full w-full overflow-auto transition-all duration-300 ease-in-out">
+          <div className="px-4 w-full max-w-3xl py-8 pb-16">
+            <Card className="p-6 w-full border-dark-border/40 shadow-lg">
+              <div className="space-y-4" suppressHydrationWarning>
+                Loading...
+              </div>
+            </Card>
+          </div>
+        </div>
+      </EditorLayout>
+    );
+  }
+
   if (!showEditor) {
     return (
       <EditorLayout>

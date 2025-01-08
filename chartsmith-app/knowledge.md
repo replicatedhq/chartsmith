@@ -24,6 +24,10 @@
 - Keep flex-1 on growing sections between fixed-width elements
 - For nav bars with 3 sections (left, center, right), use min-width on outer sections to prevent squishing
 - For full-height scrollable containers, use h-full with overflow-auto on parent and py-8 on child for padding
+- For elements that appear/disappear on hover:
+  - Always reserve space for the element with fixed width/height
+  - Use opacity for show/hide instead of conditional rendering
+  - Use flex layout with fixed dimensions to prevent layout shifts
 - For layout transitions between states, add transition-all duration-300 ease-in-out to parent containers
 - For smooth width transitions in flex layouts:
   - Use flex-shrink-0 instead of flex-none
