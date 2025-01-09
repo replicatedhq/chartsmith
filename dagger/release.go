@@ -41,7 +41,7 @@ func (m *Chartsmith) Release(
 		return err
 	}
 
-	appContainerStaging, appContainerProd, err := buildChartsmithApp(ctx, source.Directory("chartsmith-app"), opServiceAccount, latestVersion)
+	appContainerStaging, appContainerProd, err := buildChartsmithApp(ctx, source.Directory("chartsmith-app"), opServiceAccount, newVersion)
 	if err != nil {
 		return err
 	}
