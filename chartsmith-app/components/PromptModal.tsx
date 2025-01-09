@@ -60,7 +60,15 @@ export function PromptModal({ isOpen, onClose }: PromptModalProps) {
       setIsLoading(true);
       setError(null);
 
-      const workspaceId = await createWorkspaceAction(session!, "prompt", prompt);
+      if (!session) {
+        // Store the prompt before redirecting to auth
+        localStorage.setItem('pendingPrompt', prompt);
+        // Redirect to Google Auth
+        window.location.href = '/auth/google';
+        return;
+      }
+
+      const workspaceId = await createWorkspaceAction(session, "prompt", prompt);
       
       // Don't reset loading state, let it persist through redirect
       router.push(`/workspace/${workspaceId}`);
