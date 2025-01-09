@@ -331,6 +331,13 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
       content: file.content,
       type: 'file' as const
     }));
+    
+    // Clear selected file and editor content when switching to rendered view
+    if (newView === "rendered") {
+      setSelectedFile(undefined);
+      setEditorContent("");
+    }
+    
     toggleView(newFiles);
   };
 

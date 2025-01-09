@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import { Message } from "../types";
 import { Session } from "@/lib/types/session";
 import { useTheme } from "../../../contexts/ThemeContext";
-import { ChatChanges } from "./ChatChanges";
 import { Button } from "@/components/ui/Button";
 import { UndoConfirmationModal } from "@/components/UndoConfirmationModal";
 import { FeedbackModal } from "@/components/FeedbackModal";

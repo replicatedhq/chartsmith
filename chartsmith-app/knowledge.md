@@ -109,6 +109,10 @@ State Management:
 - Check for undefined rather than falsy values when conditionally rendering responses
 - For streaming responses, validate isComplete as boolean type rather than checking for undefined
 - For streaming UI transitions, check isComplete on last message before showing next step
+- When switching between source/rendered views:
+  - Clear selected file and editor content when switching to rendered
+  - Conditionally render editor only in source view
+  - Maintain file tree visibility state independent of view
 - For async operations on messages:
   - Show centered spinner with animate-spin and border-t-transparent when isApplying
   - Disable actions during applying state

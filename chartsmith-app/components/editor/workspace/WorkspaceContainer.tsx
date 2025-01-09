@@ -35,7 +35,9 @@ export function WorkspaceContainer({ view, onViewChange, files, renderedFiles, s
         {isFileTreeVisible && (view === "source" ? <FileBrowser nodes={files} onFileSelect={onFileSelect} onFileDelete={onFileDelete} selectedFile={selectedFile} /> : <RenderedFileBrowser nodes={renderedFiles} onFileSelect={onFileSelect} selectedFile={selectedFile} />)}
         <div className={`w-px ${resolvedTheme === "dark" ? "bg-dark-border" : "bg-gray-200"} flex-shrink-0`} />
         <div className="flex-1 min-w-0 w-full">
-          <CodeEditor file={selectedFile} theme={resolvedTheme} value={editorContent} onChange={onEditorChange} />
+          {view === "source" && selectedFile && (
+            <CodeEditor file={selectedFile} theme={resolvedTheme} value={editorContent} onChange={onEditorChange} />
+          )}
         </div>
       </div>
     </div>
