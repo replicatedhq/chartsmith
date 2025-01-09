@@ -88,6 +88,10 @@ func IterationChat(ctx context.Context, w *workspacetypes.Workspace, previousCha
 		return stream.Err()
 	}
 
+	if err := chat.SetResponse(ctx, c); err != nil {
+		fmt.Printf("Error setting response: %v\n", err)
+		return err
+	}
 	if err := chat.MarkComplete(ctx, c); err != nil {
 		return err
 	}
@@ -171,6 +175,10 @@ func ClarificationChat(ctx context.Context, w *workspacetypes.Workspace, previou
 		return stream.Err()
 	}
 
+	if err := chat.SetResponse(ctx, c); err != nil {
+		fmt.Printf("Error setting response: %v\n", err)
+		return err
+	}
 	if err := chat.MarkComplete(ctx, c); err != nil {
 		return err
 	}
@@ -249,6 +257,10 @@ func CreateNewChartFromMessage(ctx context.Context, w *workspacetypes.Workspace,
 		return stream.Err()
 	}
 
+	if err := chat.SetResponse(ctx, c); err != nil {
+		fmt.Printf("Error setting response: %v\n", err)
+		return err
+	}
 	if err := chat.MarkComplete(ctx, c); err != nil {
 		return err
 	}

@@ -22,6 +22,7 @@ export interface Message {
   isComplete: boolean;
   isApplied: boolean;
   isApplying: boolean;
+  isIgnored: boolean;
 }
 
 // Interface for raw message from server before normalization
@@ -57,6 +58,7 @@ export interface CentrifugoMessageData {
   workspace_id: string;
   is_applied?: boolean;
   is_applying?: boolean;
+  is_ignored?: boolean;
 }
 
 // Interface for raw message from server before normalization
@@ -66,6 +68,7 @@ export interface RawMessage {
   response?: string;
   is_applied?: boolean;
   is_applying?: boolean;
+  is_ignored?: boolean;
 }
 
 export interface ValuesScenario {

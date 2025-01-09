@@ -246,7 +246,7 @@ export async function createRevision(workspaceID: string, chatMessageID: string,
     await db.query(
       `
         UPDATE workspace_chat
-        SET is_applying = true, is_applied = false
+        SET is_applying = true, is_applied = false, is_ignored = false
         WHERE id = $1
       `,
       [chatMessageID],
