@@ -53,7 +53,6 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
 
   useEffect(() => {
     if (!session) return;
-    console.log("Loading initial messages...");
     getWorkspaceMessagesAction(session, workspaceId).then(messages => {
       console.log("Initial messages loaded:", messages);
       setMessages(messages);
@@ -126,10 +125,8 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
       } else {
         const newWorkspace = message.data.workspace;
         if (newWorkspace) {
-          console.log("Received workspace update:", newWorkspace);
           // Preserve existing messages when updating workspace
           setWorkspace(prev => {
-            console.log("Previous workspace state:", prev);
             const updated: Workspace = {
               id: newWorkspace.id,
               createdAt: new Date(newWorkspace.created_at),
@@ -139,7 +136,6 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
               currentRevisionNumber: newWorkspace.current_revision,
               incompleteRevisionNumber: newWorkspace.incomplete_revision_number
             };
-            console.log("Updated workspace state:", updated);
             return updated;
           });
         }
@@ -213,6 +209,16 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     setIsFileTreeVisible(true);
   }
 
+  const handleApplyChanges = async (message: Message) => {
+    if (!session || !workspace) return;
+    const updatedWorkspace = await createRevisionAction(session, workspace.id, message.id);
+    if (!updatedWorkspace) return;
+
+    console.log(updatedWorkspace);
+    setWorkspace(updatedWorkspace);
+    return;
+  };
+
   // Reference for auto-scrolling
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -255,11 +261,12 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
             <Card className="p-6 w-full border-dark-border/40 shadow-lg">
               <div className="space-y-4">
                 {messages.map((message, index) => (
-                  <ChatMessage 
-                    key={message.id || index} 
-                    message={message} 
+                  <ChatMessage
+                    key={message.id || index}
+                    message={message}
                     session={session}
                     workspaceId={workspaceId}
+                    showActions={index === messages.length - 1}
                   />
                 ))}
                 {messages[messages.length - 1]?.isComplete && !showClarificationInput && (
@@ -320,9 +327,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     return;
   };
 
-  const handleUndoChanges = () => {
-    return;
-  };
+
 
   return (
     <EditorLayout>
@@ -334,7 +339,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
             <ChatContainer
               messages={messages}
               onSendMessage={handleSendMessage}
-              onUndoChanges={handleUndoChanges}
+              onApplyChanges={handleApplyChanges}
               session={session}
               workspaceId={workspaceId}
             />
