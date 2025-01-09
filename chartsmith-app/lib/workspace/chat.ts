@@ -3,6 +3,23 @@ import { getDB } from "../data/db";
 import { getParam } from "../data/param";
 import * as srs from "secure-random-string";
 
+export async function setMessageIgnored(workspaceID: string, chatMessageID: string): Promise<void> {
+  try {
+    const db = getDB(await getParam("DB_URI"));
+    await db.query(
+      `
+        UPDATE workspace_chat
+        SET is_ignored = true
+        WHERE workspace_id = $1 AND id = $2
+      `,
+      [workspaceID, chatMessageID],
+    );
+  } catch (err) {
+    console.error(err);
+    throw err;
+  }
+}
+
 export async function listMessagesForWorkspace(workspaceID: string): Promise<Message[]> {
   try {
     const db = getDB(await getParam("DB_URI"));
@@ -16,7 +33,8 @@ export async function listMessagesForWorkspace(workspaceID: string): Promise<Mes
                 workspace_chat.response,
                 workspace_chat.is_complete,
                 workspace_chat.is_applied,
-                workspace_chat.is_applying
+                workspace_chat.is_applying,
+                workspace_chat.is_ignored
             FROM
                 workspace_chat
             WHERE
@@ -44,6 +62,7 @@ export async function listMessagesForWorkspace(workspaceID: string): Promise<Mes
         isComplete: row.is_complete,
         isApplied: row.is_applied,
         isApplying: row.is_applying,
+        isIgnored: row.is_ignored,
       };
       messages.push(message);
     }
@@ -62,8 +81,8 @@ export async function addChatMessage(workspaceID: string, userID: string, messag
     const db = getDB(await getParam("DB_URI"));
     await db.query(
       `
-          INSERT INTO workspace_chat (id, workspace_id, created_at, sent_by, prompt, response, is_complete, is_initial_message, is_applied, is_applying)
-          VALUES ($1, $2, now(), $3, $4, null, false, true, false, false)
+          INSERT INTO workspace_chat (id, workspace_id, created_at, sent_by, prompt, response, is_complete, is_initial_message, is_applied, is_applying, is_ignored)
+          VALUES ($1, $2, now(), $3, $4, null, false, true, false, false, false)
         `,
       [chatID, workspaceID, userID, message],
     );
@@ -77,6 +96,7 @@ export async function addChatMessage(workspaceID: string, userID: string, messag
       isComplete: false,
       isApplied: false,
       isApplying: false,
+      isIgnored: false,
     };
   } catch (err) {
     console.error(err);
@@ -98,7 +118,8 @@ export async function getChatMessage(workspaceID: string, chatID: string): Promi
           workspace_chat.response,
           workspace_chat.is_complete,
           workspace_chat.is_applied,
-          workspace_chat.is_applying
+          workspace_chat.is_applying,
+          workspace_chat.is_ignored
         FROM
           workspace_chat
         WHERE
@@ -119,6 +140,7 @@ export async function getChatMessage(workspaceID: string, chatID: string): Promi
       isComplete: row.is_complete,
       isApplied: row.is_applied,
       isApplying: row.is_applying,
+      isIgnored: row.is_ignored,
     };
 
     return message;

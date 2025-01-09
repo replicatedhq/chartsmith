@@ -11,9 +11,10 @@ interface ChatPanelProps {
   onApplyChanges?: (message: Message) => void;
   session: Session;
   workspaceId: string;
+  setMessages: (messages: Message[]) => void;
 }
 
-export function ChatPanel({ messages, onSendMessage, onApplyChanges, session, workspaceId }: ChatPanelProps) {
+export function ChatPanel({ messages, onSendMessage, onApplyChanges, session, workspaceId, setMessages }: ChatPanelProps) {
   const { theme } = useTheme();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -36,6 +37,7 @@ export function ChatPanel({ messages, onSendMessage, onApplyChanges, session, wo
             session={session}
             workspaceId={workspaceId}
             showActions={index === messages.length - 1}
+            setMessages={setMessages}
           />
         ))}
         <div ref={messagesEndRef} />

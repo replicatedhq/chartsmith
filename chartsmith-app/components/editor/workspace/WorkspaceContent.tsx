@@ -75,11 +75,11 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
       const cf = centrifugeRef.current;
 
       cf.on("connected", () => {
-        // console.log("Connected to Centrifugo");
+        console.log("Connected to Centrifugo");
       });
 
       cf.on("disconnected", () => {
-        // console.log("Disconnected from Centrifugo");
+        console.log("Disconnected from Centrifugo");
       });
 
       cf.on("error", (ctx) => {
@@ -92,6 +92,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     const sub = cf.newSubscription(channel);
 
     sub.on("publication", (message: { data: CentrifugoMessageData }) => {
+      console.log("Received message:", message.data);
       const isWorkspaceUpdatedEvent = message.data.workspace;
 
       if (!isWorkspaceUpdatedEvent) {
@@ -108,6 +109,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
           isComplete: message.data.is_complete === true,  // Only true if explicitly set to true
           isApplied: chatMessage.is_applied === true || message.data.is_applied === true,
           isApplying: chatMessage.is_applying === true || message.data.is_applying === true,
+          isIgnored: chatMessage.is_ignored === true || message.data.is_ignored === true,
         };
 
         setMessages((prevMessages) => {
@@ -152,7 +154,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     });
 
     sub.on("subscribed", () => {
-      // console.log(`Subscribed to channel ${channel}`);
+      console.log(`Subscribed to channel ${channel}`);
     });
 
     sub.on("error", (ctx) => {
@@ -300,6 +302,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
                     session={session}
                     workspaceId={workspaceId}
                     showActions={index === messages.length - 1}
+                    setMessages={setMessages}
                   />
                 ))}
                 {messages[messages.length - 1]?.isComplete && !showClarificationInput && (
@@ -347,13 +350,13 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
       content: file.content,
       type: 'file' as const
     }));
-    
+
     // Clear selected file and editor content when switching to rendered view
     if (newView === "rendered") {
       setSelectedFile(undefined);
       setEditorContent("");
     }
-    
+
     toggleView(newFiles);
   };
 
@@ -380,6 +383,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
               onApplyChanges={handleApplyChanges}
               session={session}
               workspaceId={workspaceId}
+              setMessages={setMessages}
             />
           </div>
         </div>

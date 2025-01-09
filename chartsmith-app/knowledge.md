@@ -17,6 +17,7 @@
 - Never update state of a component during render of another component
 - Move state updates that depend on prop/state changes into useEffect
 - Use stable IDs as React keys when available to preserve component state during updates
+- Always import UI components from @/components/ui/* to ensure consistent styling and behavior
 
 # Theme
 
@@ -129,6 +130,10 @@ State Management:
 - Check for undefined rather than falsy values when conditionally rendering responses
 - For streaming responses, validate isComplete as boolean type rather than checking for undefined
 - For streaming UI transitions, check isComplete on last message before showing next step
+- When updating state from real-time events:
+  - Update local state immediately for optimistic UI
+  - Handle errors and revert state if needed
+  - Use functional updates to ensure latest state
 - For modals:
   - Handle both Escape key and click outside to close
   - Add event listeners only when modal is open

@@ -28,6 +28,7 @@ func SendEvent(ctx context.Context, r types.Recipient, e types.Event) error {
 
 	for _, userID := range r.GetUserIDs() {
 		userChannelName := fmt.Sprintf("%s#%s", e.GetChannelName(), userID)
+		fmt.Printf("Sending message to channel %s\n", userChannelName)
 		if err := sendMessage(userChannelName, messageData); err != nil {
 			logger.Errorf("Failed to send message to user %s: %v", userID, err)
 		}

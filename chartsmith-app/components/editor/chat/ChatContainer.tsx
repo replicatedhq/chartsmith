@@ -10,9 +10,10 @@ interface ChatContainerProps {
   onApplyChanges: (message: Message) => void;
   session: Session;
   workspaceId: string;
+  setMessages: (messages: Message[]) => void;
 }
 
-export function ChatContainer({ messages, onSendMessage, onApplyChanges, session, workspaceId }: ChatContainerProps) {
+export function ChatContainer({ messages, onSendMessage, onApplyChanges, session, workspaceId, setMessages }: ChatContainerProps) {
   const { theme } = useTheme();
 
   return (
@@ -23,6 +24,7 @@ export function ChatContainer({ messages, onSendMessage, onApplyChanges, session
         onApplyChanges={onApplyChanges}
         session={session}
         workspaceId={workspaceId}
+        setMessages={setMessages}
       />
     </div>
   );

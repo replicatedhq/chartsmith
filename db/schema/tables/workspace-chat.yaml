@@ -47,3 +47,8 @@ schema:
       constraints:
         notNull: true
       default: false
+    - name: is_ignored
+      type: boolean
+      constraints:
+        notNull: true
+      default: false
