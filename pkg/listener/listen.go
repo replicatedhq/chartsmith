@@ -59,12 +59,12 @@ func Listen(ctx context.Context) error {
 					fmt.Printf("Error handling new revision notification: %+v\n", err)
 				}
 			}()
-		case "new_slack_notification":
-			go func() {
-				if err := handleNewSlackNotification(ctx, notification.Payload); err != nil {
-					fmt.Printf("Error handling new slack notification: %+v\n", err)
-				}
-			}()
+		// case "new_slack_notification":
+		// 	go func() {
+		// 		if err := handleNewSlackNotification(ctx, notification.Payload); err != nil {
+		// 			fmt.Printf("Error handling new slack notification: %+v\n", err)
+		// 		}
+		// 	}()
 		default:
 			fmt.Printf("Unknown notification received: %+v\n", notification)
 		}

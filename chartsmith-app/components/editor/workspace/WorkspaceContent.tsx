@@ -256,8 +256,8 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
   if (!showEditor) {
     return (
       <EditorLayout>
-        <div className="flex justify-center h-full w-full overflow-auto transition-all duration-300 ease-in-out">
-          <div className="px-4 w-full max-w-3xl py-8 pb-16">
+        <div className="h-full w-full overflow-auto transition-all duration-300 ease-in-out">
+          <div className="px-4 w-full max-w-3xl py-8 pb-16 mx-auto">
             <Card className="p-6 w-full border-dark-border/40 shadow-lg">
               <div className="space-y-4">
                 {messages.map((message, index) => (
@@ -327,15 +327,13 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     return;
   };
 
-
-
   return (
     <EditorLayout>
       <div className="flex w-full overflow-hidden relative">
-        <div className={`chat-container-wrapper transition-all duration-300 ease-in-out absolute inset-0 flex justify-center ${
-          !workspace?.currentRevisionNumber || workspace.currentRevisionNumber === 0 ? 'w-full' : 'w-[400px]'
+        <div className={`chat-container-wrapper transition-all duration-300 ease-in-out absolute ${
+          (!workspace?.currentRevisionNumber && !workspace?.incompleteRevisionNumber) || (workspace.currentRevisionNumber === 0 && !workspace.incompleteRevisionNumber) ? 'inset-0 flex justify-center' : 'left-0 top-0 bottom-0'
         }`}>
-          <div className={`w-full max-w-3xl ${!workspace?.currentRevisionNumber || workspace.currentRevisionNumber === 0 ? '' : 'w-full'}`}>
+          <div className={`${(!workspace?.currentRevisionNumber && !workspace?.incompleteRevisionNumber) || (workspace.currentRevisionNumber === 0 && !workspace.incompleteRevisionNumber) ? 'w-full max-w-3xl px-4' : 'w-[400px]'}`}>
             <ChatContainer
               messages={messages}
               onSendMessage={handleSendMessage}

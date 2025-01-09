@@ -16,7 +16,7 @@ export function ChatContainer({ messages, onSendMessage, onApplyChanges, session
   const { theme } = useTheme();
 
   return (
-    <div className={`h-full border-r flex flex-col min-h-0 overflow-hidden transition-all duration-300 ease-in-out w-full ${theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"}`}>
+    <div className={`h-[calc(100vh-3.5rem)] border-r flex flex-col min-h-0 overflow-hidden transition-all duration-300 ease-in-out w-full ${theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"}`}>
       <ChatPanel 
         messages={messages} 
         onSendMessage={onSendMessage} 

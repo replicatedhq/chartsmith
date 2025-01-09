@@ -37,7 +37,7 @@ export default async function WorkspaceLayout({
 }) {
   const { id } = await params;
   const { workspace } = await getSessionAndWorkspace(id);
-  const hasRevision = workspace.currentRevisionNumber > 0;
+  const hasRevision = workspace.currentRevisionNumber > 0 || workspace.incompleteRevisionNumber;
 
   return (
     <WorkspaceUIProvider initialChatVisible={true} initialFileTreeVisible={hasRevision}>

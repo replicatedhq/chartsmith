@@ -23,8 +23,20 @@
 - Use min-w-[size] instead of w-[size] for fixed-width sections in flex layouts to prevent overflow
 - Keep flex-1 on growing sections between fixed-width elements
 - For nav bars with 3 sections (left, center, right), use min-width on outer sections to prevent squishing
-- For full-height scrollable containers, use h-full with overflow-auto on parent and py-8 on child for padding
+- For full-height scrollable containers:
+  - Use h-[calc(100vh-3.5rem)] for containers below nav bar (3.5rem is nav height)
+  - Use h-full with overflow-auto on parent and py-8 on child for padding
+  - Add min-h-0 to prevent flex children from expanding beyond parent
 - For layout transitions between states, add transition-all duration-300 ease-in-out to parent containers
+- For transitions between centered and side-aligned layouts:
+  - Use absolute positioning with inset-0 for centered state
+  - Use left-0 top-0 bottom-0 for side-aligned state
+  - Add padding to centered container, not wrapper
+  - Avoid nested flex containers during transition
+  - Keep max-width and padding only in centered state
+  - Use exact width (e.g. w-[400px]) without padding in side-aligned state
+  - Use same container structure in both states to ensure smooth transitions
+  - Maintain consistent chat container wrapper with absolute positioning
 - For smooth width transitions in flex layouts:
   - Use flex-shrink-0 instead of flex-none
   - Add transitions to both parent and child containers

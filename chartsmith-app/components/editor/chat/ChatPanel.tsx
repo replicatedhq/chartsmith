@@ -27,7 +27,7 @@ export function ChatPanel({ messages, onSendMessage, onApplyChanges, session, wo
 
   return (
     <>
-      <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${theme === "dark" ? "bg-dark-surface" : "bg-gray-50"}`}>
+      <div className={`flex-1 overflow-y-auto p-4 space-y-4 min-h-0 ${theme === "dark" ? "bg-dark-surface" : "bg-gray-50"}`}>
         {messages.map((message, index) => (
           <ChatMessage
             key={message.id || index}
