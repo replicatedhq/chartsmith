@@ -162,11 +162,15 @@ export async function getWorkspace(id: string): Promise<Workspace | undefined> {
   }
 }
 
-
 export async function createRevision(workspaceID: string, chatMessageID: string, userID: string): Promise<number> {
+  const db = getDB(await getParam("DB_URI"));
+
   try {
-    const db = getDB(await getParam("DB_URI"));
-    const result = await db.query(
+    // Start transaction
+    await db.query('BEGIN');
+
+    // Create new revision and get its number
+    const revisionResult = await db.query(
       `
         WITH latest_revision AS (
           SELECT * FROM workspace_revision
@@ -198,17 +202,86 @@ export async function createRevision(workspaceID: string, chatMessageID: string,
       [workspaceID, chatMessageID, userID]
     );
 
-    const newRevisionNumber = result.rows[0].revision_number;
+    const newRevisionNumber = revisionResult.rows[0].revision_number;
+    const previousRevisionNumber = newRevisionNumber - 1;
 
-    await db.query(`SELECT pg_notify('new_revision', $1)`, [`${workspaceID}/${newRevisionNumber}`]);
+    // Copy workspace_file records from previous revision
+    await db.query(
+      `
+        INSERT INTO workspace_file (
+          workspace_id, file_path, revision_number, created_at,
+          last_updated_at, content, name
+        )
+        SELECT
+          workspace_id,
+          file_path,
+          $2 as revision_number,
+          NOW() as created_at,
+          NOW() as last_updated_at,
+          content,
+          name
+        FROM workspace_file
+        WHERE workspace_id = $1
+        AND revision_number = $3
+      `,
+      [workspaceID, newRevisionNumber, previousRevisionNumber]
+    );
+
+    // Get previous workspace_gvk records
+    const previousGvkResult = await db.query(
+      `
+        SELECT
+          workspace_id, gvk, file_path, content,
+          summary, embeddings
+        FROM workspace_gvk
+        WHERE workspace_id = $1
+        AND revision_number = $2
+      `,
+      [workspaceID, previousRevisionNumber]
+    );
+
+    // Insert workspace_gvk records with new IDs
+    for (const gvk of previousGvkResult.rows) {
+      const id = srs.default({ length: 12, alphanumeric: true });
+      await db.query(
+        `
+          INSERT INTO workspace_gvk (
+            id, workspace_id, gvk, revision_number, file_path,
+            created_at, content, summary, embeddings
+          )
+          VALUES ($1, $2, $3, $4, $5, NOW(), $6, $7, $8)
+        `,
+        [
+          id,
+          gvk.workspace_id,
+          gvk.gvk,
+          newRevisionNumber,
+          gvk.file_path,
+          gvk.content,
+          gvk.summary,
+          gvk.embeddings
+        ]
+      );
+    }
+
+    // Notify about new revision
+    await db.query(
+      `SELECT pg_notify('new_revision', $1)`,
+      [`${workspaceID}/${newRevisionNumber}`]
+    );
+
+    // Commit transaction
+    await db.query('COMMIT');
+
     return newRevisionNumber;
 
   } catch (err) {
-    console.error(err);
+    // Rollback transaction on error
+    await db.query('ROLLBACK');
+    console.error('Error creating revision:', err);
     throw err;
   }
- }
-
+}
 
 async function listFilesForWorkspace(workspaceID: string, revisionNumber: number): Promise<File[]> {
   try {

@@ -20,7 +20,6 @@ import { sendChatMessageAction } from "@/lib/workspace/actions/send-chat-message
 import { Centrifuge } from "centrifuge";
 import { PromptInput } from "@/components/PromptInput";
 import { createRevisionAction } from "@/lib/workspace/actions/create-revision";
-import { create } from "domain";
 
 interface WorkspaceContentProps {
   initialWorkspace: Workspace;
@@ -54,7 +53,6 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
 
   useEffect(() => {
     if (!session) return;
-    console.log("Loading initial messages...");
     getWorkspaceMessagesAction(session, workspaceId).then(messages => {
       console.log("Initial messages loaded:", messages);
       setMessages(messages);
@@ -213,7 +211,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
 
   const handleApplyChanges = async (message: Message) => {
     if (!session || !workspace) return;
-    const updatedWorkspace = await createRevisionAction(session, workspace.id);
+    const updatedWorkspace = await createRevisionAction(session, workspace.id, message.id);
     if (!updatedWorkspace) return;
 
     console.log(updatedWorkspace);
@@ -268,6 +266,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
                     message={message}
                     session={session}
                     workspaceId={workspaceId}
+                    showActions={index === messages.length - 1}
                   />
                 ))}
                 {messages[messages.length - 1]?.isComplete && !showClarificationInput && (

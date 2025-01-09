@@ -30,12 +30,14 @@ export function ChatMessage({ message, onApplyChanges, session, workspaceId, sho
         </div>
       </div>
 
-      {/* Assistant Message - only show if there's a response */}
-      {message.response !== undefined && (
+      {/* Assistant Message - show if there's a response or if message is incomplete */}
+      {(message.response !== undefined || !message.isComplete) && (
         <div className="px-4 py-2 mr-12">
           <div className={`p-4 rounded-2xl ${theme === "dark" ? "bg-dark-border/40" : "bg-gray-100"} rounded-tl-sm`}>
             <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"} mb-1`}>ChartSmith</div>
-            <div className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} text-sm whitespace-pre-wrap`}>{message.response}</div>
+            <div className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} text-sm whitespace-pre-wrap`}>
+              {message.response || (!message.isComplete ? "..." : "")}
+            </div>
             {message.isComplete && (
               <div className="mt-4 space-y-4 border-t border-gray-700/10 pt-4">
                 {message.fileChanges && <ChatChanges changes={message.fileChanges} />}
