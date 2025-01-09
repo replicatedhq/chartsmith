@@ -3,7 +3,6 @@ import { Message } from "../types";
 import { Session } from "@/lib/types/session";
 import { useTheme } from "../../../contexts/ThemeContext";
 import { Button } from "@/components/ui/Button";
-import { UndoConfirmationModal } from "@/components/UndoConfirmationModal";
 import { FeedbackModal } from "@/components/FeedbackModal";
 
 interface ChatMessageProps {
@@ -17,7 +16,7 @@ interface ChatMessageProps {
 export function ChatMessage({ message, onApplyChanges, session, workspaceId, showActions = true }: ChatMessageProps) {
   const { theme } = useTheme();
   const [showReportModal, setShowReportModal] = useState(false);
-  const [showUndoModal, setShowUndoModal] = useState(false);
+
 
   return (
     <div className="space-y-2">
@@ -74,7 +73,7 @@ export function ChatMessage({ message, onApplyChanges, session, workspaceId, sho
         workspaceId={workspaceId}
         session={session}
       />
-      <UndoConfirmationModal isOpen={showUndoModal} onClose={() => setShowUndoModal(false)} onConfirm={() => onUndo?.()} />
+
     </div>
   );
 }

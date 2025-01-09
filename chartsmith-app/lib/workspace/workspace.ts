@@ -91,6 +91,79 @@ export async function createWorkspace(name: string, createdType: string, prompt:
   }
 }
 
+export async function listWorkspaces(userId: string): Promise<Workspace[]> {
+  try {
+    const db = getDB(await getParam("DB_URI"));
+    const result = await db.query(
+      `
+            SELECT
+                workspace.id,
+                workspace.created_at,
+                workspace.last_updated_at,
+                workspace.name,
+                workspace.created_by_user_id,
+                workspace.created_type,
+                workspace.current_revision_number
+            FROM
+                workspace
+            WHERE
+                workspace.created_by_user_id = $1
+            ORDER BY
+                workspace.last_updated_at DESC
+        `,
+      [userId],
+    );
+
+    const workspaces: Workspace[] = [];
+
+    for (const row of result.rows) {
+      const w: Workspace = {
+        id: row.id,
+        createdAt: row.created_at,
+        lastUpdatedAt: row.last_updated_at,
+        name: row.name,
+        currentRevisionNumber: row.current_revision_number,
+        files: [],
+      };
+
+      // get the files, only if revision number is > 0
+      if (row.current_revision_number > 0) {
+        const files = await listFilesForWorkspace(row.id, row.current_revision_number);
+        w.files = files;
+      }
+
+      // look for an incomplete revision
+      const result2 = await db.query(
+        `
+          SELECT
+            workspace_revision.revision_number
+          FROM
+            workspace_revision
+          WHERE
+            workspace_revision.workspace_id = $1 AND
+            workspace_revision.is_complete = false AND
+            workspace_revision.revision_number > $2
+          ORDER BY
+            workspace_revision.revision_number DESC
+          LIMIT 1
+        `,
+        [row.id, w.currentRevisionNumber],
+      );
+
+      if (result2.rows.length > 0) {
+        w.incompleteRevisionNumber = result2.rows[0].revision_number;
+      }
+
+      workspaces.push(w);
+    }
+
+    return workspaces;
+  } catch (err) {
+    console.error(err);
+    throw err;
+  }
+}
+
 export async function getWorkspace(id: string): Promise<Workspace | undefined> {
   try {
     const db = getDB(await getParam("DB_URI"));

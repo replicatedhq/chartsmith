@@ -38,7 +38,7 @@ export default async function WorkspaceLayout({
 }) {
   const { id } = await params;
   const { workspace } = await getSessionAndWorkspace(id);
-  const hasRevision = workspace.currentRevisionNumber > 0 || workspace.incompleteRevisionNumber;
+  const hasRevision = Boolean(workspace?.currentRevisionNumber > 0 || workspace?.incompleteRevisionNumber);
 
   return (
     <ValuesScenariosProvider>

@@ -57,7 +57,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
       console.log("Initial messages loaded:", messages);
       setMessages(messages);
     });
-  }, [session, workspaceId]); // Remove workspace from dependencies to prevent reloading
+  }, [session, workspaceId]); // Include workspaceId since we need to reload messages when it changes
 
   useEffect(() => {
     // Don't include messages in deps to avoid infinite loop with streaming updates
@@ -168,7 +168,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
       cf.disconnect();
       centrifugeRef.current = null;
     };
-  }, [centrifugoToken, session, workspace, setWorkspace]);
+  }, [centrifugoToken, session, workspace, setWorkspace, workspaceId]);
 
   // Handle auto-selecting new files in follow mode
   useEffect(() => {
@@ -247,6 +247,22 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Handle window resize for mobile viewport height
+  // Handle window resize for mobile viewport height
+  useEffect(() => {
+    const handleResize = () => {
+      const vh = window.innerHeight * 0.01;
+      document.documentElement.style.setProperty("--vh", `${vh}px`);
+    };
+
+    handleResize();
+    window.addEventListener("resize", handleResize);
+
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []); // Empty dependency array since this effect only handles window resize
 
 
 

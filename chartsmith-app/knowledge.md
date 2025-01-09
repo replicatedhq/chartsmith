@@ -3,6 +3,8 @@
 - Use suppressHydrationWarning on elements where hydration mismatches are expected and harmless (e.g. testing attributes, timestamps)
 - For dynamic content that differs between server and client, use useEffect to update the content after initial render
 - Avoid using browser-only APIs in the initial render (window, document, etc)
+- For dynamic content that differs between server and client, use useEffect to update the content after initial render
+- Avoid using browser-only APIs in the initial render (window, document, etc)
 
 # State Management
 
@@ -28,10 +30,19 @@
   - Add min-w-0 to parent flex container to enable truncation
   - Make action buttons flex-shrink-0 to maintain size
   - Keep hover actions outside of text container
+  - For table rows with hover actions:
+    - Keep action buttons always visible unless explicitly required to be hidden
+    - Add cursor-pointer to action buttons
+    - Use consistent padding and icon sizes
+    - Maintain hover states for background and text color
 - For full-height scrollable containers:
   - Use h-[calc(100vh-3.5rem)] for containers below nav bar (3.5rem is nav height)
   - Use h-full with overflow-auto on parent and py-8 on child for padding
   - Add min-h-0 to prevent flex children from expanding beyond parent
+  - For mobile viewport height:
+    - Set CSS variable --vh using window.innerHeight * 0.01
+    - Update on window resize
+    - Use calc(var(--vh, 1vh) * 100) for full height
 - For layout transitions between states, add transition-all duration-300 ease-in-out to parent containers
 - For transitions between centered and side-aligned layouts:
   - Use absolute positioning with inset-0 for centered state
@@ -99,6 +110,10 @@ React Hooks:
 - Call hooks at the top level of component
 - Don't call hooks inside conditionals, loops, or nested functions
 - Extract values from hooks before using in JSX conditionals
+- For useEffect dependencies:
+  - Include all variables used inside the effect
+  - For resize event listeners, empty array is acceptable since they don't depend on props/state
+  - For real-time connections, include connection parameters (workspaceId, etc.)
 
 Development:
 - Run lint/type checks before committing, not after every small change
@@ -114,6 +129,11 @@ State Management:
 - Check for undefined rather than falsy values when conditionally rendering responses
 - For streaming responses, validate isComplete as boolean type rather than checking for undefined
 - For streaming UI transitions, check isComplete on last message before showing next step
+- For modals:
+  - Handle both Escape key and click outside to close
+  - Add event listeners only when modal is open
+  - Clean up listeners on close
+  - Use ref to detect clicks outside modal content
 - When switching between source/rendered views:
   - Clear selected file and editor content when switching to rendered
   - Conditionally render editor only in source view
@@ -130,6 +150,10 @@ State Management:
   - Capture previous state before updates when needed for transition checks
   - Check state transitions to trigger side effects (e.g. refresh data)
   - Append unknown messages rather than ignoring them
+- When updating state from real-time events:
+  - Update local state immediately for optimistic UI
+  - Handle errors and revert state if needed
+  - Use functional updates to ensure latest state
 - When handling real-time updates, append unknown messages rather than ignoring them
 - Check for undefined rather than falsy values when conditionally rendering responses
 - For streaming responses, validate isComplete as boolean type rather than checking for undefined
@@ -145,6 +169,13 @@ State Management:
 - For auto-scrolling chat, add empty div with ref at end of messages and scroll on message updates
 - For streaming UI transitions, check isComplete on last message before showing next step
 - Server-side render layout components when possible to avoid loading states
+- Server-side fetch data in layout.tsx for initial render, then use client-side actions for updates
+- Move client-side state and effects into dedicated client components
+- When using params in page.tsx, type it as Promise<{ id: string }> for dynamic routes
+- When using cookies() in server components, must await before accessing values
+- Server-side render layout components when possible to avoid loading states
+- Server-side fetch data in layout.tsx for initial render, then use client-side actions for updates
+- Move client-side state and effects into dedicated client components
 - Server-side fetch data in layout.tsx for initial render, then use client-side actions for updates
 - Move client-side state and effects into dedicated client components
 
