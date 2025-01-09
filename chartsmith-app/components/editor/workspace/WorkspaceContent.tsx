@@ -299,6 +299,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
                   <ChatMessage
                     key={message.id || index}
                     message={message}
+                    messages={messages}
                     session={session}
                     workspaceId={workspaceId}
                     showActions={index === messages.length - 1}
