@@ -122,9 +122,11 @@ export function FileTree({ nodes, onFileSelect, onFileDelete, selectedFile }: Fi
         ) : (
           <FileText className={`w-4 h-4 mr-2 ${selectedFile?.path === node.path ? "text-primary" : theme === "dark" ? "text-gray-400" : "text-gray-500"}`} />
         )}
-        <span className="text-sm flex-1">{node.name}</span>
+        <div className="flex-1 flex items-center min-w-0">
+          <span className="text-sm truncate">{node.name}</span>
+        </div>
         {hoveredItem === node.path && node.type === "file" && (
-          <button onClick={(e) => handleDelete(node, e)} className={`p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity ${theme === "dark" ? "hover:bg-dark-border/60 text-gray-400 hover:text-white" : "hover:bg-gray-200 text-gray-500 hover:text-gray-700"}`}>
+          <button onClick={(e) => handleDelete(node, e)} className={`p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 ${theme === "dark" ? "hover:bg-dark-border/60 text-gray-400 hover:text-white" : "hover:bg-gray-200 text-gray-500 hover:text-gray-700"}`}>
             <Trash2 className="w-3 h-3" />
           </button>
         )}

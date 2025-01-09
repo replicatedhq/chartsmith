@@ -23,6 +23,11 @@
 - Use min-w-[size] instead of w-[size] for fixed-width sections in flex layouts to prevent overflow
 - Keep flex-1 on growing sections between fixed-width elements
 - For nav bars with 3 sections (left, center, right), use min-width on outer sections to prevent squishing
+- For file explorer items with hover actions:
+  - Use truncate on text elements to prevent wrapping
+  - Add min-w-0 to parent flex container to enable truncation
+  - Make action buttons flex-shrink-0 to maintain size
+  - Keep hover actions outside of text container
 - For full-height scrollable containers:
   - Use h-[calc(100vh-3.5rem)] for containers below nav bar (3.5rem is nav height)
   - Use h-full with overflow-auto on parent and py-8 on child for padding
