@@ -7,6 +7,7 @@ import { PromptInput } from "./PromptInput";
 import { useSession } from "@/app/hooks/useSession";
 import { useRouter } from "next/navigation";
 import { createWorkspaceAction } from "@/lib/workspace/actions/create-workspace-from-prompt";
+import { getGoogleAuthUrl } from "@/lib/auth/google";
 
 interface PromptModalProps {
   isOpen: boolean;
@@ -60,7 +61,22 @@ export function PromptModal({ isOpen, onClose }: PromptModalProps) {
       setIsLoading(true);
       setError(null);
 
-      const workspaceId = await createWorkspaceAction(session!, "prompt", prompt);
+      if (!session) {
+        try {
+          // Store the prompt before redirecting to auth
+          localStorage.setItem('pendingPrompt', prompt);
+          // Redirect to Google Auth using the proper OAuth URL
+          const authUrl = getGoogleAuthUrl();
+          window.location.href = authUrl;
+        } catch (error) {
+          console.error("Failed to get Google Auth URL:", error);
+          setError("Failed to initiate Google login. Please try again.");
+          setIsLoading(false);
+        }
+        return;
+      }
+
+      const workspaceId = await createWorkspaceAction(session, "prompt", prompt);
       
       // Don't reset loading state, let it persist through redirect
       router.push(`/workspace/${workspaceId}`);

@@ -6,6 +6,7 @@ import { Loader2 } from "lucide-react";
 import { useToast } from "@/components/toast/use-toast";
 import { Card } from "@/components/ui/Card";
 import { exchangeGoogleCodeForSession } from "@/lib/auth/actions/exchange-google-code";
+import { createWorkspaceAction } from "@/lib/workspace/actions/create-workspace-from-prompt";
 
 function GoogleCallback() {
   const searchParams = useSearchParams();
@@ -25,12 +26,26 @@ function GoogleCallback() {
       exchangeComplete.current = true;
 
       exchangeGoogleCodeForSession(code)
-        .then((jwt) => {
+        .then(async (jwt) => {
           const expires = new Date();
           expires.setDate(expires.getDate() + 7);
           document.cookie = `session=${jwt}; expires=${expires.toUTCString()}; path=/; SameSite=Lax`;
 
-          window.location.href = "/";
+          // Check for a stored prompt
+          const pendingPrompt = localStorage.getItem('pendingPrompt');
+          if (pendingPrompt) {
+            try {
+              localStorage.removeItem('pendingPrompt'); // Clear the stored prompt
+              // Create workspace with the stored prompt
+              const workspaceId = await createWorkspaceAction({ jwt }, "prompt", pendingPrompt);
+              window.location.href = `/workspace/${workspaceId}`;
+            } catch (error) {
+              console.error("Failed to create workspace:", error);
+              window.location.href = "/";
+            }
+          } else {
+            window.location.href = "/";
+          }
         })
         .catch((error) => {
           console.error("Auth Error:", error);
