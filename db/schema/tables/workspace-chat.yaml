@@ -37,3 +37,13 @@ schema:
         notNull: true
     - name: files_sent
       type: text[]
+    - name: is_applied
+      type: boolean
+      constraints:
+        notNull: true
+      default: false
+    - name: is_applying
+      type: boolean
+      constraints:
+        notNull: true
+      default: false

@@ -19,11 +19,9 @@ export interface Message {
   id: string;
   prompt: string;
   response?: string;
-  fileChanges?: {
-    path: string;
-    content: string;
-  }[];
   isComplete: boolean;
+  isApplied: boolean;
+  isApplying: boolean;
 }
 
 // Interface for raw message from server before normalization
@@ -31,10 +29,6 @@ export interface RawMessage {
   id: string;
   prompt: string;
   response?: string;
-  fileChanges?: {
-    path: string;
-    content: string;
-  }[];
 }
 
 // Interface for Centrifugo message data

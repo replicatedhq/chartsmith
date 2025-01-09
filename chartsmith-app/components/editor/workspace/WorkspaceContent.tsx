@@ -107,7 +107,6 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
           id: chatMessage.id,
           prompt: chatMessage.prompt,
           response: chatMessage.response,
-          fileChanges: chatMessage.fileChanges,
           isComplete: message.data.is_complete === true,  // Only true if explicitly set to true
         };
 

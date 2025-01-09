@@ -14,7 +14,9 @@ export async function listMessagesForWorkspace(workspaceID: string): Promise<Mes
                 workspace_chat.sent_by,
                 workspace_chat.prompt,
                 workspace_chat.response,
-                workspace_chat.is_complete
+                workspace_chat.is_complete,
+                workspace_chat.is_applied,
+                workspace_chat.is_applying
             FROM
                 workspace_chat
             WHERE
@@ -39,13 +41,12 @@ export async function listMessagesForWorkspace(workspaceID: string): Promise<Mes
         id: row.id,
         prompt: row.prompt,
         response: row.response,
-        fileChanges: undefined,
         isComplete: row.is_complete,
+        isApplied: row.is_applied,
+        isApplying: row.is_applying,
       };
       messages.push(message);
     }
-
-    console.log("Returning messages:", messages);
 
     return messages;
   } catch (err) {
@@ -61,8 +62,8 @@ export async function addChatMessage(workspaceID: string, userID: string, messag
     const db = getDB(await getParam("DB_URI"));
     await db.query(
       `
-          INSERT INTO workspace_chat (id, workspace_id, created_at, sent_by, prompt, response, is_complete, is_initial_message)
-          VALUES ($1, $2, now(), $3, $4, null, false, true)
+          INSERT INTO workspace_chat (id, workspace_id, created_at, sent_by, prompt, response, is_complete, is_initial_message, is_applied, is_applying)
+          VALUES ($1, $2, now(), $3, $4, null, false, true, false, false)
         `,
       [chatID, workspaceID, userID, message],
     );
@@ -73,8 +74,9 @@ export async function addChatMessage(workspaceID: string, userID: string, messag
       id: chatID,
       prompt: message,
       response: undefined,
-      fileChanges: undefined,
       isComplete: false,
+      isApplied: false,
+      isApplying: false,
     };
   } catch (err) {
     console.error(err);
@@ -94,7 +96,9 @@ export async function getChatMessage(workspaceID: string, chatID: string): Promi
           workspace_chat.sent_by,
           workspace_chat.prompt,
           workspace_chat.response,
-          workspace_chat.is_complete
+          workspace_chat.is_complete,
+          workspace_chat.is_applied,
+          workspace_chat.is_applying
         FROM
           workspace_chat
         WHERE
@@ -112,8 +116,9 @@ export async function getChatMessage(workspaceID: string, chatID: string): Promi
       id: row.id,
       prompt: row.prompt,
       response: row.response,
-      fileChanges: undefined,
       isComplete: row.is_complete,
+      isApplied: row.is_applied,
+      isApplying: row.is_applying,
     };
 
     return message;

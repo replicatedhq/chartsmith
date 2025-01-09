@@ -40,7 +40,6 @@ export function ChatMessage({ message, onApplyChanges, session, workspaceId, sho
             </div>
             {message.isComplete && (
               <div className="mt-4 space-y-4 border-t border-gray-700/10 pt-4">
-                {message.fileChanges && <ChatChanges changes={message.fileChanges} />}
                 {showActions && onApplyChanges && (
                   <div className="flex justify-between mt-4">
                     <Button
@@ -64,9 +63,9 @@ export function ChatMessage({ message, onApplyChanges, session, workspaceId, sho
         </div>
       )}
 
-      <FeedbackModal 
-        isOpen={showReportModal} 
-        onClose={() => setShowReportModal(false)} 
+      <FeedbackModal
+        isOpen={showReportModal}
+        onClose={() => setShowReportModal(false)}
         message={message}
         chatId={message.id}
         workspaceId={workspaceId}

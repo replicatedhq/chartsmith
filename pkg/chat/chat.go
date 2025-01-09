@@ -191,3 +191,27 @@ func MarkComplete(ctx context.Context, chat *types.Chat) error {
 	_, err := conn.Exec(ctx, query, chat.Response, chat.ID)
 	return err
 }
+
+func MarkApplying(ctx context.Context, chat *types.Chat) error {
+	conn := persistence.MustGetPooledPostgresSession()
+	defer conn.Release()
+
+	query := `UPDATE workspace_chat
+	SET is_applying = true
+	WHERE id = $1`
+
+	_, err := conn.Exec(ctx, query, chat.ID)
+	return err
+}
+
+func MarkApplied(ctx context.Context, chat *types.Chat) error {
+	conn := persistence.MustGetPooledPostgresSession()
+	defer conn.Release()
+
+	query := `UPDATE workspace_chat
+	SET is_applied = true
+	WHERE id = $1`
+
+	_, err := conn.Exec(ctx, query, chat.ID)
+	return err
+}
