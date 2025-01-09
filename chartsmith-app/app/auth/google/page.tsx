@@ -7,6 +7,7 @@ import { useToast } from "@/components/toast/use-toast";
 import { Card } from "@/components/ui/Card";
 import { exchangeGoogleCodeForSession } from "@/lib/auth/actions/exchange-google-code";
 import { createWorkspaceAction } from "@/lib/workspace/actions/create-workspace-from-prompt";
+import { findSession } from "@/lib/auth/session";
 
 function GoogleCallback() {
   const searchParams = useSearchParams();
@@ -36,8 +37,12 @@ function GoogleCallback() {
           if (pendingPrompt) {
             try {
               localStorage.removeItem('pendingPrompt'); // Clear the stored prompt
-              // Create workspace with the stored prompt
-              const workspaceId = await createWorkspaceAction({ jwt }, "prompt", pendingPrompt);
+              // Get session from JWT and create workspace with the stored prompt
+              const session = await findSession(jwt);
+              if (!session) {
+                throw new Error("Failed to get session");
+              }
+              const workspaceId = await createWorkspaceAction(session, "prompt", pendingPrompt);
               window.location.href = `/workspace/${workspaceId}`;
             } catch (error) {
               console.error("Failed to create workspace:", error);

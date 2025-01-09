@@ -4,12 +4,11 @@ import { Session } from "@/lib/types/session";
 import { useTheme } from "../../../contexts/ThemeContext";
 import { Button } from "@/components/ui/Button";
 import { FeedbackModal } from "@/components/FeedbackModal";
-import { Tooltip } from "@/components/ui/Tooltip";
 import { ignorePlanAction } from "@/lib/workspace/actions/ignore-plan";
-import { getWorkspaceMessagesAction } from "@/lib/workspace/actions/get-workspace-messages";
 
 interface ChatMessageProps {
   message: Message;
+  messages: Message[];
   onApplyChanges?: () => void;
   session: Session;
   workspaceId: string;
@@ -17,7 +16,7 @@ interface ChatMessageProps {
   setMessages: (messages: Message[]) => void;
 }
 
-export function ChatMessage({ message, onApplyChanges, session, workspaceId, showActions = true, setMessages }: ChatMessageProps) {
+export function ChatMessage({ message, messages, onApplyChanges, session, workspaceId, showActions = true, setMessages }: ChatMessageProps) {
   const { theme } = useTheme();
   const [showReportModal, setShowReportModal] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -91,14 +90,13 @@ export function ChatMessage({ message, onApplyChanges, session, workspaceId, sho
                             onClick={async () => {
                               setShowDropdown(false);
                               // Optimistically update local state
-                              setMessages(prevMessages => {
-                                return prevMessages.map(m => {
-                                  if (m.id === message.id) {
-                                    return { ...m, isIgnored: true };
-                                  }
-                                  return m;
-                                });
+                              const updatedMessages = messages.map(m => {
+                                if (m.id === message.id) {
+                                  return { ...m, isIgnored: true };
+                                }
+                                return m;
                               });
+                              setMessages(updatedMessages);
                               // Make server call in background
                               await ignorePlanAction(session, workspaceId, message.id);
                             }}
