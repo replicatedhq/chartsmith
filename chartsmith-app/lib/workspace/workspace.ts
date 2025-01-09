@@ -169,6 +169,16 @@ export async function createRevision(workspaceID: string, chatMessageID: string,
     // Start transaction
     await db.query('BEGIN');
 
+    // mark the chat message as applying
+    await db.query(
+      `
+        UPDATE workspace_chat
+        SET is_applying = true, is_applied = false
+        WHERE id = $1
+      `,
+      [chatMessageID],
+    );
+
     // Create new revision and get its number
     const revisionResult = await db.query(
       `

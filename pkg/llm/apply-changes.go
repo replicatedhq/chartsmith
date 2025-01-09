@@ -15,10 +15,6 @@ import (
 )
 
 func ApplyChangesToWorkspace(ctx context.Context, w *workspacetypes.Workspace, revisionNumber int, c *chattypes.Chat, relevantFiles []workspacetypes.File) error {
-	if err := chat.MarkApplying(ctx, c); err != nil {
-		return err
-	}
-
 	client, err := newAnthropicClient(ctx)
 	if err != nil {
 		return err

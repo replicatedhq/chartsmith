@@ -109,15 +109,26 @@ State Management:
 - Check for undefined rather than falsy values when conditionally rendering responses
 - For streaming responses, validate isComplete as boolean type rather than checking for undefined
 - For streaming UI transitions, check isComplete on last message before showing next step
+- For async operations on messages:
+  - Show centered spinner with animate-spin and border-t-transparent when isApplying
+  - Disable actions during applying state
+  - Maintain consistent layout space during state changes
 - Backend sends snake_case (is_complete), normalize to camelCase (isComplete) before updating state
 - When using real-time APIs, define separate types for raw server messages vs normalized frontend types
 - For streaming message updates, exclude messages state from effect deps to avoid feedback loops
 - When updating state from real-time events, use functional updates to preserve existing state
+- When handling real-time updates:
+  - Capture previous state before updates when needed for transition checks
+  - Check state transitions to trigger side effects (e.g. refresh data)
+  - Append unknown messages rather than ignoring them
 - When handling real-time updates, append unknown messages rather than ignoring them
 - Check for undefined rather than falsy values when conditionally rendering responses
 - For streaming responses, validate isComplete as boolean type rather than checking for undefined
 - For streaming UI transitions, check isComplete on last message before showing next step
-- When normalizing Centrifugo messages, get top-level fields like is_complete from message.data, not from nested objects
+- When normalizing Centrifugo messages:
+  - Check both top-level message.data and nested message fields for state flags
+  - Use strict boolean comparison (=== true) for all flags
+  - Normalize snake_case (is_applying) to camelCase (isApplying)
 - For streaming responses, validate isComplete as boolean type rather than checking for undefined
 - Backend sends snake_case (is_complete), normalize to camelCase (isComplete) before updating state
 - For auto-scrolling chat, add empty div with ref at end of messages and scroll on message updates

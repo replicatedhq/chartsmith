@@ -55,6 +55,17 @@ export interface CentrifugoMessageData {
   message?: RawMessage;
   is_complete?: boolean;
   workspace_id: string;
+  is_applied?: boolean;
+  is_applying?: boolean;
+}
+
+// Interface for raw message from server before normalization
+export interface RawMessage {
+  id: string;
+  prompt: string;
+  response?: string;
+  is_applied?: boolean;
+  is_applying?: boolean;
 }
 
 export interface ValuesScenario {

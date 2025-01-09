@@ -38,9 +38,13 @@ export function ChatMessage({ message, onApplyChanges, session, workspaceId, sho
             <div className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} text-sm whitespace-pre-wrap`}>
               {message.response || (!message.isComplete ? "..." : "")}
             </div>
-            {message.isComplete && (
+            {message.isComplete && !message.isApplied && showActions && onApplyChanges && (
               <div className="mt-4 space-y-4 border-t border-gray-700/10 pt-4">
-                {showActions && onApplyChanges && (
+                {message.isApplying ? (
+                  <div className="flex justify-center mt-4">
+                    <div className="animate-spin rounded-full h-6 w-6 border-2 border-primary border-t-transparent"></div>
+                  </div>
+                ) : (
                   <div className="flex justify-between mt-4">
                     <Button
                       onClick={() => setShowReportModal(true)}

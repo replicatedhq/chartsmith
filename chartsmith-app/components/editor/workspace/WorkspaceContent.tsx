@@ -92,13 +92,11 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     const sub = cf.newSubscription(channel);
 
     sub.on("publication", (message: { data: CentrifugoMessageData }) => {
-      console.log("Received message:", message.data);
       const isWorkspaceUpdatedEvent = message.data.workspace;
 
       if (!isWorkspaceUpdatedEvent) {
         const { message: chatMessage } = message.data;
         if (!chatMessage?.id || !chatMessage.prompt) {
-          console.log("Invalid chat message format:", chatMessage);
           return;
         }
 
@@ -108,6 +106,8 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
           prompt: chatMessage.prompt,
           response: chatMessage.response,
           isComplete: message.data.is_complete === true,  // Only true if explicitly set to true
+          isApplied: chatMessage.is_applied === true || message.data.is_applied === true,
+          isApplying: chatMessage.is_applying === true || message.data.is_applying === true,
         };
 
         setMessages((prevMessages) => {
@@ -125,6 +125,8 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
         const newWorkspace = message.data.workspace;
         if (newWorkspace) {
           // Preserve existing messages when updating workspace
+          const hadIncompleteRevision = workspace.incompleteRevisionNumber !== undefined;
+
           setWorkspace(prev => {
             const updated: Workspace = {
               id: newWorkspace.id,
@@ -137,6 +139,14 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
             };
             return updated;
           });
+
+          // If we had an incomplete revision before but not after, refresh messages,
+          // this is how we ge the message to stop showing a spinner
+          if (hadIncompleteRevision && !newWorkspace.incomplete_revision_number && session) {
+            getWorkspaceMessagesAction(session, workspaceId).then(updatedMessages => {
+              setMessages(updatedMessages);
+            });
+          }
         }
       }
     });
@@ -206,6 +216,10 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     console.log(updatedWorkspace);
     setWorkspace(updatedWorkspace);
     setIsFileTreeVisible(true);
+
+    // Refresh messages
+    const updatedMessages = await getWorkspaceMessagesAction(session, workspace.id);
+    setMessages(updatedMessages);
   }
 
   const handleApplyChanges = async (message: Message) => {
@@ -215,6 +229,10 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
 
     console.log(updatedWorkspace);
     setWorkspace(updatedWorkspace);
+
+    // Refresh messages
+    const updatedMessages = await getWorkspaceMessagesAction(session, workspace.id);
+    setMessages(updatedMessages);
     return;
   };
 

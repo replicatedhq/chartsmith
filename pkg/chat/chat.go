@@ -57,7 +57,9 @@ func ListChatMessagesForWorkspaceSinceRevision(ctx context.Context, workspaceID 
 		workspace_chat.workspace_id,
 		workspace_chat.prompt,
 		workspace_chat.response,
-		workspace_chat.is_complete
+		workspace_chat.is_complete,
+		workspace_chat.is_applied,
+		workspace_chat.is_applying
 	FROM
 		workspace_chat
 	WHERE
@@ -81,6 +83,8 @@ func ListChatMessagesForWorkspaceSinceRevision(ctx context.Context, workspaceID 
 			&message.Prompt,
 			&response,
 			&message.IsComplete,
+			&message.IsApplied,
+			&message.IsApplying,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("error scanning chat message: %w", err)
@@ -106,7 +110,9 @@ func ListChatMessagesForWorkspace(ctx context.Context, workspaceID string) ([]ty
 		workspace_chat.workspace_id,
 		workspace_chat.prompt,
 		workspace_chat.response,
-		workspace_chat.is_complete
+		workspace_chat.is_complete,
+		workspace_chat.is_applied,
+		workspace_chat.is_applying
 	FROM
 		workspace_chat
 	WHERE
@@ -129,6 +135,8 @@ func ListChatMessagesForWorkspace(ctx context.Context, workspaceID string) ([]ty
 			&chat.Prompt,
 			&response,
 			&chat.IsComplete,
+			&chat.IsApplied,
+			&chat.IsApplying,
 		)
 		if err != nil {
 			return nil, err
@@ -154,7 +162,9 @@ func GetChatMessage(ctx context.Context, id string) (*types.Chat, error) {
 		workspace_chat.workspace_id,
 		workspace_chat.prompt,
 		workspace_chat.response,
-		workspace_chat.is_complete
+		workspace_chat.is_complete,
+		workspace_chat.is_applied,
+		workspace_chat.is_applying
 	FROM
 		workspace_chat
 	WHERE
@@ -169,6 +179,8 @@ func GetChatMessage(ctx context.Context, id string) (*types.Chat, error) {
 		&chat.Prompt,
 		&response,
 		&chat.IsComplete,
+		&chat.IsApplied,
+		&chat.IsApplying,
 	)
 
 	if err != nil {
