@@ -24,10 +24,27 @@ run-worker: build
 	@./$(WORKER_BUILD_DIR)/$(WORKER_BINARY_NAME) run
 
 .PHONY: bootstrap
-bootstrap:
+bootstrap: build
 	@echo "Bootstrapping chart..."
 	@./$(WORKER_BUILD_DIR)/$(WORKER_BINARY_NAME) bootstrap \
 		--force
+
+.PHONY: test-data
+test-data:
+	rm -rf ./testdata/data
+	mkdir -p ./testdata/data
+	pg_dump -h localhost -p 5432 -U chartsmith --table=bootstrap_meta --data-only --column-inserts --no-comments chartsmith | awk '/^INSERT/,/;/' | sed 's/public\.//g' > ./testdata/data/bootstrap_meta.sql
+	pg_dump -h localhost -p 5432 -U chartsmith --table=bootstrap_file --data-only --column-inserts --no-comments chartsmith | awk '/^INSERT/,/;/' | sed 's/public\.//g' > ./testdata/data/bootstrap_file.sql
+	pg_dump -h localhost -p 5432 -U chartsmith --table=bootstrap_gvk --data-only --column-inserts --no-comments chartsmith | awk '/^INSERT/,/;/' | sed 's/public\.//g' > ./testdata/data/bootstrap_gvk.sql
+
+
+.PHONY: integration-test
+integration-test: build
+	@echo "Generating schema for integration tests..."
+	rm -rf ./testdata/schema.sql
+	schemahero fixtures --dbname test-db --driver postgres --input-dir ./db/schema/tables --output-dir ./testdata
+	@echo "Running integratioan tests..."
+	@./$(WORKER_BUILD_DIR)/$(WORKER_BINARY_NAME) integration
 
 .PHONY: validate
 validate:
