@@ -41,14 +41,14 @@ schema:
       type: boolean
       constraints:
         notNull: true
-      default: false
+      default: "false"
     - name: is_applying
       type: boolean
       constraints:
         notNull: true
-      default: false
+      default: "false"
     - name: is_ignored
       type: boolean
       constraints:
         notNull: true
-      default: false
+      default: "false"
