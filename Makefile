@@ -37,7 +37,6 @@ test-data:
 	pg_dump -h localhost -p 5432 -U chartsmith --table=bootstrap_file --data-only --column-inserts --no-comments chartsmith | awk '/^INSERT/,/;/' | sed 's/public\.//g' > ./testdata/gen-data/bootstrap_file.sql
 	pg_dump -h localhost -p 5432 -U chartsmith --table=bootstrap_gvk --data-only --column-inserts --no-comments chartsmith | awk '/^INSERT/,/;/' | sed 's/public\.//g' > ./testdata/gen-data/bootstrap_gvk.sql
 
-
 .PHONY: integration-test
 integration-test: build
 	@echo "Generating schema for integration tests..."

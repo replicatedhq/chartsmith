@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 	"os/signal"
+	"strings"
 	"syscall"
 
-	"github.com/replicatedhq/chartsmith/pkg/llm"
+	"github.com/replicatedhq/chartsmith/pkg/integration"
 	"github.com/replicatedhq/chartsmith/pkg/param"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 	"github.com/replicatedhq/chartsmith/pkg/realtime"
@@ -34,6 +35,18 @@ func IntegrationCmd() *cobra.Command {
 				return fmt.Errorf("failed to init params: %w", err)
 			}
 
+			missingParams := []string{}
+
+			if param.Get().AnthropicAPIKey == "" {
+				missingParams = append(missingParams, "ANTHROPIC_API_KEY")
+			}
+			if param.Get().VoyageAPIKey == "" {
+				missingParams = append(missingParams, "VOYAGE_API_KEY")
+			}
+
+			if len(missingParams) > 0 {
+				return fmt.Errorf("missing required params: %s", strings.Join(missingParams, ", "))
+			}
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -70,7 +83,7 @@ func runIntegrationTests(ctx context.Context) error {
 	}
 
 	// run through the integration tests
-	if err := llm.IntegrationTest_ApplyChangesToWorkspace(); err != nil {
+	if err := integration.IntegrationTest_ApplyChangesToWorkspace(); err != nil {
 		return fmt.Errorf("failed to run integration tests: %w", err)
 	}
 
