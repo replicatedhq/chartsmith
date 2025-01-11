@@ -37,6 +37,16 @@ test-data:
 	pg_dump -h localhost -p 5432 -U chartsmith --table=bootstrap_file --data-only --column-inserts --no-comments chartsmith | awk '/^INSERT/,/;/' | sed 's/public\.//g' > ./testdata/gen-data/bootstrap_file.sql
 	pg_dump -h localhost -p 5432 -U chartsmith --table=bootstrap_gvk --data-only --column-inserts --no-comments chartsmith | awk '/^INSERT/,/;/' | sed 's/public\.//g' > ./testdata/gen-data/bootstrap_gvk.sql
 
+.PHONY: dump-workspaces
+dump-workspaces:
+	rm -rf ./testdata/ignored-data
+	mkdir -p ./testdata/ignored-data
+	pg_dump -h localhost -p 5432 -U chartsmith --table=workspace --data-only --format=plain --no-comments --no-owner chartsmith | grep '^COPY\|^[^S]' > ./testdata/ignored-data/workspace.sql
+	pg_dump -h localhost -p 5432 -U chartsmith --table=workspace_chat --data-only --format=plain --no-comments --no-owner chartsmith | grep '^COPY\|^[^S]' > ./testdata/ignored-data/workspace_chat.sql
+	pg_dump -h localhost -p 5432 -U chartsmith --table=workspace_file --data-only --format=plain --no-comments --no-owner chartsmith | grep '^COPY\|^[^S]' > ./testdata/ignored-data/workspace_file.sql
+	pg_dump -h localhost -p 5432 -U chartsmith --table=workspace_gvk --data-only --format=plain --no-comments --no-owner chartsmith | grep '^COPY\|^[^S]' > ./testdata/ignored-data/workspace_gvk.sql
+	pg_dump -h localhost -p 5432 -U chartsmith --table=workspace_revision --data-only --format=plain --no-comments --no-owner chartsmith | grep '^COPY\|^[^S]' > ./testdata/ignored-data/workspace_revision.sql
+
 .PHONY: integration-test
 integration-test: build
 	@echo "Generating schema for integration tests..."
