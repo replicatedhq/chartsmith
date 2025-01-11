@@ -31,11 +31,11 @@ bootstrap: build
 
 .PHONY: test-data
 test-data:
-	rm -rf ./testdata/data
-	mkdir -p ./testdata/data
-	pg_dump -h localhost -p 5432 -U chartsmith --table=bootstrap_meta --data-only --column-inserts --no-comments chartsmith | awk '/^INSERT/,/;/' | sed 's/public\.//g' > ./testdata/data/bootstrap_meta.sql
-	pg_dump -h localhost -p 5432 -U chartsmith --table=bootstrap_file --data-only --column-inserts --no-comments chartsmith | awk '/^INSERT/,/;/' | sed 's/public\.//g' > ./testdata/data/bootstrap_file.sql
-	pg_dump -h localhost -p 5432 -U chartsmith --table=bootstrap_gvk --data-only --column-inserts --no-comments chartsmith | awk '/^INSERT/,/;/' | sed 's/public\.//g' > ./testdata/data/bootstrap_gvk.sql
+	rm -rf ./testdata/gen-data
+	mkdir -p ./testdata/gen-data
+	pg_dump -h localhost -p 5432 -U chartsmith --table=bootstrap_meta --data-only --column-inserts --no-comments chartsmith | awk '/^INSERT/,/;/' | sed 's/public\.//g' > ./testdata/gen-data/bootstrap_meta.sql
+	pg_dump -h localhost -p 5432 -U chartsmith --table=bootstrap_file --data-only --column-inserts --no-comments chartsmith | awk '/^INSERT/,/;/' | sed 's/public\.//g' > ./testdata/gen-data/bootstrap_file.sql
+	pg_dump -h localhost -p 5432 -U chartsmith --table=bootstrap_gvk --data-only --column-inserts --no-comments chartsmith | awk '/^INSERT/,/;/' | sed 's/public\.//g' > ./testdata/gen-data/bootstrap_gvk.sql
 
 
 .PHONY: integration-test

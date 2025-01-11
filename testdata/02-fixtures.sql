@@ -13,4 +13,3 @@ create table "workspace_gvk" ("id" text not null, "workspace_id" text not null, 
 create table "workspace_revision" ("workspace_id" text not null, "revision_number" integer not null, "created_at" timestamp not null, "chat_message_id" text, "created_by_user_id" text not null, "created_type" text not null, "is_complete" boolean not null, primary key ("workspace_id", "revision_number"));
 create table "workspace" ("id" text not null, "created_at" timestamp not null, "last_updated_at" timestamp, "name" text not null, "created_by_user_id" text not null, "created_type" text not null, "current_revision_number" integer not null, primary key ("id"));
 
-INSERT INTO bootstrap_meta (key, value) VALUES ('current_directory_hash', 'fea06d3028c221624ca2c90e5688a6d0c2112b6800482712acca44664e0f5505');

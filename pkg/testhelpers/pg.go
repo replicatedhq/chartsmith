@@ -3,6 +3,7 @@ package testhelpers
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -28,7 +29,7 @@ func CreatePostgresContainer(ctx context.Context) (*PostgresContainer, error) {
 	// or testcontainers acts like something is wrong. i don't know testcontainers
 	// well enough, but also getting real tired or fighting it
 
-	if err := filepath.Walk("testdata/data", func(path string, info os.FileInfo, err error) error {
+	if err := filepath.Walk("testdata/gen-data", func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -44,28 +45,62 @@ func CreatePostgresContainer(ctx context.Context) (*PostgresContainer, error) {
 		return nil, err
 	}
 
-	initScriptsMergedFile, err := os.CreateTemp("", "init-scripts-merged.sql")
-	if err != nil {
+	if err := filepath.Walk("testdata/static-data", func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		if filepath.Ext(path) == ".sql" {
+			// make sure it's not already there
+			initDatafiles = append(initDatafiles, path)
+		}
+		return nil
+	}); err != nil {
 		return nil, err
 	}
-	defer initScriptsMergedFile.Close()
 
-	for _, initDatafile := range initDatafiles {
-		// append to the merged file
-		if err := os.WriteFile(initScriptsMergedFile.Name(), []byte(initDatafile+"\n"), 0644); err != nil {
+	mergedFilename := filepath.Join("testdata", "init-scripts-merged.sql")
+	if _, err := os.Stat(mergedFilename); err == nil {
+		if err := os.Remove(mergedFilename); err != nil {
 			return nil, err
 		}
 	}
 
+	mergedFile, err := os.Create(mergedFilename)
+	if err != nil {
+		return nil, err
+	}
+	defer mergedFile.Close()
+
+	for _, initDatafile := range initDatafiles {
+		b, err := os.ReadFile(initDatafile)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := mergedFile.Write(b); err != nil {
+			return nil, err
+		}
+		if _, err := mergedFile.WriteString("\n"); err != nil {
+			return nil, err
+		}
+	}
+	mergedFile.Close()
+
+	fmt.Printf("running: %s\n", mergedFile.Name())
+
 	pgContainer, err := postgres.RunContainer(ctx,
 		testcontainers.WithImage("pgvector/pgvector:pg16"),
-		postgres.WithInitScripts(initScriptsMergedFile.Name()),
+		postgres.WithInitScripts(mergedFile.Name()),
 		postgres.WithDatabase("test-db"),
 		postgres.WithUsername("postgres"),
 		postgres.WithPassword("postgres"),
 		testcontainers.WithWaitStrategy(
-			wait.ForLog("database system is ready to accept connections").
-				WithOccurrence(2).WithStartupTimeout(10*time.Second)),
+			wait.
+				ForLog("database system is ready to accept connections").
+				WithOccurrence(2).
+				WithStartupTimeout(10*time.Second)),
 	)
 	if err != nil {
 		return nil, err

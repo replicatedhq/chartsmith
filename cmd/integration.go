@@ -18,8 +18,10 @@ import (
 
 func IntegrationCmd() *cobra.Command {
 	integrationCmd := &cobra.Command{
-		Use:   "integration",
-		Short: "Run integration tests",
+		Use:           "integration",
+		Short:         "Run integration tests",
+		SilenceUsage:  true,
+		SilenceErrors: true,
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			v := viper.GetViper()
 			if err := v.BindPFlags(cmd.Flags()); err != nil {
