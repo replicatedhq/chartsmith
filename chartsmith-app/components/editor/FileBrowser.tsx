@@ -2,13 +2,13 @@ import React from "react";
 import { FileTree } from "./FileTree";
 import { useTheme } from "../../contexts/ThemeContext";
 import { FolderPlus, FilePlus } from "lucide-react";
-import { FileNode } from "@/lib/types/files";
+import { WorkspaceFile } from "@/lib/types/workspace";
 
 interface FileBrowserProps {
-  nodes: FileNode[];
-  onFileSelect: (file: FileNode) => void;
+  nodes: WorkspaceFile[];
+  onFileSelect: (file: WorkspaceFile) => void;
   onFileDelete: (path: string) => void;
-  selectedFile?: FileNode;
+  selectedFile?: WorkspaceFile;
 }
 
 export function FileBrowser({ nodes, onFileSelect, onFileDelete, selectedFile }: FileBrowserProps) {
@@ -37,8 +37,7 @@ export function FileBrowser({ nodes, onFileSelect, onFileDelete, selectedFile }:
           </button>
         </div>
       </div>
-      <div className="flex-1 overflow-auto p-2">
-        <FileTree nodes={nodes} onFileSelect={onFileSelect} onFileDelete={onFileDelete} selectedFile={selectedFile} />
+      <div className="flex-1 overflow-auto p-2">         <FileTree files={nodes} onFileSelect={onFileSelect} onFileDelete={onFileDelete} selectedFile={selectedFile} />
       </div>
     </div>
   );

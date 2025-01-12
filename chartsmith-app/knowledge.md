@@ -11,6 +11,12 @@
 - Prefer using centralized state from contexts over local component state when data is shared
 - Files and workspace data come from Centrifugo real-time updates - don't maintain duplicate state
 - Explorer follows new files automatically - selects most recently added file
+- Files have composite identity (id, revision_number) - maintain consistent IDs across revisions
+- Use filePath property name to match backend naming convention
+- Files are represented by WorkspaceFile interface, not DOM File type
+- Always handle potentially undefined file paths from Centrifugo updates with default values
+- Filter out invalid files (missing paths) from Centrifugo updates before processing
+- When auto-selecting files, filter for valid files first to prevent runtime errors
 
 # React Patterns
 
@@ -31,6 +37,15 @@
   - Add min-w-0 to parent flex container to enable truncation
   - Make action buttons flex-shrink-0 to maintain size
   - Keep hover actions outside of text container
+  - For table rows with hover actions:
+    - Keep action buttons always visible unless explicitly required to be hidden
+    - Add cursor-pointer to action buttons
+    - Use consistent padding and icon sizes
+    - Maintain hover states for background and text color
+  - For file explorer panels:
+    - Use fixed width (e.g. w-[280px]) with flex-shrink-0 to prevent resizing
+    - Wrap tree in fixed-width container to maintain consistent width
+    - Add min-w-0 to content area to enable truncation
   - For table rows with hover actions:
     - Keep action buttons always visible unless explicitly required to be hidden
     - Add cursor-pointer to action buttons
@@ -72,6 +87,7 @@
 - Vector similarity searches use `<=>` operator
 - Vectors are stored in native pgvector format but must be cast when scanning to application
 - For array parameters with pgx, use `&pgtype.Array[T]{Elements: slice, Valid: true}`
+- workspace_file table uses composite primary key (id, revision_number) - maintain same id across revisions
 
 # Theme colors:
 

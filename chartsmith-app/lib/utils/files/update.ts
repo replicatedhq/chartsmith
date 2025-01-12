@@ -2,7 +2,7 @@ import { FileNode } from "../../types/files";
 
 export function updateFileContent(files: FileNode[], path: string, content: string): FileNode[] {
   return files.map((file) => {
-    if (file.path === path) {
+    if (file.filePath === path) {
       return { ...file, content };
     }
     if (file.type === "folder" && file.children) {
@@ -17,7 +17,7 @@ export function updateFileContent(files: FileNode[], path: string, content: stri
 
 export function deleteFile(files: FileNode[], path: string): FileNode[] {
   return files.filter((file) => {
-    if (file.path === path) {
+    if (file.filePath === path) {
       return false;
     }
     if (file.type === "folder" && file.children) {

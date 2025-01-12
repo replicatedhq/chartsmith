@@ -4,12 +4,12 @@ import React, { useState } from "react";
 import { FileText, ChevronRight, ChevronDown } from "lucide-react";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useValuesScenarios } from "@/app/contexts/ValuesScenariosContext";
-import { FileNode } from "@/lib/types/files";
+import { WorkspaceFile } from "@/lib/types/workspace";
 
 interface RenderedFileBrowserProps {
-  nodes: FileNode[];
-  onFileSelect: (file: FileNode) => void;
-  selectedFile?: FileNode;
+  nodes: WorkspaceFile[];
+  onFileSelect: (file: WorkspaceFile) => void;
+  selectedFile?: WorkspaceFile;
 }
 
 export function RenderedFileBrowser({ nodes, onFileSelect, selectedFile }: RenderedFileBrowserProps) {
@@ -46,19 +46,18 @@ export function RenderedFileBrowser({ nodes, onFileSelect, selectedFile }: Rende
                     {nodes.map((node) => {
                       const nodeWithScenario = {
                         ...node,
-                        path: `${scenario.id}/${node.path}`,
+                        filePath: `${scenario.id}/${node.filePath}`,
                         scenarioId: scenario.id,
                       };
 
                       return (
                         <button
-                          key={nodeWithScenario.path}
+                          key={nodeWithScenario.filePath}
                           onClick={() => onFileSelect(nodeWithScenario)}
-                          className={`w-full px-2 py-1.5 rounded-sm text-left flex items-center gap-2 transition-colors relative ${selectedFile?.path === nodeWithScenario.path ? "bg-primary/10 text-primary" : theme === "dark" ? "text-gray-300 hover:bg-dark-border/40" : "text-gray-700 hover:bg-gray-100"}`}
+                          className={`w-full px-2 py-1.5 rounded-sm text-left flex items-center gap-2 transition-colors relative ${selectedFile?.filePath === nodeWithScenario.filePath ? "bg-primary/10 text-primary" : theme === "dark" ? "text-gray-300 hover:bg-dark-border/40" : "text-gray-700 hover:bg-gray-100"}`}
                         >
                           <FileText className="w-4 h-4" />
-                          <span className="text-sm">{node.name}</span>
-                          {node.hasError && <div className="absolute right-2 top-1/2 -translate-y-1/2 min-w-[20px] h-5 bg-error text-white text-xs rounded-full flex items-center justify-center">{node.errorCount}</div>}
+                          <span className="text-sm">{node.filePath.split('/').pop() || node.filePath}</span>
                         </button>
                       );
                     })}

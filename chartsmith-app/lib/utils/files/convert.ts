@@ -1,6 +1,16 @@
-import { FileNode, FileMap, FileTreeOptions } from "../../types/files";
+import { FileNode, FileTreeOptions } from "../../types/files";
 
-export function convertFilesToTree(files: FileMap, options: FileTreeOptions = {}): FileNode[] {
+interface ExtendedFileMap {
+  [path: string]: {
+    content: string;
+    id?: string;
+    revisionNumber?: number;
+    chartId?: string;
+    workspaceId?: string;
+  };
+}
+
+export function convertFilesToTree(files: ExtendedFileMap, options: FileTreeOptions = {}): FileNode[] {
   const { sortPaths = true, debug = false } = options;
 
   if (debug) console.log("Converting files to tree:", files);
@@ -23,7 +33,7 @@ export function convertFilesToTree(files: FileMap, options: FileTreeOptions = {}
           name: part,
           type: "folder",
           children: [],
-          path: folderPath,
+          filePath: folderPath,
           content: "", // Adding required content property for folders
         };
         current.push(folder);
@@ -34,11 +44,16 @@ export function convertFilesToTree(files: FileMap, options: FileTreeOptions = {}
 
     // Create file node
     const fileName = parts[parts.length - 1];
+    const fileData = files[path];
     current.push({
       name: fileName,
       type: "file",
-      path: path,
-      content: files[path],
+      filePath: path,
+      content: fileData.content,
+      id: fileData.id,
+      revisionNumber: fileData.revisionNumber,
+      chartId: fileData.chartId,
+      workspaceId: fileData.workspaceId,
     });
   }
 

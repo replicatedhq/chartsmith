@@ -3,15 +3,16 @@ export interface Workspace {
   createdAt: Date;
   lastUpdatedAt: Date;
   name: string;
-  files: File[];
+  charts: Chart[];
+  files: WorkspaceFile[];
   currentRevisionNumber: number;
   incompleteRevisionNumber?: number;
 }
 
-export interface File {
-  path: string;
-  content: string;
-  name: string;
+export interface WorkspaceFile {
+  id: string;
+  filePath: string;  // Required - files without paths are filtered out
+  content: string;   // Required but may be empty string
 }
 
 export interface ValuesScenario {
@@ -20,4 +21,10 @@ export interface ValuesScenario {
   description: string;
   values: string;
   enabled?: boolean;
+}
+
+export interface Chart {
+  id: string;
+  name: string;
+  files: WorkspaceFile[];
 }

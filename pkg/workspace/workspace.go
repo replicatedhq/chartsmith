@@ -66,7 +66,13 @@ func GetWorkspace(ctx context.Context, id string) (*types.Workspace, error) {
 		return nil, fmt.Errorf("error scanning workspace: %w", err)
 	}
 
-	files, err := listFilesForWorkspace(ctx, id, workspace.CurrentRevision)
+	charts, err := listChartsForWorkspace(ctx, id, workspace.CurrentRevision)
+	if err != nil {
+		return nil, fmt.Errorf("error listing charts for workspace: %w", err)
+	}
+	workspace.Charts = charts
+
+	files, err := listFilesWithoutChartsForWorkspace(ctx, id, workspace.CurrentRevision)
 	if err != nil {
 		return nil, fmt.Errorf("error listing files for workspace: %w", err)
 	}
@@ -104,22 +110,71 @@ func GetWorkspace(ctx context.Context, id string) (*types.Workspace, error) {
 	return &workspace, nil
 }
 
-func listFilesForWorkspace(ctx context.Context, workspaceID string, revisionNumber int) ([]types.File, error) {
+func listChartsForWorkspace(ctx context.Context, workspaceID string, revisionNumber int) ([]types.Chart, error) {
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
 
 	query := `SELECT
-		workspace_file.file_path,
-		workspace_file.content,
-		workspace_file.name
+		workspace_chart.id,
+		workspace_chart.name
 	FROM
-		workspace_file
+		workspace_chart
 	WHERE
-		workspace_file.workspace_id = $1 AND workspace_file.revision_number = $2`
+		workspace_chart.workspace_id = $1 and workspace_chart.revision_number = $2`
 
 	rows, err := conn.Query(ctx, query, workspaceID, revisionNumber)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error scanning workspace charts: %w", err)
+	}
+
+	defer rows.Close()
+
+	var charts []types.Chart
+	for rows.Next() {
+		var chart types.Chart
+		err := rows.Scan(
+			&chart.ID,
+			&chart.Name,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("error scanning chart: %w", err)
+		}
+		charts = append(charts, chart)
+	}
+	rows.Close()
+
+	// for each chart, get the files
+	for _, chart := range charts {
+		files, err := listFilesForChart(ctx, chart.ID, revisionNumber)
+		if err != nil {
+			return nil, fmt.Errorf("error listing files for chart: %w", err)
+		}
+		chart.Files = files
+	}
+
+	return charts, nil
+}
+
+func listFilesForChart(ctx context.Context, chartID string, revisionNumber int) ([]types.File, error) {
+	conn := persistence.MustGetPooledPostgresSession()
+	defer conn.Release()
+
+	query := `SELECT
+		id,
+		revision_number,
+		chart_id,
+		workspace_id,
+		file_path,
+		content,
+		summary
+	FROM
+		workspace_file
+	WHERE
+		workspace_file.chart_id = $1 and workspace_file.revision_number = $2`
+
+	rows, err := conn.Query(ctx, query, chartID, revisionNumber)
+	if err != nil {
+		return nil, fmt.Errorf("error scanning chart files: %w", err)
 	}
 
 	defer rows.Close()
@@ -128,12 +183,64 @@ func listFilesForWorkspace(ctx context.Context, workspaceID string, revisionNumb
 	for rows.Next() {
 		var file types.File
 		err := rows.Scan(
-			&file.Path,
+			&file.ID,
+			&file.RevisionNumber,
+			&file.ChartID,
+			&file.WorkspaceID,
+			&file.FilePath,
 			&file.Content,
-			&file.Name,
+			&file.Summary,
 		)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error scanning file: %w", err)
+		}
+		files = append(files, file)
+	}
+	rows.Close()
+
+	return files, nil
+}
+
+func listFilesWithoutChartsForWorkspace(ctx context.Context, workspaceID string, revisionNumber int) ([]types.File, error) {
+	conn := persistence.MustGetPooledPostgresSession()
+	defer conn.Release()
+
+	query := `SELECT
+		id,
+		revision_number,
+		chart_id,
+		workspace_id,
+		file_path,
+		content,
+		summary
+	FROM
+		workspace_file
+	WHERE
+		revision_number = $1 AND
+		workspace_id = $2 AND
+		chart_id IS NULL`
+
+	rows, err := conn.Query(ctx, query, revisionNumber, workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("error scanning files without charts: %w", err)
+	}
+
+	defer rows.Close()
+
+	var files []types.File
+	for rows.Next() {
+		var file types.File
+		err := rows.Scan(
+			&file.ID,
+			&file.RevisionNumber,
+			&file.ChartID,
+			&file.WorkspaceID,
+			&file.FilePath,
+			&file.Content,
+			&file.Summary,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("error scanning file: %w", err)
 		}
 		files = append(files, file)
 	}
@@ -141,99 +248,107 @@ func listFilesForWorkspace(ctx context.Context, workspaceID string, revisionNumb
 	return files, nil
 }
 
-func SetCurrentRevision(ctx context.Context, workspace *types.Workspace, revision int) (*types.Workspace, error) {
-	conn := persistence.MustGetPooledPostgresSession()
-	defer conn.Release()
+func SetCurrentRevision(ctx context.Context, tx pgx.Tx, workspace *types.Workspace, revision int) (*types.Workspace, error) {
+	shouldCommit := false
 
-	tx, err := conn.Begin(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("error starting transaction: %w", err)
+	if tx == nil {
+		conn := persistence.MustGetPooledPostgresSession()
+		defer conn.Release()
+
+		tx, err := conn.Begin(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("error starting transaction: %w", err)
+		}
+		defer tx.Rollback(ctx)
+
+		shouldCommit = true
 	}
-	defer tx.Rollback(ctx)
 
 	query := `UPDATE workspace
 	SET current_revision_number = $1
 	WHERE id = $2`
 
-	_, err = conn.Exec(ctx, query, revision, workspace.ID)
+	_, err := tx.Exec(ctx, query, revision, workspace.ID)
 	if err != nil {
 		return nil, fmt.Errorf("error updating workspace: %w", err)
 	}
 
 	query = `UPDATE workspace_revision set is_complete = true WHERE workspace_id = $1 AND revision_number = $2`
-	_, err = conn.Exec(ctx, query, workspace.ID, revision)
+	_, err = tx.Exec(ctx, query, workspace.ID, revision)
 	if err != nil {
 		return nil, fmt.Errorf("error updating workspace revision: %w", err)
 	}
 
-	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("error committing transaction: %w", err)
+	if shouldCommit {
+		if err := tx.Commit(ctx); err != nil {
+			return nil, fmt.Errorf("error committing transaction: %w", err)
+		}
 	}
 
 	return GetWorkspace(ctx, workspace.ID)
 }
 
-func AddFilesToWorkspace(ctx context.Context, workspace *types.Workspace, revision int) error {
-	conn := persistence.MustGetPooledPostgresSession()
-	defer conn.Release()
+func AddFilesToWorkspace(ctx context.Context, tx pgx.Tx, workspace *types.Workspace, revision int) error {
+	shouldCommit := false
+	if tx == nil {
+		conn := persistence.MustGetPooledPostgresSession()
+		defer conn.Release()
 
-	tx, err := conn.Begin(ctx)
-	if err != nil {
-		return err
+		localTx, err := conn.Begin(ctx)
+		if err != nil {
+			return err
+		}
+		defer localTx.Rollback(ctx)
+
+		tx = localTx
+		shouldCommit = true
 	}
-	defer tx.Rollback(ctx)
+
+	for _, chart := range workspace.Charts {
+		for _, file := range chart.Files {
+			if file.ID == "" {
+				fileID, err := securerandom.Hex(12)
+				if err != nil {
+					return fmt.Errorf("error generating file ID: %w", err)
+				}
+				file.ID = fileID
+
+				query := `INSERT INTO workspace_file (id, revision_number, chart_id, workspace_id, file_path, content, summary, embeddings)
+				VALUES ($1, $2, $3, $4, $5, $6, null, null)`
+				_, err = tx.Exec(ctx, query, file.ID, revision, chart.ID, workspace.ID, file.FilePath, file.Content)
+				if err != nil {
+					return err
+				}
+
+				// TODO notify the worker to capture embeddings for this file
+			}
+		}
+	}
 
 	for _, file := range workspace.Files {
-		// insert the file
-		query := `INSERT INTO workspace_file (workspace_id, file_path, revision_number, created_at, last_updated_at, content, name)
-		VALUES ($1, $2, $3, now(), now(), $4, $5)`
+		if file.ID == "" {
+			fileID, err := securerandom.Hex(12)
+			if err != nil {
+				return fmt.Errorf("error generating file ID: %w", err)
+			}
+			file.ID = fileID
+		}
 
-		_, err = conn.Exec(ctx, query, workspace.ID, file.Path, revision, file.Content, file.Name)
+		query := `INSERT INTO workspace_file (id, revision_number, chart_id, workspace_id, file_path, content, summary, embeddings)
+VALUES ($1, $2, null, $3, $4, $5, null, null)`
+		_, err := tx.Exec(ctx, query, file.ID, revision, workspace.ID, file.FilePath, file.Content)
 		if err != nil {
 			return err
 		}
 
-		// split the file into separate YAML documents
-		for _, document := range strings.Split(file.Content, "---") {
-			// trim the document
-			document = strings.TrimSpace(document)
-
-			// skip empty documents
-			if document == "" {
-				continue
-			}
-
-			// try to parse the gvk in the format of <group>/<version>/<kind>, for well known types, we have a
-			// static string, but there could be emptys too
-			gvk, err := ParseGVK(file.Path, document)
-			if err != nil {
-				continue
-			}
-
-			// insert the document
-			gvkID, err := securerandom.Hex(12)
-			if err != nil {
-				return err
-			}
-			query = `INSERT INTO workspace_gvk (id, workspace_id, gvk, revision_number, file_path, created_at, content)
-			VALUES ($1, $2, $3, $4, $5, now(), $6)`
-
-			_, err = conn.Exec(ctx, query, gvkID, workspace.ID, gvk, revision, file.Path, document)
-			if err != nil {
-				return err
-			}
-
-			// notify the worker
-			query = `SELECT pg_notify('new_gvk', $1)`
-			_, err = conn.Exec(ctx, query, gvkID)
-			if err != nil {
-				return err
-			}
-		}
+		// TODO notify the worker to capture embeddings for this file
 	}
 
-	if err := tx.Commit(ctx); err != nil {
-		return err
+	// only commit the transaction if we started it
+	if shouldCommit {
+		if err := tx.Commit(ctx); err != nil {
+			return err
+		}
 	}
 
 	return nil

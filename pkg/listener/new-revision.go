@@ -10,6 +10,7 @@ import (
 	"github.com/replicatedhq/chartsmith/pkg/llm"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 	"github.com/replicatedhq/chartsmith/pkg/workspace"
+	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 )
 
 func handleNewRevisionNotification(ctx context.Context, id string) error {
@@ -71,22 +72,52 @@ func handleNewRevisionNotification(ctx context.Context, id string) error {
 		return fmt.Errorf("error getting chat message: %w", err)
 	}
 
-	// the response to the chat message on the revision should be a plan to
-	// execute on.
-	relevantGVKs, err := workspace.ChooseRelevantGVKsForChatMessage(ctx, w, rev.RevisionNumber-1, chatMessage)
+	relevantCharts := []workspacetypes.Chart{
+		w.Charts[0],
+	}
+
+	for _, chart := range relevantCharts {
+		relevantFiles, err := workspace.ChooseRelevantFilesForChatMessage(ctx, w, chart.ID, rev.RevisionNumber, chatMessage)
+		if err != nil {
+			return fmt.Errorf("error choosing relevant files: %w", err)
+		}
+
+		updatedChartFiles, err := llm.ApplyPlanToChart(ctx, w, &chart, rev.RevisionNumber, chatMessage, relevantFiles)
+		if err != nil {
+			return fmt.Errorf("error applying changes to workspace: %w", err)
+		}
+
+		// TODO write these to the database
+		fmt.Printf("Updated chart files: %v\n", updatedChartFiles)
+	}
+
+	// mark the chat as complete and applied, add files to the workspace, and set the current revision to what we just created
+	tx, err := conn.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("error choosing relevant GVKs: %w", err)
+		return fmt.Errorf("error beginning transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	if err := workspace.AddFilesToWorkspace(ctx, tx, w, rev.RevisionNumber); err != nil {
+		return fmt.Errorf("error adding files to workspace: %w", err)
 	}
 
-	// get the files from the previous revision for those GVKs
-	files, err := workspace.GetFilesForGVKs(ctx, w.ID, rev.RevisionNumber-1, relevantGVKs)
+	if err := chat.MarkComplete(ctx, tx, chatMessage); err != nil {
+		return fmt.Errorf("error marking chat message as complete: %w", err)
+	}
+	if err := chat.MarkApplied(ctx, tx, chatMessage); err != nil {
+		return fmt.Errorf("error marking chat message as applied: %w", err)
+	}
+
+	updatedWorkspace, err := workspace.SetCurrentRevision(ctx, tx, w, revisionNumber)
 	if err != nil {
-		return fmt.Errorf("error getting files for GVKs: %w", err)
+		return fmt.Errorf("error setting current revision: %w", err)
 	}
 
-	if err := llm.ApplyChangesToWorkspace(ctx, w, rev.RevisionNumber, chatMessage, files); err != nil {
-		return fmt.Errorf("error applying changes to workspace: %w", err)
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("error committing transaction: %w", err)
 	}
 
+	fmt.Printf("Updated workspace: %v\n", updatedWorkspace)
 	return nil
 }

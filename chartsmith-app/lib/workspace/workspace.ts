@@ -1,49 +1,61 @@
 import { getDB } from "../data/db";
 import { getParam } from "../data/param";
 
-import { File, Workspace } from "../types/workspace";
+import { Chart, WorkspaceFile, Workspace } from "../types/workspace";
 import * as srs from "secure-random-string";
 
-export async function createWorkspace(name: string, createdType: string, prompt: string | undefined, userId: string): Promise<Workspace> {
+/**
+ * Creates a new workspace with initialized files, charts, and content
+ *
+ * @param createdType - The creation method (currently only "prompt" is supported)
+ * @param prompt - Optional initial chat message prompt. Required if createdType is "prompt"
+ * @param userId - ID of the user creating the workspace
+ * @returns A Workspace object containing the new workspace's basic info
+ * @throws Will throw an error if database operations fail
+ */
+export async function createWorkspace(createdType: string, prompt: string | undefined, userId: string): Promise<Workspace> {
+  console.log("Creating new workspace: ", createdType, prompt, userId);
   try {
     const id = srs.default({ length: 12, alphanumeric: true });
 
     const db = getDB(await getParam("DB_URI"));
 
-    // Start transaction
     const client = await db.connect();
     try {
       await client.query("BEGIN");
 
+      const boostrapWorkspaceRow = await client.query(`select id, name, current_revision from bootstrap_workspace where name = $1`, ['default-workspace']);
+      if (boostrapWorkspaceRow.rowCount === 0) {
+        throw new Error("No default-workspace found in bootstrap_workspace table");
+      }
+
       await client.query(
         `INSERT INTO workspace (id, created_at, last_updated_at, name, created_by_user_id, created_type, current_revision_number)
-        VALUES ($1, now(), now(), $2, $3, $4, 0)`,
-        [id, name, userId, createdType],
+        VALUES ($1, now(), now(), $2, $3, $4, $5)`,
+        [id, boostrapWorkspaceRow.rows[0].name, userId, createdType, boostrapWorkspaceRow.rows[0].current_revision],
       );
 
-      const bootsrapFiles = await client.query(`SELECT file_path, content, name FROM bootstrap_file`);
-      for (const file of bootsrapFiles.rows) {
-        await client.query(
-          `INSERT INTO workspace_file (workspace_id, file_path, revision_number, created_at, last_updated_at, content, name)
-          VALUES ($1, $2, 0, now(), now(), $3, $4)`,
-          [id, file.file_path, file.content, file.name],
-        );
-      }
-      const bootsrapGVKs = await client.query(`SELECT gvk, file_path, content, summary, embeddings FROM bootstrap_gvk`);
-      for (const gvk of bootsrapGVKs.rows) {
-        const gvkId: string = srs.default({ length: 12, alphanumeric: true });
-        await client.query(
-          `INSERT INTO workspace_gvk (id, workspace_id, gvk, revision_number, file_path, created_at, content, summary, embeddings)
-          VALUES ($1, $2, $3, 0, $4, now(), $5, $6, $7)`,
-          [gvkId, id, gvk.gvk, gvk.file_path, gvk.content, gvk.summary, gvk.embeddings],
-        );
-      }
+      await client.query(`INSERT INTO workspace_revision (workspace_id, revision_number, created_at, created_by_user_id, created_type, is_complete) VALUES ($1, 0, now(), $2, $3, true)`, [id, userId, createdType]);
 
-      await client.query(
-        `INSERT INTO workspace_revision (workspace_id, revision_number, created_at, created_by_user_id, created_type, is_complete)
-        VALUES ($1, 0, now(), $2, $3, true)`,
-        [id, userId, "manual"],
-      );
+      const bootstrapCharts = await client.query(`SELECT id, name FROM bootstrap_chart`);
+      for (const chart of bootstrapCharts.rows) {
+        const chartId = srs.default({ length: 12, alphanumeric: true });
+        await client.query(
+          `INSERT INTO workspace_chart (id, workspace_id, name, revision_number)
+          VALUES ($1, $2, $3, 0)`,
+          [chartId, id, chart.name],
+        );
+
+        const boostrapChartFiles = await client.query(`SELECT file_path, content, summary, embeddings FROM bootstrap_file WHERE chart_id = $1`, [chart.id]);
+        for (const file of boostrapChartFiles.rows) {
+          const fileId = srs.default({ length: 12, alphanumeric: true });
+          await client.query(
+            `INSERT INTO workspace_file (id, revision_number, chart_id, workspace_id, file_path, content, summary, embeddings)
+            VALUES ($1, 0, $2, $3, $4, $5, $6, $7)`,
+            [fileId, chartId, id, file.file_path, file.content, file.summary, file.embeddings],
+          );
+        }
+      }
 
       // commit before sending the notification
       await client.query("COMMIT");
@@ -81,8 +93,9 @@ export async function createWorkspace(name: string, createdType: string, prompt:
       createdAt: new Date(),
       lastUpdatedAt: new Date(),
       currentRevisionNumber: 0,
-      name: name,
+      name: "default-workspace",
       files: [],
+      charts: [],  // Add missing charts property
     };
 
   } catch (err) {
@@ -92,6 +105,48 @@ export async function createWorkspace(name: string, createdType: string, prompt:
 }
 
 export async function listWorkspaces(userId: string): Promise<Workspace[]> {
+
+async function listFilesForWorkspace(workspaceID: string, revisionNumber: number): Promise<WorkspaceFile[]> {
+  try {
+    const db = getDB(await getParam("DB_URI"));
+    const result = await db.query(
+      `
+        SELECT
+          id,
+          revision_number,
+          chart_id,
+          workspace_id,
+          file_path,
+          content,
+          summary
+        FROM
+          workspace_file
+        WHERE
+          revision_number = $1 AND
+          workspace_id = $2
+      `,
+      [revisionNumber, workspaceID],
+    );
+
+    if (result.rows.length === 0) {
+      return [];
+    }
+
+    const files: WorkspaceFile[] = result.rows.map((row: { id: string; file_path: string; content: string; summary: string }) => {
+      return {
+        id: row.id,
+        filePath: row.file_path,
+        content: row.content,
+      };
+    });
+
+    return files;
+  } catch (err) {
+    console.error(err);
+    throw err;
+  }
+}
+
   try {
     const db = getDB(await getParam("DB_URI"));
     const result = await db.query(
@@ -124,6 +179,7 @@ export async function listWorkspaces(userId: string): Promise<Workspace[]> {
         name: row.name,
         currentRevisionNumber: row.current_revision_number,
         files: [],
+        charts: [],  // Add missing charts property
       };
 
       // get the files, only if revision number is > 0
@@ -198,11 +254,18 @@ export async function getWorkspace(id: string): Promise<Workspace | undefined> {
       name: row.name,
       currentRevisionNumber: row.current_revision_number,
       files: [],
+      charts: [],
     };
+
+    // get the charts, only if revision number is > 0
+    if (result.rows[0].current_revision_number > 0) {
+      const charts = await listChartsForWorkspace(id, result.rows[0].current_revision_number);
+      w.charts = charts;
+    }
 
     // get the files, only if revision number is > 0
     if (result.rows[0].current_revision_number > 0) {
-      const files = await listFilesForWorkspace(id, result.rows[0].current_revision_number);
+      const files = await listFilesWithoutChartsForWorkspace(id, result.rows[0].current_revision_number);
       w.files = files;
     }
 
@@ -288,73 +351,75 @@ export async function createRevision(workspaceID: string, chatMessageID: string,
     const newRevisionNumber = revisionResult.rows[0].revision_number;
     const previousRevisionNumber = newRevisionNumber - 1;
 
-    // Copy workspace_file records from previous revision
-    await db.query(
+    // Copy workspace_chart records from previous revision
+    const previousCharts = await db.query(
       `
-        INSERT INTO workspace_file (
-          workspace_id, file_path, revision_number, created_at,
-          last_updated_at, content, name
-        )
         SELECT
-          workspace_id,
-          file_path,
-          $2 as revision_number,
-          NOW() as created_at,
-          NOW() as last_updated_at,
-          content,
+          id,
           name
-        FROM workspace_file
-        WHERE workspace_id = $1
-        AND revision_number = $3
+        FROM workspace_chart
+        WHERE workspace_id = $1 AND revision_number = $2
       `,
-      [workspaceID, newRevisionNumber, previousRevisionNumber]
+      [workspaceID, previousRevisionNumber]
     );
 
-    // Get previous workspace_gvk records
-    const previousGvkResult = await db.query(
+    // insert workspace_chart records with same IDs but new revision number
+    for (const chart of previousCharts.rows) {
+      await db.query(
+        `INSERT INTO workspace_chart (id, revision_number, workspace_id, name) VALUES ($1, $2, $3, $4)`,
+        [chart.id, newRevisionNumber, workspaceID, chart.name]
+      );
+    }
+
+    // Copy workspace_file records from previous revision
+    const previousFiles = await db.query(
       `
         SELECT
-          workspace_id, gvk, file_path, content,
-          summary, embeddings
-        FROM workspace_gvk
+          id,
+          chart_id,
+          workspace_id,
+          file_path,
+          content,
+          summary,
+          embeddings
+        FROM workspace_file
         WHERE workspace_id = $1
         AND revision_number = $2
       `,
       [workspaceID, previousRevisionNumber]
     );
 
-    // Insert workspace_gvk records with new IDs
-    for (const gvk of previousGvkResult.rows) {
-      const id = srs.default({ length: 12, alphanumeric: true });
+    // Insert workspace_file records with same IDs but new revision number
+    for (const file of previousFiles.rows) {
       await db.query(
         `
-          INSERT INTO workspace_gvk (
-            id, workspace_id, gvk, revision_number, file_path,
-            created_at, content, summary, embeddings
+          INSERT INTO workspace_file (
+            id, revision_number, chart_id, workspace_id, file_path,
+            content, summary, embeddings
           )
-          VALUES ($1, $2, $3, $4, $5, NOW(), $6, $7, $8)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         `,
         [
-          id,
-          gvk.workspace_id,
-          gvk.gvk,
+          file.id,  // Keep the same ID
           newRevisionNumber,
-          gvk.file_path,
-          gvk.content,
-          gvk.summary,
-          gvk.embeddings
+          file.chart_id,
+          file.workspace_id,
+          file.file_path,
+          file.content,
+          file.summary,
+          file.embeddings
         ]
       );
     }
+
+    // Commit transaction
+    await db.query('COMMIT');
 
     // Notify about new revision
     await db.query(
       `SELECT pg_notify('new_revision', $1)`,
       [`${workspaceID}/${newRevisionNumber}`]
     );
-
-    // Commit transaction
-    await db.query('COMMIT');
 
     return newRevisionNumber;
 
@@ -366,32 +431,121 @@ export async function createRevision(workspaceID: string, chatMessageID: string,
   }
 }
 
-async function listFilesForWorkspace(workspaceID: string, revisionNumber: number): Promise<File[]> {
+async function listChartsForWorkspace(workspaceID: string, revisionNumber: number): Promise<Chart[]> {
   try {
     const db = getDB(await getParam("DB_URI"));
     const result = await db.query(
       `
-            SELECT
-                workspace_file.file_path,
-                workspace_file.content,
-                workspace_file.name
-            FROM
-                workspace_file
-            WHERE
-                workspace_file.workspace_id = $1 AND workspace_file.revision_number = $2
-        `,
-      [workspaceID, revisionNumber],
+        SELECT
+          id,
+          name
+        FROM
+          workspace_chart
+        WHERE
+          workspace_id = $1 AND revision_number = $2
+      `,
+      [workspaceID, revisionNumber]
     );
 
     if (result.rows.length === 0) {
       return [];
     }
 
-    const files: File[] = result.rows.map((row: { file_path: string; content: string; name: string }) => {
+    const charts: Chart[] = result.rows.map((row: { id: string; name: string }) => {
       return {
-        path: row.file_path,
-        content: row.content,
+        id: row.id,
         name: row.name,
+        files: [],
+       };
+    });
+
+    // get the files for each chart
+    for (const chart of charts) {
+      const files = await listFilesForChart(workspaceID, chart.id, revisionNumber);
+      chart.files = files;
+    }
+
+    return charts;
+
+  } catch (err) {
+    console.error(err);
+    throw err;
+  }
+}
+
+async function listFilesForChart(workspaceID: string, chartID: string, revisionNumber: number): Promise<WorkspaceFile[]> {
+  console.log(`listFilesForChart: ${workspaceID}, ${chartID}, ${revisionNumber}`);
+  try {
+    const db = getDB(await getParam("DB_URI"));
+    const result = await db.query(
+      `
+        SELECT
+          id,
+          revision_number,
+          chart_id,
+          workspace_id,
+          file_path,
+          content,
+          summary
+        FROM
+          workspace_file
+        WHERE
+          workspace_file.chart_id = $1 AND workspace_file.revision_number = $2
+      `,
+      [chartID, revisionNumber]
+    );
+
+    if (result.rows.length === 0) {
+      return [];
+    }
+
+    const files: WorkspaceFile[] = result.rows.map((row: { id: string; file_path: string; content: string; summary: string }) => {
+      return {
+        id: row.id,
+        filePath: row.file_path,
+        content: row.content,
+      };
+    });
+
+    return files;
+  } catch (err){
+    console.error(err);
+    throw err;
+  }
+}
+
+async function listFilesWithoutChartsForWorkspace(workspaceID: string, revisionNumber: number): Promise<WorkspaceFile[]> {
+  try {
+    const db = getDB(await getParam("DB_URI"));
+    const result = await db.query(
+      `
+        SELECT
+          id,
+          revision_number,
+          chart_id,
+          workspace_id,
+          file_path,
+          content,
+          summary
+        FROM
+          workspace_file
+        WHERE
+          revision_number = $1 AND
+          workspace_id = $2 AND
+          chart_id IS NULL
+      `,
+      [revisionNumber, workspaceID],
+    );
+
+    if (result.rows.length === 0) {
+      return [];
+    }
+
+    const files: WorkspaceFile[] = result.rows.map((row: { id: string; file_path: string; content: string; summary: string }) => {
+      return {
+        id: row.id,
+        filePath: row.file_path,
+        content: row.content,
       };
     });
 

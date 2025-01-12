@@ -3,7 +3,6 @@ package llm
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
@@ -36,8 +35,8 @@ func IterationChat(ctx context.Context, w *workspacetypes.Workspace, previousCha
 	filenamesSent := []string{}
 	relevantFileWithPaths := []string{}
 	for _, file := range relevantFiles {
-		filenamesSent = append(filenamesSent, file.Path)
-		relevantFileWithPaths = append(relevantFileWithPaths, fmt.Sprintf("%s: %s", file.Path, file.Content))
+		filenamesSent = append(filenamesSent, file.FilePath)
+		relevantFileWithPaths = append(relevantFileWithPaths, fmt.Sprintf("%s: %s", file.FilePath, file.Content))
 	}
 
 	if err := chat.SetFilesSentForChatMessage(ctx, w.ID, c.ID, filenamesSent); err != nil {
@@ -88,11 +87,11 @@ func IterationChat(ctx context.Context, w *workspacetypes.Workspace, previousCha
 		return stream.Err()
 	}
 
-	if err := chat.SetResponse(ctx, c); err != nil {
+	if err := chat.SetResponse(ctx, nil, c); err != nil {
 		fmt.Printf("Error setting response: %v\n", err)
 		return err
 	}
-	if err := chat.MarkComplete(ctx, c); err != nil {
+	if err := chat.MarkComplete(ctx, nil, c); err != nil {
 		return err
 	}
 
@@ -127,7 +126,7 @@ func ClarificationChat(ctx context.Context, w *workspacetypes.Workspace, previou
 		}
 	}
 
-	messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(initialUserMessage(c.Prompt))))
+	messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(c.Prompt)))
 
 	stream := client.Messages.NewStreaming(context.TODO(), anthropic.MessageNewParams{
 		Model:     anthropic.F(anthropic.ModelClaude3_5Sonnet20241022),
@@ -175,93 +174,11 @@ func ClarificationChat(ctx context.Context, w *workspacetypes.Workspace, previou
 		return stream.Err()
 	}
 
-	if err := chat.SetResponse(ctx, c); err != nil {
+	if err := chat.SetResponse(ctx, nil, c); err != nil {
 		fmt.Printf("Error setting response: %v\n", err)
 		return err
 	}
-	if err := chat.MarkComplete(ctx, c); err != nil {
-		return err
-	}
-
-	e := realtimetypes.ChatMessageUpdatedEvent{
-		WorkspaceID: c.WorkspaceID,
-		Message:     c,
-		IsComplete:  true,
-	}
-
-	if err := realtime.SendEvent(ctx, recipient, e); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func initialUserMessage(prompt string) string {
-	userMessage := "Describe the plan only (do not write code) to create a helm chart based on the following prompt. Do not ask if you should proceed. " + prompt
-	return userMessage
-}
-
-func CreateNewChartFromMessage(ctx context.Context, w *workspacetypes.Workspace, c *chattypes.Chat) error {
-	client, err := newAnthropicClient(ctx)
-	if err != nil {
-		return err
-	}
-
-	stream := client.Messages.NewStreaming(context.TODO(), anthropic.MessageNewParams{
-		Model:     anthropic.F(anthropic.ModelClaude3_5Sonnet20241022),
-		MaxTokens: anthropic.F(int64(8192)),
-		Messages: anthropic.F([]anthropic.MessageParam{
-			anthropic.NewAssistantMessage(anthropic.NewTextBlock(systemPrompt)),
-			anthropic.NewUserMessage(anthropic.NewTextBlock(planKnowledge)),
-			anthropic.NewUserMessage(anthropic.NewTextBlock(initialUserMessage(c.Prompt))),
-		}),
-	})
-
-	userIDs, err := workspace.ListUserIDsForWorkspace(ctx, c.WorkspaceID)
-	if err != nil {
-		return err
-	}
-
-	// minimize database writes by keeping this message in memory while it's streaming back, only writing
-	// to the database when complete.  but still send the message as we receive it over the realtime socket
-	// to the client
-
-	recipient := realtimetypes.Recipient{
-		UserIDs: userIDs,
-	}
-
-	message := anthropic.Message{}
-	for stream.Next() {
-		event := stream.Current()
-		message.Accumulate(event)
-
-		switch delta := event.Delta.(type) {
-		case anthropic.ContentBlockDeltaEventDelta:
-			if delta.Text != "" {
-				c.Response += delta.Text
-
-				e := realtimetypes.ChatMessageUpdatedEvent{
-					WorkspaceID: c.WorkspaceID,
-					Message:     c,
-					IsComplete:  false,
-				}
-
-				if err := realtime.SendEvent(ctx, recipient, e); err != nil {
-					return err
-				}
-			}
-		}
-	}
-
-	if stream.Err() != nil {
-		return stream.Err()
-	}
-
-	if err := chat.SetResponse(ctx, c); err != nil {
-		fmt.Printf("Error setting response: %v\n", err)
-		return err
-	}
-	if err := chat.MarkComplete(ctx, c); err != nil {
+	if err := chat.MarkComplete(ctx, nil, c); err != nil {
 		return err
 	}
 
@@ -290,8 +207,7 @@ func parseArtifactsInResponse(workspace *workspacetypes.Workspace, response stri
 	workspace.Files = []workspacetypes.File{}
 	for _, file := range result.Files {
 		f := workspacetypes.File{
-			Path: file.Path,
-			Name: filepath.Base(file.Path),
+			FilePath: file.Path,
 		}
 
 		if file.Content != "" {

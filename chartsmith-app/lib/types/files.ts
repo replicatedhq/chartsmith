@@ -3,7 +3,11 @@ export interface FileNode {
   type: "file" | "folder";
   children?: FileNode[];
   content: string;
-  path: string;
+  filePath: string;
+  id?: string;
+  revisionNumber?: number;
+  chartId?: string;
+  workspaceId?: string;
   hasError?: boolean;
   errorCount?: number;
   errorLine?: number;
