@@ -1,4 +1,4 @@
-INSERT INTO bootstrap_file (file_path, content, name) VALUES ('go/src/github.com/replicatedhq/chartsmith/bootstrap-chart/.helmignore', '# Patterns to ignore when building packages.
+INSERT INTO bootstrap_file (file_path, content, name) VALUES ('.helmignore', '# Patterns to ignore when building packages.
 # This supports shell glob matching, relative path matching, and
 # negation (prefixed with !). Only one pattern per line.
 .DS_Store
@@ -22,7 +22,7 @@ INSERT INTO bootstrap_file (file_path, content, name) VALUES ('go/src/github.com
 *.tmproj
 .vscode/
 ', '.helmignore');
-INSERT INTO bootstrap_file (file_path, content, name) VALUES ('go/src/github.com/replicatedhq/chartsmith/bootstrap-chart/Chart.yaml', 'apiVersion: v2
+INSERT INTO bootstrap_file (file_path, content, name) VALUES ('Chart.yaml', 'apiVersion: v2
 name: bootstrap-chart
 description: A Helm chart for Kubernetes
 
@@ -52,9 +52,9 @@ dependencies:
   repository: oci://registry.replicated.com/library
   version: 1.0.0-beta.32
 ', 'Chart.yaml');
-INSERT INTO bootstrap_file (file_path, content, name) VALUES ('go/src/github.com/replicatedhq/chartsmith/bootstrap-chart/templates/NOTES.txt', 'You''ve installed the app.
+INSERT INTO bootstrap_file (file_path, content, name) VALUES ('templates/NOTES.txt', 'You''ve installed the app.
 ', 'NOTES.txt');
-INSERT INTO bootstrap_file (file_path, content, name) VALUES ('go/src/github.com/replicatedhq/chartsmith/bootstrap-chart/templates/_helpers.tpl', '{{/*
+INSERT INTO bootstrap_file (file_path, content, name) VALUES ('templates/_helpers.tpl', '{{/*
 Expand the name of the chart.
 */}}
 {{- define "bootstrap-chart.name" -}}
@@ -117,7 +117,7 @@ Create the name of the service account to use
 {{- end }}
 {{- end }}
 ', '_helpers.tpl');
-INSERT INTO bootstrap_file (file_path, content, name) VALUES ('go/src/github.com/replicatedhq/chartsmith/bootstrap-chart/templates/service.yaml', 'apiVersion: v1
+INSERT INTO bootstrap_file (file_path, content, name) VALUES ('templates/service.yaml', 'apiVersion: v1
 kind: Service
 metadata:
   name: {{ include "bootstrap-chart.fullname" . }}
@@ -133,7 +133,7 @@ spec:
   selector:
     {{- include "bootstrap-chart.selectorLabels" . | nindent 4 }}
 ', 'service.yaml');
-INSERT INTO bootstrap_file (file_path, content, name) VALUES ('go/src/github.com/replicatedhq/chartsmith/bootstrap-chart/templates/serviceaccount.yaml', '{{- if .Values.serviceAccount.create -}}
+INSERT INTO bootstrap_file (file_path, content, name) VALUES ('templates/serviceaccount.yaml', '{{- if .Values.serviceAccount.create -}}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -147,7 +147,7 @@ metadata:
 automountServiceAccountToken: {{ .Values.serviceAccount.automount }}
 {{- end }}
 ', 'serviceaccount.yaml');
-INSERT INTO bootstrap_file (file_path, content, name) VALUES ('go/src/github.com/replicatedhq/chartsmith/bootstrap-chart/values.yaml', '# Default values for bootstrap-chart.
+INSERT INTO bootstrap_file (file_path, content, name) VALUES ('values.yaml', '# Default values for bootstrap-chart.
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 

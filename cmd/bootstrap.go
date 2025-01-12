@@ -135,8 +135,8 @@ func runBootstrap(ctx context.Context, pgURI string, chartDir string, force bool
 
 		// insert the file
 		filePath := filepath.ToSlash(path)
-		// remove the chartDir from filePath, so make it relative to that
 
+		// remove the chartDir from filePath, so make it relative to that
 		filePath = strings.TrimPrefix(filePath, chartDir)
 		filePath = strings.TrimPrefix(filePath, "/")
 

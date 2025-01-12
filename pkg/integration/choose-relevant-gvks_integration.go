@@ -29,7 +29,7 @@ func IntegrationTest_ChooseRelevantGVKs() error {
 
 	ctx := context.TODO()
 
-	workspaceID := "TfZJGnk8XzPP" // feom the exported data
+	workspaceID := "nPytmV93RWDx" // feom the exported data
 
 	w, err := workspace.GetWorkspace(ctx, workspaceID)
 	if err != nil {
@@ -63,19 +63,23 @@ func IntegrationTest_ChooseRelevantGVKs() error {
 
 	// iterate throught the GVKs returned and make a list the required files that we found
 	// making sure we don't include duplicated
-	var foundFiles []string
+	var gotFiles []string
+	var gotRequiredFiles []string
 	for _, gvk := range gotGVKs {
+		if !contains(gotFiles, gvk.FilePath) {
+			gotFiles = append(gotFiles, gvk.FilePath)
+		}
 		for _, file := range requiredFiles {
 			if gvk.FilePath == file {
-				if !contains(foundFiles, file) {
-					foundFiles = append(foundFiles, file)
+				if !contains(gotRequiredFiles, file) {
+					gotRequiredFiles = append(gotRequiredFiles, file)
 				}
 			}
 		}
 	}
 
-	if len(foundFiles) != len(requiredFiles) {
-		return fmt.Errorf("expected %d files, got %d", len(requiredFiles), len(foundFiles))
+	if len(gotRequiredFiles) != len(requiredFiles) {
+		return fmt.Errorf("expected %v, got %v", requiredFiles, gotFiles)
 	}
 
 	return nil
