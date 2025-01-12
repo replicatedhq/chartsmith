@@ -31,7 +31,7 @@ func ListUserIDsForWorkspace(ctx context.Context, workspaceID string) ([]string,
 	)
 
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error scanning user ID: %w", err)
 	}
 
 	return []string{userID}, nil
@@ -63,12 +63,12 @@ func GetWorkspace(ctx context.Context, id string) (*types.Workspace, error) {
 	)
 
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error scanning workspace: %w", err)
 	}
 
 	files, err := listFilesForWorkspace(ctx, id, workspace.CurrentRevision)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error listing files for workspace: %w", err)
 	}
 
 	workspace.Files = files
@@ -93,7 +93,7 @@ func GetWorkspace(ctx context.Context, id string) (*types.Workspace, error) {
 	err = row.Scan(&incompleteRevisionNumber)
 	if err != nil {
 		if err != pgx.ErrNoRows {
-			return nil, err
+			return nil, fmt.Errorf("error scanning incomplete revision number: %w", err)
 		}
 	}
 
