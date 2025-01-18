@@ -73,14 +73,14 @@ func buildChartsmithApp(ctx context.Context, source *dagger.Directory, opService
 	})
 	stagingReleaseContainer = stagingReleaseContainer.WithNewFile("/app/.env.local", fmt.Sprintf(
 		`NEXT_PUBLIC_GOOGLE_CLIENT_ID=%s
-    NEXT_PUBLIC_GOOGLE_REDIRECT_URI=%s
-    GOOGLE_CLIENT_SECRET=%s
-    DB_URI=%s
-    HMAC_SECRET=%s
-    CENTRIFUGO_TOKEN_HMAC_SECRET=%s
-    NEXT_PUBLIC_CENTRIFUGO_ADDRESS=%s
-	TOKEN_ENCRYPTION=%s,
-	NEXT_PUBLIC_REPLICATED_REDIRECT_URI=%s
+NEXT_PUBLIC_GOOGLE_REDIRECT_URI=%s
+GOOGLE_CLIENT_SECRET=%s
+DB_URI=%s
+HMAC_SECRET=%s
+CENTRIFUGO_TOKEN_HMAC_SECRET=%s
+NEXT_PUBLIC_CENTRIFUGO_ADDRESS=%s
+TOKEN_ENCRYPTION=%s
+NEXT_PUBLIC_REPLICATED_REDIRECT_URI=%s
 `, mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Staging - Chartsmith Oauth Credentials", "client_id"),
 		mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Staging - Chartsmith Oauth Credentials", "redirect_uri"),
 		mustGetSecretAsPlaintext(context.Background(), opServiceAccount, "Staging - Chartsmith Oauth Credentials", "client_secret"),
@@ -125,13 +125,13 @@ func buildChartsmithApp(ctx context.Context, source *dagger.Directory, opService
 	})
 	prodReleaseContainer = stagingReleaseContainer.WithNewFile("/app/.env.local", fmt.Sprintf(
 		`NEXT_PUBLIC_GOOGLE_CLIENT_ID=%s
-    NEXT_PUBLIC_GOOGLE_REDIRECT_URI=%s
-    GOOGLE_CLIENT_SECRET=%s
-    DB_URI=%s
-    HMAC_SECRET=%s
-    CENTRIFUGO_TOKEN_HMAC_SECRET=%s
-    NEXT_PUBLIC_CENTRIFUGO_ADDRESS=%s
-	TOKEN_ENCRYPTION=%s
+NEXT_PUBLIC_GOOGLE_REDIRECT_URI=%s
+GOOGLE_CLIENT_SECRET=%s
+DB_URI=%s
+HMAC_SECRET=%s
+CENTRIFUGO_TOKEN_HMAC_SECRET=%s
+NEXT_PUBLIC_CENTRIFUGO_ADDRESS=%s
+TOKEN_ENCRYPTION=%s
 `, mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Production - Chartsmith Oauth Credentials", "client_id"),
 		mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Production - Chartsmith Oauth Credentials", "redirect_uri"),
 		mustGetSecretAsPlaintext(context.Background(), opServiceAccount, "Production - Chartsmith Oauth Credentials", "client_secret"),
