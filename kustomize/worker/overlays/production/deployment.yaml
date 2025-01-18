@@ -24,7 +24,7 @@ spec:
           - /go/src/github.com/replicatedhq/chartsmith/bin/chartsmith-worker
         args:
           - "bootstrap"
-          - "--workspace-dir=/bootstrap"
+          - "--workspace-dir=/bootstrap/default-workspace"
         env:
           - name: USE_EC2_PARAMETERS
             value: "true"
