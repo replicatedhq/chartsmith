@@ -47,7 +47,7 @@ spec:
             - /go/src/github.com/replicatedhq/chartsmith/bin/chartsmith-worker
           args:
             - "bootstrap"
-            - "--chart-dir=//go/src/github.com/replicatedhq/chartsmith/bootstrap-chart"
+            - "--workspace-dir=//go/src/github.com/replicatedhq/chartsmith/bootstrap"
           env:
             - name: PG_URI
               valueFrom:
