@@ -7,12 +7,12 @@ interface CentrifugoClaims {
   channels?: string[];
 }
 
-export async function getCentrifugoToken(workspaceID: string): Promise<string> {
-  console.log("getting centrifugo token for workspace", workspaceID);
+export async function getCentrifugoToken(userID: string): Promise<string> {
+  console.log("getting centrifugo token for user", userID);
   try {
     const nowInSeconds = Math.floor(Date.now() / 1000); // Convert milliseconds to seconds
     const claims: CentrifugoClaims = {
-      sub: workspaceID,
+      sub: userID,
       exp: nowInSeconds + 60 * 60, // 1 hour from now
       iat: nowInSeconds, // Issued at current time in seconds
     };
@@ -25,7 +25,7 @@ export async function getCentrifugoToken(workspaceID: string): Promise<string> {
     const key2 = key.slice(-4);
     console.log(`jwtSigningKey: ${key1}...${key2}`);
 
-    const token = jwt.sign(claims, jwtSigningKey);
+    const token = jwt.sign(claims, jwtSigningKey, { algorithm: "HS256" });
     return token;
   } catch (err) {
     console.error(err);
@@ -34,9 +34,10 @@ export async function getCentrifugoToken(workspaceID: string): Promise<string> {
 }
 
 async function getCentrifugoJwtSigningKey(): Promise<jwt.Secret> {
-  if (process.env["CENTRIFUGO_TOKEN_HMAC_SECRET"]) {
-    return process.env["CENTRIFUGO_TOKEN_HMAC_SECRET"];
+  const secret = process.env["CENTRIFUGO_TOKEN_HMAC_SECRET"];
+  if (secret) {
+    return secret.trim(); // Trim any leading/trailing whitespace
   }
 
-  throw new Error("no jwt signing key found, set CENTRIFUGO_TOKEN_HMAC_SECRET");
+  throw new Error("No JWT signing key found, set CENTRIFUGO_TOKEN_HMAC_SECRET");
 }

@@ -45,7 +45,6 @@ func buildChartsmithApp(ctx context.Context, source *dagger.Directory, opService
 		WithSecretVariable("GOOGLE_CLIENT_SECRET", mustGetSecret(context.Background(), opServiceAccount, "Staging - Chartsmith Oauth Credentials", "client_secret")).
 		WithSecretVariable("DB_URI", mustGetSecret(context.Background(), opServiceAccount, "Staging - Postgres", "uri")).
 		WithSecretVariable("HMAC_SECRET", mustGetSecret(context.Background(), opServiceAccount, "Staging - Chartsmith", "hmac_secret")).
-		WithSecretVariable("CENTRIFUGO_TOKEN_HMAC_SECRET", mustGetSecret(context.Background(), opServiceAccount, "Staging - Chartsmith Centrifugo", "hmac_secret")).
 		WithSecretVariable("TOKEN_ENCRYPTION", mustGetSecret(context.Background(), opServiceAccount, "Staging - Chartsmith", "token_encryption")).
 		WithEnvVariable("NEXT_PUBLIC_CENTRIFUGO_ADDRESS", mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Staging - Chartsmith Centrifugo", "client_address")).
 		WithEnvVariable("NEXT_PUBLIC_REPLICATED_REDIRECT_URI", mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Staging - Chartsmith", "replicated_redirect_uri")).
@@ -77,7 +76,6 @@ NEXT_PUBLIC_GOOGLE_REDIRECT_URI=%s
 GOOGLE_CLIENT_SECRET=%s
 DB_URI=%s
 HMAC_SECRET=%s
-CENTRIFUGO_TOKEN_HMAC_SECRET=%s
 NEXT_PUBLIC_CENTRIFUGO_ADDRESS=%s
 TOKEN_ENCRYPTION=%s
 NEXT_PUBLIC_REPLICATED_REDIRECT_URI=%s
@@ -86,7 +84,6 @@ NEXT_PUBLIC_REPLICATED_REDIRECT_URI=%s
 		mustGetSecretAsPlaintext(context.Background(), opServiceAccount, "Staging - Chartsmith Oauth Credentials", "client_secret"),
 		mustGetSecretAsPlaintext(context.Background(), opServiceAccount, "Staging - Postgres", "uri"),
 		mustGetSecretAsPlaintext(context.Background(), opServiceAccount, "Staging - Chartsmith", "hmac_secret"),
-		mustGetSecretAsPlaintext(context.Background(), opServiceAccount, "Staging - Chartsmith Centrifugo", "hmac_secret"),
 		mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Staging - Chartsmith Centrifugo", "client_address"),
 		mustGetSecretAsPlaintext(context.Background(), opServiceAccount, "Staging - Chartsmith", "token_encryption"),
 		mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Staging - Chartsmith", "replicated_redirect_uri"),
@@ -98,7 +95,6 @@ NEXT_PUBLIC_REPLICATED_REDIRECT_URI=%s
 		WithSecretVariable("GOOGLE_CLIENT_SECRET", mustGetSecret(context.Background(), opServiceAccount, "Production - Chartsmith Oauth Credentials", "client_secret")).
 		WithSecretVariable("DB_URI", mustGetSecret(context.Background(), opServiceAccount, "Production - Postgres", "uri")).
 		WithSecretVariable("HMAC_SECRET", mustGetSecret(context.Background(), opServiceAccount, "Production - Chartsmith", "hmac_secret")).
-		WithSecretVariable("CENTRIFUGO_TOKEN_HMAC_SECRET", mustGetSecret(context.Background(), opServiceAccount, "Production - Chartsmith Centrifugo", "hmac_secret")).
 		WithEnvVariable("NEXT_PUBLIC_CENTRIFUGO_ADDRESS", mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Production - Chartsmith Centrifugo", "client_address")).
 		WithSecretVariable("TOKEN_ENCRYPTION", mustGetSecret(context.Background(), opServiceAccount, "Production - Chartsmith", "token_encryption")).
 		WithEnvVariable("NEXT_PUBLIC_REPLICATED_REDIRECT_URI", mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Production - Chartsmith", "replicated_redirect_uri")).
@@ -129,7 +125,6 @@ NEXT_PUBLIC_GOOGLE_REDIRECT_URI=%s
 GOOGLE_CLIENT_SECRET=%s
 DB_URI=%s
 HMAC_SECRET=%s
-CENTRIFUGO_TOKEN_HMAC_SECRET=%s
 NEXT_PUBLIC_CENTRIFUGO_ADDRESS=%s
 TOKEN_ENCRYPTION=%s
 `, mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Production - Chartsmith Oauth Credentials", "client_id"),
@@ -137,7 +132,6 @@ TOKEN_ENCRYPTION=%s
 		mustGetSecretAsPlaintext(context.Background(), opServiceAccount, "Production - Chartsmith Oauth Credentials", "client_secret"),
 		mustGetSecretAsPlaintext(context.Background(), opServiceAccount, "Production - Postgres", "uri"),
 		mustGetSecretAsPlaintext(context.Background(), opServiceAccount, "Production - Chartsmith", "hmac_secret"),
-		mustGetSecretAsPlaintext(context.Background(), opServiceAccount, "Production - Chartsmith Centrifugo", "hmac_secret"),
 		mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Production - Chartsmith Centrifugo", "client_address"),
 		mustGetSecretAsPlaintext(context.Background(), opServiceAccount, "Production - Chartsmith", "token_encryption"),
 	))
