@@ -17,4 +17,4 @@ schema:
       type: integer
       constraints:
         notNull: true
-        default: 0
+      default: 0
