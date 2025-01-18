@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"dagger/chartsmith/internal/dagger"
 	"errors"
 )
@@ -8,12 +9,20 @@ import (
 type Chartsmith struct{}
 
 func (m *Chartsmith) Validate(
+	ctx context.Context,
+
 	// +defaultPath="/"
 	source *dagger.Directory,
 
 	opServiceAccount *dagger.Secret,
 ) (bool, error) {
 	allTestResults := map[string]*ValidateResult{}
+
+	schemaResults, err := validateSchema(ctx, source)
+	if err != nil {
+		return false, err
+	}
+	allTestResults["schema"] = schemaResults
 
 	functionalTestResults, err := functionalTests(source, opServiceAccount)
 	if err != nil {
