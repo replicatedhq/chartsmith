@@ -3,9 +3,19 @@ package types
 import "time"
 
 type File struct {
-	Path    string `json:"path"`
-	Content string `json:"content"`
-	Name    string `json:"name"`
+	ID             string `json:"id"`
+	RevisionNumber int    `json:"revision_number"`
+	ChartID        string `json:"chart_id,omitempty"`
+	WorkspaceID    string `json:"workspace_id"`
+	FilePath       string `json:"filePath"`
+	Content        string `json:"content"`
+	Summary        string `json:"-"`
+}
+
+type Chart struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Files []File `json:"files"`
 }
 
 type Workspace struct {
@@ -17,7 +27,8 @@ type Workspace struct {
 	CurrentRevision          int  `json:"current_revision"`
 	IncompleteRevisionNumber *int `json:"incomplete_revision_number,omitempty"`
 
-	Files []File `json:"files"`
+	Charts []Chart `json:"charts"`
+	Files  []File  `json:"files"`
 }
 
 type Revision struct {

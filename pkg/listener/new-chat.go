@@ -9,6 +9,7 @@ import (
 	"github.com/replicatedhq/chartsmith/pkg/llm"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 	"github.com/replicatedhq/chartsmith/pkg/workspace"
+	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 )
 
 func handleNewChatNotification(ctx context.Context, chatID string) error {
@@ -47,68 +48,87 @@ func handleNewChatNotification(ctx context.Context, chatID string) error {
 		return fmt.Errorf("error getting workspace: %w", err)
 	}
 
+	// there are some shortcuts we take if there isn't a revision the user has accepted yet
+	// because we are operating from the bootstrap workspace
 	if w.CurrentRevision == 0 {
-		workspaceChatMessages, err := chat.ListChatMessagesForWorkspace(ctx, w.ID)
-		if err != nil {
-			return fmt.Errorf("error listing previous chat messages: %w", err)
+		if err := handleFirstRevisionChatMessage(ctx, w, chatMessage); err != nil {
+			return fmt.Errorf("error handling first chat message: %w", err)
 		}
 
-		// remove the chat message with ID == chatID from the list
-		previousChatMessages := []chattypes.Chat{}
-		for _, chat := range workspaceChatMessages {
-			if chat.ID != chatID {
-				previousChatMessages = append(previousChatMessages, chat)
-			}
+		return nil
+	}
+
+	fmt.Printf("Handling new chat for workspace %s\n", w.ID)
+
+	workspaceChatMessages, err := chat.ListChatMessagesForWorkspaceSinceRevision(ctx, w.ID, w.CurrentRevision)
+	if err != nil {
+		return fmt.Errorf("error listing previous chat messages: %w", err)
+	}
+
+	if len(workspaceChatMessages) == 0 {
+		return nil
+	}
+
+	// we want to include all chat messages since the last revision, but not this one
+	// also ignore ignored chat messages
+	previousChatMessages := []chattypes.Chat{}
+	for _, chat := range workspaceChatMessages {
+		if chat.IsIgnored {
+			continue
+		}
+		if chat.ID == chatMessage.ID {
+			continue
 		}
 
-		if len(previousChatMessages) > 0 {
-			fmt.Printf("Handling clarification chat for new workspace %s\n", w.ID)
-			if err := llm.ClarificationChat(ctx, w, previousChatMessages, chatMessage); err != nil {
-				return fmt.Errorf("error creating new chart: %w", err)
-			}
-		} else {
-			fmt.Printf("Handling first chat for workspace %s\n", w.ID)
-			if err := llm.CreateNewChartFromMessage(ctx, w, chatMessage); err != nil {
-				return fmt.Errorf("error creating new chart: %w", err)
-			}
+		previousChatMessages = append(previousChatMessages, chat)
+	}
+
+	currentRevision, err := workspace.GetRevision(ctx, w.ID, w.CurrentRevision)
+	if err != nil {
+		return fmt.Errorf("error getting revision: %w", err)
+	}
+
+	relevantFiles, err := workspace.ChooseRelevantFilesForChatMessage(ctx, w, "", currentRevision.RevisionNumber, chatMessage)
+	if err != nil {
+		return fmt.Errorf("error choosing relevant files: %w", err)
+	}
+
+	if err := llm.IterationChat(ctx, w, previousChatMessages, chatMessage, relevantFiles); err != nil {
+		return fmt.Errorf("error creating new chart: %w", err)
+	}
+
+	return nil
+}
+
+func handleFirstRevisionChatMessage(ctx context.Context, w *workspacetypes.Workspace, chatMessage *chattypes.Chat) error {
+	workspaceChatMessages, err := chat.ListChatMessagesForWorkspace(ctx, w.ID)
+	if err != nil {
+		return fmt.Errorf("error listing previous chat messages: %w", err)
+	}
+
+	// remove the chat message with ID == chatID from the list
+	// also remove ignored chat messages
+	previousChatMessages := []chattypes.Chat{}
+	for _, chat := range workspaceChatMessages {
+		if chat.IsIgnored {
+			continue
+		}
+		if chat.ID == chatMessage.ID {
+			continue
+		}
+
+		previousChatMessages = append(previousChatMessages, chat)
+	}
+
+	if len(previousChatMessages) > 0 {
+		fmt.Printf("Handling clarification chat for new workspace %s\n", w.ID)
+		if err := llm.ClarificationChat(ctx, w, previousChatMessages, chatMessage); err != nil {
+			return fmt.Errorf("error creating new chart: %w", err)
 		}
 	} else {
-		fmt.Printf("Handling new chat for workspace %s\n", w.ID)
-
-		workspaceChatMessages, err := chat.ListChatMessagesForWorkspaceSinceRevision(ctx, w.ID, w.CurrentRevision)
-		if err != nil {
-			return fmt.Errorf("error listing previous chat messages: %w", err)
-		}
-
-		if len(workspaceChatMessages) == 0 {
-			return nil
-		}
-
-		// we want to include all chat messages since the last revision, but not this one
-		previousChatMessages := []chattypes.Chat{}
-		for _, chat := range workspaceChatMessages {
-			if chat.ID != chatMessage.ID {
-				previousChatMessages = append(previousChatMessages, chat)
-			}
-		}
-
-		rev, err := workspace.GetRevision(ctx, w.ID, w.CurrentRevision)
-		if err != nil {
-			return fmt.Errorf("error getting revision: %w", err)
-		}
-
-		relevantGVKs, err := workspace.ChooseRelevantGVKsForChatMessage(ctx, w, rev.RevisionNumber, chatMessage)
-		if err != nil {
-			return fmt.Errorf("error choosing relevant GVKs: %w", err)
-		}
-
-		// get the files from the previous revision for those GVKs
-		files, err := workspace.GetFilesForGVKs(ctx, w.ID, rev.RevisionNumber, relevantGVKs)
-		if err != nil {
-			return fmt.Errorf("error getting files for GVKs: %w", err)
-		}
-
-		if err := llm.IterationChat(ctx, w, previousChatMessages, chatMessage, files); err != nil {
+		fmt.Printf("Creating first user revision for workspace %s\n", w.ID)
+		allChatMessages := append(previousChatMessages, *chatMessage)
+		if err := llm.CreateFirstPlanFromChatMessages(ctx, w, allChatMessages); err != nil {
 			return fmt.Errorf("error creating new chart: %w", err)
 		}
 	}

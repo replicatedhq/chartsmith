@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/replicatedhq/chartsmith/pkg/chat/types"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 )
@@ -198,50 +199,94 @@ func GetChatMessage(ctx context.Context, id string) (*types.Chat, error) {
 	return &chat, nil
 }
 
-func SetResponse(ctx context.Context, c *types.Chat) error {
-	conn := persistence.MustGetPooledPostgresSession()
-	defer conn.Release()
-
+func SetResponse(ctx context.Context, tx pgx.Tx, c *types.Chat) error {
 	query := `UPDATE workspace_chat
 	SET response = $1
 	WHERE id = $2`
 
-	_, err := conn.Exec(ctx, query, c.Response, c.ID)
-	return err
+	if tx == nil {
+		conn := persistence.MustGetPooledPostgresSession()
+		defer conn.Release()
+
+		_, err := conn.Exec(ctx, query, c.Response, c.ID)
+		if err != nil {
+			return fmt.Errorf("error setting response: %w", err)
+		}
+		return nil
+	} else {
+		_, err := tx.Exec(ctx, query, c.Response, c.ID)
+		if err != nil {
+			return fmt.Errorf("error setting response: %w", err)
+		}
+		return nil
+	}
 }
 
-func MarkComplete(ctx context.Context, chat *types.Chat) error {
-	conn := persistence.MustGetPooledPostgresSession()
-	defer conn.Release()
-
+func MarkComplete(ctx context.Context, tx pgx.Tx, chat *types.Chat) error {
 	query := `UPDATE workspace_chat
 	SET is_complete = true, is_ignored = false
 	WHERE id = $1`
 
-	_, err := conn.Exec(ctx, query, chat.ID)
-	return err
+	if tx == nil {
+		conn := persistence.MustGetPooledPostgresSession()
+		defer conn.Release()
+
+		_, err := conn.Exec(ctx, query, chat.ID)
+		if err != nil {
+			return fmt.Errorf("error marking chat message as complete: %w", err)
+		}
+		return nil
+	} else {
+		_, err := tx.Exec(ctx, query, chat.ID)
+		if err != nil {
+			return fmt.Errorf("error marking chat message as complete: %w", err)
+		}
+		return nil
+	}
 }
 
-func MarkApplying(ctx context.Context, chat *types.Chat) error {
-	conn := persistence.MustGetPooledPostgresSession()
-	defer conn.Release()
-
+func MarkApplying(ctx context.Context, tx pgx.Tx, chat *types.Chat) error {
 	query := `UPDATE workspace_chat
 	SET is_applying = true, is_applied = false, is_ignored = false
 	WHERE id = $1`
 
-	_, err := conn.Exec(ctx, query, chat.ID)
-	return err
+	if tx == nil {
+		conn := persistence.MustGetPooledPostgresSession()
+		defer conn.Release()
+
+		_, err := conn.Exec(ctx, query, chat.ID)
+		if err != nil {
+			return fmt.Errorf("error marking chat message as applying: %w", err)
+		}
+		return nil
+	} else {
+		_, err := tx.Exec(ctx, query, chat.ID)
+		if err != nil {
+			return fmt.Errorf("error marking chat message as applying: %w", err)
+		}
+		return nil
+	}
 }
 
-func MarkApplied(ctx context.Context, chat *types.Chat) error {
-	conn := persistence.MustGetPooledPostgresSession()
-	defer conn.Release()
-
+func MarkApplied(ctx context.Context, tx pgx.Tx, chat *types.Chat) error {
 	query := `UPDATE workspace_chat
 	SET is_applied = true, is_applying = false, is_ignored = false
 	WHERE id = $1`
 
-	_, err := conn.Exec(ctx, query, chat.ID)
-	return err
+	if tx == nil {
+		conn := persistence.MustGetPooledPostgresSession()
+		defer conn.Release()
+
+		_, err := conn.Exec(ctx, query, chat.ID)
+		if err != nil {
+			return fmt.Errorf("error marking chat message as applied: %w", err)
+		}
+		return nil
+	} else {
+		_, err := tx.Exec(ctx, query, chat.ID)
+		if err != nil {
+			return fmt.Errorf("error marking chat message as applied: %w", err)
+		}
+		return nil
+	}
 }

@@ -2,9 +2,9 @@
 
 import { useRef, useEffect, useCallback } from "react";
 import type { editor } from "monaco-editor";
-import type { FileNode } from "../components/editor/types";
+import type { WorkspaceFile } from "@/lib/types/workspace";
 
-export function useMonacoEditor(file?: FileNode) {
+export function useMonacoEditor(file?: WorkspaceFile) {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof import("monaco-editor") | null>(null);
   const decorationsRef = useRef<string[]>([]);
@@ -19,32 +19,10 @@ export function useMonacoEditor(file?: FileNode) {
     const monaco = monacoRef.current;
 
     // Clear existing decorations
-    decorationsRef.current = editor.deltaDecorations(decorationsRef.current, []);
+    decorationsRef.current = editor.deltaDecorations(decorationsRef.current, []);    // Initialize empty decorations array - error handling removed since it's not part of File type
+    const newDecorations: editor.IModelDeltaDecoration[] = [];
 
-    // Add new error decorations if needed
-    if (file.hasError && file.errorLine !== undefined) {
-      const newDecorations = [
-        {
-          range: new monaco.Range(file.errorLine, 1, file.errorLine, 1000),
-          options: {
-            isWholeLine: true,
-            className: "bg-error/10",
-            glyphMarginClassName: "error-glyph",
-            linesDecorationsClassName: "error-line",
-            minimap: {
-              color: { id: "minimap.errorHighlight" },
-              position: 1,
-            },
-            overviewRuler: {
-              color: { id: "editorOverviewRuler.errorForeground" },
-              position: monaco.editor.OverviewRulerLane.Right,
-            },
-          },
-        },
-      ];
-
-      decorationsRef.current = editor.deltaDecorations([], newDecorations);
-    }
+    decorationsRef.current = editor.deltaDecorations([], newDecorations);
   }, [file]);
 
   const handleEditorInit = useCallback(
@@ -72,7 +50,7 @@ export function useMonacoEditor(file?: FileNode) {
     if (editorRef.current) {
       setTimeout(updateDecorations, 0);
     }
-  }, [file?.path, file?.errorLine, updateDecorations]);
+  }, [file?.filePath, updateDecorations]);
 
   return { handleEditorInit };
 }

@@ -3,8 +3,18 @@ name: bootstrap_file
 schema:
   postgres:
     primaryKey:
-    - file_path
+    - id
     columns:
+    - name: id
+      type: text
+      constraints:
+        notNull: true
+    - name: chart_id
+      type: text
+    - name: workspace_id
+      type: text
+      constraints:
+        notNull: true
     - name: file_path
       type: text
       constraints:
@@ -13,7 +23,7 @@ schema:
       type: text
       constraints:
         notNull: true
-    - name: name
+    - name: summary
       type: text
-      constraints:
-        notNull: true
+    - name: embeddings
+      type: vector (1024)

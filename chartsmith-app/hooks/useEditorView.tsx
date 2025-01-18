@@ -33,8 +33,15 @@ export function useEditorView(initialView: EditorView = "source", defaultFile?: 
     [viewState],
   );
 
+  interface EditorFileNode {
+    name: string;
+    path: string;
+    content: string;
+    type: "file" | "folder";
+  }
+
   const updateFileSelection = useCallback(
-    (file: FileNode) => {
+    (file: EditorFileNode) => {
       setViewState((prev) => ({
         ...prev,
         [view === "source" ? "sourceFile" : "renderedFile"]: file,

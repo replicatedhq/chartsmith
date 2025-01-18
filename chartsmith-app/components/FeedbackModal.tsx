@@ -60,7 +60,6 @@ export function FeedbackModal({ isOpen, onClose, message, chatId, workspaceId, s
     }
   };
 
-  console.log(prompt);
   // Handle click outside
   const handleClickOutside = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget) {

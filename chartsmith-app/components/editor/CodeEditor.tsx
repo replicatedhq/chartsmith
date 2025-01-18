@@ -1,10 +1,10 @@
 import React from "react";
 import Editor from "@monaco-editor/react";
-import type { FileNode } from "./types";
+import type { WorkspaceFile } from "@/lib/types/workspace";
 import { useMonacoEditor } from "../../hooks/useMonacoEditor";
 
 interface CodeEditorProps {
-  file?: FileNode;
+  file?: WorkspaceFile;
   theme?: "light" | "dark";
   value?: string;
   onChange?: (value: string | undefined) => void;
@@ -42,7 +42,7 @@ export function CodeEditor({ file, theme = "light", value, onChange }: CodeEdito
           hideCursorInOverviewRuler: true,
         }}
         onMount={handleEditorInit}
-        key={`${file?.path}-${theme}`} // Force re-mount when file or theme changes
+        key={`${file?.filePath}-${theme}`} // Force re-mount when file or theme changes
       />
     </div>
   );

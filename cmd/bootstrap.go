@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"hash/fnv"
 	"io"
 	"os"
 	"path/filepath"
@@ -19,17 +20,15 @@ import (
 	"github.com/replicatedhq/chartsmith/pkg/llm"
 	"github.com/replicatedhq/chartsmith/pkg/param"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
-	"github.com/replicatedhq/chartsmith/pkg/workspace"
-	"github.com/replicatedhq/chartsmith/pkg/workspace/types"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"github.com/tuvistavie/securerandom"
+	yaml "gopkg.in/yaml.v2"
 )
 
 func BootstrapCmd() *cobra.Command {
 	bootstrapCmd := &cobra.Command{
 		Use:   "bootstrap",
-		Short: "Bootstrap the initial chart data",
+		Short: "Bootstrap the initial workspace data",
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			v := viper.GetViper()
 			if err := v.BindPFlags(cmd.Flags()); err != nil {
@@ -52,8 +51,8 @@ func BootstrapCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			v := viper.GetViper()
 
-			if err := runBootstrap(cmd.Context(), param.Get().PGURI, v.GetString("chart-dir"), v.GetBool("force")); err != nil {
-				return fmt.Errorf("failed to bootstrap chart: %w", err)
+			if err := runBootstrap(cmd.Context(), param.Get().PGURI, v.GetString("workspace-dir"), v.GetBool("force")); err != nil {
+				return fmt.Errorf("failed to bootstrap workspace: %w", err)
 			}
 
 			return nil
@@ -65,16 +64,20 @@ func BootstrapCmd() *cobra.Command {
 		return nil
 	}
 
-	bootstrapCmd.Flags().String("chart-dir", filepath.Join(wd, "bootstrap-chart"), "Chart directory")
+	bootstrapCmd.Flags().String("workspace-dir", filepath.Join(wd, "bootstrap", "default-workspace"), "Workspace directory")
 	bootstrapCmd.Flags().Bool("force", false, "Force bootstrap even if the directory is already bootstrapped")
 
 	return bootstrapCmd
 }
 
-func runBootstrap(ctx context.Context, pgURI string, chartDir string, force bool) error {
-	currentDirectoryHash, err := directoryHashDeterministic(chartDir)
+func runBootstrap(ctx context.Context, pgURI string, workspaceDir string, force bool) error {
+	// let's generate an ID for this bootstrap workspace, how about using a hash of the workspace dir string?
+	workspaceID := hashString(workspaceDir)
+	workspaceName := filepath.Base(workspaceDir)
+
+	currentDirectoryHash, err := directoryHashDeterministic(workspaceDir)
 	if err != nil {
-		return fmt.Errorf("failed to hash chart directory: %w", err)
+		return fmt.Errorf("failed to hash workspace directory: %w", err)
 	}
 
 	pgOpts := persistence.PostgresOpts{
@@ -87,8 +90,10 @@ func runBootstrap(ctx context.Context, pgURI string, chartDir string, force bool
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
 
-	query := `select value from bootstrap_meta where key = 'current_directory_hash'`
-	row := conn.QueryRow(ctx, query)
+	// since we do want to support multiple bootstrap workspaces, we generate a key for each
+
+	query := `select value from bootstrap_meta where key = 'current_directory_hash' and workspace_id = $1`
+	row := conn.QueryRow(ctx, query, workspaceID)
 	var lastDirectoryHash sql.NullString
 	err = row.Scan(&lastDirectoryHash)
 	if err != nil && err != pgx.ErrNoRows {
@@ -100,7 +105,7 @@ func runBootstrap(ctx context.Context, pgURI string, chartDir string, force bool
 		return nil
 	}
 
-	fmt.Printf("Bootstrapping initial chart data from %s...\n", chartDir)
+	fmt.Printf("Bootstrapping initial workspace data from %s...\n", workspaceDir)
 
 	tx, err := conn.Begin(ctx)
 	if err != nil {
@@ -108,144 +113,120 @@ func runBootstrap(ctx context.Context, pgURI string, chartDir string, force bool
 	}
 	defer tx.Rollback(ctx)
 
-	// remove existing data
-	_, err = tx.Exec(ctx, "DELETE FROM bootstrap_file")
+	// remove existing files
+	_, err = tx.Exec(ctx, "DELETE FROM bootstrap_file where workspace_id = $1", workspaceID)
 	if err != nil {
 		return fmt.Errorf("failed to delete files: %w", err)
 	}
 
-	_, err = tx.Exec(ctx, "DELETE FROM bootstrap_gvk")
+	// remove existing charts
+	_, err = tx.Exec(ctx, "DELETE FROM bootstrap_chart where workspace_id = $1", workspaceID)
 	if err != nil {
-		return fmt.Errorf("failed to delete GVKs: %w", err)
+		return fmt.Errorf("failed to delete charts: %w", err)
 	}
 
-	// walk the chart directory and insert files
-	err = filepath.Walk(chartDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return fmt.Errorf("failed to walk chart directory: %w", err)
-		}
-		if info.IsDir() {
-			return nil
-		}
-
-		content, err := os.ReadFile(path)
-		if err != nil {
-			return fmt.Errorf("failed to read file: %w", err)
-		}
-
-		// insert the file
-		filePath := filepath.ToSlash(path)
-
-		// remove the chartDir from filePath, so make it relative to that
-		filePath = strings.TrimPrefix(filePath, chartDir)
-		filePath = strings.TrimPrefix(filePath, "/")
-
-		name := info.Name()
-
-		_, err = tx.Exec(ctx, `
-            INSERT INTO bootstrap_file (file_path, content, name)
-            VALUES ($1, $2, $3)
-        `, filePath, string(content), name)
-		if err != nil {
-			return fmt.Errorf("failed to insert file: %w", err)
-		}
-
-		// insert the GVK
-		id, err := securerandom.Hex(12)
-		if err != nil {
-			return fmt.Errorf("failed to generate GVK ID: %w", err)
-		}
-
-		gvk, err := workspace.ParseGVK(filePath, string(content))
-		if err != nil {
-			return fmt.Errorf("failed to parse GVK: %w", err)
-		}
-
-		_, err = tx.Exec(ctx, `
-            INSERT INTO bootstrap_gvk (id, gvk, file_path, content)
-            VALUES ($1, $2, $3, $4)
-        `, id, gvk, filePath, content)
-		if err != nil {
-			return fmt.Errorf("failed to insert GVK: %w", err)
-		}
-
-		return nil
-	})
+	_, err = tx.Exec(ctx, "INSERT INTO bootstrap_workspace (id, name, current_revision) VALUES ($1, $2, $3)", workspaceID, workspaceName, 0)
 	if err != nil {
-		return fmt.Errorf("failed to insert GVKs: %w", err)
+		return fmt.Errorf("failed to insert workspace: %w", err)
+	}
+
+	_, err = tx.Exec(ctx, "INSERT INTO bootstrap_revision (workspace_id, revision_number, is_complete) VALUES ($1, $2, $3)", workspaceID, 0, true)
+	if err != nil {
+		return fmt.Errorf("failed to insert revision: %w", err)
+	}
+
+	charts := []string{}
+	chartsDir := filepath.Join(workspaceDir, "charts")
+
+	entries, err := os.ReadDir(chartsDir)
+	if err != nil {
+		return fmt.Errorf("failed to read charts directory: %w", err)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			charts = append(charts, filepath.Join(chartsDir, entry.Name()))
+		}
+	}
+
+	// for each chart in charts, walk and insert the files
+	for _, chart := range charts {
+		fmt.Printf("Processing chart %s...\n", chart)
+
+		chartID := hashString(chart)
+		chartName := ""
+
+		// walk the chart directory and insert files
+		err = filepath.Walk(chart, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return fmt.Errorf("failed to walk chart directory: %w", err)
+			}
+			if info.IsDir() {
+				return nil
+			}
+
+			content, err := os.ReadFile(path)
+			if err != nil {
+				return fmt.Errorf("failed to read file: %w", err)
+			}
+
+			relativePath := strings.TrimPrefix(path, chart)
+			relativePath = strings.TrimPrefix(relativePath, string(os.PathSeparator))
+
+			if relativePath == "Chart.yaml" {
+				// parse and get the chart name
+				n, err := parseChartName(string(content))
+				if err != nil {
+					return fmt.Errorf("failed to parse chart name: %w", err)
+				}
+				chartName = n
+			}
+
+			fmt.Printf("summarizing %s...\n", relativePath)
+			summary, err := llm.SummarizeGVK(ctx, string(content))
+			if err != nil {
+				return fmt.Errorf("failed to summarize GVK: %w", err)
+			}
+
+			fmt.Printf("embedding %s...\n", relativePath)
+			embeddings, err := embedding.Embeddings(summary)
+			if err != nil {
+				return fmt.Errorf("failed to get embeddings: %w", err)
+			}
+
+			_, err = tx.Exec(ctx, `
+				INSERT INTO bootstrap_file (id, chart_id, workspace_id, file_path, content, summary, embeddings)
+				VALUES ($1, $2, $3, $4, $5, $6, $7)
+			`, hashString(relativePath), chartID, workspaceID, relativePath, content, summary, embeddings)
+			if err != nil {
+				return fmt.Errorf("failed to insert file: %w", err)
+			}
+
+			return nil
+		})
+		if err != nil {
+			return fmt.Errorf("failed to insert chart files: %w", err)
+		}
+
+		_, err := tx.Exec(ctx, `
+            INSERT INTO bootstrap_chart (id, workspace_id, name)
+            VALUES ($1, $2, $3)
+        `, chartID, workspaceID, chartName)
+		if err != nil {
+			return fmt.Errorf("failed to insert chart: %w", err)
+		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	// we closed that tx, so now let's iterate through the GVKs and summarize, embeddings them
-
-	rows, err := conn.Query(ctx, `
-        SELECT
-        bootstrap_gvk.id,
-        bootstrap_gvk.gvk,
-        bootstrap_gvk.file_path,
-        bootstrap_gvk.content
-    FROM
-        bootstrap_gvk`)
-	if err != nil {
-		return fmt.Errorf("failed to query GVKs: %w", err)
-	}
-	defer rows.Close()
-
-	type Summarized struct {
-		Content string
-	}
-	summaries := map[string]Summarized{}
-
-	for rows.Next() {
-		var gvk types.GVK
-
-		err := rows.Scan(
-			&gvk.ID,
-			&gvk.GVK,
-			&gvk.FilePath,
-			&gvk.Content,
-		)
-		if err != nil {
-			return fmt.Errorf("failed to scan GVK: %w", err)
-		}
-
-		summaries[gvk.ID] = Summarized{
-			Content: gvk.Content,
-		}
-	}
-	rows.Close()
-
-	// now we have all the summaries, let's insert them
-	for id, summary := range summaries {
-		description, err := llm.SummarizeGVK(ctx, summary.Content)
-		if err != nil {
-			return fmt.Errorf("failed to summarize GVK: %w", err)
-		}
-
-		embeddings, err := embedding.Embeddings(summary.Content)
-		if err != nil {
-			return fmt.Errorf("failed to get embeddings: %w", err)
-		}
-
-		_, err = conn.Exec(ctx, `
-            UPDATE bootstrap_gvk
-            SET summary = $1, embeddings = $2
-            WHERE id = $3
-        `, description, embeddings, id)
-		if err != nil {
-			return fmt.Errorf("failed to update GVK summary: %w", err)
-		}
-	}
-
 	// store the current directory hash
 	_, err = conn.Exec(ctx, `
-        INSERT INTO bootstrap_meta (key, value)
-        VALUES ('current_directory_hash', $1)
-		ON CONFLICT (key) DO UPDATE SET value = $1
-    `, currentDirectoryHash)
+        INSERT INTO bootstrap_meta (key, value, workspace_id)
+        VALUES ('current_directory_hash', $1, $2)
+		ON CONFLICT (key, workspace_id) DO UPDATE SET value = $1
+    `, currentDirectoryHash, workspaceID)
 	if err != nil {
 		return fmt.Errorf("failed to store current directory hash: %w", err)
 	}
@@ -315,4 +296,23 @@ func directoryHashDeterministic(path string) (string, error) {
 	}
 
 	return hex.EncodeToString(hasher.Sum(nil)), nil
+}
+
+func hashString(s string) string {
+	h := fnv.New32a()
+	h.Write([]byte(s))
+	return fmt.Sprintf("%04x", uint16(h.Sum32()))
+}
+
+func parseChartName(chartYAML string) (string, error) {
+	var chart struct {
+		Name string `yaml:"name"`
+	}
+
+	err := yaml.Unmarshal([]byte(chartYAML), &chart)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse chart.yaml: %w", err)
+	}
+
+	return chart.Name, nil
 }

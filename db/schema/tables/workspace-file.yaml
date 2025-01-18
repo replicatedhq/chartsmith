@@ -3,10 +3,19 @@ name: workspace_file
 schema:
   postgres:
     primaryKey:
-    - workspace_id
-    - file_path
+    - id
     - revision_number
     columns:
+    - name: id
+      type: text
+      constraints:
+        notNull: true
+    - name: revision_number
+      type: integer
+      constraints:
+        notNull: false
+    - name: chart_id
+      type: text
     - name: workspace_id
       type: text
       constraints:
@@ -15,21 +24,11 @@ schema:
       type: text
       constraints:
         notNull: true
-    - name: revision_number
-      type: integer
-      constraints:
-        notNull: true
-    - name: created_at
-      type: timestamp
-      constraints:
-        notNull: true
-    - name: last_updated_at
-      type: timestamp
     - name: content
       type: text
       constraints:
         notNull: true
-    - name: name
+    - name: summary
       type: text
-      constraints:
-        notNull: true
+    - name: embeddings
+      type: vector (1024)

@@ -36,9 +36,9 @@ export interface RawMessage {
 
 // Raw workspace data from server before normalization
 export interface RawFile {
-  path: string;
+  id?: string;
+  filePath: string;  // Changed from path to filePath to match actual data
   content: string;
-  name: string;
 }
 
 export interface RawWorkspace {

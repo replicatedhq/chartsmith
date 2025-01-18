@@ -10,8 +10,8 @@ import { usePathname } from "next/navigation";
 import { useSession } from "@/app/hooks/useSession";
 import { getWorkspaceMessagesAction } from "@/lib/workspace/actions/get-workspace-messages";
 import { Message, CentrifugoMessageData } from "@/components/editor/types";
-import { FileNode } from "@/lib/types/files";
-import { Workspace } from "@/lib/types/workspace";
+
+import { Workspace, WorkspaceFile } from "@/lib/types/workspace";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { ChatMessage } from "@/components/editor/chat/ChatMessage";
@@ -31,7 +31,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
   const [workspace, setWorkspace] = useState<Workspace>(initialWorkspace);
   const { isFileTreeVisible, setIsFileTreeVisible } = useWorkspaceUI();
   const [messages, setMessages] = useState<Message[]>([]);
-  const [selectedFile, setSelectedFile] = useState<FileNode | undefined>();
+  const [selectedFile, setSelectedFile] = useState<WorkspaceFile | undefined>();
   const [editorContent, setEditorContent] = useState<string>("");
   const [showClarificationInput, setShowClarificationInput] = useState(false);
 
@@ -44,7 +44,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     usePathname()?.endsWith('/rendered') ? 'rendered' : 'source'
   );
 
-  const renderedFiles: FileNode[] = [];
+  const renderedFiles: WorkspaceFile[] = [];
 
   useEffect(() => {
     if (!session) return;
@@ -54,7 +54,6 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
   useEffect(() => {
     if (!session) return;
     getWorkspaceMessagesAction(session, workspaceId).then(messages => {
-      console.log("Initial messages loaded:", messages);
       setMessages(messages);
     });
   }, [session, workspaceId]); // Include workspaceId since we need to reload messages when it changes
@@ -92,7 +91,6 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     const sub = cf.newSubscription(channel);
 
     sub.on("publication", (message: { data: CentrifugoMessageData }) => {
-      console.log("Received message:", message.data);
       const isWorkspaceUpdatedEvent = message.data.workspace;
 
       if (!isWorkspaceUpdatedEvent) {
@@ -135,7 +133,19 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
               createdAt: new Date(newWorkspace.created_at),
               lastUpdatedAt: new Date(newWorkspace.last_updated_at),
               name: newWorkspace.name,
-              files: newWorkspace.files || prev.files,
+              files: newWorkspace.files ? newWorkspace.files.map(f => {
+                // Use filePath from incoming data, not path
+                if (!f.filePath) {
+                  console.warn("File missing filePath in Centrifugo update:", f);
+                  return null;
+                }
+                return {
+                  id: f.id || '',
+                  filePath: f.filePath,
+                  content: f.content || ''
+                } as WorkspaceFile;
+              }).filter((f): f is WorkspaceFile => f !== null) : prev.files,
+              charts: prev.charts || [],
               currentRevisionNumber: newWorkspace.current_revision,
               incompleteRevisionNumber: newWorkspace.incomplete_revision_number
             };
@@ -165,7 +175,9 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     cf.connect();
     hasConnectedRef.current = true;
 
-    return () => {
+
+
+  return () => {
       hasConnectedRef.current = false;
       cf.disconnect();
       centrifugeRef.current = null;
@@ -174,35 +186,38 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
 
   // Handle auto-selecting new files in follow mode
   useEffect(() => {
-    if (followMode && workspace?.files.length) {
-      const lastFile = workspace.files[workspace.files.length - 1];
-      const fileNode: FileNode = {
-        name: lastFile.name,
-        path: lastFile.path,
-        content: lastFile.content,
-        type: 'file'
-      };
-      setSelectedFile(fileNode);
-      setEditorContent(lastFile.content || "");
-      updateFileSelection(fileNode);
+    if (!followMode || !workspace?.files?.length) {
+      return;
     }
-  }, [workspace?.files.length, followMode, updateFileSelection, workspace?.files]);
+
+    // Find last valid file with a path
+    const validFiles = workspace.files.filter(f => f.filePath);
+    if (!validFiles.length) {
+      console.warn("No valid files with paths found in workspace:", workspace.files);
+      return;
+    }
+
+    const lastFile = validFiles[validFiles.length - 1];
+
+    setSelectedFile({ ...lastFile });
+    setEditorContent(lastFile.content || "");
+    updateFileSelection({
+      name: lastFile.filePath.split('/').pop() || lastFile.filePath,
+      path: lastFile.filePath,
+      content: lastFile.content || "",
+      type: 'file' as const
+    });
+  }, [workspace?.files, followMode, updateFileSelection]);
 
   // Keep editor content in sync with selected file's content
   useEffect(() => {
-    if (selectedFile && workspace) {
-      const currentFile = workspace.files.find((f) => f.path === selectedFile.path);
+    if (selectedFile && workspace?.files) {
+      const currentFile = workspace.files.find((f) => f.filePath === selectedFile.filePath);
       if (currentFile && currentFile.content !== editorContent) {
-        const fileNode: FileNode = {
-          name: currentFile.name,
-          path: currentFile.path,
-          content: currentFile.content,
-          type: 'file'
-        };
-        setEditorContent(fileNode.content || "");
+        setEditorContent(currentFile.content || "");
       }
     }
-  }, [workspace, selectedFile, editorContent]);
+  }, [workspace?.files, selectedFile, editorContent]);
 
   const handleSendMessage = async (message: string) => {
     if (!session || !workspace) return;
@@ -215,7 +230,6 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     const updatedWorkspace = await createRevisionAction(session, workspace.id);
     if (!updatedWorkspace) return;
 
-    console.log(updatedWorkspace);
     setWorkspace(updatedWorkspace);
     setIsFileTreeVisible(true);
 
@@ -229,7 +243,6 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     const updatedWorkspace = await createRevisionAction(session, workspace.id, message.id);
     if (!updatedWorkspace) return;
 
-    console.log(updatedWorkspace);
     setWorkspace(updatedWorkspace);
 
     // Refresh messages
@@ -286,6 +299,8 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
   const showEditor = workspace?.currentRevisionNumber > 0 || workspace?.incompleteRevisionNumber;
 
   if (!session) return null;
+
+  // return null;
 
   // Show chat-only view when there's no revision yet
   if (!showEditor) {
@@ -345,10 +360,15 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
 
   const handleViewChange = () => {
     const newView = view === "source" ? "rendered" : "source";
-    const newFiles = newView === "rendered" ? renderedFiles : workspace.files.map(file => ({
-      name: file.name,
-      path: file.path,
-      content: file.content,
+    const newFiles = newView === "rendered" ? renderedFiles.map(file => ({
+      name: file.filePath ? file.filePath.split('/').pop() || file.filePath : 'unnamed',
+      path: file.filePath || '',
+      content: file.content || '',
+      type: 'file' as const
+    })) : workspace.files.map(file => ({
+      name: file.filePath ? file.filePath.split('/').pop() || file.filePath : 'unnamed',
+      path: file.filePath || '',
+      content: file.content || '',
       type: 'file' as const
     }));
 
@@ -361,10 +381,18 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     toggleView(newFiles);
   };
 
-  const handleFileSelect = (file: FileNode) => {
+  const handleFileSelect = (file: WorkspaceFile) => {
+    if (!('content' in file)) {
+      console.warn("Selected file has no content property:", file);
+    }
     setSelectedFile(file);
     setEditorContent(file.content || "");
-    updateFileSelection(file);
+    updateFileSelection({
+      name: file.filePath.split('/').pop() || file.filePath,
+      path: file.filePath,
+      content: file.content || "",
+      type: 'file' as const
+    });
   };
 
   const handleFileDelete = () => {
@@ -393,12 +421,15 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
             <WorkspaceContainer
               view={view}
               onViewChange={handleViewChange}
-              files={workspace.files.map(file => ({
-                name: file.name,
-                path: file.path,
-                content: file.content,
-                type: 'file' as const
-              }))}
+              files={(() => {
+                const mappedFiles = workspace.files.map(file => ({
+                  name: file.filePath ? file.filePath.split('/').pop() || file.filePath : 'unnamed',
+                  filePath: file.filePath || '',
+                  content: file.content || '',
+                  id: file.id || ''
+                }));
+                return mappedFiles;
+              })()}
               renderedFiles={renderedFiles}
               selectedFile={selectedFile}
               onFileSelect={handleFileSelect}
