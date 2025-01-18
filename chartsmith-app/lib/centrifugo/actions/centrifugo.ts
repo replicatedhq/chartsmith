@@ -10,13 +10,21 @@ interface CentrifugoClaims {
 export async function getCentrifugoToken(workspaceID: string): Promise<string> {
   console.log("getting centrifugo token for workspace", workspaceID);
   try {
+    const nowInSeconds = Math.floor(Date.now() / 1000); // Convert milliseconds to seconds
     const claims: CentrifugoClaims = {
       sub: workspaceID,
-      exp: new Date().getTime() + 60 * 60,
-      iat: new Date().getTime(),
+      exp: nowInSeconds + 60 * 60, // 1 hour from now
+      iat: nowInSeconds, // Issued at current time in seconds
     };
 
     const jwtSigningKey = await getCentrifugoJwtSigningKey();
+
+    // print the 1st 4 and last 4 of the jwtSigningKey to debug
+    const key = jwtSigningKey.toString();
+    const key1 = key.slice(0, 4);
+    const key2 = key.slice(-4);
+    console.log(`jwtSigningKey: ${key1}...${key2}`);
+
     const token = jwt.sign(claims, jwtSigningKey);
     return token;
   } catch (err) {
