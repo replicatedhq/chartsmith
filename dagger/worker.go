@@ -15,7 +15,7 @@ func buildWorker(ctx context.Context, source *dagger.Directory) (*dagger.Contain
 		WithFile("/chartsmith-worker", binary)
 
 	// add the bootstrap chart in so that our init container can use it
-	releaseContainer = releaseContainer.WithDirectory("/chart", source.Directory("bootstrap-chart"))
+	releaseContainer = releaseContainer.WithDirectory("/bootstrap", source.Directory("bootstrap"))
 
 	releaseContainer = releaseContainer.WithEntrypoint([]string{
 		"/chartsmith-worker",
