@@ -9,6 +9,8 @@ import (
 	"github.com/replicatedhq/chartsmith/pkg/chat"
 	"github.com/replicatedhq/chartsmith/pkg/llm"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
+	"github.com/replicatedhq/chartsmith/pkg/realtime"
+	realtimetypes "github.com/replicatedhq/chartsmith/pkg/realtime/types"
 	"github.com/replicatedhq/chartsmith/pkg/workspace"
 	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 )
@@ -87,8 +89,12 @@ func handleNewRevisionNotification(ctx context.Context, id string) error {
 			return fmt.Errorf("error applying changes to workspace: %w", err)
 		}
 
-		// TODO write these to the database
-		fmt.Printf("Updated chart files: %v\n", updatedChartFiles)
+		// update "w" with the new files
+		for i, c := range w.Charts {
+			if c.ID == chart.ID {
+				w.Charts[i].Files = updatedChartFiles
+			}
+		}
 	}
 
 	// mark the chat as complete and applied, add files to the workspace, and set the current revision to what we just created
@@ -98,7 +104,7 @@ func handleNewRevisionNotification(ctx context.Context, id string) error {
 	}
 	defer tx.Rollback(ctx)
 
-	if err := workspace.AddFilesToWorkspace(ctx, tx, w, rev.RevisionNumber); err != nil {
+	if err := workspace.SetFilesInWorkspace(ctx, tx, w, rev.RevisionNumber); err != nil {
 		return fmt.Errorf("error adding files to workspace: %w", err)
 	}
 
@@ -118,6 +124,22 @@ func handleNewRevisionNotification(ctx context.Context, id string) error {
 		return fmt.Errorf("error committing transaction: %w", err)
 	}
 
-	fmt.Printf("Updated workspace: %v\n", updatedWorkspace)
+	e := realtimetypes.WorkspaceRevisionCompletedEvent{
+		Workspace: updatedWorkspace,
+	}
+
+	userIDs, err := workspace.ListUserIDsForWorkspace(ctx, w.ID)
+	if err != nil {
+		return fmt.Errorf("error listing user IDs for workspace: %w", err)
+	}
+
+	recipient := realtimetypes.Recipient{
+		UserIDs: userIDs,
+	}
+
+	if err := realtime.SendEvent(ctx, recipient, e); err != nil {
+		return fmt.Errorf("error sending workspace revision completed event: %w", err)
+	}
+
 	return nil
 }

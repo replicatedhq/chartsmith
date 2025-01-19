@@ -60,6 +60,21 @@ func ApplyPlanToChart(ctx context.Context, w *workspacetypes.Workspace, chart *w
 
 	fullResponseWithTags := ""
 	message := anthropic.Message{}
+
+	updatedFiles := []workspacetypes.File{}
+
+	// copy existing files into the updatedFiles slice
+
+	for _, file := range chart.Files {
+		// bump the revision of each file to the new revision number
+		file.RevisionNumber = revisionNumber
+		updatedFiles = append(updatedFiles, file)
+	}
+
+	for _, file := range updatedFiles {
+		fmt.Printf("Before file: %s:%s\n", file.ID, file.FilePath)
+	}
+
 	for stream.Next() {
 		event := stream.Current()
 		message.Accumulate(event)
@@ -67,16 +82,51 @@ func ApplyPlanToChart(ctx context.Context, w *workspacetypes.Workspace, chart *w
 		switch delta := event.Delta.(type) {
 		case anthropic.ContentBlockDeltaEventDelta:
 			if delta.Text != "" {
-				if err := parseArtifactsInResponse(w, fullResponseWithTags); err != nil {
+				_, files, err := parseArtifactsInResponse(fullResponseWithTags)
+				if err != nil {
 					return nil, fmt.Errorf("error parsing artifacts in response: %w", err)
+				}
+
+				// update our chart object with the new files, merging them in using the path as the key
+				for _, file := range files {
+					found := false
+					for i := range updatedFiles {
+						if updatedFiles[i].FilePath == file.FilePath {
+							found = true
+							// Update the existing file's content while preserving other properties
+							updatedFiles[i].Content = file.Content
+							updatedFiles[i].RevisionNumber = revisionNumber
+							break
+						}
+					}
+					if !found {
+						// For new files, set the revision number
+						file.RevisionNumber = revisionNumber
+						updatedFiles = append(updatedFiles, file)
+					}
 				}
 
 				fullResponseWithTags += delta.Text
 				c.Response = removeHelmsmithTags(ctx, fullResponseWithTags)
 
 				if strings.Contains(fullResponseWithTags, "<helmsmith") || strings.Contains(fullResponseWithTags, "</helmsmith") {
+
+					// make a copy of the chart to send to the client
+					chartCopy := *chart
+					chartCopy.Files = updatedFiles
+
+					// make a copy of the workspace to send to the client
+					workspaceCopy := *w
+
+					// replace the chart in the workspace copy based on the id
+					for i := range workspaceCopy.Charts {
+						if workspaceCopy.Charts[i].ID == chart.ID {
+							workspaceCopy.Charts[i] = chartCopy
+						}
+					}
+
 					e := realtimetypes.WorkspaceUpdatedEvent{
-						Workspace: w,
+						Workspace: &workspaceCopy,
 					}
 
 					fmt.Printf("sending workspace update event to %s\n", recipient.GetUserIDs())
@@ -92,20 +142,9 @@ func ApplyPlanToChart(ctx context.Context, w *workspacetypes.Workspace, chart *w
 		return nil, stream.Err()
 	}
 
-	if len(w.Files) == 0 {
-		return nil, nil
+	for _, file := range updatedFiles {
+		fmt.Printf("Updated file: %s:%s\n", file.ID, file.FilePath)
 	}
 
-	// e := realtimetypes.WorkspaceRevisionCompletedEvent{
-	// 	Workspace: updatedWorkspace,
-	// }
-	// r := realtimetypes.Recipient{
-	// 	UserIDs: userIDs,
-	// }
-
-	// if err := realtime.SendEvent(ctx, r, e); err != nil {
-	// 	return nil, fmt.Errorf("error sending workspace revision completed event: %w", err)
-	// }
-
-	return nil, nil
+	return updatedFiles, nil
 }

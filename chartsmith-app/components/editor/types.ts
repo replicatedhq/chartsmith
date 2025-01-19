@@ -47,6 +47,11 @@ export interface RawWorkspace {
   last_updated_at: string;
   name: string;
   files: RawFile[];
+  charts: {
+    id: string;
+    name: string;
+    files: RawFile[];
+  }[];
   current_revision: number;
   incomplete_revision_number?: number;
 }

@@ -144,12 +144,12 @@ func listChartsForWorkspace(ctx context.Context, workspaceID string, revisionNum
 	rows.Close()
 
 	// for each chart, get the files
-	for _, chart := range charts {
-		files, err := listFilesForChart(ctx, chart.ID, revisionNumber)
+	for i := range charts {
+		files, err := listFilesForChart(ctx, charts[i].ID, revisionNumber)
 		if err != nil {
 			return nil, fmt.Errorf("error listing files for chart: %w", err)
 		}
-		chart.Files = files
+		charts[i].Files = files
 	}
 
 	return charts, nil
@@ -288,7 +288,7 @@ func SetCurrentRevision(ctx context.Context, tx pgx.Tx, workspace *types.Workspa
 	return GetWorkspace(ctx, workspace.ID)
 }
 
-func AddFilesToWorkspace(ctx context.Context, tx pgx.Tx, workspace *types.Workspace, revision int) error {
+func SetFilesInWorkspace(ctx context.Context, tx pgx.Tx, workspace *types.Workspace, revision int) error {
 	shouldCommit := false
 	if tx == nil {
 		conn := persistence.MustGetPooledPostgresSession()
@@ -317,10 +317,17 @@ func AddFilesToWorkspace(ctx context.Context, tx pgx.Tx, workspace *types.Worksp
 				VALUES ($1, $2, $3, $4, $5, $6, null, null)`
 				_, err = tx.Exec(ctx, query, file.ID, revision, chart.ID, workspace.ID, file.FilePath, file.Content)
 				if err != nil {
-					return err
+					return fmt.Errorf("error inserting file: %w", err)
 				}
 
-				// TODO notify the worker to capture embeddings for this file
+			} else {
+				query := `UPDATE workspace_file
+				SET content = $1, embeddings = NULL, summary = NULL
+				WHERE id = $2 AND revision_number = $3`
+				_, err := tx.Exec(ctx, query, file.Content, file.ID, revision)
+				if err != nil {
+					return fmt.Errorf("error updating file: %w", err)
+				}
 			}
 		}
 	}

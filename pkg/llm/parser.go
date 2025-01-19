@@ -53,6 +53,9 @@ func (p *Parser) Parse(chunk string) {
 	for _, match := range startMatches {
 		path := p.buffer[match[2]:match[3]]
 
+		// strip any leading /
+		path = strings.TrimPrefix(path, "/")
+
 		// Check if we already have this file
 		fileExists := false
 		for _, existingFile := range p.result.Files {
