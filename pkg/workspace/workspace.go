@@ -288,6 +288,15 @@ func SetCurrentRevision(ctx context.Context, tx pgx.Tx, workspace *types.Workspa
 	return GetWorkspace(ctx, workspace.ID)
 }
 
+func SetChartName(ctx context.Context, tx pgx.Tx, workspaceID string, chartID string, name string, revisionNumber int) error {
+	query := `UPDATE workspace_chart SET name = $1 WHERE id = $2 AND workspace_id = $3 AND revision_number = $4`
+	_, err := tx.Exec(ctx, query, name, chartID, workspaceID, revisionNumber)
+	if err != nil {
+		return fmt.Errorf("error updating chart name: %w", err)
+	}
+	return nil
+}
+
 func SetFilesInWorkspace(ctx context.Context, tx pgx.Tx, workspace *types.Workspace, revision int) error {
 	shouldCommit := false
 	if tx == nil {

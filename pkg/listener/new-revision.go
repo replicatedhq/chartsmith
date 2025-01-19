@@ -13,6 +13,7 @@ import (
 	realtimetypes "github.com/replicatedhq/chartsmith/pkg/realtime/types"
 	"github.com/replicatedhq/chartsmith/pkg/workspace"
 	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
+	"gopkg.in/yaml.v2"
 )
 
 func handleNewRevisionNotification(ctx context.Context, id string) error {
@@ -78,6 +79,8 @@ func handleNewRevisionNotification(ctx context.Context, id string) error {
 		w.Charts[0],
 	}
 
+	chartIDNameMap := map[string]string{}
+
 	for _, chart := range relevantCharts {
 		relevantFiles, err := workspace.ChooseRelevantFilesForChatMessage(ctx, w, chart.ID, rev.RevisionNumber, chatMessage)
 		if err != nil {
@@ -93,8 +96,23 @@ func handleNewRevisionNotification(ctx context.Context, id string) error {
 		for i, c := range w.Charts {
 			if c.ID == chart.ID {
 				w.Charts[i].Files = updatedChartFiles
+
+				for _, file := range updatedChartFiles {
+					if file.FilePath == "Chart.yaml" {
+						// yaml unmarshal it
+						var chartYaml map[string]interface{}
+						err := yaml.Unmarshal([]byte(file.Content), &chartYaml)
+						if err != nil {
+							return fmt.Errorf("error unmarshalling chart.yaml: %w", err)
+						}
+						chartIDNameMap[chart.ID] = chartYaml["name"].(string)
+
+						w.Charts[i].Name = chartYaml["name"].(string)
+					}
+				}
 			}
 		}
+
 	}
 
 	// mark the chat as complete and applied, add files to the workspace, and set the current revision to what we just created
@@ -103,6 +121,12 @@ func handleNewRevisionNotification(ctx context.Context, id string) error {
 		return fmt.Errorf("error beginning transaction: %w", err)
 	}
 	defer tx.Rollback(ctx)
+
+	for id, name := range chartIDNameMap {
+		if err := workspace.SetChartName(ctx, tx, w.ID, id, name, rev.RevisionNumber); err != nil {
+			return fmt.Errorf("error setting chart name: %w", err)
+		}
+	}
 
 	if err := workspace.SetFilesInWorkspace(ctx, tx, w, rev.RevisionNumber); err != nil {
 		return fmt.Errorf("error adding files to workspace: %w", err)
@@ -115,7 +139,7 @@ func handleNewRevisionNotification(ctx context.Context, id string) error {
 		return fmt.Errorf("error marking chat message as applied: %w", err)
 	}
 
-	updatedWorkspace, err := workspace.SetCurrentRevision(ctx, tx, w, revisionNumber)
+	_, err = workspace.SetCurrentRevision(ctx, tx, w, revisionNumber)
 	if err != nil {
 		return fmt.Errorf("error setting current revision: %w", err)
 	}
@@ -124,8 +148,13 @@ func handleNewRevisionNotification(ctx context.Context, id string) error {
 		return fmt.Errorf("error committing transaction: %w", err)
 	}
 
+	refetchedWorkspace, err := workspace.GetWorkspace(ctx, w.ID)
+	if err != nil {
+		return fmt.Errorf("error getting workspace: %w", err)
+	}
+
 	e := realtimetypes.WorkspaceRevisionCompletedEvent{
-		Workspace: updatedWorkspace,
+		Workspace: refetchedWorkspace,
 	}
 
 	userIDs, err := workspace.ListUserIDsForWorkspace(ctx, w.ID)

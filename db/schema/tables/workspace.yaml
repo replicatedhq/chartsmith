@@ -31,3 +31,4 @@ schema:
       type: integer
       constraints:
         notNull: true
+
