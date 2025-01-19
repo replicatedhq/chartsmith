@@ -5,8 +5,8 @@ const planKnowledge = `
 `
 
 const createKnowledge = `
-- If the chart is named 'bootstrap-chart', rename it to an appopriate name. The word "replicated" is not part of the name.
-- If the chart is named 'bootstrap-chart', don't share that we are editing a chart or transforming a chart. Phrase everything as if we are creating a new chart.
+- If the chart is named 'new-chart', rename it to an appopriate name. The word "replicated" is not part of the name.
+- If the chart is named 'new-chart', don't share that we are editing a chart or transforming a chart. Phrase everything as if we are creating a new chart.
 - Never mention renaming the chart.
 - If there is a replicated subchart defined, do not remove it.
 - Modify this chart to meet the plan.
