@@ -10,7 +10,10 @@
 
 - Prefer using centralized state from contexts over local component state when data is shared
 - Files and workspace data come from Centrifugo real-time updates - don't maintain duplicate state
-- Explorer follows new files automatically - selects most recently added file
+- Explorer follows new files automatically:
+  - Selects most recently added or modified file
+  - Tracks both workspace files and chart files
+  - Updates selection on both new files and content changes
 - Files have composite identity (id, revision_number) - maintain consistent IDs across revisions
 - Use filePath property name to match backend naming convention
 - Files are represented by WorkspaceFile interface, not DOM File type
@@ -31,8 +34,12 @@
 
 - Use min-w-[size] instead of w-[size] for fixed-width sections in flex layouts to prevent overflow
 - Keep flex-1 on growing sections between fixed-width elements
-- For nav bars with 3 sections (left, center, right), use min-width on outer sections to prevent squishing
-- For file explorer items with hover actions:
+- For nav bars with 3 sections (left, center, right), use min-width on outer sections to prevent squishing  - File explorer auto-expansion:
+    - Automatically expand parent folders when new files are added
+    - Expand new chart nodes and their file paths automatically
+    - Preserve user's manual expand/collapse state for existing folders
+    
+  - For file explorer items with hover actions:
   - Use truncate on text elements to prevent wrapping
   - Add min-w-0 to parent flex container to enable truncation
   - Make action buttons flex-shrink-0 to maintain size
@@ -43,7 +50,8 @@
     - Use consistent padding and icon sizes
     - Maintain hover states for background and text color
   - For file explorer panels:
-    - Use fixed width (e.g. w-[280px]) with flex-shrink-0 to prevent resizing
+    - Use fixed width w-[280px] consistently across nested containers
+    - Use flex-shrink-0 to prevent resizing
     - Wrap tree in fixed-width container to maintain consistent width
     - Add min-w-0 to content area to enable truncation
   - For table rows with hover actions:

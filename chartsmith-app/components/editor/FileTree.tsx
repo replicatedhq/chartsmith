@@ -1,8 +1,8 @@
 import React from "react";
-import { FolderOpen, FileText, ChevronDown, ChevronRight, Trash2, FilePlus, FolderPlus } from "lucide-react";
+import { FileText, ChevronDown, ChevronRight, Trash2 } from "lucide-react";
 import { useTheme } from "../../contexts/ThemeContext";
 import { DeleteFileModal } from "../DeleteFileModal";
-import { WorkspaceFile } from "@/lib/types/workspace";
+import { Chart, WorkspaceFile } from "@/lib/types/workspace";
 
 interface TreeNode {
   id: string;
@@ -18,11 +18,81 @@ interface FileTreeProps {
   onFileSelect: (file: WorkspaceFile) => void;
   onFileDelete: (filePath: string) => void;
   selectedFile?: WorkspaceFile;
+  charts: Chart[];  // Add charts to props
 }
 
-export function FileTree({ files = [], onFileSelect, onFileDelete, selectedFile }: FileTreeProps) {
+export function FileTree({ files = [], charts = [], onFileSelect, onFileDelete, selectedFile }: FileTreeProps) {
   const { theme } = useTheme();
-  const [expandedFolders, setExpandedFolders] = React.useState<Set<string>>(new Set(["templates"]));
+  // Track previous files to detect new ones
+  const prevFilesRef = React.useRef<WorkspaceFile[]>([]);
+  const prevChartsRef = React.useRef<Chart[]>([]);
+
+  // Initialize expanded folders state with all chart IDs and folder paths
+  const [expandedFolders, setExpandedFolders] = React.useState<Set<string>>(() => {
+    const expanded = new Set(charts.map(chart => chart.id));
+
+    // Add all folder paths to expanded set
+    charts.forEach(chart => {
+      chart.files.forEach(file => {
+        const parts = file.filePath.split('/');
+        let path = '';
+        // Add each level of the path to expanded folders
+        for (let i = 0; i < parts.length - 1; i++) {
+          path = path ? `${path}/${parts[i]}` : parts[i];
+          expanded.add(path);
+        }
+      });
+    });
+
+    return expanded;
+  });
+
+  // Expand parent folders when new files are added
+  React.useEffect(() => {
+    const newFiles = files.filter(file =>
+      !prevFilesRef.current.some(prevFile => prevFile.filePath === file.filePath)
+    );
+
+    const newCharts = charts.filter(chart =>
+      !prevChartsRef.current.some(prevChart => prevChart.id === chart.id)
+    );
+
+    if (newFiles.length > 0 || newCharts.length > 0) {
+      setExpandedFolders(prev => {
+        const expanded = new Set(prev);
+
+        // Expand parent folders of new files
+        newFiles.forEach(file => {
+          const parts = file.filePath.split('/');
+          let path = '';
+          for (let i = 0; i < parts.length - 1; i++) {
+            path = path ? `${path}/${parts[i]}` : parts[i];
+            expanded.add(path);
+          }
+        });
+
+        // Expand new charts
+        newCharts.forEach(chart => {
+          expanded.add(chart.id);
+          // Also expand parent folders of all files in new charts
+          chart.files.forEach(file => {
+            const parts = file.filePath.split('/');
+            let path = '';
+            for (let i = 0; i < parts.length - 1; i++) {
+              path = path ? `${path}/${parts[i]}` : parts[i];
+              expanded.add(path);
+            }
+          });
+        });
+
+        return expanded;
+      });
+    }
+
+    prevFilesRef.current = files;
+    prevChartsRef.current = charts;
+  }, [files, charts]);
+
 
   const [deleteModal, setDeleteModal] = React.useState<{
     isOpen: boolean;
@@ -35,71 +105,66 @@ export function FileTree({ files = [], onFileSelect, onFileDelete, selectedFile 
   });
 
   // Convert flat file list into tree structure
-  const buildFileTree = (files: WorkspaceFile[] = []) => {
-    const tree: Record<string, TreeNode> = {};
+  const buildFileTree = (charts: Chart[] = []) => {
+    // Create tree nodes for each chart
+    const treeNodes = charts.map(chart => {
+      // Create the chart root node
+      const chartNode: TreeNode = {
+        name: chart.name,
+        id: chart.id,
+        filePath: chart.id,
+        type: "folder",
+        content: "",
+        children: []
+      };
 
-    // First create folder nodes
-    files.forEach((file) => {
+      // Create a map to store folder nodes for this chart
+      const folderMap: Record<string, TreeNode> = {};
+
+      // Add all files under this chart, maintaining their path structure
+      chart.files.forEach((file) => {
       if (!file || !file.filePath) {
         console.warn('Invalid file:', file);
         return;
       }
 
-      const parts = file.filePath.split("/");
-      let currentPath = "";
+      const parts = file.filePath.split('/');
+      let currentNode = chartNode;
 
-      parts.slice(0, -1).forEach((part) => {
-        const parentPath = currentPath;
-        currentPath = currentPath ? `${currentPath}/${part}` : part;
-
-        if (!tree[currentPath]) {
-          tree[currentPath] = {
-            name: part,
-            id: `folder-${currentPath}`,
-            filePath: currentPath,
-            content: "",  // Empty string for folders
-            type: "folder" as const,
-            children: [] as TreeNode[]  // Initialize with proper type
+      // Create folder structure
+      for (let i = 0; i < parts.length - 1; i++) {
+        const folderPath = parts.slice(0, i + 1).join('/');
+        if (!folderMap[folderPath]) {
+          const folderNode: TreeNode = {
+            name: parts[i],
+            id: `folder-${folderPath}`,
+            filePath: folderPath,
+            type: "folder",
+            content: "",
+            children: []
           };
-
-          if (parentPath && tree[parentPath] && tree[parentPath].children) {
-            tree[parentPath].children.push(tree[currentPath]);
-          }
+          folderMap[folderPath] = folderNode;
+          currentNode.children.push(folderNode);
         }
+        currentNode = folderMap[folderPath];
+      }
+
+      // Add the file to its parent folder
+      currentNode.children.push({
+        ...file,
+        name: parts[parts.length - 1],
+        type: "file" as const,
+        children: []
       });
     });
 
-    // Then add files to their parent folders
-    files.forEach((file) => {
-      const parts = file.filePath.split("/");
-      if (parts.length === 1) {
-        // Root level files
-        if (!tree[file.filePath]) {          tree[file.filePath] = { 
-            ...file,
-            name: file.filePath.split('/').pop() || file.filePath,
-            type: "file" as const,
-            children: [] as TreeNode[]
-          };
-        }
-      } else {
-        // Files in folders
-        const parentPath = parts.slice(0, -1).join("/");
-        if (tree[parentPath]) {
-          tree[parentPath].children!.push({
-            ...file,
-            name: file.filePath.split('/').pop() || file.filePath,
-            type: "file" as const,
-            children: [] as TreeNode[]
-          });
-        }
-      }
+      return chartNode;
     });
 
-    const rootNodes = Object.values(tree).filter((item) => !item.filePath.includes("/"));
-    return rootNodes;
+    return treeNodes;
   };
 
-  const treeNodes = buildFileTree(files);
+  const treeNodes = buildFileTree(charts);
 
   const toggleFolder = (path: string) => {
     const newExpanded = new Set(expandedFolders);
@@ -149,7 +214,13 @@ export function FileTree({ files = [], onFileSelect, onFileDelete, selectedFile 
       >
         <span className="w-4 h-4 mr-1">{node.type === "folder" && (expandedFolders.has(node.filePath) ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />)}</span>
         {node.type === "folder" ? (
-          <FolderOpen className={`w-4 h-4 mr-2 ${expandedFolders.has(node.filePath) ? "text-primary" : theme === "dark" ? "text-blue-400" : "text-blue-500"}`} />
+          charts.find(c => c.id === node.id) ? (
+            <div className={`w-4 h-4 mr-2 ${theme === "dark" ? "text-white" : "text-[#0F1689]"}`}>
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 0C5.383 0 0 5.383 0 12s5.383 12 12 12 12-5.383 12-12S18.617 0 12 0zm0 3c.68 0 1.34.068 1.982.191L13.4 4.74c-.46-.064-.927-.1-1.4-.1-.474 0-.94.036-1.4.1l-.582-1.55C10.66 3.069 11.32 3 12 3zm-6 9c0-1.293.416-2.49 1.121-3.467l1.046 1.046c-.11.293-.167.61-.167.942 0 .332.057.65.167.942l-1.046 1.046A5.972 5.972 0 016 12zm6 6c-1.293 0-2.49-.416-3.467-1.121l1.046-1.046c.293.11.61.167.942.167.332 0 .65-.057.942-.167l1.046 1.046A5.972 5.972 0 0112 18zm0-3c-1.657 0-3-1.343-3-3s1.343-3 3-3 3 1.343 3 3-1.343 3-3 3zm6-3c0 1.293-.416 2.49-1.121 3.467l-1.046-1.046c.11-.293.167-.61.167-.942 0-.332-.057-.65-.167-.942l1.046-1.046A5.972 5.972 0 0118 12z" fill="currentColor"/>
+              </svg>
+            </div>
+          ) : null
         ) : (
           <FileText className={`w-4 h-4 mr-2 ${selectedFile?.filePath === node.filePath ? "text-primary" : theme === "dark" ? "text-gray-400" : "text-gray-500"}`} />
         )}
@@ -186,45 +257,8 @@ export function FileTree({ files = [], onFileSelect, onFileDelete, selectedFile 
     </div>
   );
 
-  const handleNewFile = () => {
-    // TODO: Implement new file creation
-    console.log("Create new file");
-  };
-
-  const handleNewFolder = () => {
-    // TODO: Implement new folder creation
-    console.log("Create new folder");
-  };
-
   return (
-    <div className={`h-full border-r flex-shrink-0 flex flex-col ${theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"}`}>
-      <div className={`p-2 text-sm border-b flex items-center justify-between ${theme === "dark" ? "text-gray-400 border-dark-border" : "text-gray-500 border-gray-200"}`}>
-        <span>EXPLORER</span>
-        <div className="flex items-center gap-1">
-          <button 
-            onClick={handleNewFile} 
-            className={`p-1 rounded transition-colors ${
-              theme === "dark" 
-                ? "hover:bg-dark-border/40" 
-                : "hover:bg-gray-100"
-            }`} 
-            title="New File"
-          >
-            <FilePlus className="w-4 h-4" />
-          </button>
-          <button 
-            onClick={handleNewFolder} 
-            className={`p-1 rounded transition-colors ${
-              theme === "dark" 
-                ? "hover:bg-dark-border/40" 
-                : "hover:bg-gray-100"
-            }`} 
-            title="New Folder"
-          >
-            <FolderPlus className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
+    <>
       <div className="flex-1 overflow-auto p-2">
         {treeNodes
           .sort((a, b) => {
@@ -248,6 +282,6 @@ export function FileTree({ files = [], onFileSelect, onFileDelete, selectedFile 
           setDeleteModal({ isOpen: false, filePath: "", isRequired: false });
         }}
       />
-    </div>
+    </>
   );
 }

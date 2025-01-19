@@ -73,14 +73,8 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
 
       const cf = centrifugeRef.current;
 
-      cf.on("connected", () => {
-        console.log("Connected to Centrifugo");
-      });
-
-      cf.on("disconnected", () => {
-        console.log("Disconnected from Centrifugo");
-      });
-
+      cf.on("connected", () => {});
+      cf.on("disconnected", () => {});
       cf.on("error", (ctx) => {
         console.error("Centrifugo error:", ctx);
       });
@@ -95,29 +89,36 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
 
       if (!isWorkspaceUpdatedEvent) {
         const { message: chatMessage } = message.data;
+
         if (!chatMessage?.id || !chatMessage.prompt) {
+          console.warn("Invalid chat message received:", chatMessage);
           return;
         }
 
-        // Convert snake_case to camelCase for our frontend types
-        const normalizedMessage: Message = {
-          id: chatMessage.id,
-          prompt: chatMessage.prompt,
-          response: chatMessage.response,
-          isComplete: message.data.is_complete === true,  // Only true if explicitly set to true
-          isApplied: chatMessage.is_applied === true || message.data.is_applied === true,
-          isApplying: chatMessage.is_applying === true || message.data.is_applying === true,
-          isIgnored: chatMessage.is_ignored === true || message.data.is_ignored === true,
-        };
-
         setMessages((prevMessages) => {
-          const index = prevMessages.findIndex((m) => m.id === normalizedMessage.id);
+          const index = prevMessages.findIndex((m) => m.id === chatMessage.id);
           if (index === -1) {
-            const newMessages = [...prevMessages, normalizedMessage];
+            const newMessages = [...prevMessages, {
+              id: chatMessage.id,
+              prompt: chatMessage.prompt,
+              response: chatMessage.response,
+              isComplete: message.data.is_complete === true,
+              isApplied: chatMessage.is_applied === true || message.data.is_applied === true,
+              isApplying: chatMessage.is_applying === true || message.data.is_applying === true,
+              isIgnored: chatMessage.is_ignored === true || message.data.is_ignored === true,
+            }];
             return newMessages;
           }
           const newMessages = [...prevMessages];
-          newMessages[index] = normalizedMessage;
+          newMessages[index] = {
+            id: chatMessage.id,
+            prompt: chatMessage.prompt,
+            response: chatMessage.response,
+            isComplete: message.data.is_complete === true,
+            isApplied: chatMessage.is_applied === true || message.data.is_applied === true,
+            isApplying: chatMessage.is_applying === true || message.data.is_applying === true,
+            isIgnored: chatMessage.is_ignored === true || message.data.is_ignored === true,
+          };
           return newMessages;
         });
 
@@ -128,13 +129,23 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
           const hadIncompleteRevision = workspace.incompleteRevisionNumber !== undefined;
 
           setWorkspace(prev => {
+            // Deep copy the incoming charts to ensure we capture all nested file updates
+            const updatedCharts = newWorkspace.charts ? newWorkspace.charts.map(chart => ({
+              id: chart.id,
+              name: chart.name,
+              files: chart.files ? chart.files.map(f => ({
+                id: f.id || '',
+                filePath: f.filePath,
+                content: f.content || ''
+              })) : []
+            })) : [];
+
             const updated: Workspace = {
               id: newWorkspace.id,
               createdAt: new Date(newWorkspace.created_at),
               lastUpdatedAt: new Date(newWorkspace.last_updated_at),
               name: newWorkspace.name,
               files: newWorkspace.files ? newWorkspace.files.map(f => {
-                // Use filePath from incoming data, not path
                 if (!f.filePath) {
                   console.warn("File missing filePath in Centrifugo update:", f);
                   return null;
@@ -145,10 +156,11 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
                   content: f.content || ''
                 } as WorkspaceFile;
               }).filter((f): f is WorkspaceFile => f !== null) : prev.files,
-              charts: prev.charts || [],
+              charts: updatedCharts,
               currentRevisionNumber: newWorkspace.current_revision,
               incompleteRevisionNumber: newWorkspace.incomplete_revision_number
             };
+
             return updated;
           });
 
@@ -161,12 +173,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
           }
         }
       }
-    });
-
-    sub.on("subscribed", () => {
-      console.log(`Subscribed to channel ${channel}`);
-    });
-
+    });    sub.on("subscribed", () => {});
     sub.on("error", (ctx) => {
       console.error(`Subscription error for channel ${channel}:`, ctx);
     });
@@ -175,39 +182,51 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     cf.connect();
     hasConnectedRef.current = true;
 
-
-
-  return () => {
+    return () => {
       hasConnectedRef.current = false;
       cf.disconnect();
       centrifugeRef.current = null;
     };
   }, [centrifugoToken, session, workspace, setWorkspace, workspaceId]);
 
-  // Handle auto-selecting new files in follow mode
+  // Track previous workspace state for follow mode
+  const prevWorkspaceRef = React.useRef<Workspace | null>(null);
+
+  // Handle auto-selecting new files and content updates in follow mode
   useEffect(() => {
-    if (!followMode || !workspace?.files?.length) {
+    if (!followMode || !workspace) {
       return;
     }
 
-    // Find last valid file with a path
-    const validFiles = workspace.files.filter(f => f.filePath);
-    if (!validFiles.length) {
-      console.warn("No valid files with paths found in workspace:", workspace.files);
-      return;
-    }
+    // Helper to get all files including those in charts
+    const getAllFiles = (workspace: Workspace): WorkspaceFile[] => {
+      const chartFiles = workspace.charts.flatMap(chart => chart.files);
+      return [...workspace.files, ...chartFiles];
+    };
 
-    const lastFile = validFiles[validFiles.length - 1];
+    const currentFiles = getAllFiles(workspace);
+    const prevFiles = prevWorkspaceRef.current ? getAllFiles(prevWorkspaceRef.current) : [];
 
-    setSelectedFile({ ...lastFile });
-    setEditorContent(lastFile.content || "");
-    updateFileSelection({
-      name: lastFile.filePath.split('/').pop() || lastFile.filePath,
-      path: lastFile.filePath,
-      content: lastFile.content || "",
-      type: 'file' as const
+    // Find new or modified files
+    const newOrModifiedFile = currentFiles.find(currentFile => {
+      const prevFile = prevFiles.find(p => p.filePath === currentFile.filePath);
+      return !prevFile || prevFile.content !== currentFile.content;
     });
-  }, [workspace?.files, followMode, updateFileSelection]);
+
+    if (newOrModifiedFile) {
+
+      setSelectedFile(newOrModifiedFile);
+      setEditorContent(newOrModifiedFile.content || "");
+      updateFileSelection({
+        name: newOrModifiedFile.filePath.split('/').pop() || newOrModifiedFile.filePath,
+        path: newOrModifiedFile.filePath,
+        content: newOrModifiedFile.content || "",
+        type: 'file' as const
+      });
+    }
+
+    prevWorkspaceRef.current = workspace;
+  }, [workspace, followMode, updateFileSelection]);
 
   // Keep editor content in sync with selected file's content
   useEffect(() => {
@@ -278,8 +297,6 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
       window.removeEventListener("resize", handleResize);
     };
   }, []); // Empty dependency array since this effect only handles window resize
-
-
 
   // Handle chat transition end
   useEffect(() => {
@@ -421,15 +438,8 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
             <WorkspaceContainer
               view={view}
               onViewChange={handleViewChange}
-              files={(() => {
-                const mappedFiles = workspace.files.map(file => ({
-                  name: file.filePath ? file.filePath.split('/').pop() || file.filePath : 'unnamed',
-                  filePath: file.filePath || '',
-                  content: file.content || '',
-                  id: file.id || ''
-                }));
-                return mappedFiles;
-              })()}
+              files={workspace.files}
+              charts={workspace.charts}
               renderedFiles={renderedFiles}
               selectedFile={selectedFile}
               onFileSelect={handleFileSelect}

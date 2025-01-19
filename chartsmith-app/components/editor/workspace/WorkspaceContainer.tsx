@@ -1,17 +1,18 @@
 import React from "react";
 import { EditorNav } from "../EditorNav";
-import { FileTree } from "../FileTree";
+import { FileBrowser } from "../FileBrowser";
 import { RenderedFileBrowser } from "../RenderedFileBrowser";
 import { CodeEditor } from "../CodeEditor";
 import { useTheme } from "../../../contexts/ThemeContext";
 import { EditorView } from "../../../hooks/useEditorView";
 
-import { WorkspaceFile } from "@/lib/types/workspace";
+import { WorkspaceFile, Chart } from "@/lib/types/workspace";
 
 interface WorkspaceContainerProps {
   view: EditorView;
   onViewChange: (newView: EditorView) => void;
   files: WorkspaceFile[];
+  charts: Chart[];  // Add charts
   renderedFiles: WorkspaceFile[];
   selectedFile?: WorkspaceFile;
   onFileSelect: (file: WorkspaceFile) => void;
@@ -21,7 +22,7 @@ interface WorkspaceContainerProps {
   isFileTreeVisible: boolean;
 }
 
-export function WorkspaceContainer({ view, onViewChange, files, renderedFiles, selectedFile, onFileSelect, onFileDelete, editorContent, onEditorChange, isFileTreeVisible }: WorkspaceContainerProps) {
+export function WorkspaceContainer({ view, onViewChange, files, charts, renderedFiles, selectedFile, onFileSelect, onFileDelete, editorContent, onEditorChange, isFileTreeVisible }: WorkspaceContainerProps) {
   const { resolvedTheme } = useTheme();
 
   const handleViewChange = () => {
@@ -34,7 +35,20 @@ export function WorkspaceContainer({ view, onViewChange, files, renderedFiles, s
       <EditorNav view={view} onViewChange={handleViewChange} />
       <div className="flex-1 flex min-h-0">
         <div className="w-[280px] flex-shrink-0">
-          {isFileTreeVisible && (view === "source" ? <FileTree files={files} onFileSelect={onFileSelect} onFileDelete={onFileDelete} selectedFile={selectedFile} /> : <RenderedFileBrowser nodes={renderedFiles} onFileSelect={onFileSelect} selectedFile={selectedFile} />)}
+          {isFileTreeVisible && (view === "source" ? 
+            <FileBrowser 
+              nodes={files} 
+              onFileSelect={onFileSelect} 
+              onFileDelete={onFileDelete} 
+              selectedFile={selectedFile}
+              charts={charts}
+            /> : 
+            <RenderedFileBrowser 
+              nodes={renderedFiles} 
+              onFileSelect={onFileSelect} 
+              selectedFile={selectedFile} 
+            />
+          )}
         </div>
         <div className={`w-px ${resolvedTheme === "dark" ? "bg-dark-border" : "bg-gray-200"} flex-shrink-0`} />
         <div className="flex-1 min-w-0">

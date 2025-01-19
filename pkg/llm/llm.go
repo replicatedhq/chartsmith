@@ -195,16 +195,14 @@ func ClarificationChat(ctx context.Context, w *workspacetypes.Workspace, previou
 	return nil
 }
 
-func parseArtifactsInResponse(workspace *workspacetypes.Workspace, response string) error {
+func parseArtifactsInResponse(response string) (string, []workspacetypes.File, error) {
 	parser := NewParser()
 
 	parser.Parse(response)
 
 	result := parser.GetResult()
 
-	workspace.Name = result.Title
-
-	workspace.Files = []workspacetypes.File{}
+	files := []workspacetypes.File{}
 	for _, file := range result.Files {
 		f := workspacetypes.File{
 			FilePath: file.Path,
@@ -216,10 +214,10 @@ func parseArtifactsInResponse(workspace *workspacetypes.Workspace, response stri
 			f.Content = file.PartialContent
 		}
 
-		workspace.Files = append(workspace.Files, f)
+		files = append(files, f)
 	}
 
-	return nil
+	return result.Title, files, nil
 }
 
 func removeHelmsmithTags(ctx context.Context, input string) string {

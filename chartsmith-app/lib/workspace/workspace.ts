@@ -257,14 +257,12 @@ export async function getWorkspace(id: string): Promise<Workspace | undefined> {
       charts: [],
     };
 
-    // get the charts, only if revision number is > 0
+    // get the charts and their files, only if revision number is > 0
     if (result.rows[0].current_revision_number > 0) {
       const charts = await listChartsForWorkspace(id, result.rows[0].current_revision_number);
       w.charts = charts;
-    }
 
-    // get the files, only if revision number is > 0
-    if (result.rows[0].current_revision_number > 0) {
+      // Get non-chart files
       const files = await listFilesWithoutChartsForWorkspace(id, result.rows[0].current_revision_number);
       w.files = files;
     }
