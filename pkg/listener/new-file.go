@@ -3,8 +3,13 @@ package listener
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
 
+	"github.com/replicatedhq/chartsmith/pkg/embedding"
+	"github.com/replicatedhq/chartsmith/pkg/llm"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
+	"github.com/replicatedhq/chartsmith/pkg/workspace"
 )
 
 func handleNewFileNotification(ctx context.Context, id string) error {
@@ -32,20 +37,41 @@ func handleNewFileNotification(ctx context.Context, id string) error {
 	}()
 
 	fmt.Printf("Handling new file notification: %s\n", id)
+	parts := strings.Split(id, "/")
+	fileID := parts[0]
+	revisionNumber, err := strconv.Atoi(parts[1])
+	if err != nil {
+		processingErr = err
+		return err
+	}
 
-	// gvk, err := workspace.GetFile(ctx, id)
-	// if err != nil {
-	// 	processingErr = err
-	// 	return err
-	// }
+	fileRevision, err := workspace.GetFile(ctx, fileID, revisionNumber)
+	if err != nil {
+		processingErr = err
+		return err
+	}
 
-	// summary, err := llm.SummarizeGVK(ctx, gvk.Content)
-	// if err != nil {
-	// 	processingErr = err
-	// 	return err
-	// }
+	if fileRevision.Summary != "" {
+		return nil
+	}
 
-	// gvk.Summary = &summary
+	summary, err := llm.SummarizeGVK(ctx, fileRevision.Content)
+	if err != nil {
+		processingErr = err
+		return err
+	}
+
+	embeddings, err := embedding.Embeddings(summary)
+	if err != nil {
+		processingErr = err
+		return err
+	}
+
+	err = workspace.SetFileSummaryAndEmbeddings(ctx, fileID, revisionNumber, summary, embeddings)
+	if err != nil {
+		processingErr = err
+		return err
+	}
 
 	return nil
 }

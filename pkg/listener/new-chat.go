@@ -88,9 +88,15 @@ func handleNewChatNotification(ctx context.Context, chatID string) error {
 		return fmt.Errorf("error getting revision: %w", err)
 	}
 
-	relevantFiles, err := workspace.ChooseRelevantFilesForChatMessage(ctx, w, "", currentRevision.RevisionNumber, chatMessage)
+	chartID := w.Charts[0].ID
+	relevantFiles, err := workspace.ChooseRelevantFilesForChatMessage(ctx, w, chartID, currentRevision.RevisionNumber, chatMessage)
 	if err != nil {
 		return fmt.Errorf("error choosing relevant files: %w", err)
+	}
+
+	fmt.Printf("Relevant files (printing %d files):\n", len(relevantFiles))
+	for _, file := range relevantFiles {
+		fmt.Printf("  %s\n", file.FilePath)
 	}
 
 	if err := llm.IterationChat(ctx, w, previousChatMessages, chatMessage, relevantFiles); err != nil {
