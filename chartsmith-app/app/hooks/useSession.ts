@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Session } from "@/lib/types/session";
 import { validateSession } from "@/lib/auth/actions/validate-session";
+import { logger } from "@/lib/utils/logger";
 
 export const useSession = (redirectIfNotLoggedIn: boolean = false) => {
   const [session, setSession] = useState<Session | undefined>(undefined);
@@ -32,7 +33,7 @@ export const useSession = (redirectIfNotLoggedIn: boolean = false) => {
         setSession(sess);
         setIsLoading(false);
       } catch (error) {
-        console.error("Session validation failed:", error);
+        logger.error("Session validation failed:", error);
         if (redirectIfNotLoggedIn) {
           router.replace("/");
         }

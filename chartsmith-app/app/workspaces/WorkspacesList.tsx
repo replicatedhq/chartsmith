@@ -13,6 +13,7 @@ import { DeleteWorkspaceModal } from "./DeleteWorkspaceModal";
 import { Workspace } from "@/lib/types/workspace";
 import { deleteWorkspaceAction } from "@/lib/workspace/actions/delete-workspace";
 import { useSession } from "@/app/hooks/useSession";
+import { logger } from "@/lib/utils/logger";
 
 interface WorkspacesListProps {
   initialWorkspaces: Workspace[];
@@ -151,21 +152,21 @@ export function WorkspacesList({ initialWorkspaces }: WorkspacesListProps) {
         onClose={() => setDeleteModal({ isOpen: false, workspace: null })}
         onConfirm={async function handleDeleteConfirm() {
           if (!session || !deleteModal.workspace) {
-            console.log('Missing session or workspace:', { session, workspace: deleteModal.workspace });
+            logger.warn('Missing session or workspace:', { session, workspace: deleteModal.workspace });
             return;
           }
 
           try {
-            console.log('Starting deletion of workspace:', deleteModal.workspace.id);
+            logger.info('Starting deletion of workspace:', {id: deleteModal.workspace.id});
             await deleteWorkspaceAction(session, deleteModal.workspace.id);
 
             // Remove the workspace from the local state
             setWorkspaces(prevWorkspaces =>
               prevWorkspaces.filter(w => w.id !== deleteModal.workspace?.id)
             );
-            console.log('Successfully deleted workspace:', deleteModal.workspace.id);
+            logger.info('Successfully deleted workspace:',{ id: deleteModal.workspace.id});
           } catch (error) {
-            console.error('Failed to delete workspace:', error);
+            logger.error('Failed to delete workspace:', error);
           }
 
           setDeleteModal({ isOpen: false, workspace: null });

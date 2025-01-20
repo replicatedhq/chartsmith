@@ -2,6 +2,7 @@ import * as srs from "secure-random-string";
 import { User } from "../types/user";
 import { getDB } from "../data/db";
 import { getParam } from "../data/param";
+import { logger } from "../utils/logger";
 
 export async function upsertUser(email: string, name: string, imageUrl: string): Promise<User> {
   const user = await findUser(email);
@@ -30,7 +31,7 @@ export async function upsertUser(email: string, name: string, imageUrl: string):
       lastActiveAt: new Date(),
     };
   } catch (err) {
-    console.error(err);
+    logger.error("Failed to upsert user", { err });
     throw err;
   }
 }
@@ -73,7 +74,7 @@ export async function findUser(email: string): Promise<User | undefined> {
       lastActiveAt: row.last_active_at,
     };
   } catch (err) {
-    console.error(err);
+    logger.error("Failed to find user", { err });
     throw err;
   }
 }
@@ -115,7 +116,7 @@ export async function getUser(id: string): Promise<User | undefined> {
       lastActiveAt: row.last_active_at,
     };
   } catch (err) {
-    console.error(err);
+    logger.error("Failed to get user", { err });
     throw err;
   }
 }

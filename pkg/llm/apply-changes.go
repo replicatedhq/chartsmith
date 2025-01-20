@@ -129,7 +129,6 @@ func ApplyPlanToChart(ctx context.Context, w *workspacetypes.Workspace, chart *w
 						Workspace: &workspaceCopy,
 					}
 
-					fmt.Printf("sending workspace update event to %s\n", recipient.GetUserIDs())
 					if err := realtime.SendEvent(ctx, recipient, e); err != nil {
 						return nil, fmt.Errorf("error sending workspace update event: %w", err)
 					}

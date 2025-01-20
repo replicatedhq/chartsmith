@@ -148,6 +148,11 @@ func handleNewRevisionNotification(ctx context.Context, id string) error {
 		return fmt.Errorf("error committing transaction: %w", err)
 	}
 
+	// after commit, we need to notify the worker to capture embeddings for the new files
+	if err := workspace.NotifyWorkerToCaptureEmbeddings(ctx, w.ID, revisionNumber); err != nil {
+		return fmt.Errorf("error notifying worker to capture embeddings: %w", err)
+	}
+
 	refetchedWorkspace, err := workspace.GetWorkspace(ctx, w.ID)
 	if err != nil {
 		return fmt.Errorf("error getting workspace: %w", err)

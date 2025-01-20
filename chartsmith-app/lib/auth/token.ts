@@ -1,6 +1,7 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
 import { getParam } from '../data/param';
 import { getDB } from '../data/db';
+import { logger } from '../utils/logger';
 
 const algorithm = 'aes-256-gcm';
 const ENCRYPTION_KEY = process.env.TOKEN_ENCRYPTION!; // Your base64 key
@@ -54,7 +55,7 @@ export async function setUserReplicatedToken(userId: string, token: string): Pro
       [encryptedToken, userId],
     );
   } catch (err) {
-    console.error(err);
+    logger.error("Failed to set user replicated token", { err });
     throw err;
   }
 }
@@ -78,7 +79,7 @@ export async function getUserReplicatedToken(userId: string): Promise<string> {
 
     return decryptToken(result.rows[0].replicated_token);
   } catch (err) {
-    console.error(err);
+    logger.error("Failed to get user replicated token", { err });
     throw err;
   }
 }

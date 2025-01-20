@@ -8,6 +8,7 @@ import { getDB } from "../data/db";
 import { getParam } from "../data/param";
 import parse from "parse-duration";
 import { getUser } from "./user";
+import { logger } from "../utils/logger";
 
 const sessionDuration = "72h";
 
@@ -30,7 +31,7 @@ export async function createSession(user: User): Promise<Session> {
       expiresAt: new Date(Date.now() + parse(sessionDuration, "ms")!),
     };
   } catch (err) {
-    console.error(err);
+    logger.error("Failed to create session", { err });
     throw err;
   }
 }
@@ -100,7 +101,7 @@ export async function findSession(token: string): Promise<Session | undefined> {
       return;
     }
 
-    console.error(err);
+    logger.error("Failed to find session", { err });
     throw err;
   }
 }
@@ -117,7 +118,8 @@ export async function deleteSession(id: string): Promise<void> {
       [id],
     );
   } catch (err) {
-    console.error(err);
+    logger.error("Failed to delete session", { err });
     throw err;
   }
 }
+

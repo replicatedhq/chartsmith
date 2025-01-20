@@ -20,6 +20,7 @@ import { sendChatMessageAction } from "@/lib/workspace/actions/send-chat-message
 import { Centrifuge } from "centrifuge";
 import { PromptInput } from "@/components/PromptInput";
 import { createRevisionAction } from "@/lib/workspace/actions/create-revision";
+import { logger } from "@/lib/utils/logger";
 
 interface WorkspaceContentProps {
   initialWorkspace: Workspace;
@@ -76,7 +77,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
       cf.on("connected", () => {});
       cf.on("disconnected", () => {});
       cf.on("error", (ctx) => {
-        console.error("Centrifugo error:", ctx);
+        logger.error("Centrifugo error", { ctx });
       });
     }
 
@@ -175,7 +176,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
       }
     });    sub.on("subscribed", () => {});
     sub.on("error", (ctx) => {
-      console.error(`Subscription error for channel ${channel}:`, ctx);
+      logger.error("Centrifugo subscription error", { ctx });
     });
 
     sub.subscribe();

@@ -1,5 +1,6 @@
 "use server";
 
+import { logger } from "@/lib/utils/logger";
 import { fetchGoogleProfile } from "../client";
 import { createSession, sessionToken } from "../session";
 import { upsertUser } from "../user";
@@ -12,7 +13,7 @@ export async function exchangeGoogleCodeForSession(code: string): Promise<string
     const jwt = await sessionToken(sess);
     return jwt;
   } catch (error) {
-    console.error("Google auth error:", error);
+    logger.error("Failed to exchange Google code for session", { error });
     throw error;
   }
 }

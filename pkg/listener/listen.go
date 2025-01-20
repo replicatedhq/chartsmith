@@ -41,7 +41,7 @@ func Listen(ctx context.Context) error {
 		}
 
 		switch notification.Channel {
-		case "new_fiole":
+		case "new_file":
 			go func() {
 				if err := handleNewFileNotification(ctx, notification.Payload); err != nil {
 					fmt.Printf("Error handling new GVK notification: %+v\n", err)

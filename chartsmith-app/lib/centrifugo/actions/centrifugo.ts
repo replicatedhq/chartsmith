@@ -1,3 +1,4 @@
+import { logger } from "@/lib/utils/logger";
 import * as jwt from "jsonwebtoken";
 
 interface CentrifugoClaims {
@@ -8,7 +9,7 @@ interface CentrifugoClaims {
 }
 
 export async function getCentrifugoToken(userID: string): Promise<string> {
-  console.log("getting centrifugo token for user", userID);
+  logger.debug("Getting centrifugo token for user", { userID });
   try {
     const nowInSeconds = Math.floor(Date.now() / 1000); // Convert milliseconds to seconds
     const claims: CentrifugoClaims = {
@@ -23,12 +24,12 @@ export async function getCentrifugoToken(userID: string): Promise<string> {
     const key = jwtSigningKey.toString();
     const key1 = key.slice(0, 4);
     const key2 = key.slice(-4);
-    console.log(`jwtSigningKey: ${key1}...${key2}`);
+    logger.debug("JWT signing key", { key1, key2 });
 
     const token = jwt.sign(claims, jwtSigningKey, { algorithm: "HS256" });
     return token;
   } catch (err) {
-    console.error(err);
+    logger.error("Failed to get centrifugo token", { err });
     return "";
   }
 }

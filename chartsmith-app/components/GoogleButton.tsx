@@ -3,6 +3,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { useToast } from "./toast/use-toast";
 import { getGoogleAuthUrl } from "@/lib/auth/google";
 import Image from "next/image";
+import { logger } from "@/lib/utils/logger";
 
 export function GoogleButton() {
   const { theme } = useTheme();
@@ -14,7 +15,7 @@ export function GoogleButton() {
 
       window.location.href = authUrl;
     } catch (error) {
-      console.error("Failed to initiate Google login:", error);
+      logger.error("Failed to initiate Google login", { error });
       toast({
         title: "Error",
         description: "Failed to initiate Google login. Please try again.",

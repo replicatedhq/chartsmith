@@ -2,6 +2,7 @@ package workspace
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -182,6 +183,7 @@ func listFilesForChart(ctx context.Context, chartID string, revisionNumber int) 
 	var files []types.File
 	for rows.Next() {
 		var file types.File
+		var summary sql.NullString
 		err := rows.Scan(
 			&file.ID,
 			&file.RevisionNumber,
@@ -189,10 +191,13 @@ func listFilesForChart(ctx context.Context, chartID string, revisionNumber int) 
 			&file.WorkspaceID,
 			&file.FilePath,
 			&file.Content,
-			&file.Summary,
+			&summary,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("error scanning file: %w", err)
+		}
+		if summary.Valid {
+			file.Summary = summary.String
 		}
 		files = append(files, file)
 	}
@@ -230,6 +235,7 @@ func listFilesWithoutChartsForWorkspace(ctx context.Context, workspaceID string,
 	var files []types.File
 	for rows.Next() {
 		var file types.File
+		var summary sql.NullString
 		err := rows.Scan(
 			&file.ID,
 			&file.RevisionNumber,
@@ -237,10 +243,13 @@ func listFilesWithoutChartsForWorkspace(ctx context.Context, workspaceID string,
 			&file.WorkspaceID,
 			&file.FilePath,
 			&file.Content,
-			&file.Summary,
+			&summary,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("error scanning file: %w", err)
+		}
+		if summary.Valid {
+			file.Summary = summary.String
 		}
 		files = append(files, file)
 	}
@@ -294,6 +303,51 @@ func SetChartName(ctx context.Context, tx pgx.Tx, workspaceID string, chartID st
 	if err != nil {
 		return fmt.Errorf("error updating chart name: %w", err)
 	}
+	return nil
+}
+
+func NotifyWorkerToCaptureEmbeddings(ctx context.Context, workspaceID string, revisionNumber int) error {
+	conn := persistence.MustGetPooledPostgresSession()
+	defer conn.Release()
+
+	filesNeedingSummariesAndEmbeddings := []types.File{}
+
+	query := `SELECT
+		id,
+		revision_number,
+		chart_id,
+		workspace_id,
+		file_path,
+		content
+	FROM
+		workspace_file
+	WHERE
+		workspace_id = $1 AND revision_number = $2 AND (summary IS NULL OR embeddings IS NULL)`
+
+	rows, err := conn.Query(ctx, query, workspaceID, revisionNumber)
+	if err != nil {
+		return fmt.Errorf("error scanning files needing summaries and embeddings: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var file types.File
+		err := rows.Scan(&file.ID, &file.RevisionNumber, &file.ChartID, &file.WorkspaceID, &file.FilePath, &file.Content)
+		if err != nil {
+			return fmt.Errorf("error scanning file: %w", err)
+		}
+		filesNeedingSummariesAndEmbeddings = append(filesNeedingSummariesAndEmbeddings, file)
+	}
+	rows.Close()
+
+	// the payload is file_id/revision_number
+	for _, file := range filesNeedingSummariesAndEmbeddings {
+		payload := fmt.Sprintf("%s/%d", file.ID, file.RevisionNumber)
+
+		// pg_notify this with the payload
+		conn.Exec(ctx, `SELECT pg_notify('new_file', $1)`, payload)
+	}
+
 	return nil
 }
 
@@ -356,8 +410,6 @@ VALUES ($1, $2, null, $3, $4, $5, null, null)`
 		if err != nil {
 			return err
 		}
-
-		// TODO notify the worker to capture embeddings for this file
 	}
 
 	// only commit the transaction if we started it
