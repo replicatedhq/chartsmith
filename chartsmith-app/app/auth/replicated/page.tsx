@@ -7,6 +7,7 @@ import { Loader2, CheckCircle2, XCircle } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { exchangeReplicatedAuth } from "@/lib/auth/actions/exchange-replicated-nonce";
 import { useSession } from "@/app/hooks/useSession";
+import { logger } from "@/lib/utils/logger";
 
 function ReplicatedCallback() {
   const { session } = useSession();
@@ -23,7 +24,7 @@ function ReplicatedCallback() {
     const exchange = searchParams.get("exchange");
 
     if (!nonce || !exchange) {
-      console.error("Missing required auth parameters");
+      logger.error("Missing required auth parameters");
       setStatus('error');
       return;
     }

@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/Card";
 import { exchangeGoogleCodeForSession } from "@/lib/auth/actions/exchange-google-code";
 import { createWorkspaceAction } from "@/lib/workspace/actions/create-workspace-from-prompt";
 import { findSession } from "@/lib/auth/session";
+import { logger } from "@/lib/utils/logger";
 
 function GoogleCallback() {
   const searchParams = useSearchParams();
@@ -45,7 +46,7 @@ function GoogleCallback() {
               const workspaceId = await createWorkspaceAction(session, "prompt", pendingPrompt);
               window.location.href = `/workspace/${workspaceId}`;
             } catch (error) {
-              console.error("Failed to create workspace:", error);
+              logger.error("Failed to create workspace:", error);
               window.location.href = "/";
             }
           } else {
@@ -53,7 +54,7 @@ function GoogleCallback() {
           }
         })
         .catch((error) => {
-          console.error("Auth Error:", error);
+          logger.error("Auth Error:", error);
           router.push("/auth/error");
         });
     }

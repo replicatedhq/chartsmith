@@ -3,6 +3,7 @@ import { getParam } from "../data/param";
 
 import { Chart, WorkspaceFile, Workspace } from "../types/workspace";
 import * as srs from "secure-random-string";
+import { logger } from "../utils/logger";
 
 /**
  * Creates a new workspace with initialized files, charts, and content
@@ -99,7 +100,7 @@ export async function createWorkspace(createdType: string, prompt: string | unde
     };
 
   } catch (err) {
-    console.error(err);
+    logger.error("Failed to create workspace", { err });
     throw err;
   }
 }
@@ -142,7 +143,7 @@ async function listFilesForWorkspace(workspaceID: string, revisionNumber: number
 
     return files;
   } catch (err) {
-    console.error(err);
+    logger.error("Failed to list files for workspace", { err });
     throw err;
   }
 }
@@ -215,7 +216,7 @@ async function listFilesForWorkspace(workspaceID: string, revisionNumber: number
 
     return workspaces;
   } catch (err) {
-    console.error(err);
+    logger.error("Failed to list workspaces", { err });
     throw err;
   }
 }
@@ -291,7 +292,7 @@ export async function getWorkspace(id: string): Promise<Workspace | undefined> {
 
     return w;
   } catch (err) {
-    console.error(err);
+    logger.error("Failed to get workspace", { err });
     throw err;
   }
 }
@@ -424,7 +425,7 @@ export async function createRevision(workspaceID: string, chatMessageID: string,
   } catch (err) {
     // Rollback transaction on error
     await db.query('ROLLBACK');
-    console.error('Error creating revision:', err);
+    logger.error("Failed to create revision", { err });
     throw err;
   }
 }
@@ -466,13 +467,13 @@ async function listChartsForWorkspace(workspaceID: string, revisionNumber: numbe
     return charts;
 
   } catch (err) {
-    console.error(err);
+    logger.error("Failed to list charts for workspace", { err });
     throw err;
   }
 }
 
 async function listFilesForChart(workspaceID: string, chartID: string, revisionNumber: number): Promise<WorkspaceFile[]> {
-  console.log(`listFilesForChart: ${workspaceID}, ${chartID}, ${revisionNumber}`);
+  logger.debug(`listFilesForChart`, { workspaceID, chartID, revisionNumber });
   try {
     const db = getDB(await getParam("DB_URI"));
     const result = await db.query(
@@ -507,7 +508,7 @@ async function listFilesForChart(workspaceID: string, chartID: string, revisionN
 
     return files;
   } catch (err){
-    console.error(err);
+    logger.error("Failed to list files for chart", { err });
     throw err;
   }
 }
@@ -549,7 +550,7 @@ async function listFilesWithoutChartsForWorkspace(workspaceID: string, revisionN
 
     return files;
   } catch (err) {
-    console.error(err);
+    logger.error("Failed to list files without charts for workspace", { err });
     throw err;
   }
 }

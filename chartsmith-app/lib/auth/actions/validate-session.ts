@@ -2,6 +2,7 @@
 
 import { Session } from "@/lib/types/session";
 import { findSession } from "../session";
+import { logger } from "@/lib/utils/logger";
 
 export async function validateSession(token: string): Promise<Session | undefined> {
   try {
@@ -16,7 +17,7 @@ export async function validateSession(token: string): Promise<Session | undefine
 
     return session;
   } catch (err) {
-    console.error(err);
+    logger.error("Failed to validate session", err);
     throw err;
   }
 }

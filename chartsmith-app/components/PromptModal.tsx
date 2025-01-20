@@ -8,6 +8,7 @@ import { useSession } from "@/app/hooks/useSession";
 import { useRouter } from "next/navigation";
 import { createWorkspaceAction } from "@/lib/workspace/actions/create-workspace-from-prompt";
 import { getGoogleAuthUrl } from "@/lib/auth/google";
+import { logger } from "@/lib/utils/logger";
 
 interface PromptModalProps {
   isOpen: boolean;
@@ -69,7 +70,7 @@ export function PromptModal({ isOpen, onClose }: PromptModalProps) {
           const authUrl = getGoogleAuthUrl();
           window.location.href = authUrl;
         } catch (error) {
-          console.error("Failed to get Google Auth URL:", error);
+          logger.error("Failed to initiate Google login", { error });
           setError("Failed to initiate Google login. Please try again.");
           setIsLoading(false);
         }
@@ -77,11 +78,11 @@ export function PromptModal({ isOpen, onClose }: PromptModalProps) {
       }
 
       const workspaceId = await createWorkspaceAction(session, "prompt", prompt);
-      
+
       // Don't reset loading state, let it persist through redirect
       router.push(`/workspace/${workspaceId}`);
     } catch (err) {
-      console.error("Failed to create workspace:", err);
+      logger.error("Failed to create workspace", { err });
       setError(err instanceof Error ? err.message : "Failed to create workspace");
       setIsLoading(false);  // Only reset loading on error
     }

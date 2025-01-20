@@ -2,6 +2,7 @@ import { Message } from "@/components/editor/types";
 import { getDB } from "../data/db";
 import { getParam } from "../data/param";
 import * as srs from "secure-random-string";
+import { logger } from "../utils/logger";
 
 export async function setMessageIgnored(workspaceID: string, chatMessageID: string): Promise<void> {
   try {
@@ -15,7 +16,7 @@ export async function setMessageIgnored(workspaceID: string, chatMessageID: stri
       [workspaceID, chatMessageID],
     );
   } catch (err) {
-    console.error(err);
+    logger.error("Failed to set message ignored", { err });
     throw err;
   }
 }
@@ -67,7 +68,7 @@ export async function listMessagesForWorkspace(workspaceID: string): Promise<Mes
 
     return messages;
   } catch (err) {
-    console.error(err);
+    logger.error("Failed to list messages for workspace", { err });
     throw err;
   }
 }
@@ -97,7 +98,7 @@ export async function addChatMessage(workspaceID: string, userID: string, messag
       isIgnored: false,
     };
   } catch (err) {
-    console.error(err);
+    logger.error("Failed to add chat message", { err });
     throw err;
   }
 }
@@ -143,7 +144,7 @@ export async function getChatMessage(workspaceID: string, chatID: string): Promi
 
     return message;
   } catch (err) {
-    console.error(err);
+    logger.error("Failed to get chat message", { err });
     throw err;
   }
 }
