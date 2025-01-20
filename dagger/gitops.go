@@ -44,9 +44,9 @@ func pushYAMLToRepo(ctx context.Context, yamlFile *dagger.File, opts PushFileOpt
 		From("alpine/git").
 		WithMountedFile("/tmp/file.yaml", yamlFile).
 		WithEnvVariable("GIT_AUTHOR_NAME", "Chartsmith Dagger").
-		WithEnvVariable("GIT_AUTHOR_EMAIL", "release@replicatred.com").
+		WithEnvVariable("GIT_AUTHOR_EMAIL", "release@replicated.com").
 		WithEnvVariable("GIT_COMMITTER_NAME", "Chartsmith Dagger").
-		WithEnvVariable("GIT_COMMITTER_EMAIL", "release@replicatred.com")
+		WithEnvVariable("GIT_COMMITTER_EMAIL", "release@replicated.com")
 
 	// Set up Git with credentials
 	container = container.WithSecretVariable("GITHUB_TOKEN", opts.GithubToken)
