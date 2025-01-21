@@ -59,9 +59,7 @@ func ListChatMessagesForWorkspaceSinceRevision(ctx context.Context, workspaceID 
 		workspace_chat.prompt,
 		workspace_chat.response,
 		workspace_chat.is_complete,
-		workspace_chat.is_applied,
-		workspace_chat.is_applying,
-		workspace_chat.is_ignored
+		workspace_chat.plan_id
 	FROM
 		workspace_chat
 	WHERE
@@ -85,9 +83,7 @@ func ListChatMessagesForWorkspaceSinceRevision(ctx context.Context, workspaceID 
 			&message.Prompt,
 			&response,
 			&message.IsComplete,
-			&message.IsApplied,
-			&message.IsApplying,
-			&message.IsIgnored,
+			&message.PlanID,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("error scanning chat message: %w", err)
@@ -114,9 +110,7 @@ func ListChatMessagesForWorkspace(ctx context.Context, workspaceID string) ([]ty
 		workspace_chat.prompt,
 		workspace_chat.response,
 		workspace_chat.is_complete,
-		workspace_chat.is_applied,
-		workspace_chat.is_applying,
-		workspace_chat.is_ignored
+		workspace_chat.plan_id
 	FROM
 		workspace_chat
 	WHERE
@@ -133,21 +127,22 @@ func ListChatMessagesForWorkspace(ctx context.Context, workspaceID string) ([]ty
 	for rows.Next() {
 		var chat types.Chat
 		var response sql.NullString
+		var planID sql.NullString
 		err := rows.Scan(
 			&chat.ID,
 			&chat.WorkspaceID,
 			&chat.Prompt,
 			&response,
 			&chat.IsComplete,
-			&chat.IsApplied,
-			&chat.IsApplying,
-			&chat.IsIgnored,
+			&planID,
 		)
 		if err != nil {
 			return nil, err
 		}
 
 		chat.Response = response.String
+		chat.PlanID = planID.String
+
 		chats = append(chats, chat)
 	}
 
@@ -168,9 +163,7 @@ func GetChatMessage(ctx context.Context, id string) (*types.Chat, error) {
 		workspace_chat.prompt,
 		workspace_chat.response,
 		workspace_chat.is_complete,
-		workspace_chat.is_applied,
-		workspace_chat.is_applying,
-		workspace_chat.is_ignored
+		workspace_chat.plan_id
 	FROM
 		workspace_chat
 	WHERE
@@ -179,15 +172,14 @@ func GetChatMessage(ctx context.Context, id string) (*types.Chat, error) {
 	row := conn.QueryRow(ctx, query, id)
 	var chat types.Chat
 	var response sql.NullString
+	var planID sql.NullString
 	err := row.Scan(
 		&chat.ID,
 		&chat.WorkspaceID,
 		&chat.Prompt,
 		&response,
 		&chat.IsComplete,
-		&chat.IsApplied,
-		&chat.IsApplying,
-		&chat.IsIgnored,
+		&planID,
 	)
 
 	if err != nil {
@@ -195,6 +187,7 @@ func GetChatMessage(ctx context.Context, id string) (*types.Chat, error) {
 	}
 
 	chat.Response = response.String
+	chat.PlanID = planID.String
 
 	return &chat, nil
 }
@@ -224,7 +217,7 @@ func SetResponse(ctx context.Context, tx pgx.Tx, c *types.Chat) error {
 
 func MarkComplete(ctx context.Context, tx pgx.Tx, chat *types.Chat) error {
 	query := `UPDATE workspace_chat
-	SET is_complete = true, is_ignored = false
+	SET is_complete = true
 	WHERE id = $1`
 
 	if tx == nil {
@@ -246,47 +239,9 @@ func MarkComplete(ctx context.Context, tx pgx.Tx, chat *types.Chat) error {
 }
 
 func MarkApplying(ctx context.Context, tx pgx.Tx, chat *types.Chat) error {
-	query := `UPDATE workspace_chat
-	SET is_applying = true, is_applied = false, is_ignored = false
-	WHERE id = $1`
-
-	if tx == nil {
-		conn := persistence.MustGetPooledPostgresSession()
-		defer conn.Release()
-
-		_, err := conn.Exec(ctx, query, chat.ID)
-		if err != nil {
-			return fmt.Errorf("error marking chat message as applying: %w", err)
-		}
-		return nil
-	} else {
-		_, err := tx.Exec(ctx, query, chat.ID)
-		if err != nil {
-			return fmt.Errorf("error marking chat message as applying: %w", err)
-		}
-		return nil
-	}
+	return nil
 }
 
 func MarkApplied(ctx context.Context, tx pgx.Tx, chat *types.Chat) error {
-	query := `UPDATE workspace_chat
-	SET is_applied = true, is_applying = false, is_ignored = false
-	WHERE id = $1`
-
-	if tx == nil {
-		conn := persistence.MustGetPooledPostgresSession()
-		defer conn.Release()
-
-		_, err := conn.Exec(ctx, query, chat.ID)
-		if err != nil {
-			return fmt.Errorf("error marking chat message as applied: %w", err)
-		}
-		return nil
-	} else {
-		_, err := tx.Exec(ctx, query, chat.ID)
-		if err != nil {
-			return fmt.Errorf("error marking chat message as applied: %w", err)
-		}
-		return nil
-	}
+	return nil
 }

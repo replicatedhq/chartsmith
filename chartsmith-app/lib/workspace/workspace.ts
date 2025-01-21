@@ -73,8 +73,8 @@ export async function createWorkspace(createdType: string, prompt: string | unde
     const chatClient = await db.connect();
     if (createdType === "prompt") {
       await chatClient.query(
-        `INSERT INTO workspace_chat (id, workspace_id, created_at, sent_by, prompt, response, is_complete, is_initial_message)
-        VALUES ($1, $2, now(), $3, $4, null, false, true)`,
+        `INSERT INTO workspace_chat (id, workspace_id, created_at, sent_by, prompt, response, is_complete, plan_id)
+        VALUES ($1, $2, now(), $3, $4, null, false)`,
         [chatId, id, userId, prompt],
       );
     }
@@ -304,14 +304,14 @@ export async function createRevision(workspaceID: string, chatMessageID: string,
     // Start transaction
     await db.query('BEGIN');
 
-    // mark the chat message as applying
+    // create the empty plan
+    const planID = srs.default({ length: 12, alphanumeric: true });
     await db.query(
       `
-        UPDATE workspace_chat
-        SET is_applying = true, is_applied = false, is_ignored = false
-        WHERE id = $1
+        INSERT INTO workspace_plan (id, workspace_id, created_at, updated_at, version, status, description, plan, charts_affected, files_affected)
+        VALUES ($1, $2, now(), now(), 1, 'pending', '', '{}', '{}', '{}')
       `,
-      [chatMessageID],
+      [planID, workspaceID],
     );
 
     // Create new revision and get its number

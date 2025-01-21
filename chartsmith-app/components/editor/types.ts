@@ -20,9 +20,7 @@ export interface Message {
   prompt: string;
   response?: string;
   isComplete: boolean;
-  isApplied: boolean;
-  isApplying: boolean;
-  isIgnored: boolean;
+  planId?: string;
 }
 
 // Interface for raw message from server before normalization

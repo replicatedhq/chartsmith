@@ -73,9 +73,6 @@ func handleNewChatNotification(ctx context.Context, chatID string) error {
 	// also ignore ignored chat messages
 	previousChatMessages := []chattypes.Chat{}
 	for _, chat := range workspaceChatMessages {
-		if chat.IsIgnored {
-			continue
-		}
 		if chat.ID == chatMessage.ID {
 			continue
 		}
@@ -116,9 +113,6 @@ func handleFirstRevisionChatMessage(ctx context.Context, w *workspacetypes.Works
 	// also remove ignored chat messages
 	previousChatMessages := []chattypes.Chat{}
 	for _, chat := range workspaceChatMessages {
-		if chat.IsIgnored {
-			continue
-		}
 		if chat.ID == chatMessage.ID {
 			continue
 		}
