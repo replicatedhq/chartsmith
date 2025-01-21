@@ -18,7 +18,7 @@ schema:
         type: timestamp
         constraints:
           notNull: true
-      - name: chat_message_id
+      - name: plan_id
         type: text
       - name: created_by_user_id
         type: text

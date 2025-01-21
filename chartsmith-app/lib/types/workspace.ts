@@ -28,3 +28,18 @@ export interface Chart {
   name: string;
   files: WorkspaceFile[];
 }
+
+export interface Plan {
+  id: string;
+  description: string;
+  status: string;
+  workspaceId: string;
+  chatMessageIds: string[];
+}
+
+export interface ChatMessage {
+  id: string;
+  prompt: string;
+  response: string;
+  createdAt: Date;
+}

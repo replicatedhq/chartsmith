@@ -1,7 +1,9 @@
 package llm
 
-const planKnowledge = `
-- Never create a list of files that you plan to add. Just describe the files as the types (GVK) and what they will do.
+const initialPlanInstructions = `
+- Give me a high-level plan for thte user request provided here. Summarize for the user what you will do. Do NOT provide the actual code changes yet.
+- Include what you plan to name the chart.
+- Include a high level description of how you plan to test this chart (without providing specific bash commands).
 `
 
 const createKnowledge = `

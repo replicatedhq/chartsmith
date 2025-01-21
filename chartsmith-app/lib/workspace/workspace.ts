@@ -1,7 +1,7 @@
 import { getDB } from "../data/db";
 import { getParam } from "../data/param";
 
-import { Chart, WorkspaceFile, Workspace } from "../types/workspace";
+import { Chart, WorkspaceFile, Workspace, Plan } from "../types/workspace";
 import * as srs from "secure-random-string";
 import { logger } from "../utils/logger";
 
@@ -14,11 +14,10 @@ import { logger } from "../utils/logger";
  * @returns A Workspace object containing the new workspace's basic info
  * @throws Will throw an error if database operations fail
  */
-export async function createWorkspace(createdType: string, prompt: string | undefined, userId: string): Promise<Workspace> {
-  console.log("Creating new workspace: ", createdType, prompt, userId);
+export async function createWorkspace(createdType: string, prompt: string | undefined, userId: string): Promise<Plan> {
+  logger.info("Creating new workspace", { createdType, prompt, userId });
   try {
     const id = srs.default({ length: 12, alphanumeric: true });
-
     const db = getDB(await getParam("DB_URI"));
 
     const client = await db.connect();
@@ -58,7 +57,6 @@ export async function createWorkspace(createdType: string, prompt: string | unde
         }
       }
 
-      // commit before sending the notification
       await client.query("COMMIT");
     } catch (err) {
       // Rollback transaction on error
@@ -73,13 +71,20 @@ export async function createWorkspace(createdType: string, prompt: string | unde
     const chatClient = await db.connect();
     if (createdType === "prompt") {
       await chatClient.query(
-        `INSERT INTO workspace_chat (id, workspace_id, created_at, sent_by, prompt, response, is_complete, is_initial_message)
-        VALUES ($1, $2, now(), $3, $4, null, false, true)`,
+        `INSERT INTO workspace_chat (id, workspace_id, created_at, sent_by, prompt, response, is_complete)
+        VALUES ($1, $2, now(), $3, $4, null, false)`,
         [chatId, id, userId, prompt],
       );
     }
 
-    await chatClient.query(`SELECT pg_notify('new_chat', $1)`, [chatId]);
+    const planId: string = srs.default({ length: 12, alphanumeric: true });
+    await chatClient.query(
+      `INSERT INTO workspace_plan (id, workspace_id, chat_message_ids, created_at, updated_at, version, status)
+      VALUES ($1, $2, $3, now(), now(), 0, 'pending')`,
+      [planId, id, [chatId]],
+    );
+
+    await chatClient.query(`SELECT pg_notify('new_plan', $1)`, [planId]);
 
     const slackNottificationId = srs.default({ length: 12, alphanumeric: true });
     await chatClient.query(
@@ -89,18 +94,87 @@ export async function createWorkspace(createdType: string, prompt: string | unde
     );
     await chatClient.query(`SELECT pg_notify('new_slack_notification', $1)`, [slackNottificationId]);
 
-    return {
-      id: id,
-      createdAt: new Date(),
-      lastUpdatedAt: new Date(),
-      currentRevisionNumber: 0,
-      name: "default-workspace",
-      files: [],
-      charts: [],  // Add missing charts property
-    };
+    // we have a workspace, we need to return the plan
+    return getPlan(planId);
 
   } catch (err) {
     logger.error("Failed to create workspace", { err });
+    throw err;
+  }
+}
+
+export async function createPlan(userId: string, prompt: string, workspaceId: string, superceedingPlanId?: string): Promise<Plan> {
+  logger.info("Creating plan", { userId, prompt, workspaceId, superceedingPlanId });
+  try {
+    const client = getDB(await getParam("DB_URI"));
+
+    try {
+      await client.query("BEGIN");
+
+      if (superceedingPlanId) {
+        await client.query(`UPDATE workspace_plan SET status = 'ignored' WHERE id = $1`, [superceedingPlanId]);
+      }
+
+      const chatId: string = srs.default({ length: 12, alphanumeric: true });
+      await client.query(
+        `INSERT INTO workspace_chat (id, workspace_id, created_at, sent_by, prompt, response, is_complete)
+        VALUES ($1, $2, now(), $3, $4, null, false)`,
+        [chatId, workspaceId, userId, prompt],
+      );
+
+      const planId: string = srs.default({ length: 12, alphanumeric: true });
+
+      const newPlanChatIds = [];
+
+      // if there was a superceeding plan, we need to get the previous chat messages since they are relevent
+      if (superceedingPlanId) {
+        const previousPlan = await getPlan(superceedingPlanId);
+
+        for (const chatId of previousPlan.chatMessageIds) {
+          newPlanChatIds.push(chatId);
+        }
+      }
+
+      newPlanChatIds.push(chatId);
+
+      await client.query(
+        `INSERT INTO workspace_plan (id, workspace_id, chat_message_ids, created_at, updated_at, version, status)
+        VALUES ($1, $2, $3, now(), now(), 0, 'pending')`,
+        [planId, workspaceId, newPlanChatIds],
+      );
+
+      await client.query("COMMIT");
+
+      // notify
+      await client.query(`SELECT pg_notify('new_plan', $1)`, [planId]);
+
+      return getPlan(planId);
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    }
+  } catch (err) {
+    logger.error("Failed to create plan", { err });
+    throw err;
+  }
+}
+
+export async function getPlan(planId: string): Promise<Plan> {
+  try {
+    const db = getDB(await getParam("DB_URI"));
+    const result = await db.query(`SELECT id, description, status, workspace_id, chat_message_ids FROM workspace_plan WHERE id = $1`, [planId]);
+
+    const plan: Plan = {
+      id: result.rows[0].id,
+      description: result.rows[0].description,
+      status: result.rows[0].status,
+      workspaceId: result.rows[0].workspace_id,
+      chatMessageIds: result.rows[0].chat_message_ids,
+    };
+
+    return plan;
+  } catch (err) {
+    logger.error("Failed to get plan", { err });
     throw err;
   }
 }
@@ -304,15 +378,6 @@ export async function createRevision(workspaceID: string, chatMessageID: string,
     // Start transaction
     await db.query('BEGIN');
 
-    // mark the chat message as applying
-    await db.query(
-      `
-        UPDATE workspace_chat
-        SET is_applying = true, is_applied = false, is_ignored = false
-        WHERE id = $1
-      `,
-      [chatMessageID],
-    );
 
     // Create new revision and get its number
     const revisionResult = await db.query(
@@ -329,7 +394,7 @@ export async function createRevision(workspaceID: string, chatMessageID: string,
           WHERE workspace_id = $1
         )
         INSERT INTO workspace_revision (
-          workspace_id, revision_number, created_at, chat_message_id,
+          workspace_id, revision_number, created_at,
           created_by_user_id, created_type, is_complete
         )
         SELECT
@@ -337,14 +402,13 @@ export async function createRevision(workspaceID: string, chatMessageID: string,
           next_num,
           NOW(),
           $2,
-          $3,
           COALESCE(lr.created_type, 'manual'),
           false
         FROM next_revision
         LEFT JOIN latest_revision lr ON true
         RETURNING revision_number
       `,
-      [workspaceID, chatMessageID, userID]
+      [workspaceID, userID]
     );
 
     const newRevisionNumber = revisionResult.rows[0].revision_number;

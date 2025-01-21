@@ -34,4 +34,59 @@ body {
   @apply bg-app text-text;
 }
 
+.markdown-content {
+  @apply prose prose-sm max-w-none;
+}
+
+.dark .markdown-content {
+  @apply prose-invert;
+}
+
+.markdown-content p {
+  @apply my-2;
+}
+
+.markdown-content ul {
+  @apply list-disc list-inside my-2;
+}
+
+.markdown-content ol {
+  @apply list-decimal my-2 pl-8;
+}
+
+.markdown-content code {
+  @apply px-1.5 py-0.5 rounded bg-gray-100 dark:bg-dark-border/80 font-mono text-sm text-gray-800 dark:text-gray-200;
+}
+
+.markdown-content pre {
+  @apply p-3 my-3 rounded bg-gray-100 dark:bg-dark-border/80 overflow-auto;
+}
+
+.markdown-content pre code {
+  @apply p-0 bg-transparent;
+}
+
+.markdown-content h1, 
+.markdown-content h2, 
+.markdown-content h3, 
+.markdown-content h4 {
+  @apply font-semibold mt-4 mb-2;
+}
+
+.markdown-content h1 {
+  @apply text-xl;
+}
+
+.markdown-content h2 {
+  @apply text-lg;
+}
+
+.markdown-content h3 {
+  @apply text-base;
+}
+
+.markdown-content h4 {
+  @apply text-sm;
+}
+
 /* Rest of the file stays the same */

@@ -42,9 +42,6 @@ func IntegrationTest_ChooseRelevantGVKs() error {
 		Prompt:      "add an init container to the the wordpress deployment to wait for mysql to be ready",
 		Response:    "",
 		IsComplete:  false,
-		IsApplied:   false,
-		IsApplying:  false,
-		IsIgnored:   false,
 	}
 
 	gotFiles, err := workspace.ChooseRelevantFilesForChatMessage(ctx, w, "", 0, &c)

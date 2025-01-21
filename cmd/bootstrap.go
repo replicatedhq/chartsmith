@@ -183,7 +183,7 @@ func runBootstrap(ctx context.Context, pgURI string, workspaceDir string, force 
 			}
 
 			fmt.Printf("summarizing %s...\n", relativePath)
-			summary, err := llm.SummarizeGVK(ctx, string(content))
+			summary, err := llm.SummarizeContent(ctx, string(content))
 			if err != nil {
 				return fmt.Errorf("failed to summarize GVK: %w", err)
 			}

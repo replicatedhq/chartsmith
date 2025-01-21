@@ -43,8 +43,12 @@ function GoogleCallback() {
               if (!session) {
                 throw new Error("Failed to get session");
               }
-              const workspaceId = await createWorkspaceAction(session, "prompt", pendingPrompt);
-              window.location.href = `/workspace/${workspaceId}`;
+              const plan = await createWorkspaceAction(session, "prompt", pendingPrompt);
+
+              // set the plan id in local storage, so that the workspace page knows which plan to follow
+              localStorage.setItem('planId', plan.id);
+
+              window.location.href = `/workspace/${plan.workspaceId}`;
             } catch (error) {
               logger.error("Failed to create workspace:", error);
               window.location.href = "/";
