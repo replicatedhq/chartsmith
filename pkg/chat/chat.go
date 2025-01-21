@@ -37,36 +37,19 @@ func ListChatMessagesForWorkspaceSinceRevision(ctx context.Context, workspaceID 
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
 
-	// get the chat id that created the current revision
 	query := `SELECT
-		workspace_revision.chat_message_id
-	FROM
-		workspace_revision
-	WHERE
-		workspace_revision.workspace_id = $1 AND
-		workspace_revision.revision_number = $2`
-
-	row := conn.QueryRow(ctx, query, workspaceID, revision)
-	var chatID string
-	err := row.Scan(&chatID)
-	if err != nil {
-		return nil, fmt.Errorf("error scanning chat id: %w", err)
-	}
-
-	query = `SELECT
 		workspace_chat.id,
 		workspace_chat.workspace_id,
 		workspace_chat.prompt,
 		workspace_chat.response,
-		workspace_chat.is_complete,
-		workspace_chat.plan_id
+		workspace_chat.is_complete
 	FROM
 		workspace_chat
 	WHERE
 		workspace_chat.workspace_id = $1 AND
-		workspace_chat.created_at > (SELECT created_at FROM workspace_revision WHERE workspace_id = $1 AND chat_message_id = $2)`
+		workspace_chat.created_at > (SELECT created_at FROM workspace_revision WHERE workspace_id = $1)`
 
-	rows, err := conn.Query(ctx, query, workspaceID, chatID)
+	rows, err := conn.Query(ctx, query, workspaceID)
 	if err != nil {
 		return nil, fmt.Errorf("error listing chat messages: %w", err)
 	}
@@ -83,7 +66,6 @@ func ListChatMessagesForWorkspaceSinceRevision(ctx context.Context, workspaceID 
 			&message.Prompt,
 			&response,
 			&message.IsComplete,
-			&message.PlanID,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("error scanning chat message: %w", err)
@@ -109,8 +91,7 @@ func ListChatMessagesForWorkspace(ctx context.Context, workspaceID string) ([]ty
 		workspace_chat.workspace_id,
 		workspace_chat.prompt,
 		workspace_chat.response,
-		workspace_chat.is_complete,
-		workspace_chat.plan_id
+		workspace_chat.is_complete
 	FROM
 		workspace_chat
 	WHERE
@@ -127,21 +108,18 @@ func ListChatMessagesForWorkspace(ctx context.Context, workspaceID string) ([]ty
 	for rows.Next() {
 		var chat types.Chat
 		var response sql.NullString
-		var planID sql.NullString
 		err := rows.Scan(
 			&chat.ID,
 			&chat.WorkspaceID,
 			&chat.Prompt,
 			&response,
 			&chat.IsComplete,
-			&planID,
 		)
 		if err != nil {
 			return nil, err
 		}
 
 		chat.Response = response.String
-		chat.PlanID = planID.String
 
 		chats = append(chats, chat)
 	}
@@ -162,8 +140,7 @@ func GetChatMessage(ctx context.Context, id string) (*types.Chat, error) {
 		workspace_chat.workspace_id,
 		workspace_chat.prompt,
 		workspace_chat.response,
-		workspace_chat.is_complete,
-		workspace_chat.plan_id
+		workspace_chat.is_complete
 	FROM
 		workspace_chat
 	WHERE
@@ -172,14 +149,12 @@ func GetChatMessage(ctx context.Context, id string) (*types.Chat, error) {
 	row := conn.QueryRow(ctx, query, id)
 	var chat types.Chat
 	var response sql.NullString
-	var planID sql.NullString
 	err := row.Scan(
 		&chat.ID,
 		&chat.WorkspaceID,
 		&chat.Prompt,
 		&response,
 		&chat.IsComplete,
-		&planID,
 	)
 
 	if err != nil {
@@ -187,7 +162,6 @@ func GetChatMessage(ctx context.Context, id string) (*types.Chat, error) {
 	}
 
 	chat.Response = response.String
-	chat.PlanID = planID.String
 
 	return &chat, nil
 }

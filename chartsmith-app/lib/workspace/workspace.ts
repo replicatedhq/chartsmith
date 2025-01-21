@@ -73,7 +73,7 @@ export async function createWorkspace(createdType: string, prompt: string | unde
     const chatClient = await db.connect();
     if (createdType === "prompt") {
       await chatClient.query(
-        `INSERT INTO workspace_chat (id, workspace_id, created_at, sent_by, prompt, response, is_complete, plan_id)
+        `INSERT INTO workspace_chat (id, workspace_id, created_at, sent_by, prompt, response, is_complete)
         VALUES ($1, $2, now(), $3, $4, null, false)`,
         [chatId, id, userId, prompt],
       );
@@ -304,15 +304,6 @@ export async function createRevision(workspaceID: string, chatMessageID: string,
     // Start transaction
     await db.query('BEGIN');
 
-    // create the empty plan
-    const planID = srs.default({ length: 12, alphanumeric: true });
-    await db.query(
-      `
-        INSERT INTO workspace_plan (id, workspace_id, created_at, updated_at, version, status, description, plan, charts_affected, files_affected)
-        VALUES ($1, $2, now(), now(), 1, 'pending', '', '{}', '{}', '{}')
-      `,
-      [planID, workspaceID],
-    );
 
     // Create new revision and get its number
     const revisionResult = await db.query(
@@ -329,7 +320,7 @@ export async function createRevision(workspaceID: string, chatMessageID: string,
           WHERE workspace_id = $1
         )
         INSERT INTO workspace_revision (
-          workspace_id, revision_number, created_at, chat_message_id,
+          workspace_id, revision_number, created_at,
           created_by_user_id, created_type, is_complete
         )
         SELECT
@@ -337,14 +328,13 @@ export async function createRevision(workspaceID: string, chatMessageID: string,
           next_num,
           NOW(),
           $2,
-          $3,
           COALESCE(lr.created_type, 'manual'),
           false
         FROM next_revision
         LEFT JOIN latest_revision lr ON true
         RETURNING revision_number
       `,
-      [workspaceID, chatMessageID, userID]
+      [workspaceID, userID]
     );
 
     const newRevisionNumber = revisionResult.rows[0].revision_number;

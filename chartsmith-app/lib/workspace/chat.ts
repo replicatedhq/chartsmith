@@ -19,8 +19,7 @@ export async function listMessagesForWorkspace(workspaceID: string): Promise<Mes
                 workspace_chat.sent_by,
                 workspace_chat.prompt,
                 workspace_chat.response,
-                workspace_chat.is_complete,
-                workspace_chat.plan_id
+                workspace_chat.is_complete
 
             FROM
                 workspace_chat
@@ -45,7 +44,6 @@ export async function listMessagesForWorkspace(workspaceID: string): Promise<Mes
         prompt: row.prompt,
         response: row.response,
         isComplete: row.is_complete,
-        planId: row.plan_id,
       };
       messages.push(message);
     }
@@ -64,8 +62,8 @@ export async function addChatMessage(workspaceID: string, userID: string, messag
     const db = getDB(await getParam("DB_URI"));
     await db.query(
       `
-          INSERT INTO workspace_chat (id, workspace_id, created_at, sent_by, prompt, response, is_complete, plan_id)
-          VALUES ($1, $2, now(), $3, $4, null, null)
+          INSERT INTO workspace_chat (id, workspace_id, created_at, sent_by, prompt, response, is_complete)
+          VALUES ($1, $2, now(), $3, $4, null)
         `,
       [chatID, workspaceID, userID, message],
     );
@@ -77,7 +75,6 @@ export async function addChatMessage(workspaceID: string, userID: string, messag
       prompt: message,
       response: undefined,
       isComplete: false,
-      planId: undefined,
     };
   } catch (err) {
     logger.error("Failed to add chat message", { err });
@@ -97,8 +94,7 @@ export async function getChatMessage(workspaceID: string, chatID: string): Promi
           workspace_chat.sent_by,
           workspace_chat.prompt,
           workspace_chat.response,
-          workspace_chat.is_complete,
-          workspace_chat.plan_id
+          workspace_chat.is_complete
         FROM
           workspace_chat
         WHERE
@@ -117,7 +113,6 @@ export async function getChatMessage(workspaceID: string, chatID: string): Promi
       prompt: row.prompt,
       response: row.response,
       isComplete: row.is_complete,
-      planId: row.plan_id,
     };
 
     return message;

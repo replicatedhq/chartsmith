@@ -31,5 +31,3 @@ schema:
       type: boolean
       constraints:
         notNull: true
-    - name: plan_id
-      type: text

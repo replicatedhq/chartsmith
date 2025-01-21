@@ -35,7 +35,6 @@ type Revision struct {
 	WorkspaceID     string
 	RevisionNumber  int
 	CreatedAt       time.Time
-	ChatMessageID   string
 	CreatedByUserID string
 	CreatedType     string
 	IsComplete      bool

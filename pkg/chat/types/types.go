@@ -6,5 +6,4 @@ type Chat struct {
 	Prompt      string `json:"prompt"`
 	Response    string `json:"response"`
 	IsComplete  bool   `json:"is_complete"`
-	PlanID      string `json:"plan_id"`
 }

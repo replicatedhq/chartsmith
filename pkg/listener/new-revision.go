@@ -70,7 +70,7 @@ func handleNewRevisionNotification(ctx context.Context, id string) error {
 		return nil
 	}
 
-	chatMessage, err := chat.GetChatMessage(ctx, rev.ChatMessageID)
+	chatMessage, err := chat.GetChatMessage(ctx, "")
 	if err != nil {
 		return fmt.Errorf("error getting chat message: %w", err)
 	}
