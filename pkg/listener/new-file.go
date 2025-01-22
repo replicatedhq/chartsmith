@@ -55,7 +55,7 @@ func handleNewFileNotification(ctx context.Context, id string) error {
 		return nil
 	}
 
-	summary, err := llm.SummarizeGVK(ctx, fileRevision.Content)
+	summary, err := llm.SummarizeContent(ctx, fileRevision.Content)
 	if err != nil {
 		processingErr = err
 		return err

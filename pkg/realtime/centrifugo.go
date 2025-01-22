@@ -44,6 +44,7 @@ func sendMessage(channelName string, data map[string]interface{}) error {
 	url := centrifugoConfig.Address
 	apiKey := centrifugoConfig.APIKey
 
+	fmt.Printf("sending data: %+v\n", data["plan"])
 	requestBody := map[string]interface{}{
 		"method": "publish",
 		"params": map[string]interface{}{

@@ -9,9 +9,9 @@ import { useWorkspaceUI } from "@/contexts/WorkspaceUIContext";
 import { usePathname } from "next/navigation";
 import { useSession } from "@/app/hooks/useSession";
 import { getWorkspaceMessagesAction } from "@/lib/workspace/actions/get-workspace-messages";
-import { Message, CentrifugoMessageData } from "@/components/editor/types";
+import { Message, CentrifugoMessageData, RawPlan, RawWorkspace } from "@/components/editor/types";
 
-import { Workspace, WorkspaceFile } from "@/lib/types/workspace";
+import { Plan, Workspace, WorkspaceFile } from "@/lib/types/workspace";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { ChatMessage } from "@/components/editor/chat/ChatMessage";
@@ -21,6 +21,9 @@ import { Centrifuge } from "centrifuge";
 import { PromptInput } from "@/components/PromptInput";
 import { createRevisionAction } from "@/lib/workspace/actions/create-revision";
 import { logger } from "@/lib/utils/logger";
+import { getPlanAction } from "@/lib/workspace/actions/get-plan";
+import { PlanOnlyLayout } from "../layout/PlanOnlyLayout";
+import { PlanContent } from "./PlanContent";
 
 interface WorkspaceContentProps {
   initialWorkspace: Workspace;
@@ -35,6 +38,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
   const [selectedFile, setSelectedFile] = useState<WorkspaceFile | undefined>();
   const [editorContent, setEditorContent] = useState<string>("");
   const [showClarificationInput, setShowClarificationInput] = useState(false);
+  const [plan, setPlan] = useState<Plan | undefined>();
 
   const followMode = true; // Always true for now
   const [centrifugoToken, setCentrifugoToken] = useState<string | null>(null);
@@ -47,6 +51,16 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
 
   const renderedFiles: WorkspaceFile[] = [];
 
+  // load the plan from local storage
+  useEffect(() => {
+    if (!session) return;
+
+    const planId = localStorage.getItem('planId');
+    if (planId) {
+      getPlanAction(session, planId).then(setPlan);
+    }
+  }, [session]);
+
   useEffect(() => {
     if (!session) return;
     getCentrifugoTokenAction(session).then(setCentrifugoToken);
@@ -58,6 +72,21 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
       setMessages(messages);
     });
   }, [session, workspaceId]); // Include workspaceId since we need to reload messages when it changes
+
+  const handlePlanUpdated = (plan: RawPlan) => {
+    const p: Plan = {
+      id: plan.id,
+      description: plan.description,
+      status: plan.status,
+      workspaceId: plan.workspaceId,
+      chatMessageIds: plan.chatMessageIds,
+    }
+    setPlan(p);
+  }
+
+  const handleWorkspaceUpdated = (workspace: RawWorkspace) => {
+    console.log(`workspace updated`);
+  }
 
   useEffect(() => {
     // Don't include messages in deps to avoid infinite loop with streaming updates
@@ -86,95 +115,17 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     const sub = cf.newSubscription(channel);
 
     sub.on("publication", (message: { data: CentrifugoMessageData }) => {
-      const isWorkspaceUpdatedEvent = message.data.workspace;
-
-      if (!isWorkspaceUpdatedEvent) {
-        const { message: chatMessage } = message.data;
-
-        if (!chatMessage?.id || !chatMessage.prompt) {
-          console.warn("Invalid chat message received:", chatMessage);
-          return;
-        }
-
-        setMessages((prevMessages) => {
-          const index = prevMessages.findIndex((m) => m.id === chatMessage.id);
-          if (index === -1) {
-            const newMessages = [...prevMessages, {
-              id: chatMessage.id,
-              prompt: chatMessage.prompt,
-              response: chatMessage.response,
-              isComplete: message.data.is_complete === true,
-              isApplied: chatMessage.is_applied === true || message.data.is_applied === true,
-              isApplying: chatMessage.is_applying === true || message.data.is_applying === true,
-              isIgnored: chatMessage.is_ignored === true || message.data.is_ignored === true,
-            }];
-            return newMessages;
-          }
-          const newMessages = [...prevMessages];
-          newMessages[index] = {
-            id: chatMessage.id,
-            prompt: chatMessage.prompt,
-            response: chatMessage.response,
-            isComplete: message.data.is_complete === true,
-            isApplied: chatMessage.is_applied === true || message.data.is_applied === true,
-            isApplying: chatMessage.is_applying === true || message.data.is_applying === true,
-            isIgnored: chatMessage.is_ignored === true || message.data.is_ignored === true,
-          };
-          return newMessages;
-        });
-
-      } else {
-        const newWorkspace = message.data.workspace;
-        if (newWorkspace) {
-          // Preserve existing messages when updating workspace
-          const hadIncompleteRevision = workspace.incompleteRevisionNumber !== undefined;
-
-          setWorkspace(prev => {
-            // Deep copy the incoming charts to ensure we capture all nested file updates
-            const updatedCharts = newWorkspace.charts ? newWorkspace.charts.map(chart => ({
-              id: chart.id,
-              name: chart.name,
-              files: chart.files ? chart.files.map(f => ({
-                id: f.id || '',
-                filePath: f.filePath,
-                content: f.content || ''
-              })) : []
-            })) : [];
-
-            const updated: Workspace = {
-              id: newWorkspace.id,
-              createdAt: new Date(newWorkspace.created_at),
-              lastUpdatedAt: new Date(newWorkspace.last_updated_at),
-              name: newWorkspace.name,
-              files: newWorkspace.files ? newWorkspace.files.map(f => {
-                if (!f.filePath) {
-                  console.warn("File missing filePath in Centrifugo update:", f);
-                  return null;
-                }
-                return {
-                  id: f.id || '',
-                  filePath: f.filePath,
-                  content: f.content || ''
-                } as WorkspaceFile;
-              }).filter((f): f is WorkspaceFile => f !== null) : prev.files,
-              charts: updatedCharts,
-              currentRevisionNumber: newWorkspace.current_revision,
-              incompleteRevisionNumber: newWorkspace.incomplete_revision_number
-            };
-
-            return updated;
-          });
-
-          // If we had an incomplete revision before but not after, refresh messages,
-          // this is how we ge the message to stop showing a spinner
-          if (hadIncompleteRevision && !newWorkspace.incomplete_revision_number && session) {
-            getWorkspaceMessagesAction(session, workspaceId).then(updatedMessages => {
-              setMessages(updatedMessages);
-            });
-          }
-        }
+      const isPlanUpdatedEvent = message.data.plan;
+      if (isPlanUpdatedEvent) {
+        handlePlanUpdated(message.data.plan!);
       }
-    });    sub.on("subscribed", () => {});
+
+      const isWorkspaceUpdatedEvent = message.data.workspace;
+      if (isWorkspaceUpdatedEvent) {
+        handleWorkspaceUpdated(message.data.workspace!);
+      }
+    });
+    sub.on("subscribed", () => {});
     sub.on("error", (ctx) => {
       logger.error("Centrifugo subscription error", { ctx });
     });
@@ -284,7 +235,6 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
   }, [messages]);
 
   // Handle window resize for mobile viewport height
-  // Handle window resize for mobile viewport height
   useEffect(() => {
     const handleResize = () => {
       const vh = window.innerHeight * 0.01;
@@ -318,63 +268,6 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
 
   if (!session) return null;
 
-  // return null;
-
-  // Show chat-only view when there's no revision yet
-  if (!showEditor) {
-    return (
-      <EditorLayout>
-        <div className="h-full w-full overflow-auto transition-all duration-300 ease-in-out">
-          <div className="px-4 w-full max-w-3xl py-8 pb-16 mx-auto">
-            <Card className="p-6 w-full border-dark-border/40 shadow-lg">
-              <div className="space-y-4">
-                {messages.map((message, index) => (
-                  <ChatMessage
-                    key={message.id || index}
-                    message={message}
-                    messages={messages}
-                    session={session}
-                    workspaceId={workspaceId}
-                    showActions={index === messages.length - 1}
-                    setMessages={setMessages}
-                  />
-                ))}
-                {messages[messages.length - 1]?.isComplete && !showClarificationInput && (
-                  <div className="mt-8 flex justify-center space-x-4">
-                    <Button
-                      onClick={() => handleGenerateChart()}
-                      className="bg-primary hover:bg-primary/90 text-white"
-                    >
-                      Continue to the editor
-                    </Button>
-                    <Button
-                      onClick={() => setShowClarificationInput(true)}
-                      className="bg-primary hover:bg-primary/90 text-white"
-                    >
-                      Provide clarification
-                    </Button>
-                  </div>
-                )}
-                {showClarificationInput && (
-                  <div className="mt-8">
-                    <PromptInput
-                      onSubmit={(message) => {
-                        handleSendMessage(message);
-                        setShowClarificationInput(false);
-                      }}
-                      className="w-full"
-                      label="Add additional clarifying prompts"
-                    />
-                  </div>
-                )}
-              </div>
-              <div ref={messagesEndRef} />
-            </Card>
-          </div>
-        </div>
-      </EditorLayout>
-    );
-  }
 
   const handleViewChange = () => {
     const newView = view === "source" ? "rendered" : "source";
@@ -416,6 +309,21 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
   const handleFileDelete = () => {
     return;
   };
+
+  // Show chat-only view when there's no revision yet
+  if (!showEditor) {
+    console.log(plan);
+    return (
+      <PlanOnlyLayout>
+        <PlanContent
+          session={session}
+          plan={plan!}
+          workspace={workspace!}
+          messages={messages}
+        />
+      </PlanOnlyLayout>
+    );
+  }
 
   return (
     <EditorLayout>

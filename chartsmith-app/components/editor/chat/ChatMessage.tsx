@@ -8,7 +8,6 @@ import { ignorePlanAction } from "@/lib/workspace/actions/ignore-plan";
 
 interface ChatMessageProps {
   message: Message;
-  messages: Message[];
   onApplyChanges?: () => void;
   session: Session;
   workspaceId: string;
@@ -16,7 +15,7 @@ interface ChatMessageProps {
   setMessages: (messages: Message[]) => void;
 }
 
-export function ChatMessage({ message, messages, onApplyChanges, session, workspaceId, showActions = true, setMessages }: ChatMessageProps) {
+export function ChatMessage({ message, onApplyChanges, session, workspaceId, showActions = true, setMessages }: ChatMessageProps) {
   const { theme } = useTheme();
   const [showReportModal, setShowReportModal] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -89,14 +88,6 @@ export function ChatMessage({ message, messages, onApplyChanges, session, worksp
                           <button
                             onClick={async () => {
                               setShowDropdown(false);
-                              // Optimistically update local state
-                              const updatedMessages = messages.map(m => {
-                                if (m.id === message.id) {
-                                  return { ...m, isIgnored: true };
-                                }
-                                return m;
-                              });
-                              setMessages(updatedMessages);
                               // Make server call in background
                               await ignorePlanAction(session, workspaceId, message.id);
                             }}
@@ -111,7 +102,6 @@ export function ChatMessage({ message, messages, onApplyChanges, session, worksp
                       onClick={() => onApplyChanges()}
                       size="sm"
                       className="bg-primary hover:bg-primary/90 text-white"
-                      disabled={message.isIgnored}
                     >
                       Apply changes
                     </Button>

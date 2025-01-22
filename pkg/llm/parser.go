@@ -40,14 +40,14 @@ func (p *Parser) Parse(chunk string) {
 
 	// Extract title if we haven't already
 	if p.result.Title == "" {
-		titleRegex := regexp.MustCompile(`<helmsmithArtifact.*title="([^"]*)">`)
+		titleRegex := regexp.MustCompile(`<chartsmithArtifact.*title="([^"]*)">`)
 		if match := titleRegex.FindStringSubmatch(p.buffer); len(match) > 1 {
 			p.result.Title = match[1]
 		}
 	}
 
 	// Find starts of new files
-	fileStartRegex := regexp.MustCompile(`<helmsmithAction type="file" path="([^"]*)"`)
+	fileStartRegex := regexp.MustCompile(`<chartsmithAction type="file" path="([^"]*)"`)
 	startMatches := fileStartRegex.FindAllStringSubmatchIndex(p.buffer, -1)
 
 	for _, match := range startMatches {
@@ -69,7 +69,7 @@ func (p *Parser) Parse(chunk string) {
 		if !fileExists {
 			// Find where the content starts (after the closing >)
 			contentStart := strings.Index(p.buffer[match[0]:], ">") + match[0] + 1
-			contentEnd := strings.Index(p.buffer[contentStart:], "</helmsmithAction>")
+			contentEnd := strings.Index(p.buffer[contentStart:], "</chartsmithAction>")
 			if contentStart > match[0] {
 				helmFile := HelmFile{
 					Path: path,
@@ -90,13 +90,13 @@ func (p *Parser) Parse(chunk string) {
 		file := &p.result.Files[i]
 
 		// Find the start of this file's content in the buffer
-		startPattern := fmt.Sprintf(`<helmsmithAction type="file" path="%s">`, regexp.QuoteMeta(file.Path))
+		startPattern := fmt.Sprintf(`<chartsmithAction type="file" path="%s">`, regexp.QuoteMeta(file.Path))
 		startIndex := strings.Index(p.buffer, startPattern)
 		if startIndex != -1 {
 			contentStart := startIndex + len(startPattern)
 
 			// Check if we have an end tag for this file
-			endPattern := "</helmsmithAction>"
+			endPattern := "</chartsmithAction>"
 			endIndex := strings.Index(p.buffer[contentStart:], endPattern)
 
 			if endIndex != -1 {

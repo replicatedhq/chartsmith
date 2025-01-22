@@ -13,6 +13,10 @@ schema:
       type: text
       constraints:
         notNull: true
+    - name: revision_number
+      type: integer
+      constraints:
+        notNull: true
     - name: created_at
       type: timestamp
       constraints:
@@ -27,7 +31,3 @@ schema:
         notNull: true
     - name: response
       type: text
-    - name: is_complete
-      type: boolean
-      constraints:
-        notNull: true

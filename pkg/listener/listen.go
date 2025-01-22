@@ -12,7 +12,7 @@ func Listen(ctx context.Context) error {
 	conn := persistence.MustGeUunpooledPostgresSession()
 	defer conn.Close(ctx)
 
-	channels := []string{"new_chat", "new_file", "new_revision", "new_slack_notification"}
+	channels := []string{"new_plan", "new_file", "new_slack_notification"}
 	for _, channel := range channels {
 		_, err := conn.Exec(ctx, fmt.Sprintf("LISTEN %s", channel))
 		if err != nil {
@@ -47,16 +47,10 @@ func Listen(ctx context.Context) error {
 					fmt.Printf("Error handling new GVK notification: %+v\n", err)
 				}
 			}()
-		case "new_chat":
+		case "new_plan":
 			go func() {
-				if err := handleNewChatNotification(ctx, notification.Payload); err != nil {
-					fmt.Printf("Error handling new chat notification: %+v\n", err)
-				}
-			}()
-		case "new_revision":
-			go func() {
-				if err := handleNewRevisionNotification(ctx, notification.Payload); err != nil {
-					fmt.Printf("Error handling new revision notification: %+v\n", err)
+				if err := handleNewPlanNotification(ctx, notification.Payload); err != nil {
+					fmt.Printf("Error handling new plan notification: %+v\n", err)
 				}
 			}()
 		// case "new_slack_notification":

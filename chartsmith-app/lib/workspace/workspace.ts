@@ -1,7 +1,7 @@
 import { getDB } from "../data/db";
 import { getParam } from "../data/param";
 
-import { Chart, WorkspaceFile, Workspace } from "../types/workspace";
+import { Chart, WorkspaceFile, Workspace, Plan } from "../types/workspace";
 import * as srs from "secure-random-string";
 import { logger } from "../utils/logger";
 
@@ -14,11 +14,10 @@ import { logger } from "../utils/logger";
  * @returns A Workspace object containing the new workspace's basic info
  * @throws Will throw an error if database operations fail
  */
-export async function createWorkspace(createdType: string, prompt: string | undefined, userId: string): Promise<Workspace> {
-  console.log("Creating new workspace: ", createdType, prompt, userId);
+export async function createWorkspace(createdType: string, prompt: string | undefined, userId: string): Promise<Plan> {
+  logger.info("Creating new workspace", { createdType, prompt, userId });
   try {
     const id = srs.default({ length: 12, alphanumeric: true });
-
     const db = getDB(await getParam("DB_URI"));
 
     const client = await db.connect();
@@ -58,7 +57,6 @@ export async function createWorkspace(createdType: string, prompt: string | unde
         }
       }
 
-      // commit before sending the notification
       await client.query("COMMIT");
     } catch (err) {
       // Rollback transaction on error
@@ -79,7 +77,14 @@ export async function createWorkspace(createdType: string, prompt: string | unde
       );
     }
 
-    await chatClient.query(`SELECT pg_notify('new_chat', $1)`, [chatId]);
+    const planId: string = srs.default({ length: 12, alphanumeric: true });
+    await chatClient.query(
+      `INSERT INTO workspace_plan (id, workspace_id, chat_message_ids, created_at, updated_at, version, status)
+      VALUES ($1, $2, $3, now(), now(), 0, 'pending')`,
+      [planId, id, [chatId]],
+    );
+
+    await chatClient.query(`SELECT pg_notify('new_plan', $1)`, [planId]);
 
     const slackNottificationId = srs.default({ length: 12, alphanumeric: true });
     await chatClient.query(
@@ -89,18 +94,31 @@ export async function createWorkspace(createdType: string, prompt: string | unde
     );
     await chatClient.query(`SELECT pg_notify('new_slack_notification', $1)`, [slackNottificationId]);
 
-    return {
-      id: id,
-      createdAt: new Date(),
-      lastUpdatedAt: new Date(),
-      currentRevisionNumber: 0,
-      name: "default-workspace",
-      files: [],
-      charts: [],  // Add missing charts property
-    };
+    // we have a workspace, we need to return the plan
+    return getPlan(planId);
 
   } catch (err) {
     logger.error("Failed to create workspace", { err });
+    throw err;
+  }
+}
+
+export async function getPlan(planId: string): Promise<Plan> {
+  try {
+    const db = getDB(await getParam("DB_URI"));
+    const result = await db.query(`SELECT id, description, status, workspace_id, chat_message_ids FROM workspace_plan WHERE id = $1`, [planId]);
+
+    const plan: Plan = {
+      id: result.rows[0].id,
+      description: result.rows[0].description,
+      status: result.rows[0].status,
+      workspaceId: result.rows[0].workspace_id,
+      chatMessageIds: result.rows[0].chat_message_ids,
+    };
+
+    return plan;
+  } catch (err) {
+    logger.error("Failed to get plan", { err });
     throw err;
   }
 }
