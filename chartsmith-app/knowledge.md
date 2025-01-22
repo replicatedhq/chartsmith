@@ -109,6 +109,11 @@ Button styling:
 - Primary buttons: bg-primary with text-white for contrast
 - Secondary/outline buttons: Use theme-aware hover states
 
+Message styling:
+- Regular chat messages: bg-dark-border/40 (dark) or bg-gray-100 (light)
+- User messages: bg-primary/20 (dark) or bg-primary/10 (light) with rounded-tr-sm
+- Plan messages: bg-dark-border/40 (dark) or bg-gray-100 (light) with rounded-tl-sm and "Proposed Plan" label
+
 Dark theme:
 - Background: #0f0f0f (bg-dark)
 - Surface: #1a1a1a (bg-dark-surface)

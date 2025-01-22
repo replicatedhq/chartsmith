@@ -3,7 +3,6 @@ package workspace
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 	"github.com/replicatedhq/chartsmith/pkg/workspace/types"
@@ -46,13 +45,11 @@ func AppendPlanDescription(ctx context.Context, planID string, description strin
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
 
-	// Trim any whitespace from the description to avoid extra spaces
-	description = strings.TrimSpace(description)
 	if description == "" {
 		return nil
 	}
 
-	// Use COALESCE and string_agg to properly handle concatenation
+	// Simple concatenation, trusting the input stream's spacing
 	query := `
 		UPDATE workspace_plan
 		SET description = CASE

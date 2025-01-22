@@ -68,7 +68,7 @@ func handleNewPlanNotification(ctx context.Context, planID string) error {
 
 	var buffer strings.Builder
 	for stream := range streamCh {
-		// Accumulate the stream in the buffer
+		// Trust the stream's spacing and just append
 		buffer.WriteString(stream)
 
 		// Send realtime update with current state

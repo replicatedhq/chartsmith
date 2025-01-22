@@ -45,8 +45,8 @@ export function ChatMessage({ message, onApplyChanges, session, workspaceId, sho
         </div>
       </div>
 
-      {/* Assistant Message - show if there's a response or if message is incomplete */}
-      {(message.response !== undefined || !message.isComplete) && (
+      {/* Assistant Message - only show if there's a response */}
+      {message.response && (
         <div className="px-4 py-2 mr-12">
           <div className={`p-4 rounded-2xl ${theme === "dark" ? "bg-dark-border/40" : "bg-gray-100"} rounded-tl-sm`}>
             <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"} mb-1`}>ChartSmith</div>

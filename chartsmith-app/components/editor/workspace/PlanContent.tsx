@@ -47,16 +47,14 @@ export function PlanContent({ session, plan, workspace, messages }: PlanContentP
                 setMessages={() => {}}
               />
             ))}
+            <PlanChatMessage
+              description={plan.description}
+              showActions={true}
+              session={session}
+              workspaceId={workspace.id}
+              messageId={plan.chatMessageIds?.[0]}
+            />
           </div>
-        </Card>
-        <Card className="p-6 w-full border-dark-border/40 shadow-lg">
-          <PlanChatMessage
-            description={plan.description}
-            showActions={true}
-            session={session}
-            workspaceId={workspace.id}
-            messageId={plan.chatMessageIds?.[0]}
-          />
         </Card>
       </div>
     </div>
