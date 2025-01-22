@@ -52,7 +52,10 @@ export function PlanContent({ session, plan, workspace, messages }: PlanContentP
         <Card className="p-6 w-full border-dark-border/40 shadow-lg">
           <PlanChatMessage
             description={plan.description}
-            showActions={false}
+            showActions={true}
+            session={session}
+            workspaceId={workspace.id}
+            messageId={plan.chatMessageIds?.[0]}
           />
         </Card>
       </div>

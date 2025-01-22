@@ -105,6 +105,10 @@ Light theme:
 - Border: #e2e8f0 (border-light-border)
 - Text: #0f172a (text-slate-900)
 
+Button styling:
+- Primary buttons: bg-primary with text-white for contrast
+- Secondary/outline buttons: Use theme-aware hover states
+
 Dark theme:
 - Background: #0f0f0f (bg-dark)
 - Surface: #1a1a1a (bg-dark-surface)

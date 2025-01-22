@@ -3,6 +3,7 @@ package listener
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/replicatedhq/chartsmith/pkg/llm"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
@@ -65,8 +66,13 @@ func handleNewPlanNotification(ctx context.Context, planID string) error {
 		doneCh <- llm.CreateInitialPlan(ctx, streamCh, doneCh, plan)
 	}()
 
+	var buffer strings.Builder
 	for stream := range streamCh {
-		plan.Description += stream
+		// Accumulate the stream in the buffer
+		buffer.WriteString(stream)
+
+		// Send realtime update with current state
+		plan.Description = buffer.String()
 		e := realtimetypes.PlanUpdatedEvent{
 			WorkspaceID: w.ID,
 			Plan:        plan,
@@ -77,6 +83,7 @@ func handleNewPlanNotification(ctx context.Context, planID string) error {
 			return err
 		}
 
+		// Write to database
 		if err := workspace.AppendPlanDescription(ctx, plan.ID, stream); err != nil {
 			return fmt.Errorf("error appending plan description: %w", err)
 		}

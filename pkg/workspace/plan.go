@@ -3,6 +3,7 @@ package workspace
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 	"github.com/replicatedhq/chartsmith/pkg/workspace/types"
@@ -45,12 +46,18 @@ func AppendPlanDescription(ctx context.Context, planID string, description strin
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
 
-	// Use COALESCE to handle NULL values, and concatenate with new description
+	// Trim any whitespace from the description to avoid extra spaces
+	description = strings.TrimSpace(description)
+	if description == "" {
+		return nil
+	}
+
+	// Use COALESCE and string_agg to properly handle concatenation
 	query := `
 		UPDATE workspace_plan
 		SET description = CASE
-			WHEN description IS NULL THEN $1
-			ELSE description || E'\n\n' || $1
+			WHEN description IS NULL OR description = '' THEN $1
+			ELSE description || $1
 		END
 		WHERE id = $2`
 
