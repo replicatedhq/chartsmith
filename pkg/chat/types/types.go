@@ -5,5 +5,4 @@ type Chat struct {
 	WorkspaceID string `json:"-"`
 	Prompt      string `json:"prompt"`
 	Response    string `json:"response"`
-	IsComplete  bool   `json:"is_complete"`
 }

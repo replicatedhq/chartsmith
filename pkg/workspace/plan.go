@@ -8,6 +8,47 @@ import (
 	"github.com/replicatedhq/chartsmith/pkg/workspace/types"
 )
 
+func listPlans(ctx context.Context, workspaceID string) ([]types.Plan, error) {
+	conn := persistence.MustGetPooledPostgresSession()
+	defer conn.Release()
+
+	query := `SELECT
+		id,
+		workspace_id,
+		chat_message_ids,
+		created_at,
+		updated_at,
+		version,
+		status
+	FROM workspace_plan WHERE workspace_id = $1 ORDER BY created_at DESC`
+
+	rows, err := conn.Query(ctx, query, workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("error listing plans: %w", err)
+	}
+	defer rows.Close()
+
+	var plans []types.Plan
+	for rows.Next() {
+		var plan types.Plan
+		err := rows.Scan(
+			&plan.ID,
+			&plan.WorkspaceID,
+			&plan.ChatMessageIDs,
+			&plan.CreatedAt,
+			&plan.UpdatedAt,
+			&plan.Version,
+			&plan.Status,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("error scanning plan: %w", err)
+		}
+		plans = append(plans, plan)
+	}
+
+	return plans, nil
+}
+
 func GetPlan(ctx context.Context, planID string) (*types.Plan, error) {
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()

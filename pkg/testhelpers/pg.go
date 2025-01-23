@@ -3,7 +3,6 @@ package testhelpers
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -87,8 +86,6 @@ func CreatePostgresContainer(ctx context.Context) (*PostgresContainer, error) {
 		}
 	}
 	mergedFile.Close()
-
-	fmt.Printf("running: %s\n", mergedFile.Name())
 
 	pgContainer, err := postgres.RunContainer(ctx,
 		testcontainers.WithImage("pgvector/pgvector:pg16"),

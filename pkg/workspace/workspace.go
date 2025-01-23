@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
@@ -108,6 +109,43 @@ func GetWorkspace(ctx context.Context, id string) (*types.Workspace, error) {
 		workspace.IncompleteRevisionNumber = &incompleteRevisionNumber
 	}
 
+	var currentPlanId sql.NullString
+	query = `SELECT plan_id FROM workspace_revision WHERE workspace_id = $1 AND revision_number = $2`
+	row = conn.QueryRow(ctx, query, id, workspace.CurrentRevision)
+	err = row.Scan(&currentPlanId)
+	if err != nil {
+		if err != pgx.ErrNoRows {
+			return nil, fmt.Errorf("error scanning current plan created at: %w", err)
+		}
+	}
+
+	workspacePlans, err := listPlans(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("error listing plans: %w", err)
+	}
+
+	var currentPlanCreatedAt *time.Time
+	if currentPlanId.Valid {
+		for _, plan := range workspacePlans {
+			if plan.ID == currentPlanId.String {
+				currentPlanCreatedAt = &plan.CreatedAt
+			}
+		}
+	}
+
+	for _, plan := range workspacePlans {
+		if currentPlanCreatedAt == nil {
+			workspace.CurrentPlans = append(workspace.CurrentPlans, plan)
+		} else {
+			if plan.CreatedAt.Before(*currentPlanCreatedAt) {
+				workspace.PreviousPlans = append(workspace.PreviousPlans, plan)
+			} else {
+				workspace.CurrentPlans = append(workspace.CurrentPlans, plan)
+			}
+		}
+	}
+
+	workspace.CurrentPlans = workspacePlans
 	return &workspace, nil
 }
 

@@ -71,8 +71,8 @@ export async function createWorkspace(createdType: string, prompt: string | unde
     const chatClient = await db.connect();
     if (createdType === "prompt") {
       await chatClient.query(
-        `INSERT INTO workspace_chat (id, workspace_id, created_at, sent_by, prompt, response, is_complete)
-        VALUES ($1, $2, now(), $3, $4, null, false)`,
+        `INSERT INTO workspace_chat (id, workspace_id, created_at, sent_by, prompt, response, revision_number)
+        VALUES ($1, $2, now(), $3, $4, null, 0)`,
         [chatId, id, userId, prompt],
       );
     }
@@ -115,11 +115,14 @@ export async function createPlan(userId: string, prompt: string, workspaceId: st
         await client.query(`UPDATE workspace_plan SET status = 'ignored' WHERE id = $1`, [superceedingPlanId]);
       }
 
+      const workspaceRow = await client.query(`SELECT current_revision_number FROM workspace WHERE id = $1`, [workspaceId]);
+
+      const currentRevisionNumber = workspaceRow.rows[0].current_revision_number;
       const chatId: string = srs.default({ length: 12, alphanumeric: true });
       await client.query(
-        `INSERT INTO workspace_chat (id, workspace_id, created_at, sent_by, prompt, response, is_complete)
-        VALUES ($1, $2, now(), $3, $4, null, false)`,
-        [chatId, workspaceId, userId, prompt],
+        `INSERT INTO workspace_chat (id, workspace_id, created_at, sent_by, prompt, response, revision_number)
+        VALUES ($1, $2, now(), $3, $4, null, $5)`,
+        [chatId, workspaceId, userId, prompt, currentRevisionNumber],
       );
 
       const planId: string = srs.default({ length: 12, alphanumeric: true });
@@ -162,7 +165,7 @@ export async function createPlan(userId: string, prompt: string, workspaceId: st
 export async function getPlan(planId: string): Promise<Plan> {
   try {
     const db = getDB(await getParam("DB_URI"));
-    const result = await db.query(`SELECT id, description, status, workspace_id, chat_message_ids FROM workspace_plan WHERE id = $1`, [planId]);
+    const result = await db.query(`SELECT id, description, status, workspace_id, chat_message_ids, created_at FROM workspace_plan WHERE id = $1`, [planId]);
 
     const plan: Plan = {
       id: result.rows[0].id,
@@ -170,6 +173,7 @@ export async function getPlan(planId: string): Promise<Plan> {
       status: result.rows[0].status,
       workspaceId: result.rows[0].workspace_id,
       chatMessageIds: result.rows[0].chat_message_ids,
+      createdAt: result.rows[0].created_at,
     };
 
     return plan;
@@ -178,8 +182,6 @@ export async function getPlan(planId: string): Promise<Plan> {
     throw err;
   }
 }
-
-export async function listWorkspaces(userId: string): Promise<Workspace[]> {
 
 async function listFilesForWorkspace(workspaceID: string, revisionNumber: number): Promise<WorkspaceFile[]> {
   try {
@@ -222,6 +224,7 @@ async function listFilesForWorkspace(workspaceID: string, revisionNumber: number
   }
 }
 
+export async function listWorkspaces(userId: string): Promise<Workspace[]> {
   try {
     const db = getDB(await getParam("DB_URI"));
     const result = await db.query(
@@ -254,7 +257,9 @@ async function listFilesForWorkspace(workspaceID: string, revisionNumber: number
         name: row.name,
         currentRevisionNumber: row.current_revision_number,
         files: [],
-        charts: [],  // Add missing charts property
+        charts: [],
+        currentPlans: [],
+        previousPlans: [],
       };
 
       // get the files, only if revision number is > 0
@@ -330,6 +335,8 @@ export async function getWorkspace(id: string): Promise<Workspace | undefined> {
       currentRevisionNumber: row.current_revision_number,
       files: [],
       charts: [],
+      currentPlans: [],
+      previousPlans: [],
     };
 
     // get the charts and their files, only if revision number is > 0
@@ -364,9 +371,57 @@ export async function getWorkspace(id: string): Promise<Workspace | undefined> {
       w.incompleteRevisionNumber = result2.rows[0].revision_number;
     }
 
+    // get the current plan id
+    const result3 = await db.query(
+      `SELECT plan_id FROM workspace_revision WHERE workspace_id = $1 AND revision_number = $2`,
+      [id, w.currentRevisionNumber]
+    );
+    const currentPlanId: string | undefined = result3.rows[0].plan_id;
+
+    // list all plans
+    const plans = await listPlans(id);
+
+    const currentPlanCreatedAt: Date | undefined = currentPlanId ? plans.find(plan => plan.id === currentPlanId)?.createdAt : undefined;
+
+    // iterate through them, if the plan is created before the current plan, add it to the previous plans
+    for (const plan of plans) {
+      if (!currentPlanCreatedAt || plan.createdAt > currentPlanCreatedAt) {
+        w.currentPlans.push(plan);
+      } else {
+        w.previousPlans.push(plan);
+      }
+    }
+
     return w;
   } catch (err) {
     logger.error("Failed to get workspace", { err });
+    throw err;
+  }
+}
+
+async function listPlans(workspaceId: string): Promise<Plan[]> {
+  try {
+    const db = getDB(await getParam("DB_URI"));
+    const result = await db.query(`SELECT
+      id, created_at, description, status, workspace_id, chat_message_ids
+      FROM workspace_plan WHERE workspace_id = $1 ORDER BY created_at DESC`, [workspaceId]);
+
+    const plans: Plan[] = [];
+
+    for (const row of result.rows) {
+      plans.push({
+        id: row.id,
+        createdAt: row.created_at,
+        description: row.description,
+        status: row.status,
+        workspaceId: row.workspace_id,
+        chatMessageIds: row.chat_message_ids,
+      });
+    }
+
+    return plans;
+  } catch (err) {
+    logger.error("Failed to list plans", { err });
     throw err;
   }
 }

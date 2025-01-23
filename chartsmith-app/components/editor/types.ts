@@ -19,10 +19,6 @@ export interface Message {
   id: string;
   prompt: string;
   response?: string;
-  isComplete: boolean;
-  isApplied?: boolean;
-  isApplying?: boolean;
-  isIgnored?: boolean;
 }
 
 // Interface for raw message from server before normalization
@@ -88,4 +84,5 @@ export interface RawPlan {
   status: string;
   workspaceId: string;
   chatMessageIds: string[];
+  createdAt: string;
 }
