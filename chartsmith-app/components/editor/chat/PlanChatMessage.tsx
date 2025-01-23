@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState } from "react";
 import { Message } from "../types";
 import { Session } from "@/lib/types/session";
 import { useTheme } from "../../../contexts/ThemeContext";
@@ -6,10 +6,13 @@ import { Button } from "@/components/ui/Button";
 import { FeedbackModal } from "@/components/FeedbackModal";
 import { ignorePlanAction } from "@/lib/workspace/actions/ignore-plan";
 import { ThumbsUp, ThumbsDown } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import { createPlanAction } from "@/lib/workspace/actions/create-plan";
+import { Plan } from "@/lib/types/workspace";
 
 interface PlanChatMessageProps {
   showActions?: boolean;
-  description: string;
+  plan: Plan;
   onProceed?: () => void;
   onIgnore?: () => void;
   session?: Session;
@@ -18,28 +21,42 @@ interface PlanChatMessageProps {
 }
 
 export function PlanChatMessage({
-  description,
+  plan,
   showActions = true,
   onProceed,
   onIgnore,
   session,
-  workspaceId,
   messageId
 }: PlanChatMessageProps) {
   const { theme } = useTheme();
   const [showFeedback, setShowFeedback] = useState(false);
   const [chatInput, setChatInput] = useState("");
 
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowDropdown(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   const handleIgnore = async () => {
-    if (session && workspaceId && messageId) {
-      await ignorePlanAction(session, workspaceId, messageId);
+    if (session && plan) {
+      await ignorePlanAction(session, plan.workspaceId, "");
       onIgnore?.();
     }
   };
 
-  const handleSubmitChat = (e: React.FormEvent) => {
+  const handleSubmitChat = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Handle chat submission here
+    if (!session || !plan) return;
+    const p = await createPlanAction(session, plan.workspaceId, plan.id);
+    console.log(p);
     setChatInput("");
   };
 
@@ -48,8 +65,8 @@ export function PlanChatMessage({
       <div className="px-4 py-2 mr-12">
         <div className={`p-4 rounded-2xl ${theme === "dark" ? "bg-dark-border/40" : "bg-gray-100"} rounded-tl-sm`}>
           <div className={`text-xs ${theme === "dark" ? "text-primary/70" : "text-primary/70"} font-medium mb-1`}>Proposed Plan</div>
-          <div className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} text-sm whitespace-pre-wrap`}>
-            {description}
+          <div className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} text-sm markdown-content`}>
+            <ReactMarkdown>{plan.description}</ReactMarkdown>
           </div>
           {showActions && (
             <div className="mt-6 border-t border-dark-border/20">
@@ -89,12 +106,12 @@ export function PlanChatMessage({
                     onChange={(e) => setChatInput(e.target.value)}
                     placeholder="Ask a question or suggest changes..."
                     className={`flex-1 px-3 py-1.5 text-sm rounded-md border ${
-                      theme === "dark" 
-                        ? "bg-dark border-dark-border/60 text-white placeholder-gray-500" 
+                      theme === "dark"
+                        ? "bg-dark border-dark-border/60 text-white placeholder-gray-500"
                         : "bg-white border-gray-200 text-gray-900 placeholder-gray-400"
                     } focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50`}
                   />
-                  <Button 
+                  <Button
                     type="submit"
                     variant="ghost"
                     size="sm"
@@ -108,13 +125,13 @@ export function PlanChatMessage({
           )}
         </div>
       </div>
-      {showFeedback && session && workspaceId && messageId && (
+      {showFeedback && session && plan.workspaceId && (
         <FeedbackModal
           isOpen={showFeedback}
           onClose={() => setShowFeedback(false)}
           message={{ id: messageId } as Message}
-          chatId={messageId}
-          workspaceId={workspaceId}
+          chatId={plan.id}
+          workspaceId={plan.workspaceId}
           session={session}
         />
       )}

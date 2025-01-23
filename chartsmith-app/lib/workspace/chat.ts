@@ -4,7 +4,7 @@ import { getParam } from "../data/param";
 import * as srs from "secure-random-string";
 import { logger } from "../utils/logger";
 
-export async function setMessageIgnored(workspaceID: string, chatMessageID: string): Promise<void> {
+export async function setMessageIgnored(_workspaceID: string, _chatMessageID: string): Promise<void> {
   // TODO
 }
 

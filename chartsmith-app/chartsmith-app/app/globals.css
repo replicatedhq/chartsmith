@@ -1,0 +1,9 @@
+<<<<<<< SEARCH
+.markdown-content {
+  @apply prose prose-sm max-w-none;
+}
+=======
+.markdown-content {
+  @apply prose-sm max-w-none;
+}
+>>>>>>> REPLACE

@@ -12,7 +12,8 @@ interface ChatMessageProps {
   session: Session;
   workspaceId: string;
   showActions?: boolean;
-  setMessages: (messages: Message[]) => void;
+  /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
+  setMessages?: (messages: Message[]) => void;
 }
 
 export function ChatMessage({ message, onApplyChanges, session, workspaceId, showActions = true, setMessages }: ChatMessageProps) {
