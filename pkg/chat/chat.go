@@ -37,38 +37,19 @@ func ListChatMessagesForWorkspaceSinceRevision(ctx context.Context, workspaceID 
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
 
-	// get the chat id that created the current revision
 	query := `SELECT
-		workspace_revision.chat_message_id
-	FROM
-		workspace_revision
-	WHERE
-		workspace_revision.workspace_id = $1 AND
-		workspace_revision.revision_number = $2`
-
-	row := conn.QueryRow(ctx, query, workspaceID, revision)
-	var chatID string
-	err := row.Scan(&chatID)
-	if err != nil {
-		return nil, fmt.Errorf("error scanning chat id: %w", err)
-	}
-
-	query = `SELECT
 		workspace_chat.id,
 		workspace_chat.workspace_id,
 		workspace_chat.prompt,
 		workspace_chat.response,
-		workspace_chat.is_complete,
-		workspace_chat.is_applied,
-		workspace_chat.is_applying,
-		workspace_chat.is_ignored
+		workspace_chat.is_complete
 	FROM
 		workspace_chat
 	WHERE
 		workspace_chat.workspace_id = $1 AND
-		workspace_chat.created_at > (SELECT created_at FROM workspace_revision WHERE workspace_id = $1 AND chat_message_id = $2)`
+		workspace_chat.created_at > (SELECT created_at FROM workspace_revision WHERE workspace_id = $1)`
 
-	rows, err := conn.Query(ctx, query, workspaceID, chatID)
+	rows, err := conn.Query(ctx, query, workspaceID)
 	if err != nil {
 		return nil, fmt.Errorf("error listing chat messages: %w", err)
 	}
@@ -85,9 +66,6 @@ func ListChatMessagesForWorkspaceSinceRevision(ctx context.Context, workspaceID 
 			&message.Prompt,
 			&response,
 			&message.IsComplete,
-			&message.IsApplied,
-			&message.IsApplying,
-			&message.IsIgnored,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("error scanning chat message: %w", err)
@@ -113,10 +91,7 @@ func ListChatMessagesForWorkspace(ctx context.Context, workspaceID string) ([]ty
 		workspace_chat.workspace_id,
 		workspace_chat.prompt,
 		workspace_chat.response,
-		workspace_chat.is_complete,
-		workspace_chat.is_applied,
-		workspace_chat.is_applying,
-		workspace_chat.is_ignored
+		workspace_chat.is_complete
 	FROM
 		workspace_chat
 	WHERE
@@ -139,15 +114,13 @@ func ListChatMessagesForWorkspace(ctx context.Context, workspaceID string) ([]ty
 			&chat.Prompt,
 			&response,
 			&chat.IsComplete,
-			&chat.IsApplied,
-			&chat.IsApplying,
-			&chat.IsIgnored,
 		)
 		if err != nil {
 			return nil, err
 		}
 
 		chat.Response = response.String
+
 		chats = append(chats, chat)
 	}
 
@@ -167,10 +140,7 @@ func GetChatMessage(ctx context.Context, id string) (*types.Chat, error) {
 		workspace_chat.workspace_id,
 		workspace_chat.prompt,
 		workspace_chat.response,
-		workspace_chat.is_complete,
-		workspace_chat.is_applied,
-		workspace_chat.is_applying,
-		workspace_chat.is_ignored
+		workspace_chat.is_complete
 	FROM
 		workspace_chat
 	WHERE
@@ -185,9 +155,6 @@ func GetChatMessage(ctx context.Context, id string) (*types.Chat, error) {
 		&chat.Prompt,
 		&response,
 		&chat.IsComplete,
-		&chat.IsApplied,
-		&chat.IsApplying,
-		&chat.IsIgnored,
 	)
 
 	if err != nil {
@@ -224,7 +191,7 @@ func SetResponse(ctx context.Context, tx pgx.Tx, c *types.Chat) error {
 
 func MarkComplete(ctx context.Context, tx pgx.Tx, chat *types.Chat) error {
 	query := `UPDATE workspace_chat
-	SET is_complete = true, is_ignored = false
+	SET is_complete = true
 	WHERE id = $1`
 
 	if tx == nil {
@@ -246,47 +213,9 @@ func MarkComplete(ctx context.Context, tx pgx.Tx, chat *types.Chat) error {
 }
 
 func MarkApplying(ctx context.Context, tx pgx.Tx, chat *types.Chat) error {
-	query := `UPDATE workspace_chat
-	SET is_applying = true, is_applied = false, is_ignored = false
-	WHERE id = $1`
-
-	if tx == nil {
-		conn := persistence.MustGetPooledPostgresSession()
-		defer conn.Release()
-
-		_, err := conn.Exec(ctx, query, chat.ID)
-		if err != nil {
-			return fmt.Errorf("error marking chat message as applying: %w", err)
-		}
-		return nil
-	} else {
-		_, err := tx.Exec(ctx, query, chat.ID)
-		if err != nil {
-			return fmt.Errorf("error marking chat message as applying: %w", err)
-		}
-		return nil
-	}
+	return nil
 }
 
 func MarkApplied(ctx context.Context, tx pgx.Tx, chat *types.Chat) error {
-	query := `UPDATE workspace_chat
-	SET is_applied = true, is_applying = false, is_ignored = false
-	WHERE id = $1`
-
-	if tx == nil {
-		conn := persistence.MustGetPooledPostgresSession()
-		defer conn.Release()
-
-		_, err := conn.Exec(ctx, query, chat.ID)
-		if err != nil {
-			return fmt.Errorf("error marking chat message as applied: %w", err)
-		}
-		return nil
-	} else {
-		_, err := tx.Exec(ctx, query, chat.ID)
-		if err != nil {
-			return fmt.Errorf("error marking chat message as applied: %w", err)
-		}
-		return nil
-	}
+	return nil
 }

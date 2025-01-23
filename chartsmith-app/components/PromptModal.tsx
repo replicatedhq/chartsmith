@@ -77,10 +77,13 @@ export function PromptModal({ isOpen, onClose }: PromptModalProps) {
         return;
       }
 
-      const workspaceId = await createWorkspaceAction(session, "prompt", prompt);
+      const plan = await createWorkspaceAction(session, "prompt", prompt);
+
+      // set the plan id in local storage, so that the workspace page knows which plan to follow
+      localStorage.setItem('planId', plan.id);
 
       // Don't reset loading state, let it persist through redirect
-      router.push(`/workspace/${workspaceId}`);
+      router.push(`/workspace/${plan.workspaceId}`);
     } catch (err) {
       logger.error("Failed to create workspace", { err });
       setError(err instanceof Error ? err.message : "Failed to create workspace");

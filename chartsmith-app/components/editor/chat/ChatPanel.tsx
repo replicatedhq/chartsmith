@@ -19,7 +19,12 @@ export function ChatPanel({ messages, onSendMessage, onApplyChanges, session, wo
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (messagesEndRef.current) {
+      const parent = messagesEndRef.current.parentElement;
+      if (parent) {
+        parent.scrollTop = parent.scrollHeight;
+      }
+    }
   };
 
   useEffect(() => {
@@ -33,7 +38,6 @@ export function ChatPanel({ messages, onSendMessage, onApplyChanges, session, wo
           <ChatMessage
             key={message.id || index}
             message={message}
-            messages={messages}
             onApplyChanges={() => onApplyChanges?.(message)}
             session={session}
             workspaceId={workspaceId}

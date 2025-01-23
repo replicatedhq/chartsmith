@@ -4,21 +4,8 @@ import { getParam } from "../data/param";
 import * as srs from "secure-random-string";
 import { logger } from "../utils/logger";
 
-export async function setMessageIgnored(workspaceID: string, chatMessageID: string): Promise<void> {
-  try {
-    const db = getDB(await getParam("DB_URI"));
-    await db.query(
-      `
-        UPDATE workspace_chat
-        SET is_ignored = true
-        WHERE workspace_id = $1 AND id = $2
-      `,
-      [workspaceID, chatMessageID],
-    );
-  } catch (err) {
-    logger.error("Failed to set message ignored", { err });
-    throw err;
-  }
+export async function setMessageIgnored(_workspaceID: string, _chatMessageID: string): Promise<void> {
+  // TODO
 }
 
 export async function listMessagesForWorkspace(workspaceID: string): Promise<Message[]> {
@@ -32,10 +19,8 @@ export async function listMessagesForWorkspace(workspaceID: string): Promise<Mes
                 workspace_chat.sent_by,
                 workspace_chat.prompt,
                 workspace_chat.response,
-                workspace_chat.is_complete,
-                workspace_chat.is_applied,
-                workspace_chat.is_applying,
-                workspace_chat.is_ignored
+                workspace_chat.is_complete
+
             FROM
                 workspace_chat
             WHERE
@@ -59,9 +44,6 @@ export async function listMessagesForWorkspace(workspaceID: string): Promise<Mes
         prompt: row.prompt,
         response: row.response,
         isComplete: row.is_complete,
-        isApplied: row.is_applied,
-        isApplying: row.is_applying,
-        isIgnored: row.is_ignored,
       };
       messages.push(message);
     }
@@ -80,8 +62,8 @@ export async function addChatMessage(workspaceID: string, userID: string, messag
     const db = getDB(await getParam("DB_URI"));
     await db.query(
       `
-          INSERT INTO workspace_chat (id, workspace_id, created_at, sent_by, prompt, response, is_complete, is_initial_message, is_applied, is_applying, is_ignored)
-          VALUES ($1, $2, now(), $3, $4, null, false, true, false, false, false)
+          INSERT INTO workspace_chat (id, workspace_id, created_at, sent_by, prompt, response, is_complete)
+          VALUES ($1, $2, now(), $3, $4, null)
         `,
       [chatID, workspaceID, userID, message],
     );
@@ -93,9 +75,6 @@ export async function addChatMessage(workspaceID: string, userID: string, messag
       prompt: message,
       response: undefined,
       isComplete: false,
-      isApplied: false,
-      isApplying: false,
-      isIgnored: false,
     };
   } catch (err) {
     logger.error("Failed to add chat message", { err });
@@ -115,10 +94,7 @@ export async function getChatMessage(workspaceID: string, chatID: string): Promi
           workspace_chat.sent_by,
           workspace_chat.prompt,
           workspace_chat.response,
-          workspace_chat.is_complete,
-          workspace_chat.is_applied,
-          workspace_chat.is_applying,
-          workspace_chat.is_ignored
+          workspace_chat.is_complete
         FROM
           workspace_chat
         WHERE
@@ -137,9 +113,6 @@ export async function getChatMessage(workspaceID: string, chatID: string): Promi
       prompt: row.prompt,
       response: row.response,
       isComplete: row.is_complete,
-      isApplied: row.is_applied,
-      isApplying: row.is_applying,
-      isIgnored: row.is_ignored,
     };
 
     return message;

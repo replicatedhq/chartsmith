@@ -35,19 +35,28 @@ type Revision struct {
 	WorkspaceID     string
 	RevisionNumber  int
 	CreatedAt       time.Time
-	ChatMessageID   string
 	CreatedByUserID string
 	CreatedType     string
 	IsComplete      bool
 }
 
-type GVK struct {
-	ID             string
-	WorkspaceID    string
-	GVK            string
-	RevisionNumber int
-	FilePath       string
-	CreatedAt      time.Time
-	Content        string
-	Summary        *string
+type PlanStatus string
+
+const (
+	PlanStatusPending  PlanStatus = "pending"
+	PlanStatusPlanning PlanStatus = "planning"
+	PlanStatusReview   PlanStatus = "review"
+	PlanStatusSuccess  PlanStatus = "success"
+	PlanStatusError    PlanStatus = "error"
+)
+
+type Plan struct {
+	ID             string     `json:"id"`
+	WorkspaceID    string     `json:"workspaceId"`
+	ChatMessageIDs []string   `json:"chatMessageIds"`
+	Description    string     `json:"description"`
+	CreatedAt      time.Time  `json:"-"`
+	UpdatedAt      time.Time  `json:"-"`
+	Version        int        `json:"-"`
+	Status         PlanStatus `json:"-"`
 }

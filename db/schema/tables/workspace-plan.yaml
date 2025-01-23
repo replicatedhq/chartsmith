@@ -1,5 +1,5 @@
 database: chartsmith
-name: workspace_chat
+name: workspace_plan
 schema:
   postgres:
     primaryKey:
@@ -13,21 +13,28 @@ schema:
       type: text
       constraints:
         notNull: true
-    - name: revision_number
-      type: integer
-      constraints:
-        notNull: true
+    - name: chat_message_ids
+      type: text[]
     - name: created_at
       type: timestamp
       constraints:
         notNull: true
-    - name: sent_by
+    - name: updated_at
+      type: timestamp
+      constraints:
+        notNull: true
+    - name: version
+      type: integer
+    - name: status
       type: text
       constraints:
         notNull: true
-    - name: prompt
+    - name: description
       type: text
-      constraints:
-        notNull: true
-    - name: response
-      type: text
+    - name: plan
+      type: jsonb
+    - name: charts_affected
+      type: text[]
+    - name: files_affected
+      type: text[]
+

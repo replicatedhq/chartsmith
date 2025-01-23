@@ -8,15 +8,15 @@ import { ignorePlanAction } from "@/lib/workspace/actions/ignore-plan";
 
 interface ChatMessageProps {
   message: Message;
-  messages: Message[];
   onApplyChanges?: () => void;
   session: Session;
   workspaceId: string;
   showActions?: boolean;
-  setMessages: (messages: Message[]) => void;
+  /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
+  setMessages?: (messages: Message[]) => void;
 }
 
-export function ChatMessage({ message, messages, onApplyChanges, session, workspaceId, showActions = true, setMessages }: ChatMessageProps) {
+export function ChatMessage({ message, onApplyChanges, session, workspaceId, showActions = true, setMessages }: ChatMessageProps) {
   const { theme } = useTheme();
   const [showReportModal, setShowReportModal] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -46,8 +46,8 @@ export function ChatMessage({ message, messages, onApplyChanges, session, worksp
         </div>
       </div>
 
-      {/* Assistant Message - show if there's a response or if message is incomplete */}
-      {(message.response !== undefined || !message.isComplete) && (
+      {/* Assistant Message - only show if there's a response */}
+      {message.response && (
         <div className="px-4 py-2 mr-12">
           <div className={`p-4 rounded-2xl ${theme === "dark" ? "bg-dark-border/40" : "bg-gray-100"} rounded-tl-sm`}>
             <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"} mb-1`}>ChartSmith</div>
@@ -89,14 +89,6 @@ export function ChatMessage({ message, messages, onApplyChanges, session, worksp
                           <button
                             onClick={async () => {
                               setShowDropdown(false);
-                              // Optimistically update local state
-                              const updatedMessages = messages.map(m => {
-                                if (m.id === message.id) {
-                                  return { ...m, isIgnored: true };
-                                }
-                                return m;
-                              });
-                              setMessages(updatedMessages);
                               // Make server call in background
                               await ignorePlanAction(session, workspaceId, message.id);
                             }}
@@ -111,7 +103,6 @@ export function ChatMessage({ message, messages, onApplyChanges, session, worksp
                       onClick={() => onApplyChanges()}
                       size="sm"
                       className="bg-primary hover:bg-primary/90 text-white"
-                      disabled={message.isIgnored}
                     >
                       Apply changes
                     </Button>

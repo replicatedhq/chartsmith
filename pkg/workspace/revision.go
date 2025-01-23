@@ -15,7 +15,6 @@ func GetRevision(ctx context.Context, workspaceID string, revisionNumber int) (*
         workspace_revision.workspace_id,
         workspace_revision.revision_number,
         workspace_revision.created_at,
-        workspace_revision.chat_message_id,
         workspace_revision.created_by_user_id,
         workspace_revision.created_type,
         workspace_revision.is_complete
@@ -30,7 +29,6 @@ func GetRevision(ctx context.Context, workspaceID string, revisionNumber int) (*
 		&revision.WorkspaceID,
 		&revision.RevisionNumber,
 		&revision.CreatedAt,
-		&revision.ChatMessageID,
 		&revision.CreatedByUserID,
 		&revision.CreatedType,
 		&revision.IsComplete,

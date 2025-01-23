@@ -105,6 +105,15 @@ Light theme:
 - Border: #e2e8f0 (border-light-border)
 - Text: #0f172a (text-slate-900)
 
+Button styling:
+- Primary buttons: bg-primary with text-white for contrast
+- Secondary/outline buttons: Use theme-aware hover states
+
+Message styling:
+- Regular chat messages: bg-dark-border/40 (dark) or bg-gray-100 (light)
+- User messages: bg-primary/20 (dark) or bg-primary/10 (light) with rounded-tr-sm
+- Plan messages: bg-dark-border/40 (dark) or bg-gray-100 (light) with rounded-tl-sm and "Proposed Plan" label
+
 Dark theme:
 - Background: #0f0f0f (bg-dark)
 - Surface: #1a1a1a (bg-dark-surface)
@@ -140,7 +149,11 @@ React Hooks:
   - For resize event listeners, empty array is acceptable since they don't depend on props/state
   - For real-time connections, include connection parameters (workspaceId, etc.)
 
-Development:
+# Development
+
+- Do not run npm run dev - custom dev setup in place
+- Tailwind plugins used in the application (like @tailwindcss/typography) should be regular dependencies, not devDependencies
+- PostCSS plugins (like autoprefixer) should be regular dependencies since they're used in production builds
 - Run lint/type checks before committing, not after every small change
 - For small changes that are obviously correct, skip the checks
 - Run full build before deploying or when making significant changes
@@ -193,7 +206,15 @@ State Management:
   - Normalize snake_case (is_applying) to camelCase (isApplying)
 - For streaming responses, validate isComplete as boolean type rather than checking for undefined
 - Backend sends snake_case (is_complete), normalize to camelCase (isComplete) before updating state
-- For auto-scrolling chat, add empty div with ref at end of messages and scroll on message updates
+- For auto-scrolling chat:
+  - Add empty div with ref at end of messages
+  - Use closest('.overflow-auto') to find scrollable container
+  - Set scrollTop directly on container rather than using scrollIntoView
+  - Watch all content changes that could affect scroll height
+  - Create separate client component for scroll behavior to avoid React static flag errors
+  - Use React.memo to optimize re-renders of scrolling container
+  - Stop auto-scrolling when user scrolls up (>50px from bottom)
+  - Resume auto-scrolling when user scrolls back to bottom
 - For streaming UI transitions, check isComplete on last message before showing next step
 - For auto-scrolling chat, add empty div with ref at end of messages and scroll on message updates
 - For streaming UI transitions, check isComplete on last message before showing next step
@@ -210,6 +231,7 @@ State Management:
 
 Next.js 15:
 - Dynamic APIs like params, searchParams, cookies(), headers() must be awaited in server components
+- 'use client' directive must be the first line in the file with no preceding whitespace
 - Use React.use() to unwrap these promises in client components
 - Prefer awaiting as late as possible to allow more static rendering
 - Must await params in both layout.tsx and page.tsx when using dynamic routes
