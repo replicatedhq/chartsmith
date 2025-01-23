@@ -7,6 +7,8 @@ export interface Workspace {
   files: WorkspaceFile[];
   currentRevisionNumber: number;
   incompleteRevisionNumber?: number;
+  currentPlans: Plan[];
+  previousPlans: Plan[];
 }
 
 export interface WorkspaceFile {
@@ -33,6 +35,7 @@ export interface Plan {
   id: string;
   description: string;
   status: string;
+  createdAt: Date;
   workspaceId: string;
   chatMessageIds: string[];
 }

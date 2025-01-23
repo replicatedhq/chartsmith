@@ -46,15 +46,46 @@ const ScrollingContent = React.memo(function ScrollingContent({ children }: { ch
 
 interface PlanContentProps {
   session: Session;
-  plan: Plan;
   workspace: Workspace;
   messages: Message[];
 }
 
-export function PlanContent({ session, plan, workspace, messages }: PlanContentProps) {
-  if (!plan || !messages) {
-    if (!plan) {
-      return <div>No plan found</div>;
+function createMessagePlanMap(currentPlans: Plan[], messages: Message[]): Map<Message[], Plan> {
+  const userMessagePlanMap = new Map<Message[], Plan>();
+  const seenMessageIds = new Set<string>();
+
+  // Process plans in reverse order first to identify the newest messages for each plan
+  const plansInReverseOrder = [...currentPlans].reverse();
+
+  // Create a map of message ID to Message object for quick lookup
+  const messageMap = new Map(messages.map(message => [message.id, message]));
+
+  for (const plan of plansInReverseOrder) {
+    // Get the new message IDs that haven't been seen in more recent plans
+    const newMessageIds = plan.chatMessageIds.filter(id => !seenMessageIds.has(id));
+
+    // Convert IDs to actual Message objects
+    const planMessages = newMessageIds
+      .map(id => messageMap.get(id))
+      .filter((message): message is Message => message !== undefined);
+
+    // Add these message IDs to seen set
+    newMessageIds.forEach(id => seenMessageIds.add(id));
+
+    // Only add to map if we found new messages
+    if (planMessages.length > 0) {
+      userMessagePlanMap.set(planMessages, plan);
+    }
+  }
+
+  // Return a new map with entries in chronological order
+  return new Map([...userMessagePlanMap.entries()].reverse());
+}
+
+export function PlanContent({ session, workspace, messages }: PlanContentProps) {
+  if (!workspace || !messages) {
+    if (!workspace) {
+      return <div>No workspace found</div>;
     }
     if (!messages) {
       return <div>No messages found</div>;
@@ -62,35 +93,39 @@ export function PlanContent({ session, plan, workspace, messages }: PlanContentP
     return null;
   }
 
-  // find the chat messages for the id, based on the array in the plan
-  let chatMessages: Message[] = [];
-  if (plan.chatMessageIds) {
-    chatMessages = messages.filter(message => plan.chatMessageIds.includes(message.id));
-  }
+  console.log(workspace.currentPlans);
+
+  console.log('PlanContent received workspace:', workspace);
+  console.log('PlanContent received messages:', messages);
+  const userMessagePlanMap = createMessagePlanMap(workspace.currentPlans, messages);
+  console.log('Created userMessagePlanMap:', userMessagePlanMap);
+  // Create reversed map for rendering
+  const reversedMap = new Map([...userMessagePlanMap].reverse());
 
   return (
     <div className="h-full w-full overflow-auto transition-all duration-300 ease-in-out">
       <div className="px-4 w-full max-w-3xl py-8 pb-16 mx-auto">
         <ScrollingContent>
           <Card className="p-6 w-full border-dark-border/40 shadow-lg">
-            <div className="space-y-4">
-              {chatMessages.map(message => (
-                <ChatMessage
-                  key={message.id}
-                  message={message}
+            {Array.from(reversedMap).map(([userMessages, plan], index) => (
+              <div key={plan.id}>
+                {userMessages.map(message => (
+                  <ChatMessage
+                    key={message.id}
+                    message={message}
+                    session={session}
+                    workspaceId={workspace.id}
+                  />
+                ))}
+                <PlanChatMessage
+                  plan={plan}
                   session={session}
                   workspaceId={workspace.id}
-                  showActions={false}
-                  setMessages={() => {}}
+                  messageId={userMessages[0]?.id}
+                  showActions={index === reversedMap.size - 1}
                 />
-              ))}
-              <PlanChatMessage
-                plan={plan}
-                showActions={true}
-                session={session}
-                workspaceId={workspace.id}
-              />
-            </div>
+              </div>
+            ))}
           </Card>
         </ScrollingContent>
       </div>

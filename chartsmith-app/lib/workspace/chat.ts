@@ -18,8 +18,7 @@ export async function listMessagesForWorkspace(workspaceID: string): Promise<Mes
                 workspace_chat.created_at,
                 workspace_chat.sent_by,
                 workspace_chat.prompt,
-                workspace_chat.response,
-                workspace_chat.is_complete
+                workspace_chat.response
 
             FROM
                 workspace_chat
@@ -43,7 +42,6 @@ export async function listMessagesForWorkspace(workspaceID: string): Promise<Mes
         id: row.id,
         prompt: row.prompt,
         response: row.response,
-        isComplete: row.is_complete,
       };
       messages.push(message);
     }
@@ -93,8 +91,7 @@ export async function getChatMessage(workspaceID: string, chatID: string): Promi
           workspace_chat.created_at,
           workspace_chat.sent_by,
           workspace_chat.prompt,
-          workspace_chat.response,
-          workspace_chat.is_complete
+          workspace_chat.response
         FROM
           workspace_chat
         WHERE
@@ -112,7 +109,6 @@ export async function getChatMessage(workspaceID: string, chatID: string): Promi
       id: row.id,
       prompt: row.prompt,
       response: row.response,
-      isComplete: row.is_complete,
     };
 
     return message;

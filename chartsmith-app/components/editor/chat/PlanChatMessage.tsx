@@ -5,7 +5,7 @@ import { useTheme } from "../../../contexts/ThemeContext";
 import { Button } from "@/components/ui/Button";
 import { FeedbackModal } from "@/components/FeedbackModal";
 import { ignorePlanAction } from "@/lib/workspace/actions/ignore-plan";
-import { ThumbsUp, ThumbsDown, Send } from "lucide-react";
+import { ThumbsUp, ThumbsDown, Send, ChevronDown, ChevronUp } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { createPlanAction } from "@/lib/workspace/actions/create-plan";
 import { Plan } from "@/lib/types/workspace";
@@ -30,6 +30,7 @@ export function PlanChatMessage({
 }: PlanChatMessageProps) {
   const { theme } = useTheme();
   const [showFeedback, setShowFeedback] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(!plan.status?.includes('ignored'));
   const [chatInput, setChatInput] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -65,9 +66,49 @@ export function PlanChatMessage({
     <div className="space-y-2">
       <div className="px-4 py-2 mr-12">
         <div className={`p-4 rounded-2xl ${theme === "dark" ? "bg-dark-border/40" : "bg-gray-100"} rounded-tl-sm`}>
-          <div className={`text-xs ${theme === "dark" ? "text-primary/70" : "text-primary/70"} font-medium mb-1`}>Proposed Plan</div>
-          <div className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} text-sm markdown-content`}>
-            <ReactMarkdown>{plan.description}</ReactMarkdown>
+          <div className={`text-xs ${
+            plan.status === 'ignored' 
+              ? `${theme === "dark" ? "text-gray-500" : "text-gray-400"}`
+              : `${theme === "dark" ? "text-primary/70" : "text-primary/70"}`
+          } font-medium mb-1`}>
+            {plan.status === 'ignored' ? 'Superseded Plan' : 'Proposed Plan'}
+          </div>
+          <div className={`${
+            plan.status === 'ignored'
+              ? `${theme === "dark" ? "text-gray-400" : "text-gray-500"}`
+              : `${theme === "dark" ? "text-gray-200" : "text-gray-700"}`
+          } text-sm markdown-content ${plan.status === 'ignored' ? 'opacity-75' : ''}`}>
+            {plan.status === 'ignored' && !isExpanded ? (
+              <div className="flex items-center justify-between">
+                <div className="line-clamp-2">
+                  <ReactMarkdown>{plan.description}</ReactMarkdown>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsExpanded(true)}
+                  className={`ml-2 p-1 ${theme === "dark" ? "hover:bg-dark-border/40 text-gray-400" : "hover:bg-gray-100 text-gray-500"}`}
+                >
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : (
+              <div className="relative">
+                <ReactMarkdown>{plan.description}</ReactMarkdown>
+                {plan.status === 'ignored' && (
+                  <div className="absolute top-0 right-0">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setIsExpanded(false)}
+                      className={`p-1 ${theme === "dark" ? "hover:bg-dark-border/40 text-gray-400" : "hover:bg-gray-100 text-gray-500"}`}
+                    >
+                      <ChevronUp className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           {showActions && (
             <div className="mt-6 border-t border-dark-border/20">

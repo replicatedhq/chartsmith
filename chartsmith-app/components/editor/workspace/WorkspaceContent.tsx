@@ -38,7 +38,6 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
   const [selectedFile, setSelectedFile] = useState<WorkspaceFile | undefined>();
   const [editorContent, setEditorContent] = useState<string>("");
   const [showClarificationInput, setShowClarificationInput] = useState(false);
-  const [plan, setPlan] = useState<Plan | undefined>();
 
   const followMode = true; // Always true for now
   const [centrifugoToken, setCentrifugoToken] = useState<string | null>(null);
@@ -50,16 +49,6 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
   );
 
   const renderedFiles: WorkspaceFile[] = [];
-
-  // load the plan from local storage
-  useEffect(() => {
-    if (!session) return;
-
-    const planId = localStorage.getItem('planId');
-    if (planId) {
-      getPlanAction(session, planId).then(setPlan);
-    }
-  }, [session]);
 
   useEffect(() => {
     if (!session) return;
@@ -74,18 +63,70 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
   }, [session, workspaceId]); // Include workspaceId since we need to reload messages when it changes
 
   const handlePlanUpdated = (plan: RawPlan) => {
+    console.log('handlePlanUpdated called with:', plan);
     const p: Plan = {
       id: plan.id,
       description: plan.description,
       status: plan.status,
       workspaceId: plan.workspaceId,
       chatMessageIds: plan.chatMessageIds,
+      createdAt: new Date(plan.createdAt),
     }
-    setPlan(p);
+    console.log('Normalized plan:', p);
+
+    setWorkspace(currentWorkspace => {
+      console.log('Current workspace plans:', currentWorkspace.currentPlans);
+
+      // If this is a new pending plan, mark all other plans as ignored
+      if (p.status === 'pending') {
+        const updatedCurrentPlans = currentWorkspace.currentPlans.map(existingPlan => 
+          existingPlan.id === p.id ? p : { ...existingPlan, status: 'ignored' }
+        );
+        const updatedPreviousPlans = currentWorkspace.previousPlans.map(existingPlan => 
+          ({ ...existingPlan, status: 'ignored' })
+        );
+
+        // Add new plan to start if it doesn't exist
+        if (!updatedCurrentPlans.some(plan => plan.id === p.id)) {
+          updatedCurrentPlans.unshift(p);
+        }
+
+        const result = {
+          ...currentWorkspace,
+          currentPlans: updatedCurrentPlans,
+          previousPlans: updatedPreviousPlans
+        };
+        console.log('Updated workspace plans:', result.currentPlans);
+        return result;
+      }
+
+      // For non-pending plans, just update the existing plan
+      const updatedCurrentPlans = currentWorkspace.currentPlans.map(existingPlan =>
+        existingPlan.id === p.id ? p : existingPlan
+      );
+      const updatedPreviousPlans = currentWorkspace.previousPlans.map(existingPlan =>
+        existingPlan.id === p.id ? p : existingPlan
+      );
+
+      const result = {
+        ...currentWorkspace,
+        currentPlans: updatedCurrentPlans,
+        previousPlans: updatedPreviousPlans
+      };
+      console.log('Updated workspace plans:', result.currentPlans);
+      return result;
+    });
+
+    // Refresh messages when we get a new plan
+    if (session) {
+      getWorkspaceMessagesAction(session, workspaceId).then(updatedMessages => {
+        setMessages(updatedMessages);
+      });
+    }
   }
 
   const handleWorkspaceUpdated = (workspace: RawWorkspace) => {
-    console.log(`workspace updated`);
+    console.log(`workspace updated`, workspace);
   }
 
   useEffect(() => {
@@ -312,12 +353,10 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
 
   // Show chat-only view when there's no revision yet
   if (!showEditor) {
-    console.log(plan);
     return (
       <PlanOnlyLayout>
         <PlanContent
           session={session}
-          plan={plan!}
           workspace={workspace!}
           messages={messages}
         />

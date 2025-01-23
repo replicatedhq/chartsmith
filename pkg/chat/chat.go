@@ -41,8 +41,7 @@ func ListChatMessagesForWorkspaceSinceRevision(ctx context.Context, workspaceID 
 		workspace_chat.id,
 		workspace_chat.workspace_id,
 		workspace_chat.prompt,
-		workspace_chat.response,
-		workspace_chat.is_complete
+		workspace_chat.response
 	FROM
 		workspace_chat
 	WHERE
@@ -65,7 +64,6 @@ func ListChatMessagesForWorkspaceSinceRevision(ctx context.Context, workspaceID 
 			&message.WorkspaceID,
 			&message.Prompt,
 			&response,
-			&message.IsComplete,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("error scanning chat message: %w", err)
@@ -90,8 +88,7 @@ func ListChatMessagesForWorkspace(ctx context.Context, workspaceID string) ([]ty
 		workspace_chat.id,
 		workspace_chat.workspace_id,
 		workspace_chat.prompt,
-		workspace_chat.response,
-		workspace_chat.is_complete
+		workspace_chat.response
 	FROM
 		workspace_chat
 	WHERE
@@ -113,7 +110,6 @@ func ListChatMessagesForWorkspace(ctx context.Context, workspaceID string) ([]ty
 			&chat.WorkspaceID,
 			&chat.Prompt,
 			&response,
-			&chat.IsComplete,
 		)
 		if err != nil {
 			return nil, err
@@ -139,8 +135,7 @@ func GetChatMessage(ctx context.Context, id string) (*types.Chat, error) {
 		workspace_chat.id,
 		workspace_chat.workspace_id,
 		workspace_chat.prompt,
-		workspace_chat.response,
-		workspace_chat.is_complete
+		workspace_chat.response
 	FROM
 		workspace_chat
 	WHERE
@@ -154,7 +149,6 @@ func GetChatMessage(ctx context.Context, id string) (*types.Chat, error) {
 		&chat.WorkspaceID,
 		&chat.Prompt,
 		&response,
-		&chat.IsComplete,
 	)
 
 	if err != nil {
@@ -187,35 +181,4 @@ func SetResponse(ctx context.Context, tx pgx.Tx, c *types.Chat) error {
 		}
 		return nil
 	}
-}
-
-func MarkComplete(ctx context.Context, tx pgx.Tx, chat *types.Chat) error {
-	query := `UPDATE workspace_chat
-	SET is_complete = true
-	WHERE id = $1`
-
-	if tx == nil {
-		conn := persistence.MustGetPooledPostgresSession()
-		defer conn.Release()
-
-		_, err := conn.Exec(ctx, query, chat.ID)
-		if err != nil {
-			return fmt.Errorf("error marking chat message as complete: %w", err)
-		}
-		return nil
-	} else {
-		_, err := tx.Exec(ctx, query, chat.ID)
-		if err != nil {
-			return fmt.Errorf("error marking chat message as complete: %w", err)
-		}
-		return nil
-	}
-}
-
-func MarkApplying(ctx context.Context, tx pgx.Tx, chat *types.Chat) error {
-	return nil
-}
-
-func MarkApplied(ctx context.Context, tx pgx.Tx, chat *types.Chat) error {
-	return nil
 }

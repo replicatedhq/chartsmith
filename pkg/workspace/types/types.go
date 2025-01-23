@@ -29,6 +29,9 @@ type Workspace struct {
 
 	Charts []Chart `json:"charts"`
 	Files  []File  `json:"files"`
+
+	CurrentPlans  []Plan `json:"current_plans"`
+	PreviousPlans []Plan `json:"previous_plans"`
 }
 
 type Revision struct {
@@ -55,8 +58,8 @@ type Plan struct {
 	WorkspaceID    string     `json:"workspaceId"`
 	ChatMessageIDs []string   `json:"chatMessageIds"`
 	Description    string     `json:"description"`
-	CreatedAt      time.Time  `json:"-"`
+	CreatedAt      time.Time  `json:"createdAt"`
 	UpdatedAt      time.Time  `json:"-"`
-	Version        int        `json:"-"`
-	Status         PlanStatus `json:"-"`
+	Version        int        `json:"version"`
+	Status         PlanStatus `json:"status"`
 }
