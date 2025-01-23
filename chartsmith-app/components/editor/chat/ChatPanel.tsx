@@ -33,7 +33,6 @@ export function ChatPanel({ messages, onSendMessage, onApplyChanges, session, wo
           <ChatMessage
             key={message.id || index}
             message={message}
-            messages={messages}
             onApplyChanges={() => onApplyChanges?.(message)}
             session={session}
             workspaceId={workspaceId}

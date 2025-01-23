@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Message } from "../types";
 import { Session } from "@/lib/types/session";
 import { useTheme } from "../../../contexts/ThemeContext";
@@ -31,6 +31,7 @@ export function PlanChatMessage({
   const { theme } = useTheme();
   const [showFeedback, setShowFeedback] = useState(false);
   const [chatInput, setChatInput] = useState("");
+  const [showDropdown, setShowDropdown] = useState(false);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
 
