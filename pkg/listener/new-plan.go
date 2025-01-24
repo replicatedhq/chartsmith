@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/replicatedhq/chartsmith/pkg/llm"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
@@ -80,7 +79,6 @@ func handleNewPlanNotification(ctx context.Context, planID string) error {
 			e := realtimetypes.PlanUpdatedEvent{
 				WorkspaceID: w.ID,
 				Plan:        plan,
-				When:        time.Now(),
 			}
 
 			if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
@@ -96,12 +94,11 @@ func handleNewPlanNotification(ctx context.Context, planID string) error {
 				return fmt.Errorf("error creating initial plan: %w", err)
 			}
 
-			plan.Status = workspacetypes.PlanStatusSuccess
+			plan.Status = workspacetypes.PlanStatusReview
 
 			e := realtimetypes.PlanUpdatedEvent{
 				WorkspaceID: w.ID,
 				Plan:        plan,
-				When:        time.Now(),
 			}
 
 			if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
@@ -112,7 +109,6 @@ func handleNewPlanNotification(ctx context.Context, planID string) error {
 		}
 	}
 
-	fmt.Printf("\n\n\n here\n\n\n")
 	// Advance the status of the plan so that the user can review it
 	if err := workspace.UpdatePlanStatus(ctx, plan.ID, workspacetypes.PlanStatusReview); err != nil {
 		return fmt.Errorf("error updating plan status: %w", err)

@@ -130,7 +130,7 @@ export function PlanChatMessage({
               </div>
             )}
           </div>
-          {showActions && plan.status === 'pending' && (
+          {showActions && plan.status === 'review' && (
             <div className="mt-6 border-t border-dark-border/20">
               <div className="flex items-center justify-between pt-4 pb-3">
                 <div className="flex gap-2">

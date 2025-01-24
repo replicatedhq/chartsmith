@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 
@@ -58,7 +57,6 @@ func sendMessage(channelName string, data map[string]interface{}) error {
 		log.Fatalf("Error encoding JSON: %v", err)
 	}
 
-	fmt.Printf("Sending event: %+v\n", requestBody)
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
 		log.Fatalf("Error creating request: %v", err)
@@ -76,13 +74,6 @@ func sendMessage(channelName string, data map[string]interface{}) error {
 	if resp.StatusCode != http.StatusOK {
 		log.Fatalf("Failed to send message, status code: %d", resp.StatusCode)
 	}
-
-	// log the response
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Fatalf("Error reading response body: %v", err)
-	}
-	fmt.Printf("Response: %s\n", string(body))
 
 	return nil
 }

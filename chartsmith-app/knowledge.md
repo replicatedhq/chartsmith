@@ -55,6 +55,12 @@
     - Use line-clamp-2 for collapsed preview
     - Position expand/collapse buttons in top-right
     - Maintain collapsed state until user explicitly expands
+
+  - Plan workflow states:
+    - planning: Initial state, no actions shown
+    - pending: Intermediate state, no actions shown
+    - review: Show approve/reject actions and chat input
+    - ignored: Collapsed view, no actions shown
   - For file explorer panels:
     - Use fixed width w-[280px] consistently across nested containers
     - Use flex-shrink-0 to prevent resizing
