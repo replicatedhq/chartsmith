@@ -237,7 +237,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
         centrifugeRef.current = null;
       }
     };
-  }, [centrifugoToken, session?.user.id, workspace?.id]); // Only core connection dependencies
+  }, [centrifugoToken, session?.user.id, workspace?.id, handlePlanUpdated, session]); // Include all dependencies
 
   // Track previous workspace state for follow mode
   const prevWorkspaceRef = React.useRef<Workspace | null>(null);

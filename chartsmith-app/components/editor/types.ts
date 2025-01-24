@@ -26,6 +26,12 @@ export interface Message {
   isApplied?: boolean;
   isApplying?: boolean;
   isIgnored?: boolean;
+  role?: string;
+  createdAt?: Date;
+  workspaceId?: string;
+  planId?: string;
+  userId?: string;
+  isOptimistic?: boolean;
 }
 
 // Interface for raw message from server before normalization
