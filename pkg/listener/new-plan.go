@@ -60,6 +60,12 @@ func handleNewPlanNotification(ctx context.Context, planID string) error {
 		UserIDs: userIDs,
 	}
 
+	if err := workspace.UpdatePlanStatus(ctx, plan.ID, workspacetypes.PlanStatusPlanning); err != nil {
+		return fmt.Errorf("error updating plan status: %w", err)
+	}
+
+	plan.Status = workspacetypes.PlanStatusPlanning
+
 	streamCh := make(chan string, 1)
 	doneCh := make(chan error, 1)
 	go func() {
