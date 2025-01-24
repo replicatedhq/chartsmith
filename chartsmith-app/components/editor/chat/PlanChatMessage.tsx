@@ -8,7 +8,7 @@ import { ignorePlanAction } from "@/lib/workspace/actions/ignore-plan";
 import { ThumbsUp, ThumbsDown, Send, ChevronDown, ChevronUp } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { createPlanAction } from "@/lib/workspace/actions/create-plan";
-import { Plan } from "@/lib/types/workspace";
+import { Plan, Workspace } from "@/lib/types/workspace";
 
 interface PlanChatMessageProps {
   showActions?: boolean;

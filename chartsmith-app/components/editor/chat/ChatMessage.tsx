@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Message } from "../types";
 import { Session } from "@/lib/types/session";
+import { Workspace } from "@/lib/types/workspace";
 import { useTheme } from "../../../contexts/ThemeContext";
 import { Button } from "@/components/ui/Button";
 import { FeedbackModal } from "@/components/FeedbackModal";
@@ -14,9 +15,10 @@ interface ChatMessageProps {
   showActions?: boolean;
   /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
   setMessages?: (messages: Message[]) => void;
+  setWorkspace?: React.Dispatch<React.SetStateAction<Workspace>>;
 }
 
-export function ChatMessage({ message, onApplyChanges, session, workspaceId, showActions = true, setMessages }: ChatMessageProps) {
+export function ChatMessage({ message, onApplyChanges, session, workspaceId, showActions = true, setMessages, setWorkspace }: ChatMessageProps) {
   const { theme } = useTheme();
   const [showReportModal, setShowReportModal] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
