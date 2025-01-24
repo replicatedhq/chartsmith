@@ -27,6 +27,11 @@
 - Move state updates that depend on prop/state changes into useEffect
 - Use stable IDs as React keys when available to preserve component state during updates
 - Always import UI components from @/components/ui/* to ensure consistent styling and behavior
+- For real-time connections:
+  - Use stable IDs as React keys when available to preserve component state during updates
+  - Always import UI components from @/components/ui/* to ensure consistent styling and behavior
+  - Wrap WebSocket message handlers in useCallback to prevent reconnections in production builds
+  - Keep WebSocket effect dependencies minimal - only include values needed for connection setup
 
 # Theme
 

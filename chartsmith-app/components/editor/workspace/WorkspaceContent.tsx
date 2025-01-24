@@ -62,7 +62,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     });
   }, [session, workspaceId]); // Include workspaceId since we need to reload messages when it changes
 
-  const handlePlanUpdated = (plan: RawPlan) => {
+  const handlePlanUpdated = React.useCallback((plan: RawPlan) => {
     console.log(`received publication with plan status: ${plan.status}`);
     const p: Plan = {
       id: plan.id,
@@ -116,7 +116,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
         setMessages(updatedMessages);
       });
     }
-  }
+  }, [session, workspaceId, setMessages]);
 
   const handleWorkspaceUpdated = (workspace: RawWorkspace) => {
     console.log(`workspace updated`, workspace);
@@ -173,7 +173,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
         centrifugeRef.current = null;
       }
     };
-  }, [centrifugoToken, session?.user.id, workspace?.id, handlePlanUpdated, session]); // Include all dependencies
+  }, [centrifugoToken, session?.user.id, workspace?.id]); // Only core connection dependencies
 
   // Track previous workspace state for follow mode
   const prevWorkspaceRef = React.useRef<Workspace | null>(null);
