@@ -18,6 +18,8 @@ interface PlanChatMessageProps {
   session?: Session;
   workspaceId?: string;
   messageId?: string;
+  handlePlanUpdated: (plan: Plan) => void;
+  setMessages?: React.Dispatch<React.SetStateAction<Message[]>>;
 }
 
 export function PlanChatMessage({
@@ -26,7 +28,9 @@ export function PlanChatMessage({
   onProceed,
   onIgnore,
   session,
-  messageId
+  messageId,
+  handlePlanUpdated,
+  setMessages
 }: PlanChatMessageProps) {
   const { theme } = useTheme();
   const [showFeedback, setShowFeedback] = useState(false);
@@ -34,7 +38,6 @@ export function PlanChatMessage({
 
   // Automatically collapse when plan becomes superseded
   useEffect(() => {
-    console.log('Plan status changed:', plan.id, plan.status);
     if (plan.status === 'ignored') {
       setIsExpanded(false);
     }
@@ -65,8 +68,43 @@ export function PlanChatMessage({
   const handleSubmitChat = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!session || !plan) return;
-    const p = await createPlanAction(session, chatInput, plan.workspaceId, plan.id);
+
+    const tempId = `temp-${Date.now()}`;
+
+    // Create optimistic message
+    const optimisticMessage: Message = {
+      id: `msg-${tempId}`,
+      prompt: chatInput,
+      response: undefined,
+      role: 'user',
+      createdAt: new Date(),
+      workspaceId: plan.workspaceId,
+      planId: tempId,
+      userId: session.user.id,
+      isOptimistic: true // Add flag to identify optimistic messages
+    };
+
+    // Create optimistic plan
+    const optimisticPlan: Plan = {
+      id: tempId,
+      description: '', // Empty by default, will be filled by streaming updates
+      status: 'planning',
+      workspaceId: plan.workspaceId,
+      chatMessageIds: [optimisticMessage.id],
+      createdAt: new Date(),
+    };
+
+    // Optimistically update UI if handlers provided
+    setMessages?.(prev => {
+      return [...prev, optimisticMessage];
+    });
+    handlePlanUpdated?.(optimisticPlan);
+
+    // Clear input immediately for better UX
     setChatInput("");
+
+    // Make actual API call
+    await createPlanAction(session, chatInput, plan.workspaceId, plan.id);
   };
 
   return (

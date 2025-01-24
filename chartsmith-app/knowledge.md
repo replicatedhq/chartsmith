@@ -62,10 +62,11 @@
     - Maintain collapsed state until user explicitly expands
 
   - Plan workflow states:
-    - planning: Initial state, no actions shown
-    - pending: Intermediate state, no actions shown
+    - planning: Initial state for new plans, no actions shown
+    - pending: Intermediate state, no actions shown, marks previous plans as ignored
     - review: Show approve/reject actions and chat input
     - ignored: Collapsed view, no actions shown
+    - Only pending state should mark other plans as ignored
   - For file explorer panels:
     - Use fixed width w-[280px] consistently across nested containers
     - Use flex-shrink-0 to prevent resizing
@@ -200,10 +201,46 @@ State Management:
 - For async operations on messages:
   - Show centered spinner with animate-spin and border-t-transparent when isApplying
   - Disable actions during applying state
-  - Maintain consistent layout space during state changes
-- Backend sends snake_case (is_complete), normalize to camelCase (isComplete) before updating state
-- When using real-time APIs, define separate types for raw server messages vs normalized frontend types
-- For streaming message updates, exclude messages state from effect deps to avoid feedback loops
+  - Maintain consistent layout space during state changes  - Backend sends snake_case (is_complete), normalize to camelCase (isComplete) before updating state
+  - When using real-time APIs, define separate types for raw server messages vs normalized frontend types
+  - For real-time updates:
+    - Add optimistic updates for better UX
+    - Use temporary IDs (e.g. `temp-${Date.now()}`) for optimistic items
+    - Clear input fields immediately after user action
+    - Let websocket updates replace optimistic items
+    - When optimistically creating related items (e.g. message and plan), use matching temp IDs
+    - Update all relevant state (messages, workspace, etc) for complete optimistic UI
+    - When optimistically creating related items (e.g. message and plan), use matching temp IDs
+    - Show optimistic items immediately, even if relationships aren't established yet
+    - When optimistically creating related items (e.g. message and plan), use matching temp IDs
+    - Update all relevant state (messages, workspace, etc) for complete optimistic UI
+    - When optimistically creating messages, match the server message shape exactly (e.g. 'prompt' vs 'content')
+    - When optimistically creating related items (e.g. message and plan), use matching temp IDs
+    - Show optimistic items immediately, even if relationships aren't established yet
+    - For optimistic plans, start with empty description and let streaming updates fill it in  - For streaming message updates, exclude messages state from effect deps to avoid feedback loops
+  - When handling real-time updates:
+    - Capture previous state before updates when needed for transition checks
+    - Check state transitions to trigger side effects (e.g. refresh data)
+    - Append unknown messages rather than ignoring them
+    - When replacing optimistic items:
+      - Match by workspace ID and temp ID prefix
+      - Remove optimistic items when real ones arrive
+      - Keep non-optimistic items during updates
+      - Replace entire optimistic item rather than merging
+    - For streaming responses:
+      - Validate isComplete as boolean type rather than checking for undefined
+      - Backend sends snake_case (is_complete), normalize to camelCase (isComplete) before updating state
+      - For streaming UI transitions, check isComplete on last message before showing next step
+      - When replacing optimistic items:
+        - Match by workspace ID and temp ID prefix
+        - Remove optimistic items when real ones arrive
+        - Keep non-optimistic items during updates
+        - Replace entire optimistic item rather than merging
+        - During streaming, update optimistic item content while preserving temp ID
+        - Only replace optimistic item with real one when stream completes
+        - When optimistically creating related items (e.g. message and plan), use matching temp IDs
+        - Update all relevant state (messages, workspace, etc) for complete optimistic UI
+        - When optimistically creating messages, match the server message shape exactly (e.g. 'prompt' vs 'content')
 - When updating state from real-time events, use functional updates to preserve existing state
 - When handling real-time updates:
   - Capture previous state before updates when needed for transition checks

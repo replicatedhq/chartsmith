@@ -35,6 +35,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
   const [workspace, setWorkspace] = useState<Workspace>(initialWorkspace);
   const { isFileTreeVisible, setIsFileTreeVisible } = useWorkspaceUI();
   const [messages, setMessages] = useState<Message[]>([]);
+
   const [selectedFile, setSelectedFile] = useState<WorkspaceFile | undefined>();
   const [editorContent, setEditorContent] = useState<string>("");
   const [showClarificationInput, setShowClarificationInput] = useState(false);
@@ -62,26 +63,75 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     });
   }, [session, workspaceId]); // Include workspaceId since we need to reload messages when it changes
 
-  const handlePlanUpdated = React.useCallback((plan: RawPlan) => {
-    console.log(`received publication with plan status: ${plan.status}`);
-    const p: Plan = {
+  const handlePlanUpdated = React.useCallback((plan: RawPlan | Plan) => {
+    // If it's a RawPlan, normalize it
+    const p: Plan = 'createdAt' in plan && typeof plan.createdAt === 'string' ? {
       id: plan.id,
       description: plan.description,
       status: plan.status,
       workspaceId: plan.workspaceId,
       chatMessageIds: plan.chatMessageIds,
       createdAt: new Date(plan.createdAt),
-    }
+    } : plan as Plan;
 
     setWorkspace(currentWorkspace => {
+      // Find any optimistic plan for this workspace
+      const optimisticPlan = currentWorkspace.currentPlans.find(existingPlan => {
+        const isOptimistic = existingPlan.id.startsWith('temp-');
+        const matchesWorkspace = existingPlan.workspaceId === p.workspaceId;
+        return isOptimistic && matchesWorkspace;
+      });
+
+
+      // If this is a real plan (non-temp id) and we have an optimistic plan, replace or update it
+      if (!p.id.startsWith('temp-') && optimisticPlan) {
+        // Find if we already have this plan
+        const existingPlan = currentWorkspace.currentPlans.find(plan => plan.id === p.id);
+
+        if (existingPlan) {
+          // Update existing plan with new content and remove optimistic
+          const updatedCurrentPlans = currentWorkspace.currentPlans
+            .filter(plan => plan.id !== optimisticPlan.id)
+            .map(plan => plan.id === p.id ? {...p} : plan);
+          return {
+            ...currentWorkspace,
+            currentPlans: updatedCurrentPlans,
+            previousPlans: currentWorkspace.previousPlans
+          };
+        } else if (p.status === 'planning') {
+          // During planning phase, update the optimistic plan's content
+          const updatedCurrentPlans = currentWorkspace.currentPlans.map(plan =>
+            plan.id === optimisticPlan.id ? {...plan, description: p.description} : plan
+          );
+          return {
+            ...currentWorkspace,
+            currentPlans: updatedCurrentPlans,
+            previousPlans: currentWorkspace.previousPlans
+          };
+        } else {
+          // For other states, replace optimistic with real plan
+          const updatedCurrentPlans = currentWorkspace.currentPlans.map(plan =>
+            plan.id === optimisticPlan.id ? p : plan
+          );
+          return {
+            ...currentWorkspace,
+            currentPlans: updatedCurrentPlans,
+            previousPlans: currentWorkspace.previousPlans
+          };
+        }
+      }
+
       // If this is a new pending plan, mark all other plans as ignored
       if (p.status === 'pending') {
-        const updatedCurrentPlans = currentWorkspace.currentPlans.map(existingPlan =>
-          existingPlan.id === p.id ? p : { ...existingPlan, status: 'ignored' }
-        );
-        const updatedPreviousPlans = currentWorkspace.previousPlans.map(existingPlan =>
-          ({ ...existingPlan, status: 'ignored' })
-        );
+        const updatedCurrentPlans = currentWorkspace.currentPlans.map(existingPlan => {
+          if (existingPlan.id === p.id) {
+            return p;
+          }
+          return { ...existingPlan, status: 'ignored' };
+        });
+        const updatedPreviousPlans = currentWorkspace.previousPlans.map(existingPlan => {
+          return { ...existingPlan, status: 'ignored' };
+        });
 
         // Add new plan to start if it doesn't exist
         if (!updatedCurrentPlans.some(plan => plan.id === p.id)) {
@@ -95,10 +145,20 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
         };
       }
 
-      // For non-pending plans, just update the existing plan
-      const updatedCurrentPlans = currentWorkspace.currentPlans.map(existingPlan =>
-        existingPlan.id === p.id ? p : existingPlan
-      );
+      // For non-pending plans, just update the existing plan or add if it's new
+      let found = false;
+      const updatedCurrentPlans = currentWorkspace.currentPlans.map(existingPlan => {
+        if (existingPlan.id === p.id) {
+          found = true;
+          return p;
+        }
+        return existingPlan;
+      });
+
+      // If this is a new plan and not replacing an optimistic one, add it
+      if (!found && !optimisticPlan) {
+        updatedCurrentPlans.unshift(p);
+      }
       const updatedPreviousPlans = currentWorkspace.previousPlans.map(existingPlan =>
         existingPlan.id === p.id ? p : existingPlan
       );
@@ -110,10 +170,14 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
       };
     });
 
-    // Refresh messages when we get a new plan or when plan status changes to 'review'
+    // Refresh messages when we get a new plan or when plan status changes
     if (session && (p.status === 'review' || p.status === 'pending')) {
       getWorkspaceMessagesAction(session, workspaceId).then(updatedMessages => {
-        setMessages(updatedMessages);
+        // Replace optimistic messages with real ones
+        setMessages(prev => {
+          const nonOptimisticMessages = prev.filter(m => !m.isOptimistic);
+          return [...nonOptimisticMessages, ...updatedMessages];
+        });
       });
     }
   }, [session, workspaceId, setMessages]);
@@ -352,6 +416,8 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
           session={session}
           workspace={workspace!}
           messages={messages}
+          handlePlanUpdated={handlePlanUpdated}
+          setMessages={setMessages}
         />
       </PlanOnlyLayout>
     );

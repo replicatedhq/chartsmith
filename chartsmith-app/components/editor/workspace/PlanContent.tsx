@@ -48,6 +48,8 @@ interface PlanContentProps {
   session: Session;
   workspace: Workspace;
   messages: Message[];
+  handlePlanUpdated: (plan: Plan) => void;
+  setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
 }
 
 function createMessagePlanMap(currentPlans: Plan[], messages: Message[]): Map<Message[], Plan> {
@@ -82,7 +84,7 @@ function createMessagePlanMap(currentPlans: Plan[], messages: Message[]): Map<Me
   return new Map([...userMessagePlanMap.entries()].reverse());
 }
 
-export function PlanContent({ session, workspace, messages }: PlanContentProps) {
+export function PlanContent({ session, workspace, messages, handlePlanUpdated, setMessages }: PlanContentProps) {
   if (!workspace || !messages) {
     if (!workspace) {
       return <div>No workspace found</div>;
@@ -96,6 +98,11 @@ export function PlanContent({ session, workspace, messages }: PlanContentProps) 
   const userMessagePlanMap = createMessagePlanMap(workspace.currentPlans, messages);
   // Create reversed map for rendering
   const reversedMap = new Map([...userMessagePlanMap].reverse());
+
+  // Find messages that aren't associated with any plan yet (like optimistic messages)
+  const unassociatedMessages = messages.filter(message =>
+    !workspace.currentPlans.some(plan => plan.chatMessageIds.includes(message.id))
+  );
 
   return (
     <div className="h-full w-full overflow-auto transition-all duration-300 ease-in-out">
@@ -118,8 +125,19 @@ export function PlanContent({ session, workspace, messages }: PlanContentProps) 
                   workspaceId={workspace.id}
                   messageId={userMessages[0]?.id}
                   showActions={index === reversedMap.size - 1}
+                  handlePlanUpdated={handlePlanUpdated}
+                  setMessages={setMessages}
                 />
               </div>
+            ))}
+            {/* Show any unassociated messages at the bottom */}
+            {unassociatedMessages.map(message => (
+              <ChatMessage
+                key={message.id}
+                message={message}
+                session={session}
+                workspaceId={workspace.id}
+              />
             ))}
           </Card>
         </ScrollingContent>
