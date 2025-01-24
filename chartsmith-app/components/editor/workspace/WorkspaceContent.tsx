@@ -123,8 +123,6 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
   }
 
   useEffect(() => {
-    // Don't include messages in deps to avoid infinite loop with streaming updates
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     if (!centrifugoToken || !session || !workspace?.id) {
       return;
     }
@@ -175,7 +173,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
         centrifugeRef.current = null;
       }
     };
-  }, [centrifugoToken, session?.user.id, workspace?.id]); // Only reconnect when these core values change
+  }, [centrifugoToken, session?.user.id, workspace?.id, handlePlanUpdated, session]); // Include all dependencies
 
   // Track previous workspace state for follow mode
   const prevWorkspaceRef = React.useRef<Workspace | null>(null);
