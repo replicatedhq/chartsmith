@@ -4,32 +4,17 @@ import (
 	"context"
 	"strings"
 
-	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
+	types "github.com/replicatedhq/chartsmith/pkg/llm/types"
 )
 
-func parseArtifactsInResponse(response string) (string, []workspacetypes.File, error) {
+func parseActionsInResponse(response string) (map[string]types.ActionPlan, error) {
 	parser := NewParser()
 
-	parser.Parse(response)
+	parser.ParsePlan(response)
 
 	result := parser.GetResult()
 
-	files := []workspacetypes.File{}
-	for _, file := range result.Files {
-		f := workspacetypes.File{
-			FilePath: file.Path,
-		}
-
-		if file.Content != "" {
-			f.Content = file.Content
-		} else {
-			f.Content = file.PartialContent
-		}
-
-		files = append(files, f)
-	}
-
-	return result.Title, files, nil
+	return result.Actions, nil
 }
 
 func removeChartsmithTags(ctx context.Context, input string) string {

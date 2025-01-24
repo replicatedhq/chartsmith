@@ -31,8 +31,6 @@ schema:
         notNull: true
     - name: description
       type: text
-    - name: plan
-      type: jsonb
     - name: charts_affected
       type: text[]
     - name: files_affected

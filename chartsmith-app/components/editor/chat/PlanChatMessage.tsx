@@ -1,14 +1,15 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { Message } from "../types";
 import { Session } from "@/lib/types/session";
 import { useTheme } from "../../../contexts/ThemeContext";
 import { Button } from "@/components/ui/Button";
 import { FeedbackModal } from "@/components/FeedbackModal";
 import { ignorePlanAction } from "@/lib/workspace/actions/ignore-plan";
-import { ThumbsUp, ThumbsDown, Send, ChevronDown, ChevronUp } from "lucide-react";
+import { ThumbsUp, ThumbsDown, Send, ChevronDown, ChevronUp, Plus, Pencil, Trash2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { createPlanAction } from "@/lib/workspace/actions/create-plan";
 import { Plan, Workspace } from "@/lib/types/workspace";
+import { createRevisionAction } from "@/lib/workspace/actions/create-revision";
 
 interface PlanChatMessageProps {
   showActions?: boolean;
@@ -45,6 +46,15 @@ export function PlanChatMessage({
     }
   }, [plan.status, plan.id]);
   const [chatInput, setChatInput] = useState("");
+  const actionsRef = useRef<HTMLDivElement>(null);
+
+  // Scroll when new actions are added
+  useLayoutEffect(() => {
+    if (plan.status === 'applying' && plan.actionFiles) {
+      actionsRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [plan.status, plan.actionFiles]);
+
   const [showDropdown, setShowDropdown] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -65,6 +75,15 @@ export function PlanChatMessage({
       await ignorePlanAction(session, plan.workspaceId, "");
       onIgnore?.();
     }
+  };
+
+  const handleProceed = async () => {
+    if (!session || !plan) return;
+    const updatedWorkspace = await createRevisionAction(session, plan.id);
+    if (updatedWorkspace && setWorkspace) {
+      setWorkspace(updatedWorkspace);
+    }
+    onProceed?.();
   };
 
   const handleSubmitChat = async (e: React.FormEvent) => {
@@ -100,7 +119,7 @@ export function PlanChatMessage({
     setMessages?.(prev => {
       return [...prev, optimisticMessage];
     });
-    
+
     // Mark other plans as ignored when adding new plan
     setWorkspace?.(currentWorkspace => ({
       ...currentWorkspace,
@@ -178,8 +197,49 @@ export function PlanChatMessage({
                     </Button>
                   </div>
                 )}
+            <style jsx>{`
+              @keyframes spin {
+                from { transform: rotate(0deg); }
+                to { transform: rotate(360deg); }
+              }
+            `}</style>
               </div>
             )}
+            {plan.status === 'applying' && plan.actionFiles && (
+              <div className="mt-4 border-t border-dark-border/20 pt-4">
+                <div className="flex flex-col items-center gap-2" ref={actionsRef}>
+                  {plan.actionFiles.map((action, index) => (
+                    <div key={index} className="flex items-center gap-1.5 px-2 py-1 rounded-full text-xs bg-primary/5 min-w-0">
+                      {action.status === 'created' ? (
+                        <div className="text-green-500">
+                          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
+                      ) : action.status === 'creating' ? (
+                        <div
+                          className="rounded-full h-3 w-3 border border-primary/70 border-t-transparent"
+                          style={{
+                            animation: 'spin 1s linear infinite',
+                            animationDelay: '0s'
+                          }}
+                        />
+                      ) : (
+                        <>
+                          {action.action === 'create' && <Plus className="h-3 w-3 text-primary/70" />}
+                          {action.action === 'update' && <Pencil className="h-3 w-3 text-primary/70" />}
+                          {action.action === 'delete' && <Trash2 className="h-3 w-3 text-primary/70" />}
+                        </>
+                      )}
+                      <span className={`${theme === "dark" ? "text-gray-300" : "text-gray-600"}`}>
+                        {action.path}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
           </div>
           {showActions && plan.status === 'review' && (
             <div className="mt-6 border-t border-dark-border/20">
@@ -205,7 +265,7 @@ export function PlanChatMessage({
                 <Button
                   variant="default"
                   size="sm"
-                  onClick={onProceed}
+                  onClick={handleProceed}
                   className="min-w-[100px] bg-primary hover:bg-primary/80 text-white"
                 >
                   Proceed

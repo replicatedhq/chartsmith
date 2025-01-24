@@ -1,9 +1,15 @@
 package llm
 
+const detailedPlanInstructions = `
+- Provide a detailed plan for the high level plan outlined here.
+`
+
 const initialPlanInstructions = `
-- Give me a high-level plan for thte user request provided here. Summarize for the user what you will do. Do NOT provide the actual code changes yet.
-- Include what you plan to name the chart.
-- Include a high level description of how you plan to test this chart (without providing specific bash commands).
+- Describe a general plan for creating a new helm chart based on the user request.
+- The user will provide a chart to start from. You shoud be inspired by this, but it's not important to copy it exactly.
+- Refer the the process as "creating" a chart, not "editing" a chart.
+- The user is a developer who understands Helm and Kubernetes.
+- You can be technical in your response, but don't write code.
 `
 
 const createKnowledge = `

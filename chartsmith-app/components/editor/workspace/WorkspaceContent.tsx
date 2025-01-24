@@ -72,8 +72,10 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
       workspaceId: plan.workspaceId,
       chatMessageIds: plan.chatMessageIds,
       createdAt: new Date(plan.createdAt),
+      actionFiles: plan.actionFiles,
     } : plan as Plan;
 
+    console.log('plan updated', p);
     setWorkspace(currentWorkspace => {
       // Find any optimistic plan for this workspace
       const optimisticPlan = currentWorkspace.currentPlans.find(existingPlan => {
@@ -174,10 +176,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     if (session && (p.status === 'review' || p.status === 'pending')) {
       getWorkspaceMessagesAction(session, workspaceId).then(updatedMessages => {
         // Replace optimistic messages with real ones
-        setMessages(prev => {
-          const nonOptimisticMessages = prev.filter(m => !m.isOptimistic);
-          return [...nonOptimisticMessages, ...updatedMessages];
-        });
+        setMessages(updatedMessages);
       });
     }
   }, [session, workspaceId, setMessages]);
@@ -438,6 +437,8 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
               session={session}
               workspaceId={workspaceId}
               setMessages={setMessages}
+              workspace={workspace}
+              setWorkspace={setWorkspace}
             />
           </div>
         </div>

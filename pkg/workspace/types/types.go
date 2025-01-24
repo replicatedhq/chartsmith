@@ -1,6 +1,8 @@
 package types
 
-import "time"
+import (
+	"time"
+)
 
 type File struct {
 	ID             string `json:"id"`
@@ -16,6 +18,15 @@ type Chart struct {
 	ID    string `json:"id"`
 	Name  string `json:"name"`
 	Files []File `json:"files"`
+}
+
+type BootstrapWorkspace struct {
+	ID              string `json:"-"`
+	Name            string `json:"-"`
+	CurrentRevision int    `json:"-"`
+
+	Charts []Chart `json:"-"`
+	Files  []File  `json:"-"`
 }
 
 type Workspace struct {
@@ -49,17 +60,25 @@ const (
 	PlanStatusPending  PlanStatus = "pending"
 	PlanStatusPlanning PlanStatus = "planning"
 	PlanStatusReview   PlanStatus = "review"
+	PlanStatusApplying PlanStatus = "applying"
 	PlanStatusSuccess  PlanStatus = "success"
 	PlanStatusError    PlanStatus = "error"
 )
 
 type Plan struct {
-	ID             string     `json:"id"`
-	WorkspaceID    string     `json:"workspaceId"`
-	ChatMessageIDs []string   `json:"chatMessageIds"`
-	Description    string     `json:"description"`
-	CreatedAt      time.Time  `json:"createdAt"`
-	UpdatedAt      time.Time  `json:"-"`
-	Version        int        `json:"version"`
-	Status         PlanStatus `json:"status"`
+	ID             string       `json:"id"`
+	WorkspaceID    string       `json:"workspaceId"`
+	ChatMessageIDs []string     `json:"chatMessageIds"`
+	Description    string       `json:"description"`
+	CreatedAt      time.Time    `json:"createdAt"`
+	UpdatedAt      time.Time    `json:"-"`
+	Version        int          `json:"version"`
+	Status         PlanStatus   `json:"status"`
+	ActionFiles    []ActionFile `json:"actionFiles"`
+}
+
+type ActionFile struct {
+	Action string `json:"action"`
+	Path   string `json:"path"`
+	Status string `json:"status"`
 }

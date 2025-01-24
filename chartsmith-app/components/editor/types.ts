@@ -99,4 +99,9 @@ export interface RawPlan {
   chatMessageIds: string[];
   createdAt: string;
   isComplete?: boolean;
+  actionFiles: {
+    action: string;
+    path: string;
+    status: string;
+  }[];
 }

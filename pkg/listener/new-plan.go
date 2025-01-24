@@ -39,7 +39,7 @@ func handleNewPlanNotification(ctx context.Context, planID string) error {
 
 	fmt.Printf("Handling new plan notification: %s\n", planID)
 
-	plan, err := workspace.GetPlan(ctx, planID)
+	plan, err := workspace.GetPlan(ctx, nil, planID)
 	if err != nil {
 		return fmt.Errorf("error getting plan: %w", err)
 	}
@@ -48,8 +48,6 @@ func handleNewPlanNotification(ctx context.Context, planID string) error {
 	if err != nil {
 		return fmt.Errorf("error getting workspace: %w", err)
 	}
-
-	fmt.Printf("Handling new plan notification for workspace: %s, plan: %s\n", w.ID, plan.ID)
 
 	userIDs, err := workspace.ListUserIDsForWorkspace(ctx, w.ID)
 	if err != nil {
@@ -69,7 +67,10 @@ func handleNewPlanNotification(ctx context.Context, planID string) error {
 	streamCh := make(chan string, 1)
 	doneCh := make(chan error, 1)
 	go func() {
-		llm.CreateInitialPlan(ctx, streamCh, doneCh, plan)
+		if err := llm.CreateInitialPlan(ctx, streamCh, doneCh, plan); err != nil {
+			fmt.Printf("Failed to create initial plan: %v\n", err)
+			processingErr = fmt.Errorf("error creating initial plan: %w", err)
+		}
 	}()
 
 	var buffer strings.Builder
