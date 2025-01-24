@@ -10,7 +10,8 @@ data:
       "admin_secret": "secret",
       "api_key": "api_key",
       "allowed_origins": ["*"],
-      "allow_user_limited_channels": true
+      "allow_user_limited_channels": true,
+      "log_level": "trace"
     }
 ---
 apiVersion: v1

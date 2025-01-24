@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/replicatedhq/chartsmith/pkg/llm"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
@@ -60,40 +61,58 @@ func handleNewPlanNotification(ctx context.Context, planID string) error {
 		UserIDs: userIDs,
 	}
 
-	streamCh := make(chan string)
-	doneCh := make(chan error)
+	streamCh := make(chan string, 1)
+	doneCh := make(chan error, 1)
 	go func() {
-		doneCh <- llm.CreateInitialPlan(ctx, streamCh, doneCh, plan)
+		llm.CreateInitialPlan(ctx, streamCh, doneCh, plan)
 	}()
 
 	var buffer strings.Builder
-	for stream := range streamCh {
-		// Trust the stream's spacing and just append
-		buffer.WriteString(stream)
+	done := false
+	for !done {
+		select {
+		case stream := <-streamCh:
+			// Trust the stream's spacing and just append
+			buffer.WriteString(stream)
 
-		// Send realtime update with current state
-		plan.Description = buffer.String()
-		e := realtimetypes.PlanUpdatedEvent{
-			WorkspaceID: w.ID,
-			Plan:        plan,
-			IsComplete:  false,
-		}
+			// Send realtime update with current state
+			plan.Description = buffer.String()
+			e := realtimetypes.PlanUpdatedEvent{
+				WorkspaceID: w.ID,
+				Plan:        plan,
+				When:        time.Now(),
+			}
 
-		if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
-			return err
-		}
+			if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
+				return fmt.Errorf("failed to send plan update: %w", err)
+			}
 
-		// Write to database
-		if err := workspace.AppendPlanDescription(ctx, plan.ID, stream); err != nil {
-			return fmt.Errorf("error appending plan description: %w", err)
+			// Write to database
+			if err := workspace.AppendPlanDescription(ctx, plan.ID, stream); err != nil {
+				return fmt.Errorf("error appending plan description: %w", err)
+			}
+		case err := <-doneCh:
+			if err != nil {
+				return fmt.Errorf("error creating initial plan: %w", err)
+			}
+
+			plan.Status = workspacetypes.PlanStatusSuccess
+
+			e := realtimetypes.PlanUpdatedEvent{
+				WorkspaceID: w.ID,
+				Plan:        plan,
+				When:        time.Now(),
+			}
+
+			if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
+				fmt.Printf("Failed to send final plan update: %v\n", err)
+				return fmt.Errorf("failed to send final plan update: %w", err)
+			}
+			done = true
 		}
 	}
 
-	err = <-doneCh
-	if err != nil {
-		return fmt.Errorf("error creating initial plan: %w", err)
-	}
-
+	fmt.Printf("\n\n\n here\n\n\n")
 	// Advance the status of the plan so that the user can review it
 	if err := workspace.UpdatePlanStatus(ctx, plan.ID, workspacetypes.PlanStatusReview); err != nil {
 		return fmt.Errorf("error updating plan status: %w", err)

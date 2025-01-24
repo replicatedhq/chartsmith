@@ -63,5 +63,6 @@ func CreateInitialPlan(ctx context.Context, streamCh chan string, doneCh chan er
 		doneCh <- stream.Err()
 	}
 
+	doneCh <- nil
 	return nil
 }

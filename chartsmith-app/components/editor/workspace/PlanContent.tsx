@@ -93,12 +93,7 @@ export function PlanContent({ session, workspace, messages }: PlanContentProps) 
     return null;
   }
 
-  console.log(workspace.currentPlans);
-
-  console.log('PlanContent received workspace:', workspace);
-  console.log('PlanContent received messages:', messages);
   const userMessagePlanMap = createMessagePlanMap(workspace.currentPlans, messages);
-  console.log('Created userMessagePlanMap:', userMessagePlanMap);
   // Create reversed map for rendering
   const reversedMap = new Map([...userMessagePlanMap].reverse());
 

@@ -63,7 +63,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
   }, [session, workspaceId]); // Include workspaceId since we need to reload messages when it changes
 
   const handlePlanUpdated = (plan: RawPlan) => {
-    console.log('handlePlanUpdated called with:', plan);
+    console.log(`received publication with plan status: ${plan.status}`);
     const p: Plan = {
       id: plan.id,
       description: plan.description,
@@ -72,17 +72,14 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
       chatMessageIds: plan.chatMessageIds,
       createdAt: new Date(plan.createdAt),
     }
-    console.log('Normalized plan:', p);
 
     setWorkspace(currentWorkspace => {
-      console.log('Current workspace plans:', currentWorkspace.currentPlans);
-
       // If this is a new pending plan, mark all other plans as ignored
       if (p.status === 'pending') {
-        const updatedCurrentPlans = currentWorkspace.currentPlans.map(existingPlan => 
+        const updatedCurrentPlans = currentWorkspace.currentPlans.map(existingPlan =>
           existingPlan.id === p.id ? p : { ...existingPlan, status: 'ignored' }
         );
-        const updatedPreviousPlans = currentWorkspace.previousPlans.map(existingPlan => 
+        const updatedPreviousPlans = currentWorkspace.previousPlans.map(existingPlan =>
           ({ ...existingPlan, status: 'ignored' })
         );
 
@@ -91,13 +88,11 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
           updatedCurrentPlans.unshift(p);
         }
 
-        const result = {
+        return {
           ...currentWorkspace,
           currentPlans: updatedCurrentPlans,
           previousPlans: updatedPreviousPlans
         };
-        console.log('Updated workspace plans:', result.currentPlans);
-        return result;
       }
 
       // For non-pending plans, just update the existing plan
@@ -108,17 +103,15 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
         existingPlan.id === p.id ? p : existingPlan
       );
 
-      const result = {
+      return {
         ...currentWorkspace,
         currentPlans: updatedCurrentPlans,
         previousPlans: updatedPreviousPlans
       };
-      console.log('Updated workspace plans:', result.currentPlans);
-      return result;
     });
 
-    // Refresh messages when we get a new plan
-    if (session) {
+    // Refresh messages when we get a new plan or when plan status changes to 'review'
+    if (session && (p.status === 'review' || p.status === 'pending')) {
       getWorkspaceMessagesAction(session, workspaceId).then(updatedMessages => {
         setMessages(updatedMessages);
       });

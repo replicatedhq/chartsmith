@@ -35,9 +35,10 @@ export interface Plan {
   id: string;
   description: string;
   status: string;
-  createdAt: Date;
   workspaceId: string;
   chatMessageIds: string[];
+  createdAt: Date;
+  isComplete?: boolean;
 }
 
 export interface ChatMessage {

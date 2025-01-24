@@ -31,6 +31,14 @@ export function PlanChatMessage({
   const { theme } = useTheme();
   const [showFeedback, setShowFeedback] = useState(false);
   const [isExpanded, setIsExpanded] = useState(!plan.status?.includes('ignored'));
+
+  // Automatically collapse when plan becomes superseded
+  useEffect(() => {
+    console.log('Plan status changed:', plan.id, plan.status);
+    if (plan.status === 'ignored') {
+      setIsExpanded(false);
+    }
+  }, [plan.status]);
   const [chatInput, setChatInput] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -58,7 +66,6 @@ export function PlanChatMessage({
     e.preventDefault();
     if (!session || !plan) return;
     const p = await createPlanAction(session, chatInput, plan.workspaceId, plan.id);
-    console.log(p);
     setChatInput("");
   };
 
@@ -67,11 +74,24 @@ export function PlanChatMessage({
       <div className="px-4 py-2 mr-12">
         <div className={`p-4 rounded-2xl ${theme === "dark" ? "bg-dark-border/40" : "bg-gray-100"} rounded-tl-sm`}>
           <div className={`text-xs ${
-            plan.status === 'ignored' 
+            plan.status === 'ignored'
               ? `${theme === "dark" ? "text-gray-500" : "text-gray-400"}`
               : `${theme === "dark" ? "text-primary/70" : "text-primary/70"}`
-          } font-medium mb-1`}>
-            {plan.status === 'ignored' ? 'Superseded Plan' : 'Proposed Plan'}
+          } font-medium mb-1 flex items-center gap-2`}>
+            <span>
+              {plan.status === 'ignored' ? 'Superseded Plan' : 'Proposed Plan'}
+            </span>
+            <span className={`text-xs ${
+              plan.status === 'planning'
+                ? `${theme === "dark" ? "text-yellow-500/70" : "text-yellow-600/70"}`
+                : plan.status === 'pending'
+                  ? `${theme === "dark" ? "text-blue-500/70" : "text-blue-600/70"}`
+                  : plan.status === 'review'
+                    ? `${theme === "dark" ? "text-green-500/70" : "text-green-600/70"}`
+                    : `${theme === "dark" ? "text-gray-500" : "text-gray-400"}`
+            }`}>
+              ({plan.status})
+            </span>
           </div>
           <div className={`${
             plan.status === 'ignored'
@@ -110,7 +130,7 @@ export function PlanChatMessage({
               </div>
             )}
           </div>
-          {showActions && (
+          {showActions && plan.status === 'pending' && (
             <div className="mt-6 border-t border-dark-border/20">
               <div className="flex items-center justify-between pt-4 pb-3">
                 <div className="flex gap-2">

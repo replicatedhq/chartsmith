@@ -85,4 +85,5 @@ export interface RawPlan {
   workspaceId: string;
   chatMessageIds: string[];
   createdAt: string;
+  isComplete?: boolean;
 }
