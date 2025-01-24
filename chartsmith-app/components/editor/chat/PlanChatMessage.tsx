@@ -38,7 +38,7 @@ export function PlanChatMessage({
     if (plan.status === 'ignored') {
       setIsExpanded(false);
     }
-  }, [plan.status]);
+  }, [plan.status, plan.id]);
   const [chatInput, setChatInput] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);

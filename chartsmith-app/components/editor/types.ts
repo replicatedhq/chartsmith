@@ -19,6 +19,13 @@ export interface Message {
   id: string;
   prompt: string;
   response?: string;
+  is_applied?: boolean;
+  is_applying?: boolean;
+  is_ignored?: boolean;
+  isComplete?: boolean;
+  isApplied?: boolean;
+  isApplying?: boolean;
+  isIgnored?: boolean;
 }
 
 // Interface for raw message from server before normalization
