@@ -50,6 +50,7 @@ interface PlanContentProps {
   messages: Message[];
   handlePlanUpdated: (plan: Plan) => void;
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
+  setWorkspace: React.Dispatch<React.SetStateAction<Workspace>>;
 }
 
 function createMessagePlanMap(currentPlans: Plan[], messages: Message[]): Map<Message[], Plan> {
@@ -84,7 +85,7 @@ function createMessagePlanMap(currentPlans: Plan[], messages: Message[]): Map<Me
   return new Map([...userMessagePlanMap.entries()].reverse());
 }
 
-export function PlanContent({ session, workspace, messages, handlePlanUpdated, setMessages }: PlanContentProps) {
+export function PlanContent({ session, workspace, messages, handlePlanUpdated, setMessages, setWorkspace }: PlanContentProps) {
   if (!workspace || !messages) {
     if (!workspace) {
       return <div>No workspace found</div>;
@@ -117,6 +118,7 @@ export function PlanContent({ session, workspace, messages, handlePlanUpdated, s
                     message={message}
                     session={session}
                     workspaceId={workspace.id}
+                    setWorkspace={setWorkspace}
                   />
                 ))}
                 <PlanChatMessage
@@ -127,6 +129,7 @@ export function PlanContent({ session, workspace, messages, handlePlanUpdated, s
                   showActions={index === reversedMap.size - 1}
                   handlePlanUpdated={handlePlanUpdated}
                   setMessages={setMessages}
+                  setWorkspace={setWorkspace}
                 />
               </div>
             ))}

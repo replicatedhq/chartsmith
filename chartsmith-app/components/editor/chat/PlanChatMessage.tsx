@@ -20,6 +20,7 @@ interface PlanChatMessageProps {
   messageId?: string;
   handlePlanUpdated: (plan: Plan) => void;
   setMessages?: React.Dispatch<React.SetStateAction<Message[]>>;
+  setWorkspace?: React.Dispatch<React.SetStateAction<Workspace>>;
 }
 
 export function PlanChatMessage({
@@ -30,7 +31,8 @@ export function PlanChatMessage({
   session,
   messageId,
   handlePlanUpdated,
-  setMessages
+  setMessages,
+  setWorkspace
 }: PlanChatMessageProps) {
   const { theme } = useTheme();
   const [showFeedback, setShowFeedback] = useState(false);
@@ -84,7 +86,7 @@ export function PlanChatMessage({
       isOptimistic: true // Add flag to identify optimistic messages
     };
 
-    // Create optimistic plan
+    // Create optimistic plan with planning status
     const optimisticPlan: Plan = {
       id: tempId,
       description: '', // Empty by default, will be filled by streaming updates
@@ -98,7 +100,18 @@ export function PlanChatMessage({
     setMessages?.(prev => {
       return [...prev, optimisticMessage];
     });
-    handlePlanUpdated?.(optimisticPlan);
+    
+    // Mark other plans as ignored when adding new plan
+    setWorkspace?.(currentWorkspace => ({
+      ...currentWorkspace,
+      currentPlans: [
+        optimisticPlan,
+        ...currentWorkspace.currentPlans.map(existingPlan => ({
+          ...existingPlan,
+          status: 'ignored'
+        }))
+      ]
+    }));
 
     // Clear input immediately for better UX
     setChatInput("");

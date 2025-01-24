@@ -10,6 +10,10 @@
 
 - Prefer using centralized state from contexts over local component state when data is shared
 - Files and workspace data come from Centrifugo real-time updates - don't maintain duplicate state
+- When optimistically creating messages:
+  - Update both messages and workspace state together
+  - Pass state setters through component chain to maintain consistency
+  - Keep optimistic updates synchronized across related state
 - Explorer follows new files automatically:
   - Selects most recently added or modified file
   - Tracks both workspace files and chart files
@@ -66,7 +70,7 @@
     - pending: Intermediate state, no actions shown, marks previous plans as ignored
     - review: Show approve/reject actions and chat input
     - ignored: Collapsed view, no actions shown
-    - Only pending state should mark other plans as ignored
+    - When creating new plans, mark other plans as ignored directly in workspace state
   - For file explorer panels:
     - Use fixed width w-[280px] consistently across nested containers
     - Use flex-shrink-0 to prevent resizing

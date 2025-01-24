@@ -418,6 +418,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
           messages={messages}
           handlePlanUpdated={handlePlanUpdated}
           setMessages={setMessages}
+          setWorkspace={setWorkspace}
         />
       </PlanOnlyLayout>
     );
