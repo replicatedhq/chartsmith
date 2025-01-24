@@ -14,7 +14,7 @@ interface ChatContainerProps {
   onApplyChanges: (message: Message) => void;
   session: Session;
   workspaceId: string;
-  setMessages: (messages: Message[]) => void;
+  setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   workspace?: Workspace;
   setWorkspace?: React.Dispatch<React.SetStateAction<Workspace>>;
 }

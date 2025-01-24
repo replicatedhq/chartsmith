@@ -113,6 +113,7 @@ export function PlanChatMessage({
       workspaceId: plan.workspaceId,
       chatMessageIds: [optimisticMessage.id],
       createdAt: new Date(),
+      actionFiles: [], // Initialize with empty array
     };
 
     // Optimistically update UI if handlers provided

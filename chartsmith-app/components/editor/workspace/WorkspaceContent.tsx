@@ -308,7 +308,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
 
   const handleApplyChanges = async (message: Message) => {
     if (!session || !workspace) return;
-    const updatedWorkspace = await createRevisionAction(session, workspace.id, message.id);
+    const updatedWorkspace = await createRevisionAction(session, message.planId || workspace.id);
     if (!updatedWorkspace) return;
 
     setWorkspace(updatedWorkspace);
