@@ -63,7 +63,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
   }, [session, workspaceId]); // Include workspaceId since we need to reload messages when it changes
 
   const handlePlanUpdated = (plan: RawPlan) => {
-    console.log('handlePlanUpdated called with:', plan);
+    console.log(`received publication with plan status: ${plan.status}`);
     const p: Plan = {
       id: plan.id,
       description: plan.description,
@@ -72,17 +72,14 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
       chatMessageIds: plan.chatMessageIds,
       createdAt: new Date(plan.createdAt),
     }
-    console.log('Normalized plan:', p);
 
     setWorkspace(currentWorkspace => {
-      console.log('Current workspace plans:', currentWorkspace.currentPlans);
-
       // If this is a new pending plan, mark all other plans as ignored
       if (p.status === 'pending') {
-        const updatedCurrentPlans = currentWorkspace.currentPlans.map(existingPlan => 
+        const updatedCurrentPlans = currentWorkspace.currentPlans.map(existingPlan =>
           existingPlan.id === p.id ? p : { ...existingPlan, status: 'ignored' }
         );
-        const updatedPreviousPlans = currentWorkspace.previousPlans.map(existingPlan => 
+        const updatedPreviousPlans = currentWorkspace.previousPlans.map(existingPlan =>
           ({ ...existingPlan, status: 'ignored' })
         );
 
@@ -91,13 +88,11 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
           updatedCurrentPlans.unshift(p);
         }
 
-        const result = {
+        return {
           ...currentWorkspace,
           currentPlans: updatedCurrentPlans,
           previousPlans: updatedPreviousPlans
         };
-        console.log('Updated workspace plans:', result.currentPlans);
-        return result;
       }
 
       // For non-pending plans, just update the existing plan
@@ -108,17 +103,15 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
         existingPlan.id === p.id ? p : existingPlan
       );
 
-      const result = {
+      return {
         ...currentWorkspace,
         currentPlans: updatedCurrentPlans,
         previousPlans: updatedPreviousPlans
       };
-      console.log('Updated workspace plans:', result.currentPlans);
-      return result;
     });
 
-    // Refresh messages when we get a new plan
-    if (session) {
+    // Refresh messages when we get a new plan or when plan status changes to 'review'
+    if (session && (p.status === 'review' || p.status === 'pending')) {
       getWorkspaceMessagesAction(session, workspaceId).then(updatedMessages => {
         setMessages(updatedMessages);
       });
@@ -132,10 +125,11 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
   useEffect(() => {
     // Don't include messages in deps to avoid infinite loop with streaming updates
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    if (!centrifugoToken || !session || hasConnectedRef.current || !workspace) {
+    if (!centrifugoToken || !session || !workspace?.id) {
       return;
     }
 
+    // Only create new connection if we don't have one
     if (!centrifugeRef.current) {
       centrifugeRef.current = new Centrifuge(process.env.NEXT_PUBLIC_CENTRIFUGO_ADDRESS!, {
         debug: true,
@@ -149,38 +143,39 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
       cf.on("error", (ctx) => {
         logger.error("Centrifugo error", { ctx });
       });
+
+      // Set up subscription
+      const channel = `${workspace.id}#${session.user.id}`;
+      const sub = cf.newSubscription(channel);
+
+      sub.on("publication", (message: { data: CentrifugoMessageData }) => {
+        const isPlanUpdatedEvent = message.data.plan;
+        if (isPlanUpdatedEvent) {
+          handlePlanUpdated(message.data.plan!);
+        }
+
+        const isWorkspaceUpdatedEvent = message.data.workspace;
+        if (isWorkspaceUpdatedEvent) {
+          handleWorkspaceUpdated(message.data.workspace!);
+        }
+      });
+      sub.on("subscribed", () => {});
+      sub.on("error", (ctx) => {
+        logger.error("Centrifugo subscription error", { ctx });
+      });
+
+      sub.subscribe();
+      cf.connect();
     }
 
-    const cf = centrifugeRef.current;
-    const channel = `${workspace?.id}#${session.user.id}`;
-    const sub = cf.newSubscription(channel);
-
-    sub.on("publication", (message: { data: CentrifugoMessageData }) => {
-      const isPlanUpdatedEvent = message.data.plan;
-      if (isPlanUpdatedEvent) {
-        handlePlanUpdated(message.data.plan!);
-      }
-
-      const isWorkspaceUpdatedEvent = message.data.workspace;
-      if (isWorkspaceUpdatedEvent) {
-        handleWorkspaceUpdated(message.data.workspace!);
-      }
-    });
-    sub.on("subscribed", () => {});
-    sub.on("error", (ctx) => {
-      logger.error("Centrifugo subscription error", { ctx });
-    });
-
-    sub.subscribe();
-    cf.connect();
-    hasConnectedRef.current = true;
-
     return () => {
-      hasConnectedRef.current = false;
-      cf.disconnect();
-      centrifugeRef.current = null;
+      // Only disconnect if we're unmounting or changing workspace
+      if (centrifugeRef.current) {
+        centrifugeRef.current.disconnect();
+        centrifugeRef.current = null;
+      }
     };
-  }, [centrifugoToken, session, workspace, setWorkspace, workspaceId]);
+  }, [centrifugoToken, session?.user.id, workspace?.id]); // Only reconnect when these core values change
 
   // Track previous workspace state for follow mode
   const prevWorkspaceRef = React.useRef<Workspace | null>(null);

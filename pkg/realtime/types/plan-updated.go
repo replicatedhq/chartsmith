@@ -9,7 +9,6 @@ var _ Event = PlanUpdatedEvent{}
 type PlanUpdatedEvent struct {
 	WorkspaceID string               `json:"workspace_id"`
 	Plan        *workspacetypes.Plan `json:"plan"`
-	IsComplete  bool                 `json:"is_complete"`
 }
 
 func (e PlanUpdatedEvent) GetMessageData() (map[string]interface{}, error) {
