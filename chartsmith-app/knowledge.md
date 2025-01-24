@@ -49,6 +49,11 @@
     - Preserve user's manual expand/collapse state for existing folders
     
   - For file explorer items with hover actions:
+  - For file explorer items with hover actions:
+  - Use truncate on text elements to prevent wrapping
+  - Add min-w-0 to parent flex container to enable truncation
+  - Make action buttons flex-shrink-0 to maintain size
+  - Keep hover actions outside of text container
   - Use truncate on text elements to prevent wrapping
   - Add min-w-0 to parent flex container to enable truncation
   - Make action buttons flex-shrink-0 to maintain size
@@ -235,6 +240,14 @@ State Management:
       - Validate isComplete as boolean type rather than checking for undefined
       - Backend sends snake_case (is_complete), normalize to camelCase (isComplete) before updating state
       - For streaming UI transitions, check isComplete on last message before showing next step
+  - For multiple spinners in a list:
+    - Use min-width to maintain circular shape
+    - Set fixed animationDuration for synchronization
+    - Keep spinners small (h-4 w-4) for list items
+    - For subtle spinners in lists:
+      - Use single border instead of double
+      - Match opacity with surrounding icons
+      - Keep size consistent with other list icons
       - When replacing optimistic items:
         - Match by workspace ID and temp ID prefix
         - Remove optimistic items when real ones arrive
@@ -266,13 +279,15 @@ State Management:
 - Backend sends snake_case (is_complete), normalize to camelCase (isComplete) before updating state
 - For auto-scrolling chat:
   - Add empty div with ref at end of messages
-  - Use closest('.overflow-auto') to find scrollable container
-  - Set scrollTop directly on container rather than using scrollIntoView
-  - Watch all content changes that could affect scroll height
-  - Create separate client component for scroll behavior to avoid React static flag errors
-  - Use React.memo to optimize re-renders of scrolling container
-  - Stop auto-scrolling when user scrolls up (>50px from bottom)
-  - Resume auto-scrolling when user scrolls back to bottom
+  - Use scrollIntoView with behavior: "smooth" for smooth scrolling
+  - Add scroll-smooth class to scrollable container
+  - Watch messages array for changes to trigger scroll
+  - Place ref div after all content to ensure proper scroll position
+  - Keep scroll behavior consistent across all chat views
+  - For streaming updates within messages:
+    - Add refs to dynamically updating sections
+    - Use useLayoutEffect for smoother scrolling
+    - Scroll when content length changes
 - For streaming UI transitions, check isComplete on last message before showing next step
 - For auto-scrolling chat, add empty div with ref at end of messages and scroll on message updates
 - For streaming UI transitions, check isComplete on last message before showing next step

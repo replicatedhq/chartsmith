@@ -1,0 +1,28 @@
+database: chartsmith
+name: workspace_plan_action_file
+schema:
+  postgres:
+    primaryKey:
+    - plan_id
+    - path
+    columns:
+    - name: plan_id
+      type: text
+      constraints:
+        notNull: true
+    - name: path
+      type: text
+      constraints:
+        notNull: true
+    - name: action
+      type: text
+      constraints:
+        notNull: true
+    - name: status
+      type: text
+      constraints:
+        notNull: true
+    - name: created_at
+      type: timestamp
+      constraints:
+        notNull: true

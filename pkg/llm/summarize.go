@@ -18,7 +18,7 @@ func SummarizeContent(ctx context.Context, content string) (string, error) {
 		Model:     anthropic.F(anthropic.ModelClaude3_5Sonnet20241022),
 		MaxTokens: anthropic.F(int64(8192)),
 		Messages: anthropic.F([]anthropic.MessageParam{
-			anthropic.NewAssistantMessage(anthropic.NewTextBlock(systemPrompt)),
+			anthropic.NewAssistantMessage(anthropic.NewTextBlock(commonSystemPrompt)),
 			anthropic.NewUserMessage(anthropic.NewTextBlock(userMessage)),
 		}),
 	})

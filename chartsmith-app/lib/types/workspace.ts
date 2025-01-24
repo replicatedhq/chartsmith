@@ -39,6 +39,13 @@ export interface Plan {
   chatMessageIds: string[];
   createdAt: Date;
   isComplete?: boolean;
+  actionFiles: ActionFile[];
+}
+
+export interface ActionFile {
+  action: string;
+  path: string;
+  status: string;
 }
 
 export interface ChatMessage {

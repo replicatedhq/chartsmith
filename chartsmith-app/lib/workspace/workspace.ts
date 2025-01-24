@@ -1,7 +1,7 @@
 import { getDB } from "../data/db";
 import { getParam } from "../data/param";
 
-import { Chart, WorkspaceFile, Workspace, Plan } from "../types/workspace";
+import { Chart, WorkspaceFile, Workspace, Plan, ActionFile } from "../types/workspace";
 import * as srs from "secure-random-string";
 import { logger } from "../utils/logger";
 
@@ -174,13 +174,33 @@ export async function getPlan(planId: string): Promise<Plan> {
       workspaceId: result.rows[0].workspace_id,
       chatMessageIds: result.rows[0].chat_message_ids,
       createdAt: result.rows[0].created_at,
+      actionFiles: [],
     };
+
+    const actionFiles = await listActionFiles(planId);
+    plan.actionFiles = actionFiles;
 
     return plan;
   } catch (err) {
     logger.error("Failed to get plan", { err });
     throw err;
   }
+}
+
+async function listActionFiles(planId: string): Promise<ActionFile[]> {
+  const db = getDB(await getParam("DB_URI"));
+  const result = await db.query(`SELECT action, path, status FROM workspace_plan_action_file WHERE plan_id = $1`, [planId]);
+  const actionFiles: ActionFile[] = [];
+
+  for (const row of result.rows) {
+    actionFiles.push({
+      action: row.action,
+      path: row.path,
+      status: row.status,
+    });
+  }
+
+  return actionFiles;
 }
 
 async function listFilesForWorkspace(workspaceID: string, revisionNumber: number): Promise<WorkspaceFile[]> {
@@ -416,7 +436,13 @@ async function listPlans(workspaceId: string): Promise<Plan[]> {
         status: row.status,
         workspaceId: row.workspace_id,
         chatMessageIds: row.chat_message_ids,
+        actionFiles: [],
       });
+    }
+
+    for (const plan of plans) {
+      const actionFiles = await listActionFiles(plan.id);
+      plan.actionFiles = actionFiles;
     }
 
     return plans;
@@ -426,7 +452,8 @@ async function listPlans(workspaceId: string): Promise<Plan[]> {
   }
 }
 
-export async function createRevision(workspaceID: string, chatMessageID: string, userID: string): Promise<number> {
+export async function createRevision(plan: Plan, userID: string): Promise<number> {
+  logger.info("Creating revision", { planId: plan.id, userID });
   const db = getDB(await getParam("DB_URI"));
 
   try {
@@ -463,7 +490,7 @@ export async function createRevision(workspaceID: string, chatMessageID: string,
         LEFT JOIN latest_revision lr ON true
         RETURNING revision_number
       `,
-      [workspaceID, userID]
+      [plan.workspaceId, userID]
     );
 
     const newRevisionNumber = revisionResult.rows[0].revision_number;
@@ -478,14 +505,14 @@ export async function createRevision(workspaceID: string, chatMessageID: string,
         FROM workspace_chart
         WHERE workspace_id = $1 AND revision_number = $2
       `,
-      [workspaceID, previousRevisionNumber]
+      [plan.workspaceId, previousRevisionNumber]
     );
 
     // insert workspace_chart records with same IDs but new revision number
     for (const chart of previousCharts.rows) {
       await db.query(
         `INSERT INTO workspace_chart (id, revision_number, workspace_id, name) VALUES ($1, $2, $3, $4)`,
-        [chart.id, newRevisionNumber, workspaceID, chart.name]
+        [chart.id, newRevisionNumber, plan.workspaceId, chart.name]
       );
     }
 
@@ -504,7 +531,7 @@ export async function createRevision(workspaceID: string, chatMessageID: string,
         WHERE workspace_id = $1
         AND revision_number = $2
       `,
-      [workspaceID, previousRevisionNumber]
+      [plan.workspaceId, previousRevisionNumber]
     );
 
     // Insert workspace_file records with same IDs but new revision number
@@ -533,10 +560,11 @@ export async function createRevision(workspaceID: string, chatMessageID: string,
     // Commit transaction
     await db.query('COMMIT');
 
-    // Notify about new revision
+    // Notify about new revision, after the commit
+    console.log("Notifying about new revision", { planId: plan.id });
     await db.query(
-      `SELECT pg_notify('new_revision', $1)`,
-      [`${workspaceID}/${newRevisionNumber}`]
+      `SELECT pg_notify('execute_plan', $1)`,
+      [plan.id]
     );
 
     return newRevisionNumber;
