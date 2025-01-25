@@ -34,7 +34,7 @@ export function WorkspaceContainer({ view, onViewChange, files, charts, rendered
     <div className="flex-1 flex flex-col h-[calc(100vh-3.5rem)] min-h-0">
       <EditorNav view={view} onViewChange={handleViewChange} />
       <div className="flex-1 flex min-h-0">
-        <div className="w-[280px] flex-shrink-0">
+        <div className="w-[260px] flex-shrink-0">
           {isFileTreeVisible && (view === "source" ?
             (() => {
               return (

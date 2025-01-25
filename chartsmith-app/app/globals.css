@@ -35,7 +35,7 @@ body {
 }
 
 .markdown-content {
-  @apply prose prose-sm max-w-none;
+  @apply prose max-w-none text-[12px];
 }
 
 .dark .markdown-content {
@@ -43,7 +43,7 @@ body {
 }
 
 .markdown-content p {
-  @apply my-2;
+  @apply my-1.5;
 }
 
 .markdown-content ul {

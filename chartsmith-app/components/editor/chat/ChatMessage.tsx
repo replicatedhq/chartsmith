@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import Image from "next/image";
 import { Message } from "../types";
 import { Session } from "@/lib/types/session";
 import { Workspace } from "@/lib/types/workspace";
@@ -41,19 +42,29 @@ export function ChatMessage({ message, onApplyChanges, session, workspaceId, sho
   return (
     <div className="space-y-2">
       {/* User Message */}
-      <div className="px-4 py-2 ml-12">
-        <div className={`p-4 rounded-2xl ${theme === "dark" ? "bg-primary/20" : "bg-primary/10"} rounded-tr-sm`}>
-          <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"} mb-1`}>You</div>
-          <div className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} text-sm`}>{message.prompt}</div>
+      <div className="px-2 py-1">
+        <div className={`p-3 rounded-2xl ${theme === "dark" ? "bg-primary/20" : "bg-primary/10"} rounded-tr-sm w-full`}>
+          <div className="flex items-start gap-2">
+            <Image 
+              src={session.user.imageUrl} 
+              alt={session.user.name} 
+              width={24} 
+              height={24} 
+              className="w-6 h-6 rounded-full flex-shrink-0" 
+            />
+            <div className="flex-1">
+              <div className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} text-[12px] pt-0.5`}>{message.prompt}</div>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Assistant Message - only show if there's a response */}
       {message.response && (
-        <div className="px-4 py-2 mr-12">
-          <div className={`p-4 rounded-2xl ${theme === "dark" ? "bg-dark-border/40" : "bg-gray-100"} rounded-tl-sm`}>
+        <div className="px-2 py-1">
+          <div className={`p-3 rounded-2xl ${theme === "dark" ? "bg-dark-border/40" : "bg-gray-100"} rounded-tl-sm w-full`}>
             <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"} mb-1`}>ChartSmith</div>
-            <div className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} ${message.isIgnored ? "opacity-50 line-through" : ""} text-sm whitespace-pre-wrap`}>
+            <div className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} ${message.isIgnored ? "opacity-50 line-through" : ""} text-[12px] whitespace-pre-wrap`}>
               {message.response || (!message.isComplete ? "..." : "")}
             </div>
             {message.isComplete && !message.isApplied && showActions && onApplyChanges && (

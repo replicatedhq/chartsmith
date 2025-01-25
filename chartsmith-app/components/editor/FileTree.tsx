@@ -224,7 +224,7 @@ export function FileTree({ files = [], charts = [], onFileSelect, onFileDelete, 
           <FileText className={`w-4 h-4 mr-2 ${selectedFile?.filePath === node.filePath ? "text-primary" : theme === "dark" ? "text-gray-400" : "text-gray-500"}`} />
         )}
         <div className="flex-1 flex items-center min-w-0">
-          <span className="text-sm truncate">{node.name}</span>
+          <span className="text-xs truncate">{node.name}</span>
         </div>
         <button
           onClick={(e) => node.type === "file" && handleDelete(node, e)}
