@@ -25,6 +25,7 @@ import { getPlanAction } from "@/lib/workspace/actions/get-plan";
 import { getWorkspaceAction } from "@/lib/workspace/actions/get-workspace";
 import { PlanOnlyLayout } from "../layout/PlanOnlyLayout";
 import { PlanContent } from "./PlanContent";
+import { createPlanAction } from "@/lib/workspace/actions/create-plan";
 
 interface WorkspaceContentProps {
   initialWorkspace: Workspace;
@@ -34,7 +35,7 @@ interface WorkspaceContentProps {
 export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceContentProps) {
   // All hooks at the top level
   const { session } = useSession();
-  const [workspace, setWorkspace] = useState<Workspace>(initialWorkspace);  
+  const [workspace, setWorkspace] = useState<Workspace>(initialWorkspace);
   const { isFileTreeVisible, setIsFileTreeVisible } = useWorkspaceUI();
   const [messages, setMessages] = useState<Message[]>([]);
   const [selectedFile, setSelectedFile] = useState<WorkspaceFile | undefined>();
@@ -110,7 +111,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
           // Update existing plan with new content and remove optimistic
           const updatedCurrentPlans = currentWorkspace.currentPlans
             .filter(plan => plan.id !== optimisticPlan.id)
-            .map(plan => plan.id === p.id ? {...p} : plan);            
+            .map(plan => plan.id === p.id ? {...p} : plan);
           return {
             ...currentWorkspace,
             currentPlans: updatedCurrentPlans,
@@ -247,7 +248,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
           setWorkspace(currentWorkspace => {
             // Find if file exists in workspace or chart files
             const existingWorkspaceFile = currentWorkspace.files?.find(f => f.filePath === artifact.path);
-            const chartWithFile = currentWorkspace.charts?.find(chart => 
+            const chartWithFile = currentWorkspace.charts?.find(chart =>
               chart.files.some(f => f.filePath === artifact.path)
             );
 
@@ -267,7 +268,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
               // Always add to the first chart
               return {
                 ...currentWorkspace,
-                charts: currentWorkspace.charts.map((chart, index) => 
+                charts: currentWorkspace.charts.map((chart, index) =>
                   index === 0 ? {
                     ...chart,
                     files: [...chart.files, newFile]
@@ -277,13 +278,13 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
             }
 
             // Update existing file
-            const updatedFiles = currentWorkspace.files?.map(file => 
+            const updatedFiles = currentWorkspace.files?.map(file =>
               file.filePath === artifact.path ? { ...file, content: artifact.content } : file
             ) || [];
 
             const updatedCharts = currentWorkspace.charts?.map(chart => ({
               ...chart,
-              files: chart.files.map(file => 
+              files: chart.files.map(file =>
                 file.filePath === artifact.path ? { ...file, content: artifact.content } : file
               )
             })) || [];
@@ -384,8 +385,53 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
 
   const handleSendMessage = async (message: string) => {
     if (!session || !workspace) return;
-    const m = await sendChatMessageAction(session, workspace.id, message);
-    setMessages((prevMessages) => [...prevMessages, m]);
+
+    const tempId = `temp-${Date.now()}`;
+
+    // Create optimistic message
+    const optimisticMessage: Message = {
+      id: `msg-${tempId}`,
+      prompt: message,
+      response: undefined,
+      role: 'user',
+      createdAt: new Date(),
+      workspaceId: workspace.id,
+      planId: tempId,
+      userId: session.user.id,
+      isOptimistic: true // Add flag to identify optimistic messages
+    };
+
+    // Create optimistic plan with planning status
+    const optimisticPlan: Plan = {
+      id: tempId,
+      description: '', // Empty by default, will be filled by streaming updates
+      status: 'planning',
+      workspaceId: workspace.id,
+      chatMessageIds: [optimisticMessage.id],
+      createdAt: new Date(),
+      actionFiles: [], // Initialize with empty array
+      isComplete: false
+    };
+
+    // Optimistically update UI
+    setMessages(prev => {
+      return [...prev, optimisticMessage];
+    });
+
+    // Mark other plans as ignored when adding new plan
+    setWorkspace(currentWorkspace => ({
+      ...currentWorkspace,
+      currentPlans: [
+        optimisticPlan,
+        ...currentWorkspace.currentPlans.map(existingPlan => ({
+          ...existingPlan,
+          status: 'ignored'
+        }))
+      ]
+    }));
+
+    // Make actual API call
+    await createPlanAction(session, message, workspace.id);
   };
 
   const handleApplyChanges = async (message: Message) => {
@@ -506,6 +552,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
           handlePlanUpdated={handlePlanUpdated}
           setMessages={setMessages}
           setWorkspace={setWorkspace}
+          onSendMessage={handleSendMessage}
         />
       </PlanOnlyLayout>
     );

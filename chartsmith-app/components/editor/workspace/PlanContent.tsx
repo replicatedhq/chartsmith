@@ -1,6 +1,8 @@
 'use client';
 
-import React from "react";
+import React, { useState } from "react";
+import { Send } from "lucide-react";
+import { useTheme } from "../../../contexts/ThemeContext";
 import { Card } from "@/components/ui/Card";
 import { Session } from "@/lib/types/session";
 import { Plan, Workspace } from "@/lib/types/workspace";
@@ -51,6 +53,7 @@ interface PlanContentProps {
   handlePlanUpdated: (plan: Plan) => void;
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   setWorkspace: React.Dispatch<React.SetStateAction<Workspace>>;
+  onSendMessage: (message: string) => void;
 }
 
 function createMessagePlanMap(currentPlans: Plan[], messages: Message[]): Map<Message[], Plan> {
@@ -105,9 +108,10 @@ export function PlanContent({ session, workspace, messages, handlePlanUpdated, s
     !workspace.currentPlans.some(plan => plan.chatMessageIds.includes(message.id))
   );
 
+
   return (
     <div className="h-full w-full overflow-auto transition-all duration-300 ease-in-out">
-      <div className="px-4 w-full max-w-3xl py-8 pb-16 mx-auto">
+      <div className="px-4 w-full max-w-3xl py-8 pb-16 mx-auto relative">
         <ScrollingContent>
           <Card className="p-6 w-full border-dark-border/40 shadow-lg">
             {Array.from(reversedMap).map(([userMessages, plan], index) => (
@@ -130,6 +134,7 @@ export function PlanContent({ session, workspace, messages, handlePlanUpdated, s
                   handlePlanUpdated={handlePlanUpdated}
                   setMessages={setMessages}
                   setWorkspace={setWorkspace}
+                  workspace={workspace}
                 />
               </div>
             ))}
@@ -144,6 +149,7 @@ export function PlanContent({ session, workspace, messages, handlePlanUpdated, s
             ))}
           </Card>
         </ScrollingContent>
+
       </div>
     </div>
   )
