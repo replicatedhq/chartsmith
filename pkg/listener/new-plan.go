@@ -67,9 +67,16 @@ func handleNewPlanNotification(ctx context.Context, planID string) error {
 	streamCh := make(chan string, 1)
 	doneCh := make(chan error, 1)
 	go func() {
-		if err := llm.CreateInitialPlan(ctx, streamCh, doneCh, plan); err != nil {
-			fmt.Printf("Failed to create initial plan: %v\n", err)
-			processingErr = fmt.Errorf("error creating initial plan: %w", err)
+		if w.CurrentRevision == 0 {
+			if err := llm.CreateInitialPlan(ctx, streamCh, doneCh, plan); err != nil {
+				fmt.Printf("Failed to create initial plan: %v\n", err)
+				processingErr = fmt.Errorf("error creating initial plan: %w", err)
+			}
+		} else {
+			if err := llm.CreatePlan(ctx, streamCh, doneCh, w, plan); err != nil {
+				fmt.Printf("Failed to create plan: %v\n", err)
+				processingErr = fmt.Errorf("error creating plan: %w", err)
+			}
 		}
 	}()
 
