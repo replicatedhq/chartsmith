@@ -61,8 +61,7 @@ const (
 	PlanStatusPlanning PlanStatus = "planning"
 	PlanStatusReview   PlanStatus = "review"
 	PlanStatusApplying PlanStatus = "applying"
-	PlanStatusSuccess  PlanStatus = "success"
-	PlanStatusError    PlanStatus = "error"
+	PlanStatusApplied  PlanStatus = "applied"
 )
 
 type Plan struct {
@@ -75,6 +74,7 @@ type Plan struct {
 	Version        int          `json:"version"`
 	Status         PlanStatus   `json:"status"`
 	ActionFiles    []ActionFile `json:"actionFiles"`
+	IsComplete     bool         `json:"-"`
 }
 
 type ActionFile struct {

@@ -11,6 +11,28 @@ import (
 	"github.com/replicatedhq/chartsmith/pkg/workspace/types"
 )
 
+func PendingActionPathsForPlan(ctx context.Context, planID string) ([]string, error) {
+	conn := persistence.MustGetPooledPostgresSession()
+	defer conn.Release()
+
+	query := `SELECT path FROM action_queue WHERE plan_id = $1 AND completed_at IS NULL`
+	rows, err := conn.Query(ctx, query, planID)
+	if err != nil {
+		return nil, fmt.Errorf("error listing pending actions: %w", err)
+	}
+	defer rows.Close()
+
+	var paths []string
+	for rows.Next() {
+		var path string
+		if err := rows.Scan(&path); err != nil {
+			return nil, fmt.Errorf("error scanning path: %w", err)
+		}
+		paths = append(paths, path)
+	}
+	return paths, nil
+}
+
 func listPlans(ctx context.Context, workspaceID string) ([]types.Plan, error) {
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
@@ -29,7 +51,8 @@ func listPlans(ctx context.Context, workspaceID string) ([]types.Plan, error) {
 		updated_at,
 		version,
 		status,
-		description
+		description,
+		is_complete
 	FROM workspace_plan WHERE workspace_id = $1 ORDER BY created_at DESC`
 
 	rows, err := tx.Query(ctx, query, workspaceID)
@@ -51,6 +74,7 @@ func listPlans(ctx context.Context, workspaceID string) ([]types.Plan, error) {
 			&plan.Version,
 			&plan.Status,
 			&description,
+			&plan.IsComplete,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("error scanning plan: %w", err)
@@ -98,7 +122,8 @@ func GetPlan(ctx context.Context, tx pgx.Tx, planID string) (*types.Plan, error)
 		updated_at,
 		version,
 		status,
-		description
+		description,
+		is_complete
 	FROM workspace_plan WHERE id = $1`
 
 	row := tx.QueryRow(ctx, query, planID)
@@ -114,6 +139,7 @@ func GetPlan(ctx context.Context, tx pgx.Tx, planID string) (*types.Plan, error)
 		&plan.Version,
 		&plan.Status,
 		&description,
+		&plan.IsComplete,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("error scanning plan: %w", err)
@@ -212,5 +238,17 @@ func UpdatePlanActionFiles(ctx context.Context, tx pgx.Tx, planID string, action
 		}
 	}
 
+	return nil
+}
+
+func SetPlanIsComplete(ctx context.Context, planID string, isComplete bool) error {
+	conn := persistence.MustGetPooledPostgresSession()
+	defer conn.Release()
+
+	query := `UPDATE workspace_plan SET is_complete = $1 WHERE id = $2`
+	_, err := conn.Exec(ctx, query, isComplete, planID)
+	if err != nil {
+		return fmt.Errorf("error updating plan is complete: %w", err)
+	}
 	return nil
 }

@@ -6,6 +6,7 @@ import (
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
 	types "github.com/replicatedhq/chartsmith/pkg/llm/types"
+	"github.com/replicatedhq/chartsmith/pkg/workspace"
 	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 )
 
@@ -76,5 +77,11 @@ func CreateDetailedPlan(ctx context.Context, planActionCreatedCh chan types.Acti
 	}
 
 	doneCh <- nil
+
+	// mark the plan as complete so that the action executors can know when the final step is and mark the plan status as complete
+	if err := workspace.SetPlanIsComplete(ctx, plan.ID, true); err != nil {
+		return fmt.Errorf("failed to mark plan as complete: %w", err)
+	}
+
 	return nil
 }
