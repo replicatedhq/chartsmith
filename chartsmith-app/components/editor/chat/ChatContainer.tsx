@@ -155,7 +155,7 @@ export function ChatContainer({ messages, onSendMessage, onApplyChanges, session
       <div className="flex-1 overflow-y-auto">
         <div className="pb-16">
           {content}
-          {workspace?.currentRevisionNumber > 0 && workspace?.currentPlans?.some(plan => 
+          {workspace?.currentRevisionNumber && workspace?.currentRevisionNumber > 0 && workspace?.currentPlans?.some(plan => 
             ['planning', 'applying'].includes(plan.status)
           ) && (
             <div className="flex justify-center py-4">
@@ -177,7 +177,7 @@ export function ChatContainer({ messages, onSendMessage, onApplyChanges, session
           }
         `}</style>
       </div>
-      {workspace?.currentRevisionNumber > 0 && workspace?.currentPlans?.some(plan => 
+      {workspace?.currentRevisionNumber && workspace?.currentRevisionNumber > 0 && workspace?.currentPlans?.some(plan => 
         !['planning', 'pending', 'applying'].includes(plan.status)
       ) && (
         <div className={`absolute bottom-0 left-0 right-0 ${theme === "dark" ? "bg-dark-surface" : "bg-white"} border-t ${theme === "dark" ? "border-dark-border" : "border-gray-200"}`}>
