@@ -91,9 +91,17 @@ body {
 
 /* Rest of the file stays the same */
 
-@keyframes progress {
-  0% { transform: translateX(-100%); }
-  20% { transform: translateX(-40%); }
-  80% { transform: translateX(40%); }
-  100% { transform: translateX(100%); }
+@keyframes progress-color {
+  0% { 
+    background-color: rgba(99, 102, 241, 0.3);
+    transform: scale(1);
+  }
+  50% { 
+    background-color: rgba(99, 102, 241, 0.9);
+    transform: scale(1.5);
+  }
+  100% { 
+    background-color: rgba(99, 102, 241, 0.3);
+    transform: scale(1);
+  }
 }

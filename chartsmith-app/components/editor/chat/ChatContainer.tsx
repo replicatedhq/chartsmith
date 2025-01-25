@@ -158,15 +158,17 @@ export function ChatContainer({ messages, onSendMessage, onApplyChanges, session
           {workspace?.currentRevisionNumber && workspace?.currentRevisionNumber > 0 && workspace?.currentPlans?.some(plan => 
             ['planning', 'applying'].includes(plan.status)
           ) && (
-            <div className="flex justify-center py-4">
-              <div className="w-24 h-1 rounded-full bg-dark-border/20 overflow-hidden">
+            <div className="flex gap-2 justify-center py-4">
+              {[0, 1, 2].map((i) => (
                 <div 
-                  className="h-full bg-primary/70 rounded-full"
+                  key={i}
+                  className="w-2 h-2 rounded-full bg-primary/70"
                   style={{
-                    animation: 'progress 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    animation: 'progress-color 1s ease infinite',
+                    animationDelay: `${i * 0.15}s`
                   }}
                 />
-              </div>
+              ))}
             </div>
           )}
         </div>

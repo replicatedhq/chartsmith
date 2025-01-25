@@ -60,7 +60,7 @@ export function PlanChatMessage({
   useLayoutEffect(() => {
     if (plan.status === 'applying' && plan.actionFiles) {
       // Immediate scroll for new actions
-      actionsRef.current?.scrollIntoView({ 
+      actionsRef.current?.scrollIntoView({
         behavior: 'smooth',
         block: 'start'
       });
@@ -69,7 +69,7 @@ export function PlanChatMessage({
       const delays = [100, 200, 300];
       delays.forEach(delay => {
         setTimeout(() => {
-          actionsRef.current?.scrollIntoView({ 
+          actionsRef.current?.scrollIntoView({
             behavior: 'smooth',
             block: 'start'
           });
@@ -245,7 +245,7 @@ export function PlanChatMessage({
                     {actionFilesExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                   </Button>
                 </div>
-                <div 
+                <div
                   className={`flex flex-col items-center gap-2 overflow-hidden transition-all duration-300 ${
                     actionFilesExpanded ? 'max-h-[500px]' : 'max-h-0'
                   }`}
@@ -286,7 +286,7 @@ export function PlanChatMessage({
           {showActions && (
             (!workspace?.currentRevisionNumber && plan.status === 'review') || // Plan-only view - show in review
             (workspace?.currentRevisionNumber && plan.status === 'review') // Editor view - only show in review
-          ) && (
+          ) ? (
             <div className="mt-6 border-t border-dark-border/20">
               <div className="flex items-center justify-between pt-4 pb-3">
                 <div className="flex gap-2">
@@ -352,7 +352,7 @@ export function PlanChatMessage({
                 </div>
               )}
             </div>
-          )}
+          ) : null}
         </div>
       </div>
       {showFeedback && session && plan.workspaceId && (
