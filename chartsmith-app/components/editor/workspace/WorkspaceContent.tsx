@@ -22,6 +22,7 @@ import { PromptInput } from "@/components/PromptInput";
 import { createRevisionAction } from "@/lib/workspace/actions/create-revision";
 import { logger } from "@/lib/utils/logger";
 import { getPlanAction } from "@/lib/workspace/actions/get-plan";
+import { getWorkspaceAction } from "@/lib/workspace/actions/get-workspace";
 import { PlanOnlyLayout } from "../layout/PlanOnlyLayout";
 import { PlanContent } from "./PlanContent";
 
@@ -32,8 +33,7 @@ interface WorkspaceContentProps {
 
 export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceContentProps) {
   const { session } = useSession();
-  const [workspace, setWorkspace] = useState<Workspace>(initialWorkspace);
-  const { isFileTreeVisible, setIsFileTreeVisible } = useWorkspaceUI();
+  const [workspace, setWorkspace] = useState<Workspace>(initialWorkspace);  const { isFileTreeVisible, setIsFileTreeVisible } = useWorkspaceUI();
   const [messages, setMessages] = useState<Message[]>([]);
 
   const [selectedFile, setSelectedFile] = useState<WorkspaceFile | undefined>();
@@ -49,7 +49,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     usePathname()?.endsWith('/rendered') ? 'rendered' : 'source'
   );
 
-  const renderedFiles: WorkspaceFile[] = [];
+  const renderedFiles: WorkspaceFile[] = workspace?.files || [];
 
   useEffect(() => {
     if (!session) return;
@@ -75,7 +75,6 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
       actionFiles: plan.actionFiles,
     } : plan as Plan;
 
-    console.log('plan updated', p);
     setWorkspace(currentWorkspace => {
       // Find any optimistic plan for this workspace
       const optimisticPlan = currentWorkspace.currentPlans.find(existingPlan => {
@@ -293,29 +292,32 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     setMessages((prevMessages) => [...prevMessages, m]);
   };
 
-  const handleGenerateChart = async () => {
-    if (!session || !workspace) return;
-    const updatedWorkspace = await createRevisionAction(session, workspace.id);
-    if (!updatedWorkspace) return;
-
-    setWorkspace(updatedWorkspace);
-    setIsFileTreeVisible(true);
-
-    // Refresh messages
-    const updatedMessages = await getWorkspaceMessagesAction(session, workspace.id);
-    setMessages(updatedMessages);
-  }
-
   const handleApplyChanges = async (message: Message) => {
     if (!session || !workspace) return;
-    const updatedWorkspace = await createRevisionAction(session, message.planId || workspace.id);
-    if (!updatedWorkspace) return;
 
-    setWorkspace(updatedWorkspace);
+    try {
+      const updatedWorkspace = await createRevisionAction(session, message.planId || workspace.id);
+      if (!updatedWorkspace) return;
 
-    // Refresh messages
-    const updatedMessages = await getWorkspaceMessagesAction(session, workspace.id);
-    setMessages(updatedMessages);
+      // Get a fresh workspace state after revision
+      if (session) {
+        const freshWorkspace = await getWorkspaceAction(session, workspace.id);
+        if (freshWorkspace) {
+          // Set workspace state and wait for it to complete
+          await new Promise<void>(resolve => {
+            setWorkspace(freshWorkspace);
+            // Use a short timeout to ensure state is updated
+            setTimeout(resolve, 0);
+          });
+        }
+      }
+
+      // Refresh messages after workspace state is updated
+      const updatedMessages = await getWorkspaceMessagesAction(session, workspace.id);
+      setMessages(updatedMessages);
+    } catch (err) {
+      console.error('Error applying changes:', err);
+    }
     return;
   };
 
@@ -363,12 +365,19 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
 
   const showEditor = workspace?.currentRevisionNumber > 0 || workspace?.incompleteRevisionNumber;
 
+  useEffect(() => {
+    if (showEditor) {
+      console.log('Setting file tree visible');
+      setIsFileTreeVisible(true);
+    }
+  }, [showEditor, setIsFileTreeVisible]);
+
   if (!session) return null;
 
 
   const handleViewChange = () => {
     const newView = view === "source" ? "rendered" : "source";
-    const newFiles = newView === "rendered" ? renderedFiles.map(file => ({
+    const newFiles = newView === "rendered" ? workspace.files.map(file => ({
       name: file.filePath ? file.filePath.split('/').pop() || file.filePath : 'unnamed',
       path: file.filePath || '',
       content: file.content || '',
@@ -442,14 +451,23 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
             />
           </div>
         </div>
-        {showEditor && (
-          <div className="flex-1 h-full translate-x-[400px] transition-opacity duration-100 ease-in-out opacity-0 animate-fadeIn">
+        {showEditor && (() => {
+          const allFiles = [
+            ...(workspace.files || []),
+            ...(workspace.charts?.flatMap(chart => chart.files) || [])
+          ];
+
+          return (
+            <div className="flex-1 h-full translate-x-[400px]">
             <WorkspaceContainer
               view={view}
               onViewChange={handleViewChange}
-              files={workspace.files}
-              charts={workspace.charts}
-              renderedFiles={renderedFiles}
+              files={allFiles}
+              charts={workspace.charts || []}
+              renderedFiles={[
+                ...(workspace.files || []),
+                ...(workspace.charts?.flatMap(chart => chart.files) || [])
+              ]}
               selectedFile={selectedFile}
               onFileSelect={handleFileSelect}
               onFileDelete={handleFileDelete}
@@ -457,8 +475,9 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
               onEditorChange={(value) => setEditorContent(value ?? "")}
               isFileTreeVisible={isFileTreeVisible}
             />
-          </div>
-        )}
+            </div>
+          );
+        })()}
       </div>
     </EditorLayout>
   );

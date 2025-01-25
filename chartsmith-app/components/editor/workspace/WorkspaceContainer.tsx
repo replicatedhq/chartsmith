@@ -35,18 +35,22 @@ export function WorkspaceContainer({ view, onViewChange, files, charts, rendered
       <EditorNav view={view} onViewChange={handleViewChange} />
       <div className="flex-1 flex min-h-0">
         <div className="w-[280px] flex-shrink-0">
-          {isFileTreeVisible && (view === "source" ? 
-            <FileBrowser 
-              nodes={files} 
-              onFileSelect={onFileSelect} 
-              onFileDelete={onFileDelete} 
+          {isFileTreeVisible && (view === "source" ?
+            (() => {
+              return (
+                <FileBrowser
+                  nodes={files}
+                  onFileSelect={onFileSelect}
+                  onFileDelete={onFileDelete}
+                  selectedFile={selectedFile}
+                  charts={charts}
+                />
+              );
+            })() :
+            <RenderedFileBrowser
+              nodes={renderedFiles}
+              onFileSelect={onFileSelect}
               selectedFile={selectedFile}
-              charts={charts}
-            /> : 
-            <RenderedFileBrowser 
-              nodes={renderedFiles} 
-              onFileSelect={onFileSelect} 
-              selectedFile={selectedFile} 
             />
           )}
         </div>

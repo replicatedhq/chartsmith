@@ -38,11 +38,11 @@ export function FileBrowser({ nodes, onFileSelect, onFileDelete, selectedFile, c
           </button>
         </div>
       </div>
-      <div className="flex-1 overflow-auto p-2">         
-        <FileTree 
-          files={nodes} 
-          onFileSelect={onFileSelect} 
-          onFileDelete={onFileDelete} 
+      <div className="flex-1 overflow-auto p-2">
+        <FileTree
+          files={nodes}
+          onFileSelect={onFileSelect}
+          onFileDelete={onFileDelete}
           selectedFile={selectedFile}
           charts={charts}  // Pass charts to FileTree
         />

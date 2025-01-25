@@ -27,6 +27,66 @@ export function FileTree({ files = [], charts = [], onFileSelect, onFileDelete, 
   const prevFilesRef = React.useRef<WorkspaceFile[]>([]);
   const prevChartsRef = React.useRef<Chart[]>([]);
 
+  // Convert flat file list into tree structure
+  const buildFileTree = (charts: Chart[] = []) => {
+    // Create tree nodes for each chart
+    const treeNodes = charts.map(chart => {
+      // Create the chart root node
+      const chartNode: TreeNode = {
+        name: chart.name,
+        id: chart.id,
+        filePath: chart.id,
+        type: "folder",
+        content: "",
+        children: []
+      };
+
+      // Create a map to store folder nodes for this chart
+      const folderMap: Record<string, TreeNode> = {};
+
+      // Add all files under this chart, maintaining their path structure
+      chart.files.forEach((file) => {
+        if (!file || !file.filePath) {
+          console.warn('Invalid file:', file);
+          return;
+        }
+
+        const parts = file.filePath.split('/');
+        let currentNode = chartNode;
+
+        // Create folder structure
+        for (let i = 0; i < parts.length - 1; i++) {
+          const folderPath = parts.slice(0, i + 1).join('/');
+          if (!folderMap[folderPath]) {
+            const folderNode: TreeNode = {
+              name: parts[i],
+              id: `folder-${folderPath}`,
+              filePath: folderPath,
+              type: "folder",
+              content: "",
+              children: []
+            };
+            folderMap[folderPath] = folderNode;
+            currentNode.children.push(folderNode);
+          }
+          currentNode = folderMap[folderPath];
+        }
+
+        // Add the file to its parent folder
+        currentNode.children.push({
+          ...file,
+          name: parts[parts.length - 1],
+          type: "file" as const,
+          children: []
+        });
+      });
+
+      return chartNode;
+    });
+
+    return treeNodes;
+  };
+
   // Initialize expanded folders state with all chart IDs and folder paths
   const [expandedFolders, setExpandedFolders] = React.useState<Set<string>>(() => {
     const expanded = new Set(charts.map(chart => chart.id));
@@ -93,7 +153,6 @@ export function FileTree({ files = [], charts = [], onFileSelect, onFileDelete, 
     prevChartsRef.current = charts;
   }, [files, charts]);
 
-
   const [deleteModal, setDeleteModal] = React.useState<{
     isOpen: boolean;
     filePath: string;
@@ -103,66 +162,6 @@ export function FileTree({ files = [], charts = [], onFileSelect, onFileDelete, 
     filePath: "",
     isRequired: false,
   });
-
-  // Convert flat file list into tree structure
-  const buildFileTree = (charts: Chart[] = []) => {
-    // Create tree nodes for each chart
-    const treeNodes = charts.map(chart => {
-      // Create the chart root node
-      const chartNode: TreeNode = {
-        name: chart.name,
-        id: chart.id,
-        filePath: chart.id,
-        type: "folder",
-        content: "",
-        children: []
-      };
-
-      // Create a map to store folder nodes for this chart
-      const folderMap: Record<string, TreeNode> = {};
-
-      // Add all files under this chart, maintaining their path structure
-      chart.files.forEach((file) => {
-      if (!file || !file.filePath) {
-        console.warn('Invalid file:', file);
-        return;
-      }
-
-      const parts = file.filePath.split('/');
-      let currentNode = chartNode;
-
-      // Create folder structure
-      for (let i = 0; i < parts.length - 1; i++) {
-        const folderPath = parts.slice(0, i + 1).join('/');
-        if (!folderMap[folderPath]) {
-          const folderNode: TreeNode = {
-            name: parts[i],
-            id: `folder-${folderPath}`,
-            filePath: folderPath,
-            type: "folder",
-            content: "",
-            children: []
-          };
-          folderMap[folderPath] = folderNode;
-          currentNode.children.push(folderNode);
-        }
-        currentNode = folderMap[folderPath];
-      }
-
-      // Add the file to its parent folder
-      currentNode.children.push({
-        ...file,
-        name: parts[parts.length - 1],
-        type: "file" as const,
-        children: []
-      });
-    });
-
-      return chartNode;
-    });
-
-    return treeNodes;
-  };
 
   const treeNodes = buildFileTree(charts);
 
@@ -200,7 +199,6 @@ export function FileTree({ files = [], charts = [], onFileSelect, onFileDelete, 
             toggleFolder(node.filePath);
           } else {
             // Strip out tree-specific properties before passing to parent
-            // Strip out tree-specific properties and ensure content is a string
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const { type: _type, children: _children, ...rest } = node;
             onFileSelect({
@@ -210,7 +208,6 @@ export function FileTree({ files = [], charts = [], onFileSelect, onFileDelete, 
             });
           }
         }}
-
       >
         <span className="w-4 h-4 mr-1">{node.type === "folder" && (expandedFolders.has(node.filePath) ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />)}</span>
         {node.type === "folder" ? (

@@ -557,11 +557,13 @@ export async function createRevision(plan: Plan, userID: string): Promise<number
       );
     }
 
+    // update the workspace to make this the current revision
+    await db.query(`UPDATE workspace SET current_revision_number = $1 WHERE id = $2`, [newRevisionNumber, plan.workspaceId]);
+
     // Commit transaction
     await db.query('COMMIT');
 
     // Notify about new revision, after the commit
-    console.log("Notifying about new revision", { planId: plan.id });
     await db.query(
       `SELECT pg_notify('execute_plan', $1)`,
       [plan.id]
