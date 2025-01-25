@@ -49,11 +49,18 @@
     - Preserve user's manual expand/collapse state for existing folders
     
   - For file explorer items with hover actions:
-  - For file explorer items with hover actions:
   - Use truncate on text elements to prevent wrapping
   - Add min-w-0 to parent flex container to enable truncation
   - Make action buttons flex-shrink-0 to maintain size
   - Keep hover actions outside of text container
+
+# File Tree Structure
+- All files belong to the workspace's chart
+- When receiving new files via real-time updates:
+  - Add new files to the first chart in the workspace
+  - Create folder structure based on file path segments
+  - Auto-expand parent folders when new files are added
+  - Files are only shown as children of their chart, never as standalone files
   - Use truncate on text elements to prevent wrapping
   - Add min-w-0 to parent flex container to enable truncation
   - Make action buttons flex-shrink-0 to maintain size

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useEditorView } from "@/hooks/useEditorView";
 import { EditorLayout } from "@/components/editor/layout/EditorLayout";
 import { WorkspaceContainer } from "@/components/editor/workspace/WorkspaceContainer";
@@ -32,22 +32,38 @@ interface WorkspaceContentProps {
 }
 
 export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceContentProps) {
+  // All hooks at the top level
   const { session } = useSession();
-  const [workspace, setWorkspace] = useState<Workspace>(initialWorkspace);  const { isFileTreeVisible, setIsFileTreeVisible } = useWorkspaceUI();
+  const [workspace, setWorkspace] = useState<Workspace>(initialWorkspace);  
+  const { isFileTreeVisible, setIsFileTreeVisible } = useWorkspaceUI();
   const [messages, setMessages] = useState<Message[]>([]);
-
   const [selectedFile, setSelectedFile] = useState<WorkspaceFile | undefined>();
   const [editorContent, setEditorContent] = useState<string>("");
   const [showClarificationInput, setShowClarificationInput] = useState(false);
-
-  const followMode = true; // Always true for now
   const [centrifugoToken, setCentrifugoToken] = useState<string | null>(null);
   const centrifugeRef = useRef<Centrifuge | null>(null);
   const hasConnectedRef = useRef(false);
-
   const { view, toggleView, updateFileSelection } = useEditorView(
     usePathname()?.endsWith('/rendered') ? 'rendered' : 'source'
   );
+
+  // useCallback hooks
+  const handleFileSelect = useCallback((file: WorkspaceFile) => {
+    setSelectedFile(file);
+    setEditorContent(file.content || "");
+    updateFileSelection({
+      name: file.filePath.split('/').pop() || file.filePath,
+      path: file.filePath,
+      content: file.content || "",
+      type: 'file' as const
+    });
+  }, [setSelectedFile, setEditorContent, updateFileSelection]);
+
+  const handleFileDelete = useCallback(() => {
+    return;
+  }, []);
+
+  const followMode = true; // Always true for now
 
   const renderedFiles: WorkspaceFile[] = workspace?.files || [];
 
@@ -93,7 +109,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
           // Update existing plan with new content and remove optimistic
           const updatedCurrentPlans = currentWorkspace.currentPlans
             .filter(plan => plan.id !== optimisticPlan.id)
-            .map(plan => plan.id === p.id ? {...p} : plan);
+            .map(plan => plan.id === p.id ? {...p} : plan);            
           return {
             ...currentWorkspace,
             currentPlans: updatedCurrentPlans,
@@ -209,6 +225,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
       const sub = cf.newSubscription(channel);
 
       sub.on("publication", (message: { data: CentrifugoMessageData }) => {
+        console.log("message", message.data);
         const isPlanUpdatedEvent = message.data.plan;
         if (isPlanUpdatedEvent) {
           handlePlanUpdated(message.data.plan!);
@@ -217,6 +234,84 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
         const isWorkspaceUpdatedEvent = message.data.workspace;
         if (isWorkspaceUpdatedEvent) {
           handleWorkspaceUpdated(message.data.workspace!);
+        }
+
+        const artifact = message.data.artifact;
+        if (artifact && artifact.path && artifact.content) {
+          console.log('Received artifact:', {
+            path: artifact.path,
+            contentLength: artifact.content.length
+          });
+
+          setWorkspace(currentWorkspace => {
+            // Find if file exists in workspace or chart files
+            const existingWorkspaceFile = currentWorkspace.files?.find(f => f.filePath === artifact.path);
+            const chartWithFile = currentWorkspace.charts?.find(chart => 
+              chart.files.some(f => f.filePath === artifact.path)
+            );
+
+            console.log('File location check:', {
+              existingInWorkspace: !!existingWorkspaceFile,
+              existingInChart: !!chartWithFile
+            });
+
+            // If file doesn't exist, add it to the chart
+            if (!existingWorkspaceFile && !chartWithFile) {
+              const newFile = {
+                id: `file-${Date.now()}`,
+                filePath: artifact.path,
+                content: artifact.content
+              };
+
+              // Always add to the first chart
+              return {
+                ...currentWorkspace,
+                charts: currentWorkspace.charts.map((chart, index) => 
+                  index === 0 ? {
+                    ...chart,
+                    files: [...chart.files, newFile]
+                  } : chart
+                )
+              };
+            }
+
+            // Update existing file
+            const updatedFiles = currentWorkspace.files?.map(file => 
+              file.filePath === artifact.path ? { ...file, content: artifact.content } : file
+            ) || [];
+
+            const updatedCharts = currentWorkspace.charts?.map(chart => ({
+              ...chart,
+              files: chart.files.map(file => 
+                file.filePath === artifact.path ? { ...file, content: artifact.content } : file
+              )
+            })) || [];
+
+            return {
+              ...currentWorkspace,
+              files: updatedFiles,
+              charts: updatedCharts
+            };
+          });
+
+          // Auto select the file
+          const file = {
+            id: `file-${Date.now()}`,
+            filePath: artifact.path,
+            content: artifact.content
+          };
+          console.log('Selecting file:', {
+            path: file.filePath,
+            id: file.id
+          });
+          handleFileSelect(file);
+          setEditorContent(artifact.content);
+          updateFileSelection({
+            name: artifact.path.split('/').pop() || artifact.path,
+            path: artifact.path,
+            content: artifact.content,
+            type: 'file' as const
+          });
         }
       });
       sub.on("subscribed", () => {});
@@ -235,7 +330,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
         centrifugeRef.current = null;
       }
     };
-  }, [centrifugoToken, session?.user.id, workspace?.id, handlePlanUpdated, session]); // Include all dependencies
+  }, [centrifugoToken, session?.user.id, workspace?.id, handlePlanUpdated, session, handleFileSelect, updateFileSelection, setWorkspace, setEditorContent]); // Include all dependencies
 
   // Track previous workspace state for follow mode
   const prevWorkspaceRef = React.useRef<Workspace | null>(null);
@@ -374,7 +469,6 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
 
   if (!session) return null;
 
-
   const handleViewChange = () => {
     const newView = view === "source" ? "rendered" : "source";
     const newFiles = newView === "rendered" ? workspace.files.map(file => ({
@@ -398,23 +492,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     toggleView(newFiles);
   };
 
-  const handleFileSelect = (file: WorkspaceFile) => {
-    if (!('content' in file)) {
-      console.warn("Selected file has no content property:", file);
-    }
-    setSelectedFile(file);
-    setEditorContent(file.content || "");
-    updateFileSelection({
-      name: file.filePath.split('/').pop() || file.filePath,
-      path: file.filePath,
-      content: file.content || "",
-      type: 'file' as const
-    });
-  };
 
-  const handleFileDelete = () => {
-    return;
-  };
 
   // Show chat-only view when there's no revision yet
   if (!showEditor) {

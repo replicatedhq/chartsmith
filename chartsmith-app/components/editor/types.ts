@@ -69,8 +69,14 @@ export interface CentrifugoMessageData {
   workspace?: RawWorkspace;
   message?: RawMessage;
   plan?: RawPlan;
-  is_complete?: boolean;
-  workspace_id: string;
+  artifact?: RawArtifact;
+  workspaceId: string;
+}
+
+export interface RawArtifact {
+  revisionNumber: number;
+  path: string;
+  content: string;
 }
 
 // Interface for raw message from server before normalization
@@ -78,9 +84,6 @@ export interface RawMessage {
   id: string;
   prompt: string;
   response?: string;
-  is_applied?: boolean;
-  is_applying?: boolean;
-  is_ignored?: boolean;
 }
 
 export interface ValuesScenario {

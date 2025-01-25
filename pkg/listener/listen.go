@@ -3,6 +3,7 @@ package listener
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
@@ -53,11 +54,27 @@ func Listen(ctx context.Context) error {
 		fmt.Printf("Listening on channel: %s\n", channel)
 	}
 
+	idleTimer := time.NewTimer(3 * time.Second)
+	defer idleTimer.Stop()
+
+	// Check for work immediately on startup
+	fmt.Printf("Checking for pending work on startup...\n")
+	checkForPendingWork(ctx)
+
 	for {
-		fmt.Printf("Waiting for notification...\n")
+		idleTimer.Reset(3 * time.Second)
+
 		notification, err := conn.WaitForNotification(ctx)
 		if err != nil {
-			return fmt.Errorf("waiting for notification: %w", err)
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-idleTimer.C:
+				checkForPendingWork(ctx)
+				continue
+			default:
+				return fmt.Errorf("waiting for notification: %w", err)
+			}
 		}
 
 		// Try to claim this notification for processing
@@ -94,7 +111,7 @@ func Listen(ctx context.Context) error {
 				// Process the action
 				go func(pid, p string) {
 					defer func() {
-						// Instead of just releasing semaphore, check for more work
+						// Check for more pending actions before releasing semaphore
 						for {
 							nextPlanID, nextPath, err := processNextAction(ctx)
 							if err != nil {
@@ -103,13 +120,12 @@ func Listen(ctx context.Context) error {
 								return
 							}
 							if nextPlanID == "" {
-								// No more work to do
+								// No more pending actions
 								<-executeActionSemaphore
 								return
 							}
 
-							// Process the next action
-							fmt.Printf("Processing next action: %s/%s\n", nextPlanID, nextPath)
+							fmt.Printf("Found pending action: %s/%s\n", nextPlanID, nextPath)
 							if err := handleExecuteActionNotification(ctx, nextPlanID, nextPath); err != nil {
 								fmt.Printf("Error handling execute action: %v\n", err)
 								conn := persistence.MustGeUunpooledPostgresSession()
@@ -119,15 +135,17 @@ func Listen(ctx context.Context) error {
 									SET completed_at = NOW()
 									WHERE plan_id = $1 AND path = $2
 								`, nextPlanID, nextPath)
-							} else {
-								conn := persistence.MustGeUunpooledPostgresSession()
-								defer conn.Close(ctx)
-								conn.Exec(ctx, `
-									UPDATE action_queue
-									SET completed_at = NOW()
-									WHERE plan_id = $1 AND path = $2
-								`, nextPlanID, nextPath)
+								continue
 							}
+
+							// Mark action as completed
+							conn := persistence.MustGeUunpooledPostgresSession()
+							defer conn.Close(ctx)
+							conn.Exec(ctx, `
+								UPDATE action_queue
+								SET completed_at = NOW()
+								WHERE plan_id = $1 AND path = $2
+							`, nextPlanID, nextPath)
 						}
 					}()
 
@@ -183,6 +201,32 @@ func Listen(ctx context.Context) error {
 	}
 }
 
+// Helper function to check and process pending work
+func checkForPendingWork(ctx context.Context) {
+	select {
+	case executeActionSemaphore <- struct{}{}:
+		// Got the semaphore, try to get next action
+		planID, path, err := processNextAction(ctx)
+		if err != nil {
+			fmt.Printf("Error processing next action: %v\n", err)
+			<-executeActionSemaphore
+			return
+		}
+		if planID == "" {
+			// No actions to process
+			<-executeActionSemaphore
+			return
+		}
+
+		fmt.Printf("Found pending action: %s/%s\n", planID, path)
+		go handleExecuteActionWithLoop(ctx, planID, path)
+
+	default:
+		// Someone else has the semaphore, skip
+		return
+	}
+}
+
 func claimNotification(ctx context.Context, notificationChannel string, notificationID string) (bool, error) {
 	conn := persistence.MustGeUunpooledPostgresSession()
 	defer conn.Close(ctx)
@@ -207,4 +251,66 @@ func claimNotification(ctx context.Context, notificationChannel string, notifica
 		return false, err
 	}
 	return true, nil
+}
+
+// Extract the action handling loop into its own function for reuse
+func handleExecuteActionWithLoop(ctx context.Context, planID string, path string) {
+	defer func() {
+		// Check for more pending actions before releasing semaphore
+		for {
+			nextPlanID, nextPath, err := processNextAction(ctx)
+			if err != nil {
+				fmt.Printf("Error checking for next action: %v\n", err)
+				<-executeActionSemaphore
+				return
+			}
+			if nextPlanID == "" {
+				// No more pending actions
+				<-executeActionSemaphore
+				return
+			}
+
+			fmt.Printf("Found pending action: %s/%s\n", nextPlanID, nextPath)
+			if err := handleExecuteActionNotification(ctx, nextPlanID, nextPath); err != nil {
+				fmt.Printf("Error handling execute action: %v\n", err)
+				conn := persistence.MustGeUunpooledPostgresSession()
+				defer conn.Close(ctx)
+				conn.Exec(ctx, `
+					UPDATE action_queue
+					SET completed_at = NOW()
+					WHERE plan_id = $1 AND path = $2
+				`, nextPlanID, nextPath)
+				continue
+			}
+
+			// Mark action as completed
+			conn := persistence.MustGeUunpooledPostgresSession()
+			defer conn.Close(ctx)
+			conn.Exec(ctx, `
+				UPDATE action_queue
+				SET completed_at = NOW()
+				WHERE plan_id = $1 AND path = $2
+			`, nextPlanID, nextPath)
+		}
+	}()
+
+	// Handle the initial action
+	if err := handleExecuteActionNotification(ctx, planID, path); err != nil {
+		fmt.Printf("Error handling execute action: %v\n", err)
+		conn := persistence.MustGeUunpooledPostgresSession()
+		defer conn.Close(ctx)
+		conn.Exec(ctx, `
+			UPDATE action_queue
+			SET completed_at = NOW()
+			WHERE plan_id = $1 AND path = $2
+		`, planID, path)
+	} else {
+		conn := persistence.MustGeUunpooledPostgresSession()
+		defer conn.Close(ctx)
+		conn.Exec(ctx, `
+			UPDATE action_queue
+			SET completed_at = NOW()
+			WHERE plan_id = $1 AND path = $2
+		`, planID, path)
+	}
 }

@@ -7,7 +7,7 @@ import (
 var _ Event = PlanUpdatedEvent{}
 
 type PlanUpdatedEvent struct {
-	WorkspaceID string               `json:"workspace_id"`
+	WorkspaceID string               `json:"workspaceId"`
 	Plan        *workspacetypes.Plan `json:"plan"`
 }
 

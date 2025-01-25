@@ -11,6 +11,7 @@ import (
 	"github.com/replicatedhq/chartsmith/pkg/realtime"
 	realtimetypes "github.com/replicatedhq/chartsmith/pkg/realtime/types"
 	"github.com/replicatedhq/chartsmith/pkg/workspace"
+	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 	"go.uber.org/zap"
 )
 
@@ -58,6 +59,11 @@ func handleExecuteActionNotification(ctx context.Context, planID string, path st
 
 	conn.Close(ctx)
 
+	w, err := workspace.GetWorkspace(ctx, plan.WorkspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to get workspace: %w", err)
+	}
+
 	updatedPlan, err := workspace.GetPlan(ctx, nil, planID)
 	if err != nil {
 		return fmt.Errorf("failed to get plan: %w", err)
@@ -85,29 +91,62 @@ func handleExecuteActionNotification(ctx context.Context, planID string, path st
 	doneCh := make(chan error)
 
 	go func() {
+		action := ""
+
+		for _, item := range plan.ActionFiles {
+			if item.Path == path {
+				action = item.Action
+				break
+			}
+		}
+
 		apwp := llmtypes.ActionPlanWithPath{
 			ActionPlan: llmtypes.ActionPlan{
-				Action: plan.ActionFiles[0].Action,
+				Action: action,
 				Type:   "file",
 				Status: llmtypes.ActionPlanStatusPending,
 			},
-			Path: plan.ActionFiles[0].Path,
+			Path: path,
 		}
-		if err := llm.ExecuteAction(ctx, apwp, plan, streamCh, doneCh); err != nil {
+
+		// get the current chart too
+		var c *workspacetypes.Chart
+		for _, chart := range w.Charts {
+			// TODO the action should specify the chart, for now we assume there is only one
+			c = &chart
+		}
+
+		if err := llm.ExecuteAction(ctx, apwp, plan, c, streamCh, doneCh); err != nil {
 			logger.Error(fmt.Errorf("failed to execute action: %w", err))
 		}
 	}()
 
 	done := false
+	finalContent := ""
 	for !done {
 		select {
 		case err = <-doneCh:
+			fmt.Printf("doneCh received error: %+v\n", err)
 			if err != nil {
 				logger.Error(fmt.Errorf("failed to execute action: %w", err))
 			}
 			done = true
 		case stream := <-streamCh:
-			fmt.Printf("stream: %s\n", stream)
+			finalContent = stream
+
+			// send the final content to the realtime server
+			e := realtimetypes.ArtifactUpdatedEvent{
+				WorkspaceID: updatedPlan.WorkspaceID,
+				Artifact: realtimetypes.Artifact{
+					RevisionNumber: w.CurrentRevision,
+					Path:           path,
+					Content:        finalContent,
+				},
+			}
+
+			if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
+				return fmt.Errorf("failed to send artifact update: %w", err)
+			}
 		}
 	}
 
@@ -138,6 +177,12 @@ func handleExecuteActionNotification(ctx context.Context, planID string, path st
 
 	if err := finalUpdateTx.Commit(ctx); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	// save the content of the file
+	c := w.Charts[0]
+	if err := workspace.SetFileContentInWorkspace(ctx, finalUpdatePlan.WorkspaceID, w.CurrentRevision, c.ID, path, finalContent); err != nil {
+		return fmt.Errorf("failed to set file content in workspace: %w", err)
 	}
 
 	// send the updated plan to the realtime server

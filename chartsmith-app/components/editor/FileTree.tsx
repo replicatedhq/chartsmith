@@ -84,6 +84,8 @@ export function FileTree({ files = [], charts = [], onFileSelect, onFileDelete, 
       return chartNode;
     });
 
+
+
     return treeNodes;
   };
 
