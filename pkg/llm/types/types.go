@@ -19,8 +19,7 @@ type ActionPlan struct {
 	Status ActionPlanStatus `json:"status"`
 }
 
-type HelmFile struct {
-	Path           string
-	Content        string
-	PartialContent string
+type Artifact struct {
+	Path    string
+	Content string
 }

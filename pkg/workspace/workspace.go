@@ -11,7 +11,6 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 	"github.com/replicatedhq/chartsmith/pkg/workspace/types"
-	"github.com/tuvistavie/securerandom"
 )
 
 func ListUserIDsForWorkspace(ctx context.Context, workspaceID string) ([]string, error) {
@@ -389,74 +388,15 @@ func NotifyWorkerToCaptureEmbeddings(ctx context.Context, workspaceID string, re
 	return nil
 }
 
-func SetFilesInWorkspace(ctx context.Context, tx pgx.Tx, workspace *types.Workspace, revision int) error {
-	shouldCommit := false
-	if tx == nil {
-		conn := persistence.MustGetPooledPostgresSession()
-		defer conn.Release()
+func SetFileContentInWorkspace(ctx context.Context, workspaceID string, revisionNumber int, chartID string, filePath string, content string) error {
+	conn := persistence.MustGetPooledPostgresSession()
+	defer conn.Release()
 
-		localTx, err := conn.Begin(ctx)
-		if err != nil {
-			return err
-		}
-		defer localTx.Rollback(ctx)
-
-		tx = localTx
-		shouldCommit = true
+	query := `UPDATE workspace_file SET content = $1 WHERE chart_id = $2 AND file_path = $3 AND workspace_id = $4 AND revision_number = $5`
+	_, err := conn.Exec(ctx, query, content, chartID, filePath, workspaceID, revisionNumber)
+	if err != nil {
+		return fmt.Errorf("error updating file in workspace: %w", err)
 	}
-
-	for _, chart := range workspace.Charts {
-		for _, file := range chart.Files {
-			if file.ID == "" {
-				fileID, err := securerandom.Hex(12)
-				if err != nil {
-					return fmt.Errorf("error generating file ID: %w", err)
-				}
-				file.ID = fileID
-
-				query := `INSERT INTO workspace_file (id, revision_number, chart_id, workspace_id, file_path, content, summary, embeddings)
-				VALUES ($1, $2, $3, $4, $5, $6, null, null)`
-				_, err = tx.Exec(ctx, query, file.ID, revision, chart.ID, workspace.ID, file.FilePath, file.Content)
-				if err != nil {
-					return fmt.Errorf("error inserting file: %w", err)
-				}
-
-			} else {
-				query := `UPDATE workspace_file
-				SET content = $1, embeddings = NULL, summary = NULL
-				WHERE id = $2 AND revision_number = $3`
-				_, err := tx.Exec(ctx, query, file.Content, file.ID, revision)
-				if err != nil {
-					return fmt.Errorf("error updating file: %w", err)
-				}
-			}
-		}
-	}
-
-	for _, file := range workspace.Files {
-		if file.ID == "" {
-			fileID, err := securerandom.Hex(12)
-			if err != nil {
-				return fmt.Errorf("error generating file ID: %w", err)
-			}
-			file.ID = fileID
-		}
-
-		query := `INSERT INTO workspace_file (id, revision_number, chart_id, workspace_id, file_path, content, summary, embeddings)
-VALUES ($1, $2, null, $3, $4, $5, null, null)`
-		_, err := tx.Exec(ctx, query, file.ID, revision, workspace.ID, file.FilePath, file.Content)
-		if err != nil {
-			return err
-		}
-	}
-
-	// only commit the transaction if we started it
-	if shouldCommit {
-		if err := tx.Commit(ctx); err != nil {
-			return err
-		}
-	}
-
 	return nil
 }
 
