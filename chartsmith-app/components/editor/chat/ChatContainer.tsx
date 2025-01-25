@@ -163,7 +163,7 @@ export function ChatContainer({ messages, onSendMessage, onApplyChanges, session
                 <div 
                   className="h-full bg-primary/70 rounded-full"
                   style={{
-                    animation: 'progress 1.5s ease-in-out infinite',
+                    animation: 'progress 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
                   }}
                 />
               </div>

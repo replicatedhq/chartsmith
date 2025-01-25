@@ -90,3 +90,10 @@ body {
 }
 
 /* Rest of the file stays the same */
+
+@keyframes progress {
+  0% { transform: translateX(-100%); }
+  20% { transform: translateX(-40%); }
+  80% { transform: translateX(40%); }
+  100% { transform: translateX(100%); }
+}
