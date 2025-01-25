@@ -79,8 +79,8 @@ export async function createWorkspace(createdType: string, prompt: string | unde
 
     const planId: string = srs.default({ length: 12, alphanumeric: true });
     await chatClient.query(
-      `INSERT INTO workspace_plan (id, workspace_id, chat_message_ids, created_at, updated_at, version, status)
-      VALUES ($1, $2, $3, now(), now(), 0, 'pending')`,
+      `INSERT INTO workspace_plan (id, workspace_id, chat_message_ids, created_at, updated_at, version, status, is_complete)
+      VALUES ($1, $2, $3, now(), now(), 0, 'pending', false)`,
       [planId, id, [chatId]],
     );
 
@@ -141,8 +141,8 @@ export async function createPlan(userId: string, prompt: string, workspaceId: st
       newPlanChatIds.push(chatId);
 
       await client.query(
-        `INSERT INTO workspace_plan (id, workspace_id, chat_message_ids, created_at, updated_at, version, status)
-        VALUES ($1, $2, $3, now(), now(), 0, 'pending')`,
+        `INSERT INTO workspace_plan (id, workspace_id, chat_message_ids, created_at, updated_at, version, status, is_complete)
+        VALUES ($1, $2, $3, now(), now(), 0, 'pending', false)`,
         [planId, workspaceId, newPlanChatIds],
       );
 
@@ -165,7 +165,7 @@ export async function createPlan(userId: string, prompt: string, workspaceId: st
 export async function getPlan(planId: string): Promise<Plan> {
   try {
     const db = getDB(await getParam("DB_URI"));
-    const result = await db.query(`SELECT id, description, status, workspace_id, chat_message_ids, created_at FROM workspace_plan WHERE id = $1`, [planId]);
+    const result = await db.query(`SELECT id, description, status, workspace_id, chat_message_ids, created_at, is_complete FROM workspace_plan WHERE id = $1`, [planId]);
 
     const plan: Plan = {
       id: result.rows[0].id,
@@ -175,6 +175,7 @@ export async function getPlan(planId: string): Promise<Plan> {
       chatMessageIds: result.rows[0].chat_message_ids,
       createdAt: result.rows[0].created_at,
       actionFiles: [],
+      isComplete: result.rows[0].is_complete,
     };
 
     const actionFiles = await listActionFiles(planId);
@@ -423,7 +424,7 @@ async function listPlans(workspaceId: string): Promise<Plan[]> {
   try {
     const db = getDB(await getParam("DB_URI"));
     const result = await db.query(`SELECT
-      id, created_at, description, status, workspace_id, chat_message_ids
+      id, created_at, description, status, workspace_id, chat_message_ids, is_complete
       FROM workspace_plan WHERE workspace_id = $1 ORDER BY created_at DESC`, [workspaceId]);
 
     const plans: Plan[] = [];
@@ -437,6 +438,7 @@ async function listPlans(workspaceId: string): Promise<Plan[]> {
         workspaceId: row.workspace_id,
         chatMessageIds: row.chat_message_ids,
         actionFiles: [],
+        isComplete: row.is_complete,
       });
     }
 

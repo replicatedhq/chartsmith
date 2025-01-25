@@ -38,7 +38,7 @@ export interface Plan {
   workspaceId: string;
   chatMessageIds: string[];
   createdAt: Date;
-  isComplete?: boolean;
+  isComplete: boolean;
   actionFiles: ActionFile[];
 }
 

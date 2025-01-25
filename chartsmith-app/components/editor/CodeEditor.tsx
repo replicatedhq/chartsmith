@@ -40,7 +40,7 @@ export function CodeEditor({ file, theme = "light", value, onChange }: CodeEdito
         theme={theme === "light" ? "vs" : "vs-dark"}
         options={{
           minimap: { enabled: false },
-          fontSize: 14,
+          fontSize: 11,
           lineNumbers: "on",
           scrollBeyondLastLine: false,
           automaticLayout: true,

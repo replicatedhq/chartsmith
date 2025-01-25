@@ -35,4 +35,8 @@ schema:
       type: text[]
     - name: files_affected
       type: text[]
-
+    - name: is_complete
+      type: boolean
+      constraints:
+        notNull: true
+      default: "false" # remove after migration

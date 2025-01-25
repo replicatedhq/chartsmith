@@ -89,6 +89,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
       chatMessageIds: plan.chatMessageIds,
       createdAt: new Date(plan.createdAt),
       actionFiles: plan.actionFiles,
+      isComplete: plan.isComplete || false
     } : plan as Plan;
 
     setWorkspace(currentWorkspace => {
@@ -512,11 +513,10 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
 
   return (
     <EditorLayout>
-      <div className="flex w-full overflow-hidden relative">
-        <div className={`chat-container-wrapper transition-all duration-300 ease-in-out absolute ${
-          (!workspace?.currentRevisionNumber && !workspace?.incompleteRevisionNumber) || (workspace.currentRevisionNumber === 0 && !workspace.incompleteRevisionNumber) ? 'inset-0 flex justify-center' : 'left-0 top-0 bottom-0'
-        }`}>
-          <div className={`${(!workspace?.currentRevisionNumber && !workspace?.incompleteRevisionNumber) || (workspace.currentRevisionNumber === 0 && !workspace.incompleteRevisionNumber) ? 'w-full max-w-3xl px-4' : 'w-[400px]'}`}>
+      <div className="flex w-full overflow-hidden relative">          <div className={`chat-container-wrapper transition-all duration-300 ease-in-out absolute ${
+            (!workspace?.currentRevisionNumber && !workspace?.incompleteRevisionNumber) || (workspace.currentRevisionNumber === 0 && !workspace.incompleteRevisionNumber) ? 'inset-0 flex justify-center' : 'left-0 top-0 bottom-0'
+          }`}>
+            <div className={`${(!workspace?.currentRevisionNumber && !workspace?.incompleteRevisionNumber) || (workspace.currentRevisionNumber === 0 && !workspace.incompleteRevisionNumber) ? 'w-full max-w-3xl px-4' : 'w-[480px]'}`}>
             <ChatContainer
               messages={messages}
               onSendMessage={handleSendMessage}
@@ -536,7 +536,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
           ];
 
           return (
-            <div className="flex-1 h-full translate-x-[400px]">
+            <div className="flex-1 h-full translate-x-[480px]">
             <WorkspaceContainer
               view={view}
               onViewChange={handleViewChange}

@@ -114,6 +114,7 @@ export function PlanChatMessage({
       chatMessageIds: [optimisticMessage.id],
       createdAt: new Date(),
       actionFiles: [], // Initialize with empty array
+      isComplete: false
     };
 
     // Optimistically update UI if handlers provided
@@ -142,8 +143,8 @@ export function PlanChatMessage({
 
   return (
     <div className="space-y-2">
-      <div className="px-4 py-2 mr-12">
-        <div className={`p-4 rounded-2xl ${theme === "dark" ? "bg-dark-border/40" : "bg-gray-100"} rounded-tl-sm`}>
+      <div className="px-2 py-1">
+        <div className={`p-3 rounded-2xl ${theme === "dark" ? "bg-dark-border/40" : "bg-gray-100"} rounded-tl-sm w-full`}>
           <div className={`text-xs ${
             plan.status === 'ignored'
               ? `${theme === "dark" ? "text-gray-500" : "text-gray-400"}`
@@ -168,7 +169,7 @@ export function PlanChatMessage({
             plan.status === 'ignored'
               ? `${theme === "dark" ? "text-gray-400" : "text-gray-500"}`
               : `${theme === "dark" ? "text-gray-200" : "text-gray-700"}`
-          } text-sm markdown-content ${plan.status === 'ignored' ? 'opacity-75' : ''}`}>
+          } text-[11px] markdown-content ${plan.status === 'ignored' ? 'opacity-75' : ''}`}>
             {plan.status === 'ignored' && !isExpanded ? (
               <div className="flex items-center justify-between">
                 <div className="line-clamp-2">

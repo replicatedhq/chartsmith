@@ -191,5 +191,33 @@ func handleExecuteActionNotification(ctx context.Context, planID string, path st
 		return fmt.Errorf("failed to send plan update: %w", err)
 	}
 
+	if finalUpdatePlan.IsComplete {
+		// check if there are any pending actions in the queue that are incomplete
+		pendingActionPaths, err := workspace.PendingActionPathsForPlan(ctx, finalUpdatePlan.ID)
+		if err != nil {
+			return fmt.Errorf("failed to list pending actions: %w", err)
+		}
+
+		countOtherPaths := 0
+		for _, pap := range pendingActionPaths {
+			if pap != path {
+				countOtherPaths++
+			}
+		}
+
+		if countOtherPaths == 0 {
+			// send the plan status as complete to the realtime server
+			e.Plan.Status = workspacetypes.PlanStatusApplied
+
+			if err := workspace.UpdatePlanStatus(ctx, finalUpdatePlan.ID, workspacetypes.PlanStatusApplied); err != nil {
+				return fmt.Errorf("failed to set plan status: %w", err)
+			}
+
+			if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
+				return fmt.Errorf("failed to send plan update: %w", err)
+			}
+		}
+	}
+
 	return nil
 }
