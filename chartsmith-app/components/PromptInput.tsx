@@ -50,7 +50,7 @@ export function PromptInput({ onSubmit, isLoading, className, label }: PromptInp
             onChange={(e) => setPrompt(e.target.value)}
             onKeyDown={handleKeyDown}
             disabled={isLoading}
-            placeholder="Enter your clarification here..."
+            placeholder="Describe the Helm chart you want to create..."
             className={`w-full px-4 py-3 rounded-lg border resize-none h-32 ${
               theme === "dark" ? "bg-surface border-dark-border text-gray-300 placeholder-gray-500" : "bg-white border-gray-300 text-gray-900 placeholder-gray-400"
             } focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50 ${className || ""}`}

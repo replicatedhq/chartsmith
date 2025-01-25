@@ -1,4 +1,5 @@
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useState } from "react";
+import { Send } from "lucide-react";
 import { ChatPanel } from "./ChatPanel";
 import { useTheme } from "../../../contexts/ThemeContext";
 import { Message } from "../types";
@@ -53,6 +54,15 @@ function createMessagePlanMap(currentPlans: Plan[], messages: Message[]): Map<Me
 
 export function ChatContainer({ messages, onSendMessage, onApplyChanges, session, workspaceId, setMessages, workspace, setWorkspace }: ChatContainerProps) {
   const { theme } = useTheme();
+  const [chatInput, setChatInput] = useState("");
+
+  const handleSubmitChat = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chatInput.trim()) return;
+    
+    onSendMessage(chatInput.trim());
+    setChatInput("");
+  };
 
   const handlePlanUpdated = (plan: Plan) => {
     if (!workspace || !setWorkspace) return;
@@ -116,7 +126,6 @@ export function ChatContainer({ messages, onSendMessage, onApplyChanges, session
             />
           </div>
         ))}
-        {/* Show any unassociated messages at the bottom */}
         {unassociatedMessages.map(message => (
           <ChatMessage
             key={message.id}
@@ -142,8 +151,66 @@ export function ChatContainer({ messages, onSendMessage, onApplyChanges, session
   }
 
   return (
-    <div className={`h-[calc(100vh-3.5rem)] border-r flex flex-col min-h-0 overflow-hidden transition-all duration-300 ease-in-out w-full ${theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"}`}>
-      {content}
+    <div className={`h-[calc(100vh-3.5rem)] border-r flex flex-col min-h-0 overflow-hidden transition-all duration-300 ease-in-out w-full relative ${theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"}`}>
+      <div className="flex-1 overflow-y-auto">
+        <div className="pb-16">
+          {content}
+          {workspace?.currentRevisionNumber > 0 && workspace?.currentPlans?.some(plan => 
+            ['planning', 'applying'].includes(plan.status)
+          ) && (
+            <div className="flex justify-center py-4">
+              <div className="w-24 h-1 rounded-full bg-dark-border/20 overflow-hidden">
+                <div 
+                  className="h-full bg-primary/70 rounded-full"
+                  style={{
+                    animation: 'progress 1.5s ease-in-out infinite',
+                  }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+        <style jsx>{`
+          @keyframes progress {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+          }
+        `}</style>
+      </div>
+      {workspace?.currentRevisionNumber > 0 && workspace?.currentPlans?.some(plan => 
+        !['planning', 'pending', 'applying'].includes(plan.status)
+      ) && (
+        <div className={`absolute bottom-0 left-0 right-0 ${theme === "dark" ? "bg-dark-surface" : "bg-white"} border-t ${theme === "dark" ? "border-dark-border" : "border-gray-200"}`}>
+          <form onSubmit={handleSubmitChat} className="p-3 relative">
+            <textarea
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSubmitChat(e);
+                }
+              }}
+              placeholder="Type your message..."
+              rows={3}
+              style={{ height: 'auto', minHeight: '72px', maxHeight: '150px' }}
+              className={`w-full px-3 py-1.5 pr-10 text-sm rounded-md border resize-none overflow-hidden ${
+                theme === "dark"
+                  ? "bg-dark border-dark-border/60 text-white placeholder-gray-500"
+                  : "bg-white border-gray-200 text-gray-900 placeholder-gray-400"
+              } focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50`}
+            />
+            <button
+              type="submit"
+              className={`absolute right-4 top-[18px] p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-dark-border/40 ${
+                theme === "dark" ? "text-gray-400 hover:text-gray-200" : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              <Send className="w-4 h-4" />
+            </button>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

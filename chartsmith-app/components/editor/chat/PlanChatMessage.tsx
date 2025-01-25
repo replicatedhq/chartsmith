@@ -22,6 +22,7 @@ interface PlanChatMessageProps {
   handlePlanUpdated: (plan: Plan) => void;
   setMessages?: React.Dispatch<React.SetStateAction<Message[]>>;
   setWorkspace?: React.Dispatch<React.SetStateAction<Workspace>>;
+  workspace?: Workspace;
 }
 
 export function PlanChatMessage({
@@ -33,11 +34,18 @@ export function PlanChatMessage({
   messageId,
   handlePlanUpdated,
   setMessages,
-  setWorkspace
+  setWorkspace,
+  workspace
 }: PlanChatMessageProps) {
   const { theme } = useTheme();
   const [showFeedback, setShowFeedback] = useState(false);
   const [isExpanded, setIsExpanded] = useState(!plan.status?.includes('ignored'));
+  const [actionFilesExpanded, setActionFilesExpanded] = useState(plan.status === 'applying');
+
+  // Update expansion state when plan status changes
+  useEffect(() => {
+    setActionFilesExpanded(plan.status === 'applying');
+  }, [plan.status]);
 
   // Automatically collapse when plan becomes superseded
   useEffect(() => {
@@ -48,12 +56,27 @@ export function PlanChatMessage({
   const [chatInput, setChatInput] = useState("");
   const actionsRef = useRef<HTMLDivElement>(null);
 
-  // Scroll when new actions are added
+  // Scroll when new actions are added or when expanded
   useLayoutEffect(() => {
     if (plan.status === 'applying' && plan.actionFiles) {
-      actionsRef.current?.scrollIntoView({ behavior: 'smooth' });
+      // Immediate scroll for new actions
+      actionsRef.current?.scrollIntoView({ 
+        behavior: 'smooth',
+        block: 'start'
+      });
+    } else if (actionFilesExpanded) {
+      // Multiple delayed scrolls to ensure content is visible as it expands
+      const delays = [100, 200, 300];
+      delays.forEach(delay => {
+        setTimeout(() => {
+          actionsRef.current?.scrollIntoView({ 
+            behavior: 'smooth',
+            block: 'start'
+          });
+        }, delay);
+      });
     }
-  }, [plan.status, plan.actionFiles]);
+  }, [plan.status, plan.actionFiles, actionFilesExpanded]);
 
   const [showDropdown, setShowDropdown] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -207,9 +230,26 @@ export function PlanChatMessage({
             `}</style>
               </div>
             )}
-            {plan.status === 'applying' && plan.actionFiles && (
-              <div className="mt-4 border-t border-dark-border/20 pt-4">
-                <div className="flex flex-col items-center gap-2" ref={actionsRef}>
+            {(plan.status === 'applying' || plan.status === 'applied') && plan.actionFiles && (
+              <div className="mt-4 light:border light:border-gray-200 pt-4 px-3 pb-2 rounded-lg bg-primary/5 dark:bg-dark-surface">
+                <div className="flex items-center justify-between mb-2" ref={actionsRef}>
+                  <span className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
+                    {plan.actionFiles.length} file {plan.actionFiles.length === 1 ? 'change' : 'changes'}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setActionFilesExpanded(!actionFilesExpanded)}
+                    className={`p-1 ${theme === "dark" ? "hover:bg-dark-border/40 text-gray-400" : "hover:bg-gray-100 text-gray-500"}`}
+                  >
+                    {actionFilesExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  </Button>
+                </div>
+                <div 
+                  className={`flex flex-col items-center gap-2 overflow-hidden transition-all duration-300 ${
+                    actionFilesExpanded ? 'max-h-[500px]' : 'max-h-0'
+                  }`}
+                >
                   {plan.actionFiles.map((action, index) => (
                     <div key={index} className="flex items-center gap-1.5 px-2 py-1 rounded-full text-xs bg-primary/5 min-w-0">
                       {action.status === 'created' ? (
@@ -243,7 +283,10 @@ export function PlanChatMessage({
             )}
 
           </div>
-          {showActions && plan.status === 'review' && (
+          {showActions && (
+            (!workspace?.currentRevisionNumber && plan.status === 'review') || // Plan-only view - show in review
+            (workspace?.currentRevisionNumber && plan.status === 'review') // Editor view - only show in review
+          ) && (
             <div className="mt-6 border-t border-dark-border/20">
               <div className="flex items-center justify-between pt-4 pb-3">
                 <div className="flex gap-2">
@@ -273,39 +316,41 @@ export function PlanChatMessage({
                   Proceed
                 </Button>
               </div>
-              <div className="pt-2 border-t border-dark-border/10">
-                <form onSubmit={handleSubmitChat} className="relative">
-                  <textarea
-                    ref={textareaRef}
-                    value={chatInput}
-                    onChange={(e) => {
-                      setChatInput(e.target.value);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSubmitChat(e);
-                      }
-                    }}
-                    placeholder="Ask a question or suggest changes..."
-                    rows={1}
-                    style={{ height: 'auto', minHeight: '34px', maxHeight: '150px' }}
-                    className={`w-full px-3 py-1.5 pr-10 text-sm rounded-md border resize-none overflow-hidden ${
-                      theme === "dark"
-                        ? "bg-dark border-dark-border/60 text-white placeholder-gray-500"
-                        : "bg-white border-gray-200 text-gray-900 placeholder-gray-400"
-                    } focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50`}
-                  />
-                  <button
-                    type="submit"
-                    className={`absolute right-2 top-[5px] p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-dark-border/40 ${
-                      theme === "dark" ? "text-gray-400 hover:text-gray-200" : "text-gray-500 hover:text-gray-700"
-                    }`}
-                  >
-                    <Send className="w-4 h-4" />
-                  </button>
-                </form>
-              </div>
+              {plan.status === 'review' && !workspace?.currentRevisionNumber && (
+                <div className="pt-2 border-t border-dark-border/10">
+                  <form onSubmit={handleSubmitChat} className="relative">
+                    <textarea
+                      ref={textareaRef}
+                      value={chatInput}
+                      onChange={(e) => {
+                        setChatInput(e.target.value);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSubmitChat(e);
+                        }
+                      }}
+                      placeholder="Ask a question or suggest changes..."
+                      rows={1}
+                      style={{ height: 'auto', minHeight: '34px', maxHeight: '150px' }}
+                      className={`w-full px-3 py-1.5 pr-10 text-sm rounded-md border resize-none overflow-hidden ${
+                        theme === "dark"
+                          ? "bg-dark border-dark-border/60 text-white placeholder-gray-500"
+                          : "bg-white border-gray-200 text-gray-900 placeholder-gray-400"
+                      } focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50`}
+                    />
+                    <button
+                      type="submit"
+                      className={`absolute right-2 top-[5px] p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-dark-border/40 ${
+                        theme === "dark" ? "text-gray-400 hover:text-gray-200" : "text-gray-500 hover:text-gray-700"
+                      }`}
+                    >
+                      <Send className="w-4 h-4" />
+                    </button>
+                  </form>
+                </div>
+              )}
             </div>
           )}
         </div>

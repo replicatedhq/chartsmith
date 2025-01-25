@@ -60,8 +60,8 @@ export async function addChatMessage(workspaceID: string, userID: string, messag
     const db = getDB(await getParam("DB_URI"));
     await db.query(
       `
-          INSERT INTO workspace_chat (id, workspace_id, created_at, sent_by, prompt, response, is_complete)
-          VALUES ($1, $2, now(), $3, $4, null)
+          INSERT INTO workspace_chat (id, workspace_id, created_at, sent_by, prompt, response)
+          VALUES ($1, $2, now(), $3, $4)
         `,
       [chatID, workspaceID, userID, message],
     );

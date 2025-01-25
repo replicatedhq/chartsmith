@@ -44,6 +44,15 @@
 - Use min-w-[size] instead of w-[size] for fixed-width sections in flex layouts to prevent overflow
 - Keep flex-1 on growing sections between fixed-width elements
 - For nav bars with 3 sections (left, center, right), use min-width on outer sections to prevent squishing  - File explorer auto-expansion:
+
+- For chat bubbles:
+    - Use truncate on text elements to prevent wrapping
+    - Add min-w-0 to parent flex container to enable truncation
+    - Make action buttons flex-shrink-0 to maintain size
+    - Keep hover actions outside of text container
+    - Fixed chat input at bottom only shows in editor mode (after first revision)
+    - Chat input appears inside plan bubble in plan-only view
+    - Chat content needs padding to scroll above fixed input
     - Automatically expand parent folders when new files are added
     - Expand new chart nodes and their file paths automatically
     - Preserve user's manual expand/collapse state for existing folders
@@ -76,12 +85,26 @@
     - Use line-clamp-2 for collapsed preview
     - Position expand/collapse buttons in top-right
     - Maintain collapsed state until user explicitly expands
+    - For action files:
+      - Show count summary in header
+      - Auto-expand during applying state
+      - Auto-collapse in applied state
+      - Use smooth height transition with max-h-[500px]
+      - When scrolling to expanded content with many items:
+        - Use multiple delayed scrolls (100ms, 200ms, 300ms)
+        - Match transition duration (300ms) with scroll timing
+        - Ensure max height can accommodate typical content
 
   - Plan workflow states:
     - planning: Initial state for new plans, no actions shown
-    - pending: Intermediate state, no actions shown, marks previous plans as ignored
+    - pending: Intermediate state, no actions shown
+    - applying: Showing action files, no actions shown
+    - applied: Showing action files
     - review: Show approve/reject actions and chat input
-    - ignored: Collapsed view, no actions shown
+    - ignored: Collapsed view
+    - In editor view: only show proceed/feedback actions in review state
+    - In editor view: show linear progress indicator during planning/applying states
+    - In plan-only view: show proceed/feedback actions in review state
     - When creating new plans, mark other plans as ignored directly in workspace state
   - For file explorer panels:
     - Use fixed width w-[280px] consistently across nested containers
@@ -224,6 +247,8 @@ State Management:
     - Use temporary IDs (e.g. `temp-${Date.now()}`) for optimistic items
     - Clear input fields immediately after user action
     - Let websocket updates replace optimistic items
+    - When optimistically creating related items (e.g. message and plan), use matching temp IDs
+    - Update all relevant state (messages, workspace, etc) for complete optimistic UI
     - When optimistically creating related items (e.g. message and plan), use matching temp IDs
     - Update all relevant state (messages, workspace, etc) for complete optimistic UI
     - When optimistically creating related items (e.g. message and plan), use matching temp IDs
