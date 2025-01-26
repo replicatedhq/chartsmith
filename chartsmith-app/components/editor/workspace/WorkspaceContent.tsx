@@ -589,10 +589,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
               onViewChange={handleViewChange}
               files={allFiles}
               charts={workspace.charts || []}
-              renderedFiles={[
-                ...(workspace.files || []),
-                ...(workspace.charts?.flatMap(chart => chart.files) || [])
-              ]}
+              renderedCharts={workspace.renderedCharts || []}
               selectedFile={selectedFile}
               onFileSelect={handleFileSelect}
               onFileDelete={handleFileDelete}

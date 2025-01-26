@@ -1,7 +1,7 @@
 import { getDB } from "../data/db";
 import { getParam } from "../data/param";
 
-import { Chart, WorkspaceFile, Workspace, Plan, ActionFile } from "../types/workspace";
+import { Chart, WorkspaceFile, Workspace, Plan, ActionFile, RenderedChart } from "../types/workspace";
 import * as srs from "secure-random-string";
 import { logger } from "../utils/logger";
 
@@ -281,6 +281,7 @@ export async function listWorkspaces(userId: string): Promise<Workspace[]> {
         charts: [],
         currentPlans: [],
         previousPlans: [],
+        renderedCharts: [],
       };
 
       // get the files, only if revision number is > 0
@@ -310,6 +311,10 @@ export async function listWorkspaces(userId: string): Promise<Workspace[]> {
       if (result2.rows.length > 0) {
         w.incompleteRevisionNumber = result2.rows[0].revision_number;
       }
+
+      // finally, get the rendered charts for this workspace revision
+      const renderedCharts = await listRenderedChartsForWorkspace(id, w.currentRevisionNumber);
+      w.renderedCharts = renderedCharts;
 
       workspaces.push(w);
     }
@@ -358,6 +363,7 @@ export async function getWorkspace(id: string): Promise<Workspace | undefined> {
       charts: [],
       currentPlans: [],
       previousPlans: [],
+      renderedCharts: [],
     };
 
     // get the charts and their files, only if revision number is > 0
@@ -413,11 +419,19 @@ export async function getWorkspace(id: string): Promise<Workspace | undefined> {
       }
     }
 
+    // finally, get the rendered charts for this workspace revision
+    const renderedCharts = await listRenderedChartsForWorkspace(id, w.currentRevisionNumber);
+    w.renderedCharts = renderedCharts;
+
     return w;
   } catch (err) {
     logger.error("Failed to get workspace", { err });
     throw err;
   }
+}
+
+async function listRenderedChartsForWorkspace(workspaceId: string, revisionNumber: number): Promise<RenderedChart[]> {
+  return [];
 }
 
 async function listPlans(workspaceId: string): Promise<Plan[]> {

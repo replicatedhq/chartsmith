@@ -6,14 +6,14 @@ import { CodeEditor } from "../CodeEditor";
 import { useTheme } from "../../../contexts/ThemeContext";
 import { EditorView } from "../../../hooks/useEditorView";
 
-import { WorkspaceFile, Chart } from "@/lib/types/workspace";
+import { WorkspaceFile, Chart, RenderedChart } from "@/lib/types/workspace";
 
 interface WorkspaceContainerProps {
   view: EditorView;
   onViewChange: (newView: EditorView) => void;
   files: WorkspaceFile[];
   charts: Chart[];  // Add charts
-  renderedFiles: WorkspaceFile[];
+  renderedCharts: RenderedChart[];
   selectedFile?: WorkspaceFile;
   onFileSelect: (file: WorkspaceFile) => void;
   onFileDelete: (path: string) => void;
@@ -22,11 +22,10 @@ interface WorkspaceContainerProps {
   isFileTreeVisible: boolean;
 }
 
-export function WorkspaceContainer({ view, onViewChange, files, charts, renderedFiles, selectedFile, onFileSelect, onFileDelete, editorContent, onEditorChange, isFileTreeVisible }: WorkspaceContainerProps) {
+export function WorkspaceContainer({ view, onViewChange, files, charts, renderedCharts, selectedFile, onFileSelect, onFileDelete, editorContent, onEditorChange, isFileTreeVisible }: WorkspaceContainerProps) {
   const { resolvedTheme } = useTheme();
 
-  const handleViewChange = () => {
-    const newView = view === "source" ? "rendered" : "source";
+  const handleViewChange = (newView: EditorView) => {
     onViewChange(newView);
   };
 
@@ -48,7 +47,7 @@ export function WorkspaceContainer({ view, onViewChange, files, charts, rendered
               );
             })() :
             <RenderedFileBrowser
-              nodes={renderedFiles}
+              charts={renderedCharts}
               onFileSelect={onFileSelect}
               selectedFile={selectedFile}
             />

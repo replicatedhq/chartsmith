@@ -59,7 +59,7 @@ export function CreateScenarioModal({ isOpen, onClose, onSubmit }: CreateScenari
         }`}>
           <h2 className={`text-lg font-semibold ${
             theme === 'dark' ? 'text-white' : 'text-gray-900'
-          }`}>Create New Scenario</h2>
+          }`}>Create New Scenario - Chart 1</h2>
           <button
             onClick={onClose}
             className={`${
@@ -127,11 +127,12 @@ export function CreateScenarioModal({ isOpen, onClose, onSubmit }: CreateScenari
                 options={{
                   minimap: { enabled: false },
                   scrollBeyondLastLine: false,
-                  fontSize: 14,
-                  lineNumbers: 'off',
+                  fontSize: 11,
+                  lineNumbers: 'on',
                   folding: false,
-                  lineDecorationsWidth: 0,
-                  lineNumbersMinChars: 0,
+                  lineDecorationsWidth: 16,
+                  lineNumbersMinChars: 3,
+                  padding: { top: 8, bottom: 8, left: 24 }
                 }}
               />
             </div>

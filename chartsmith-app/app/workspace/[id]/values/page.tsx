@@ -7,8 +7,7 @@ import { ValuesTable } from '@/components/values/ValuesTable';
 import { ViewValuesModal } from '@/components/values/ViewValuesModal';
 import { CreateScenarioModal } from '@/components/values/CreateScenarioModal';
 import { DeleteScenarioModal } from '@/components/values/DeleteScenarioModal';
-import { Plus, ArrowLeft } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { Plus } from 'lucide-react';
 import { ValuesScenario } from '@/lib/types/workspace';
 
 const defaultScenario: ValuesScenario = {
@@ -29,13 +28,13 @@ service:
 
 export default function ValuesPage() {
   const { theme } = useTheme();
-  const router = useRouter();
   const [scenarios, setScenarios] = useState<ValuesScenario[]>([defaultScenario]);
   const [selectedScenario, setSelectedScenario] = useState<ValuesScenario | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [scenarioToDelete, setScenarioToDelete] = useState<ValuesScenario | null>(null);
 
   const handleCreateScenario = (newScenario: ValuesScenario) => {
+    console.log("Creating scenario", newScenario);
     setScenarios([...scenarios, { ...newScenario, enabled: true }]);
   };
 
@@ -63,31 +62,34 @@ export default function ValuesPage() {
       <TopNav />
       <div className="flex-1 overflow-auto p-6">
         <div className="max-w-6xl mx-auto">
-          <div className="flex items-center gap-4 mb-6">
-            <button
-              onClick={() => router.back()}
-              className={`flex items-center gap-2 ${
-                theme === 'dark'
-                  ? 'text-gray-400 hover:text-white'
-                  : 'text-gray-600 hover:text-gray-900'
-              } transition-colors`}
-            >
-              <ArrowLeft className="w-5 h-5" />
-              Back to Editor
-            </button>
+          <div className="flex flex-col gap-4 mb-6">
             <h1 className={`text-2xl font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
               Values Scenarios
             </h1>
+            <p className={`text-md text-gray-500 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+              Values scenarios allow you to manage different configurations for your Helm chart.
+              You can define additional values.yamls for each Helm chart in your workspace.
+              Chartsmith will use these to validate each update of the chart.
+            </p>
           </div>
 
-          <div className="flex justify-end mb-6">
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg transition-colors flex items-center gap-2"
-            >
-              <Plus className="w-5 h-5" />
-              Create Scenario
-            </button>
+          <div className="mb-6">
+            <div className={`flex items-center justify-between py-2 border-b ${theme === 'dark' ? 'border-dark-border' : 'border-gray-200'}`}>
+              <h2 className={`text-xl font-bold ${theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}`}>
+                Chart 1
+              </h2>
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className={`px-3 py-1.5 text-sm border rounded-lg transition-colors flex items-center gap-2 ${
+                  theme === 'dark'
+                    ? 'border-dark-border hover:bg-dark-border/40 text-gray-300'
+                    : 'border-gray-200 hover:bg-gray-50 text-gray-700'
+                }`}
+              >
+                <Plus className="w-4 h-4" />
+                Create Scenario
+              </button>
+            </div>
           </div>
 
           <ValuesTable
@@ -103,6 +105,11 @@ export default function ValuesPage() {
         isOpen={!!selectedScenario}
         onClose={() => setSelectedScenario(null)}
         scenario={selectedScenario}
+        onUpdate={(updatedScenario) => {
+          setScenarios(scenarios.map(s =>
+            s.id === updatedScenario.id ? updatedScenario : s
+          ));
+        }}
       />
 
       <CreateScenarioModal

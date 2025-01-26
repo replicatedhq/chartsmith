@@ -5,6 +5,7 @@ export interface Workspace {
   name: string;
   charts: Chart[];
   files: WorkspaceFile[];
+  renderedCharts: RenderedChart[];
   currentRevisionNumber: number;
   incompleteRevisionNumber?: number;
   currentPlans: Plan[];
@@ -31,6 +32,19 @@ export interface Chart {
   files: WorkspaceFile[];
 }
 
+export interface RenderedChart {
+  id: string;
+  name: string;
+  scenarios: RenderedChartScenario[];
+}
+
+export interface RenderedChartScenario {
+  id: string;
+  name: string;
+  values: string;
+  files: WorkspaceFile[];
+}
+
 export interface Plan {
   id: string;
   description: string;
@@ -53,4 +67,10 @@ export interface ChatMessage {
   prompt: string;
   response: string;
   createdAt: Date;
+}
+
+export interface Scenario {
+  id: string;
+  name: string;
+  values: string;
 }

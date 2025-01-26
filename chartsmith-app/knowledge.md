@@ -227,12 +227,13 @@ State Management:
 - When updating state from real-time events:
   - Update local state immediately for optimistic UI
   - Handle errors and revert state if needed
-  - Use functional updates to ensure latest state
-- For modals:
-  - Handle both Escape key and click outside to close
-  - Add event listeners only when modal is open
-  - Clean up listeners on close
-  - Use ref to detect clicks outside modal content
+  - Use functional updates to ensure latest state  - For modals:
+    - Handle both Escape key and click outside to close
+    - Add event listeners only when modal is open
+    - Clean up listeners on close
+    - Use ref to detect clicks outside modal content
+    - Add useEffect with Escape key handler in every modal component
+    - Only add listeners when modal is open (isOpen state)
 - When switching between source/rendered views:
   - Clear selected file and editor content when switching to rendered
   - Conditionally render editor only in source view
