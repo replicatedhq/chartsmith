@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { X, Layout, Columns } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
-import { ValuesScenario } from '@/lib/types/workspace';
+import { Scenario } from '@/lib/types/workspace';
 import Editor from '@monaco-editor/react';
 
 interface CreateScenarioModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (scenario: ValuesScenario) => void;
+  onSubmit: (scenario: Scenario) => void;
 }
 
 export function CreateScenarioModal({ isOpen, onClose, onSubmit }: CreateScenarioModalProps) {

@@ -2,33 +2,28 @@
 
 import React, { createContext, useContext, useState } from "react";
 
+import { Scenario } from '@/lib/types/workspace';
+
 interface ValuesScenariosContextType {
   isOpen: boolean;
   toggleScenarios: () => void;
-  scenarios: ValuesScenario[];
-  addScenario: (scenario: ValuesScenario) => void;
+  scenarios: Scenario[];
+  addScenario: (scenario: Scenario) => void;
   removeScenario: (id: string) => void;
-  activeScenario: ValuesScenario | null;
-  setActiveScenario: (scenario: ValuesScenario | null) => void;
-}
-
-interface ValuesScenario {
-  id: string;
-  name: string;
-  description: string;
-  values: string;
+  activeScenario: Scenario | null;
+  setActiveScenario: (scenario: Scenario | null) => void;
 }
 
 const ValuesScenariosContext = createContext<ValuesScenariosContextType | undefined>(undefined);
 
 export function ValuesScenariosProvider({ children }: { children: React.ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
-  const [scenarios, setScenarios] = useState<ValuesScenario[]>([]);
-  const [activeScenario, setActiveScenario] = useState<ValuesScenario | null>(null);
+  const [scenarios, setScenarios] = useState<Scenario[]>([]);
+  const [activeScenario, setActiveScenario] = useState<Scenario | null>(null);
 
   const toggleScenarios = () => setIsOpen(!isOpen);
 
-  const addScenario = (scenario: ValuesScenario) => {
+  const addScenario = (scenario: Scenario) => {
     setScenarios([...scenarios, scenario]);
   };
 

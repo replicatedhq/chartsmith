@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { X, Layout, Columns } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
-import { ValuesScenario } from '@/lib/types/workspace';
+import { Scenario } from '@/lib/types/workspace';
 import Editor from '@monaco-editor/react';
 
 interface ViewValuesModalProps {
   isOpen: boolean;
   onClose: () => void;
-  scenario: ValuesScenario | null;
-  onUpdate?: (scenario: ValuesScenario) => void;
+  scenario: Scenario | null;
+  onUpdate?: (scenario: Scenario) => void;
 }
 
 export function ViewValuesModal({ isOpen, onClose, scenario, onUpdate }: ViewValuesModalProps) {

@@ -18,14 +18,6 @@ export interface WorkspaceFile {
   content: string;   // Required but may be empty string
 }
 
-export interface ValuesScenario {
-  id: string;
-  name: string;
-  description: string;
-  values: string;
-  enabled?: boolean;
-}
-
 export interface Chart {
   id: string;
   name: string;
@@ -72,5 +64,10 @@ export interface ChatMessage {
 export interface Scenario {
   id: string;
   name: string;
+  description: string;
   values: string;
+  enabled?: boolean;
+  chartId?: string;
+  workspaceId?: string;
 }
+

@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { TopNav } from '@/components/TopNav';
 import { useTheme } from '@/contexts/ThemeContext';
 import { ValuesTable } from '@/components/values/ValuesTable';
@@ -8,48 +8,70 @@ import { ViewValuesModal } from '@/components/values/ViewValuesModal';
 import { CreateScenarioModal } from '@/components/values/CreateScenarioModal';
 import { DeleteScenarioModal } from '@/components/values/DeleteScenarioModal';
 import { Plus } from 'lucide-react';
-import { ValuesScenario } from '@/lib/types/workspace';
+import { Scenario } from '@/lib/types/workspace';
 import { createScenarioAction } from '@/lib/workspace/actions/create-scenario';
+import { listScenariosAction } from '@/lib/workspace/actions/list-scenarios';
+import { getWorkspaceAction } from '@/lib/workspace/actions/get-workspace';
+import { Workspace, Chart } from '@/lib/types/workspace';
 import { useSession } from '@/app/hooks/useSession';
 
-const defaultScenario: ValuesScenario = {
-  id: 'default',
-  name: 'Default values.yaml',
-  description: 'Default configuration values for the Helm chart',
-  enabled: true,
-  values: `# Default values for my-helm-chart
-replicaCount: 1
-image:
-  repository: nginx
-  tag: "1.16.0"
-  pullPolicy: IfNotPresent
-service:
-  type: ClusterIP
-  port: 80`
-};
 
 import { use } from 'react';
 
 export default function ValuesPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { theme } = useTheme();
-  const [scenarios, setScenarios] = useState<ValuesScenario[]>([defaultScenario]);
-  const [selectedScenario, setSelectedScenario] = useState<ValuesScenario | null>(null);
+  const [workspace, setWorkspace] = useState<Workspace | undefined>();
+  const [scenariosByChart, setScenariosByChart] = useState<Map<string, Scenario[]>>(new Map());
+  const [selectedScenario, setSelectedScenario] = useState<Scenario | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [scenarioToDelete, setScenarioToDelete] = useState<ValuesScenario | null>(null);
-  const session = useSession();
+  const [scenarioToDelete, setScenarioToDelete] = useState<Scenario | null>(null);
+  const { session } = useSession();
 
-  const handleCreateScenario = async (newScenario: ValuesScenario) => {
+  // Load workspace and scenarios
+  useEffect(() => {
+    async function loadWorkspaceAndScenarios() {
+      if (!session) return;
+      try {
+        // Load workspace
+        const loadedWorkspace = await getWorkspaceAction(session, id);
+        if (!loadedWorkspace) return;
+        setWorkspace(loadedWorkspace);
+
+        // Load scenarios for each chart
+        const scenariosMap = new Map<string, ValuesScenario[]>();
+        for (const chart of loadedWorkspace.charts) {
+          const loadedScenarios = await listScenariosAction(session, id, chart.id);
+          scenariosMap.set(chart.id, loadedScenarios);
+        }
+        setScenariosByChart(scenariosMap);
+      } catch (err) {
+        console.error("Failed to load workspace and scenarios:", err);
+      }
+    }
+    loadWorkspaceAndScenarios();
+  }, [session, id]);
+
+  const [selectedChart, setSelectedChart] = useState<Chart | null>(null);
+
+  const handleCreateScenario = async (newScenario: Scenario) => {
     try {
-      const scenario = await createScenarioAction(session, id, newScenario.name, newScenario.values);
-      setScenarios([...scenarios, { ...scenario, enabled: true }]);
+      if (!session) return;
+      if (!selectedChart) return;
+      const chartId = selectedChart.id;
+      const scenario = await createScenarioAction(session, id, chartId, newScenario.name, newScenario.description, newScenario.values);
+      setScenariosByChart(prev => {
+        const newMap = new Map(prev);
+        const chartScenarios = newMap.get(chartId) || [];
+        newMap.set(chartId, [...chartScenarios, { ...scenario, enabled: true }]);
+        return newMap;
+      });
     } catch (err) {
       console.error("Failed to create scenario:", err);
-      // Here you might want to show an error toast or message to the user
     }
   };
 
-  const handleDeleteScenario = (scenario: ValuesScenario) => {
+  const handleDeleteScenario = (scenario: Scenario) => {
     if (scenario.id === 'default') return;
     setScenarioToDelete(scenario);
   };
@@ -61,7 +83,7 @@ export default function ValuesPage({ params }: { params: Promise<{ id: string }>
     }
   };
 
-  const handleToggleEnabled = (scenario: ValuesScenario) => {
+  const handleToggleEnabled = (scenario: Scenario) => {
     if (scenario.id === 'default') return;
     setScenarios(scenarios.map(s =>
       s.id === scenario.id ? { ...s, enabled: !s.enabled } : s
@@ -84,31 +106,36 @@ export default function ValuesPage({ params }: { params: Promise<{ id: string }>
             </p>
           </div>
 
-          <div className="mb-6">
-            <div className={`flex items-center justify-between py-2 border-b ${theme === 'dark' ? 'border-dark-border' : 'border-gray-200'}`}>
-              <h2 className={`text-xl font-bold ${theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}`}>
-                Chart 1
-              </h2>
-              <button
-                onClick={() => setShowCreateModal(true)}
-                className={`px-3 py-1.5 text-sm border rounded-lg transition-colors flex items-center gap-2 ${
-                  theme === 'dark'
-                    ? 'border-dark-border hover:bg-dark-border/40 text-gray-300'
-                    : 'border-gray-200 hover:bg-gray-50 text-gray-700'
-                }`}
-              >
-                <Plus className="w-4 h-4" />
-                Create Scenario
-              </button>
-            </div>
-          </div>
+          {workspace?.charts.map((chart) => (
+            <div key={chart.id} className="mb-6">
+              <div className={`flex items-center justify-between py-2 border-b ${theme === 'dark' ? 'border-dark-border' : 'border-gray-200'}`}>
+                <h2 className={`text-xl font-bold ${theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}`}>
+                  {chart.name}
+                </h2>
+                <button
+                  onClick={() => {
+                    setSelectedChart(chart);
+                    setShowCreateModal(true);
+                  }}
+                  className={`px-3 py-1.5 text-sm border rounded-lg transition-colors flex items-center gap-2 ${
+                    theme === 'dark'
+                      ? 'border-dark-border hover:bg-dark-border/40 text-gray-300'
+                      : 'border-gray-200 hover:bg-gray-50 text-gray-700'
+                  }`}
+                >
+                  <Plus className="w-4 h-4" />
+                  Create Scenario
+                </button>
+              </div>
 
-          <ValuesTable
-            scenarios={scenarios}
-            onViewValues={(scenario) => setSelectedScenario(scenario)}
-            onDeleteScenario={handleDeleteScenario}
-            onToggleEnabled={handleToggleEnabled}
-          />
+              <ValuesTable
+                scenarios={scenariosByChart.get(chart.id) || []}
+                onViewValues={(scenario) => setSelectedScenario(scenario)}
+                onDeleteScenario={handleDeleteScenario}
+                onToggleEnabled={handleToggleEnabled}
+              />
+            </div>
+          ))}
         </div>
       </div>
 

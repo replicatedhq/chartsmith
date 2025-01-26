@@ -21,6 +21,10 @@ schema:
       type: text
       constraints:
         notNull: true
+    - name: description
+      type: text
+      constraints:
+        notNull: true
     - name: values
       type: text
     - name: is_read_only

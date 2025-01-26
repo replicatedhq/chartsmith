@@ -1,12 +1,12 @@
 import React from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
-import { ValuesScenario } from '@/lib/types/workspace';
+import { Scenario } from '@/lib/types/workspace';
 
 interface ValuesTableProps {
-  scenarios: ValuesScenario[];
-  onViewValues: (scenario: ValuesScenario) => void;
-  onDeleteScenario: (scenario: ValuesScenario) => void;
-  onToggleEnabled: (scenario: ValuesScenario) => void;
+  scenarios: Scenario[];
+  onViewValues: (scenario: Scenario) => void;
+  onDeleteScenario: (scenario: Scenario) => void;
+  onToggleEnabled: (scenario: Scenario) => void;
 }
 
 export function ValuesTable({ scenarios, onViewValues, onDeleteScenario, onToggleEnabled }: ValuesTableProps) {
@@ -14,7 +14,13 @@ export function ValuesTable({ scenarios, onViewValues, onDeleteScenario, onToggl
 
   return (
     <div className={`rounded-lg overflow-hidden border ${theme === 'dark' ? 'bg-dark-surface border-dark-border' : 'bg-white border-gray-200'}`}>
-      <table className="w-full">
+      {scenarios.length === 0 ? (
+        <div className={`p-8 text-center ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+          <p className="text-sm">There are no scenarios to test for this chart.</p>
+          <p className="text-sm mt-1">Create a scenario to validate your chart with different values.</p>
+        </div>
+      ) : (
+        <table className="w-full">
         <thead>
           <tr className={`border-b ${theme === 'dark' ? 'border-dark-border' : 'border-gray-200'}`}>
             <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Name</th>
@@ -64,6 +70,7 @@ export function ValuesTable({ scenarios, onViewValues, onDeleteScenario, onToggl
           ))}
         </tbody>
       </table>
+      )}
     </div>
   );
 }
