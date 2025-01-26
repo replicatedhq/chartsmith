@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { ValuesScenario } from '@/lib/types/workspace';
+import Editor from '@monaco-editor/react';
 
 interface CreateScenarioModalProps {
   isOpen: boolean;
@@ -112,16 +113,28 @@ export function CreateScenarioModal({ isOpen, onClose, onSubmit }: CreateScenari
             }`}>
               Values
             </label>
-            <textarea
-              value={values}
-              onChange={(e) => setValues(e.target.value)}
-              className={`w-full px-3 py-2 rounded-lg border h-48 ${
-                theme === 'dark'
-                  ? 'bg-dark border-dark-border text-gray-300'
-                  : 'bg-white border-gray-300 text-gray-900'
-              }`}
-              required
-            />
+            <div className={`w-full rounded-lg border ${
+              theme === 'dark'
+                ? 'border-dark-border'
+                : 'border-gray-300'
+            }`}>
+              <Editor
+                height="200px"
+                defaultLanguage="yaml"
+                theme={theme === 'dark' ? 'vs-dark' : 'light'}
+                value={values}
+                onChange={(value) => setValues(value || '')}
+                options={{
+                  minimap: { enabled: false },
+                  scrollBeyondLastLine: false,
+                  fontSize: 14,
+                  lineNumbers: 'off',
+                  folding: false,
+                  lineDecorationsWidth: 0,
+                  lineNumbersMinChars: 0,
+                }}
+              />
+            </div>
           </div>
           <div className="flex justify-end gap-2">
             <button
