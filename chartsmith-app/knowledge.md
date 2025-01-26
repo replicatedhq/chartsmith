@@ -210,8 +210,6 @@ React Hooks:
 # Development & Deployment
 
 - Do not run npm run dev - custom dev setup in place
-- DEPLOY_TIME constant is replaced during deployment with an ISO date string
-- Handle DEPLOY_TIME type as string, checking for "UNKNOWN" value first
 - Tailwind plugins used in the application (like @tailwindcss/typography) should be regular dependencies, not devDependencies
 - PostCSS plugins (like autoprefixer) should be regular dependencies since they're used in production builds
 - Run lint/type checks before committing, not after every small change

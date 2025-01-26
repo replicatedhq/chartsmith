@@ -5,8 +5,8 @@ import React, { useState, useEffect } from "react";
 // Constants for deployment time and version (these will be written during the build process)
 
 // BEGIN AUTOMATED REPLACE
-const DEPLOY_TIME = "UNKNOWN" as const;
-const VERSION = "0.0.0";
+const DEPLOY_TIME: string = "UNKNOWN";
+const VERSION: string = "0.0.0";
 // END AUTOMATED REPLACE
 
 export default function DebugPage() {
