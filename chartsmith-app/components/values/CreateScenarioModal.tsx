@@ -18,6 +18,17 @@ export function CreateScenarioModal({ isOpen, onClose, onSubmit }: CreateScenari
   const [activeTab, setActiveTab] = useState<'values' | 'reference'>('values');
   const [isSplitView, setIsSplitView] = useState(false);
 
+  // Reset state when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setName('');
+      setDescription('');
+      setValues('');
+      setActiveTab('values');
+      setIsSplitView(false);
+    }
+  }, [isOpen]);
+
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {

@@ -9,6 +9,8 @@ import { CreateScenarioModal } from '@/components/values/CreateScenarioModal';
 import { DeleteScenarioModal } from '@/components/values/DeleteScenarioModal';
 import { Plus } from 'lucide-react';
 import { ValuesScenario } from '@/lib/types/workspace';
+import { createScenarioAction } from '@/lib/workspace/actions/create-scenario';
+import { useSession } from '@/app/hooks/useSession';
 
 const defaultScenario: ValuesScenario = {
   id: 'default',
@@ -26,16 +28,25 @@ service:
   port: 80`
 };
 
-export default function ValuesPage() {
+import { use } from 'react';
+
+export default function ValuesPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const { theme } = useTheme();
   const [scenarios, setScenarios] = useState<ValuesScenario[]>([defaultScenario]);
   const [selectedScenario, setSelectedScenario] = useState<ValuesScenario | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [scenarioToDelete, setScenarioToDelete] = useState<ValuesScenario | null>(null);
+  const session = useSession();
 
-  const handleCreateScenario = (newScenario: ValuesScenario) => {
-    console.log("Creating scenario", newScenario);
-    setScenarios([...scenarios, { ...newScenario, enabled: true }]);
+  const handleCreateScenario = async (newScenario: ValuesScenario) => {
+    try {
+      const scenario = await createScenarioAction(session, id, newScenario.name, newScenario.values);
+      setScenarios([...scenarios, { ...scenario, enabled: true }]);
+    } catch (err) {
+      console.error("Failed to create scenario:", err);
+      // Here you might want to show an error toast or message to the user
+    }
   };
 
   const handleDeleteScenario = (scenario: ValuesScenario) => {

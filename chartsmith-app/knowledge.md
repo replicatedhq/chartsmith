@@ -343,6 +343,8 @@ Next.js 15:
 - Prefer awaiting as late as possible to allow more static rendering
 - Must await params in both layout.tsx and page.tsx when using dynamic routes
 - After awaiting params, pass the extracted values to child components rather than passing params directly
+- In client components, params is a Promise that must be unwrapped with React.use() before accessing properties
+- Type params as Promise<{ [key: string]: string }> in client components
 - When using cookies() in server components, must await before accessing values
 - Server-side render layout components when possible to avoid loading states
 - Server-side fetch data in layout.tsx for initial render, then use client-side actions for updates
