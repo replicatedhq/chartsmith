@@ -39,10 +39,6 @@ export default function DebugPage() {
                       </span>
                     ) : (
                       new Date(DEPLOY_TIME).toLocaleString()
-                    ) : (
-                      <span className="text-gray-500">
-                        {new Date().toLocaleString()} (current time - deploy time unknown)
-                      </span>
                     )}
                   </span>
                 </td>
