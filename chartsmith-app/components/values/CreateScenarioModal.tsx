@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { ValuesScenario } from '@/lib/types/workspace';
@@ -14,6 +14,21 @@ export function CreateScenarioModal({ isOpen, onClose, onSubmit }: CreateScenari
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [values, setValues] = useState('');
+
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    if (isOpen) {
+      window.addEventListener('keydown', handleEsc);
+      return () => {
+        window.removeEventListener('keydown', handleEsc);
+      };
+    }
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
