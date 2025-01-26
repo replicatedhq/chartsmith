@@ -1,6 +1,7 @@
 # Hydration
 
-- Use suppressHydrationWarning on elements where hydration mismatches are expected and harmless (e.g. testing attributes, timestamps)
+- Use suppressHydrationWarning on elements where hydration mismatches are expected and harmless
+- Always wrap dynamic date displays (toLocaleString, etc) with suppressHydrationWarning to prevent React hydration errors
 - For dynamic content that differs between server and client, use useEffect to update the content after initial render
 - Avoid using browser-only APIs in the initial render (window, document, etc)
 - For dynamic content that differs between server and client, use useEffect to update the content after initial render

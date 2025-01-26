@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 
 // Constants for deployment time and version (these will be written during the build process)
 
@@ -35,7 +35,7 @@ export default function DebugPage() {
                   {DEPLOY_TIME !== "UNKNOWN" ? (
                     new Date(DEPLOY_TIME).toLocaleString()
                   ) : (
-                    <span className="text-gray-500">
+                    <span className="text-gray-500" suppressHydrationWarning>
                       {new Date().toLocaleString()} (current time - deploy time unknown)
                     </span>
                   )}
