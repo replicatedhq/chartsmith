@@ -5,7 +5,8 @@ import React, { useState, useEffect } from "react";
 // Constants for deployment time and version (these will be written during the build process)
 
 // BEGIN AUTOMATED REPLACE
-const DEPLOY_TIME: string = "UNKNOWN";
+// Type that represents either "UNKNOWN" or an ISO date string
+const DEPLOY_TIME: "UNKNOWN" | string = "UNKNOWN";
 const VERSION = "0.0.0";
 // END AUTOMATED REPLACE
 
