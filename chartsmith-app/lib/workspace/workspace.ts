@@ -55,6 +55,14 @@ export async function createWorkspace(createdType: string, prompt: string | unde
             [fileId, chartId, id, file.file_path, file.content, file.summary, file.embeddings],
           );
         }
+
+        // create the default scenario for this chart too
+        const scenarioId = srs.default({ length: 12, alphanumeric: true });
+        await client.query(
+          `INSERT INTO workspace_scenario (id, workspace_id, chart_id, name, description, is_read_only)
+          VALUES ($1, $2, $3, 'Default', 'Apply the default values.yaml', true)`,
+          [scenarioId, id, chartId],
+        );
       }
 
       await client.query("COMMIT");
