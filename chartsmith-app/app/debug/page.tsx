@@ -32,13 +32,15 @@ export default function DebugPage() {
               <tr>
                 <td className="px-4 py-2 border-b border-border">DEPLOY_TIME (Local)</td>
                 <td className="px-4 py-2 border-b border-border">
-                  {DEPLOY_TIME !== "UNKNOWN" ? (
-                    new Date(DEPLOY_TIME).toLocaleString()
-                  ) : (
-                    <span className="text-gray-500" suppressHydrationWarning>
-                      {new Date().toLocaleString()} (current time - deploy time unknown)
-                    </span>
-                  )}
+                  <span suppressHydrationWarning>
+                    {DEPLOY_TIME !== "UNKNOWN" ? (
+                      new Date(DEPLOY_TIME).toLocaleString()
+                    ) : (
+                      <span className="text-gray-500">
+                        {new Date().toLocaleString()} (current time - deploy time unknown)
+                      </span>
+                    )}
+                  </span>
                 </td>
               </tr>
               <tr>
