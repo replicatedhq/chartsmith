@@ -23,8 +23,6 @@ schema:
         notNull: true
     - name: values
       type: text
-      constraints:
-        notNull: true
     - name: is_read_only
       type: boolean
       constraints:
