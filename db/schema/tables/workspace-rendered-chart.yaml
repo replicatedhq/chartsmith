@@ -1,0 +1,31 @@
+database: chartsmith
+name: workspace_rendered_chart
+schema:
+  postgres:
+    primaryKey:
+    - workspace_id
+    - revision_number
+    - chart_id
+    - scenario_id
+    columns:
+    - name: workspace_id
+      type: text
+      constraints:
+        notNull: true
+    - name: revision_number
+      type: int
+      constraints:
+        notNull: true
+    - name: chart_id
+      type: text
+      constraints:
+        notNull: true
+    - name: scenario_id
+      type: text
+      constraints:
+        notNull: true
+    - name: is_success
+      type: boolean
+      constraints:
+        notNull: true
+        default: false

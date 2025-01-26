@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
-import { X } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Layout, Columns } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
-import { ValuesScenario } from '@/lib/types/workspace';
+import { Scenario } from '@/lib/types/workspace';
+import Editor from '@monaco-editor/react';
 
 interface CreateScenarioModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (scenario: ValuesScenario) => void;
+  onSubmit: (scenario: Scenario) => void;
 }
 
 export function CreateScenarioModal({ isOpen, onClose, onSubmit }: CreateScenarioModalProps) {
@@ -14,6 +15,34 @@ export function CreateScenarioModal({ isOpen, onClose, onSubmit }: CreateScenari
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [values, setValues] = useState('');
+  const [activeTab, setActiveTab] = useState<'values' | 'reference'>('values');
+  const [isSplitView, setIsSplitView] = useState(false);
+
+  // Reset state when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setName('');
+      setDescription('');
+      setValues('');
+      setActiveTab('values');
+      setIsSplitView(false);
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    if (isOpen) {
+      window.addEventListener('keydown', handleEsc);
+      return () => {
+        window.removeEventListener('keydown', handleEsc);
+      };
+    }
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -33,7 +62,7 @@ export function CreateScenarioModal({ isOpen, onClose, onSubmit }: CreateScenari
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
-      <div className={`w-full max-w-2xl rounded-lg shadow-lg border ${
+      <div className={`w-full max-w-3xl h-[700px] rounded-lg shadow-lg border flex flex-col ${
         theme === 'dark'
           ? 'bg-dark-surface border-dark-border'
           : 'bg-white border-gray-200'
@@ -43,7 +72,7 @@ export function CreateScenarioModal({ isOpen, onClose, onSubmit }: CreateScenari
         }`}>
           <h2 className={`text-lg font-semibold ${
             theme === 'dark' ? 'text-white' : 'text-gray-900'
-          }`}>Create New Scenario</h2>
+          }`}>Create New Scenario - Chart 1</h2>
           <button
             onClick={onClose}
             className={`${
@@ -55,7 +84,7 @@ export function CreateScenarioModal({ isOpen, onClose, onSubmit }: CreateScenari
             <X className="w-5 h-5" />
           </button>
         </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="flex-1 p-6 pb-8 space-y-4">
           <div>
             <label className={`block text-sm font-medium mb-2 ${
               theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
@@ -92,23 +121,181 @@ export function CreateScenarioModal({ isOpen, onClose, onSubmit }: CreateScenari
             />
           </div>
           <div>
-            <label className={`block text-sm font-medium mb-2 ${
-              theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+            <div className={`flex items-center border-b ${
+              theme === 'dark' ? 'border-dark-border' : 'border-gray-200'
             }`}>
-              Values
-            </label>
-            <textarea
-              value={values}
-              onChange={(e) => setValues(e.target.value)}
-              className={`w-full px-3 py-2 rounded-lg border h-48 ${
-                theme === 'dark'
-                  ? 'bg-dark border-dark-border text-gray-300'
-                  : 'bg-white border-gray-300 text-gray-900'
-              }`}
-              required
-            />
+              {!isSplitView && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                    setActiveTab('values');
+                    setIsSplitView(false);
+                  }}
+                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                      activeTab === 'values'
+                        ? theme === 'dark'
+                          ? 'text-white border-primary'
+                          : 'text-gray-900 border-primary'
+                        : theme === 'dark'
+                          ? 'text-gray-400 border-transparent hover:text-gray-300'
+                          : 'text-gray-600 border-transparent hover:text-gray-700'
+                    }`}
+                  >
+                    Scenario values (to test)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                    setActiveTab('reference');
+                    setIsSplitView(false);
+                  }}
+                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                      activeTab === 'reference'
+                        ? theme === 'dark'
+                          ? 'text-white border-primary'
+                          : 'text-gray-900 border-primary'
+                        : theme === 'dark'
+                          ? 'text-gray-400 border-transparent hover:text-gray-300'
+                          : 'text-gray-600 border-transparent hover:text-gray-700'
+                    }`}
+                  >
+                    Built-in values (reference)
+                  </button>
+                </>
+              )}
+              <div className="flex items-center ml-auto pr-2 space-x-1">
+                <button
+                  type="button"
+                  onClick={() => setIsSplitView(false)}
+                  className={`p-1.5 rounded-lg transition-colors ${
+                    !isSplitView
+                      ? theme === 'dark'
+                        ? 'text-white bg-dark-border/40'
+                        : 'text-gray-900 bg-gray-100'
+                      : theme === 'dark'
+                        ? 'text-gray-400 hover:text-white hover:bg-dark-border/40'
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                  }`}
+                >
+                  <Layout className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsSplitView(true)}
+                  className={`p-1.5 rounded-lg transition-colors ${
+                    isSplitView
+                      ? theme === 'dark'
+                        ? 'text-white bg-dark-border/40'
+                        : 'text-gray-900 bg-gray-100'
+                      : theme === 'dark'
+                        ? 'text-gray-400 hover:text-white hover:bg-dark-border/40'
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                  }`}
+                >
+                  <Columns className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+            <div className={`w-full rounded-b-lg border-x border-b ${
+              theme === 'dark'
+                ? 'border-dark-border'
+                : 'border-gray-300'
+            }`}>
+              {isSplitView ? (
+                <div className={`grid grid-cols-2 divide-x ${
+                  theme === 'dark' ? 'divide-dark-border' : 'divide-gray-200'
+                }`}>
+                  <div>
+                    <div className={`px-4 py-2 text-sm font-medium border-b ${
+                      theme === 'dark' ? 'border-dark-border text-gray-300' : 'border-gray-200 text-gray-700'
+                    }`}>
+                      Scenario values (to test)
+                    </div>
+                    <Editor
+                      height="300px"
+                      defaultLanguage="yaml"
+                      theme={theme === 'dark' ? 'vs-dark' : 'light'}
+                      value={values}
+                      onChange={(value) => setValues(value || '')}
+                      options={{
+                        minimap: { enabled: false },
+                        scrollBeyondLastLine: false,
+                        fontSize: 11,
+                        lineNumbers: 'on',
+                        folding: false,
+                        lineDecorationsWidth: 16,
+                        lineNumbersMinChars: 3,
+                        padding: { top: 8, bottom: 8 }
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <div className={`px-4 py-2 text-sm font-medium border-b ${
+                      theme === 'dark' ? 'border-dark-border text-gray-300' : 'border-gray-200 text-gray-700'
+                    }`}>
+                      Built-in values (reference)
+                    </div>
+                    <Editor
+                      height="300px"
+                      defaultLanguage="yaml"
+                      theme={theme === 'dark' ? 'vs-dark' : 'light'}
+                      value={`# Default values for my-helm-chart
+replicaCount: 1
+image:
+  repository: nginx
+  tag: "1.16.0"
+  pullPolicy: IfNotPresent
+service:
+  type: ClusterIP
+  port: 80`}
+                      options={{
+                        minimap: { enabled: false },
+                        scrollBeyondLastLine: false,
+                        fontSize: 11,
+                        lineNumbers: 'on',
+                        folding: false,
+                        lineDecorationsWidth: 16,
+                        lineNumbersMinChars: 3,
+                        padding: { top: 8, bottom: 8 },
+                        readOnly: true
+                      }}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <Editor
+                    height="300px"
+                    defaultLanguage="yaml"
+                    theme={theme === 'dark' ? 'vs-dark' : 'light'}
+                    value={activeTab === 'values' ? values : `# Default values for my-helm-chart
+replicaCount: 1
+image:
+  repository: nginx
+  tag: "1.16.0"
+  pullPolicy: IfNotPresent
+service:
+  type: ClusterIP
+  port: 80`}
+                    onChange={activeTab === 'values' ? (value) => setValues(value || '') : undefined}
+                    options={{
+                      minimap: { enabled: false },
+                      scrollBeyondLastLine: false,
+                      fontSize: 11,
+                      lineNumbers: 'on',
+                      folding: false,
+                      lineDecorationsWidth: 16,
+                      lineNumbersMinChars: 3,
+                      padding: { top: 8, bottom: 8 },
+                      readOnly: activeTab === 'reference'
+                    }}
+                  />
+                </div>
+              )}
+            </div>
           </div>
-          <div className="flex justify-end gap-2">
+          <div className="flex justify-end gap-2 mt-auto">
             <button
               type="button"
               onClick={onClose}

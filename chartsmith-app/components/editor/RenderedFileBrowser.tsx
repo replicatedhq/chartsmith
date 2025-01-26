@@ -4,15 +4,16 @@ import React, { useState } from "react";
 import { FileText, ChevronRight, ChevronDown } from "lucide-react";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useValuesScenarios } from "@/app/contexts/ValuesScenariosContext";
-import { WorkspaceFile } from "@/lib/types/workspace";
+import { Scenario } from '@/lib/types/workspace';
+import { WorkspaceFile, RenderedChart } from "@/lib/types/workspace";
 
 interface RenderedFileBrowserProps {
-  nodes: WorkspaceFile[];
+  charts: RenderedChart[];
   onFileSelect: (file: WorkspaceFile) => void;
   selectedFile?: WorkspaceFile;
 }
 
-export function RenderedFileBrowser({ nodes, onFileSelect, selectedFile }: RenderedFileBrowserProps) {
+export function RenderedFileBrowser({ charts, onFileSelect, selectedFile }: RenderedFileBrowserProps) {
   const { theme } = useTheme();
   const { scenarios } = useValuesScenarios();
   const [expandedScenarios, setExpandedScenarios] = useState<Set<string>>(new Set(["default"]));
@@ -43,24 +44,7 @@ export function RenderedFileBrowser({ nodes, onFileSelect, selectedFile }: Rende
 
                 {expandedScenarios.has(scenario.id) && (
                   <div className="ml-4 mt-1 space-y-1">
-                    {nodes.map((node) => {
-                      const nodeWithScenario = {
-                        ...node,
-                        filePath: `${scenario.id}/${node.filePath}`,
-                        scenarioId: scenario.id,
-                      };
 
-                      return (
-                        <button
-                          key={nodeWithScenario.filePath}
-                          onClick={() => onFileSelect(nodeWithScenario)}
-                          className={`w-full px-2 py-1.5 rounded-sm text-left flex items-center gap-2 transition-colors relative ${selectedFile?.filePath === nodeWithScenario.filePath ? "bg-primary/10 text-primary" : theme === "dark" ? "text-gray-300 hover:bg-dark-border/40" : "text-gray-700 hover:bg-gray-100"}`}
-                        >
-                          <FileText className="w-4 h-4" />
-                          <span className="text-sm">{node.filePath.split('/').pop() || node.filePath}</span>
-                        </button>
-                      );
-                    })}
                   </div>
                 )}
               </div>

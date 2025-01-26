@@ -86,13 +86,7 @@ export interface RawMessage {
   response?: string;
 }
 
-export interface ValuesScenario {
-  id: string;
-  name: string;
-  description: string;
-  values: string;
-  enabled?: boolean;
-}
+import { Scenario } from '@/lib/types/workspace';
 
 export interface RawPlan {
   id: string;

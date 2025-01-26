@@ -227,12 +227,13 @@ State Management:
 - When updating state from real-time events:
   - Update local state immediately for optimistic UI
   - Handle errors and revert state if needed
-  - Use functional updates to ensure latest state
-- For modals:
-  - Handle both Escape key and click outside to close
-  - Add event listeners only when modal is open
-  - Clean up listeners on close
-  - Use ref to detect clicks outside modal content
+  - Use functional updates to ensure latest state  - For modals:
+    - Handle both Escape key and click outside to close
+    - Add event listeners only when modal is open
+    - Clean up listeners on close
+    - Use ref to detect clicks outside modal content
+    - Add useEffect with Escape key handler in every modal component
+    - Only add listeners when modal is open (isOpen state)
 - When switching between source/rendered views:
   - Clear selected file and editor content when switching to rendered
   - Conditionally render editor only in source view
@@ -335,6 +336,16 @@ State Management:
 - Server-side fetch data in layout.tsx for initial render, then use client-side actions for updates
 - Move client-side state and effects into dedicated client components
 
+# Session Management
+- Sessions expire after 24 hours of inactivity
+- Session expiration is extended on user activity (mouse, keyboard, scroll, touch)
+- Activity events are debounced to prevent excessive database updates
+- Session extension happens server-side via extendSessionAction action
+
+# Editor Configuration
+- Monaco editor padding only accepts 'top' and 'bottom' in IEditorPaddingOptions
+- Use padding: { top: 8, bottom: 8 } for consistent editor padding
+
 Next.js 15:
 - Dynamic APIs like params, searchParams, cookies(), headers() must be awaited in server components
 - 'use client' directive must be the first line in the file with no preceding whitespace
@@ -342,6 +353,8 @@ Next.js 15:
 - Prefer awaiting as late as possible to allow more static rendering
 - Must await params in both layout.tsx and page.tsx when using dynamic routes
 - After awaiting params, pass the extracted values to child components rather than passing params directly
+- In client components, params is a Promise that must be unwrapped with React.use() before accessing properties
+- Type params as Promise<{ [key: string]: string }> in client components
 - When using cookies() in server components, must await before accessing values
 - Server-side render layout components when possible to avoid loading states
 - Server-side fetch data in layout.tsx for initial render, then use client-side actions for updates

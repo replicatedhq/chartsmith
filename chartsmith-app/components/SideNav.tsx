@@ -1,7 +1,7 @@
 "use client"
 
 import React from "react";
-import { Home, FolderKanban, Lightbulb, MessageSquare, FileJson } from "lucide-react";
+import { Home, Code, Lightbulb, FileJson } from "lucide-react";
 import { UserMenu } from "./UserMenu";
 import { useTheme } from "@/contexts/ThemeContext";
 import { usePathname } from "next/navigation";
@@ -31,29 +31,21 @@ export function SideNav({ workspaceID }: SideNavProps) {
         </div>
 
         <div className="mt-4">
-          <Tooltip content="Toggle Chat">
-            <button onClick={() => setIsChatVisible(!isChatVisible)} className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${isChatVisible ? `${theme === "dark" ? "bg-dark-border/60" : "bg-light-border/60"} text-primary` : `text-neutral hover:${theme === "dark" ? "bg-dark-border/40" : "bg-light-border/40"}`}`}>
-              <MessageSquare className="w-5 h-5" />
-            </button>
-          </Tooltip>
-        </div>
-
-        <div className="mt-2">
-          <Tooltip content="Toggle File Explorer">
-            <button
-              onClick={() => setIsFileTreeVisible(!isFileTreeVisible)}
-              className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${isFileTreeVisible ? `${theme === "dark" ? "bg-dark-border/60" : "bg-light-border/60"} text-primary` : `text-neutral hover:${theme === "dark" ? "bg-dark-border/40" : "bg-light-border/40"}`}`}
+          <Tooltip content="Editor">
+            <Link
+              href={`/workspace/${workspaceID}`}
+              className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${usePathname() === `/workspace/${workspaceID}` ? `${theme === "dark" ? "bg-dark-border/60" : "bg-light-border/60"} text-primary` : `text-neutral hover:${theme === "dark" ? "bg-dark-border/40" : "bg-light-border/40"}`}`}
             >
-              <FolderKanban className="w-5 h-5" />
-            </button>
+              <Code className="w-5 h-5" />
+            </Link>
           </Tooltip>
         </div>
 
         <div className="mt-2">
-          <Tooltip content="Values.yaml Scenarios">
+          <Tooltip content="Values Scenarios">
             <Link
               href={`/workspace/${workspaceID}/values`}
-              className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${usePathname() === "/values" ? `${theme === "dark" ? "bg-dark-border/60" : "bg-light-border/60"} text-primary` : `text-neutral hover:${theme === "dark" ? "bg-dark-border/40" : "bg-light-border/40"}`}`}
+              className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${usePathname() === `/workspace/${workspaceID}/values` ? `${theme === "dark" ? "bg-dark-border/60" : "bg-light-border/60"} text-primary` : `text-neutral hover:${theme === "dark" ? "bg-dark-border/40" : "bg-light-border/40"}`}`}
             >
               <FileJson className="w-5 h-5" />
             </Link>
@@ -61,10 +53,10 @@ export function SideNav({ workspaceID }: SideNavProps) {
         </div>
 
         <div className="mt-2">
-          <Tooltip content="View Recommendations">
+          <Tooltip content="Recommendations">
             <Link
               href={`/workspace/${workspaceID}/recommendations`}
-              className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors relative ${usePathname() === "/recommendations" ? `${theme === "dark" ? "bg-dark-border/60" : "bg-light-border/60"} text-primary` : `text-neutral hover:${theme === "dark" ? "bg-dark-border/40" : "bg-light-border/40"}`}`}
+              className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors relative ${usePathname() === `/workspace/${workspaceID}/recommendations` ? `${theme === "dark" ? "bg-dark-border/60" : "bg-light-border/60"} text-primary` : `text-neutral hover:${theme === "dark" ? "bg-dark-border/40" : "bg-light-border/40"}`}`}
             >
               <Lightbulb className="w-5 h-5" />
               <div className="absolute -top-1 -right-1 bg-error text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">4</div>
