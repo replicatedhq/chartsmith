@@ -56,6 +56,24 @@ export async function sessionToken(session: Session): Promise<string> {
   return token;
 }
 
+export async function extendSession(session: Session): Promise<Session> {
+  try {
+    const db = getDB(await getParam("DB_URI"));
+    await db.query(
+      `UPDATE session SET expires_at = now() + interval '24 hours' WHERE id = $1`,
+      [session.id],
+    );
+
+    return {
+      ...session,
+      expiresAt: new Date(Date.now() + parse(sessionDuration, "ms")!),
+    };
+  } catch (err) {
+    logger.error("Failed to extend session", { err });
+    throw err;
+  }
+}
+
 export async function findSession(token: string): Promise<Session | undefined> {
   try {
     const decoded = jwt.verify(token, process.env.HMAC_SECRET!) as { id: string };

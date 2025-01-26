@@ -336,6 +336,12 @@ State Management:
 - Server-side fetch data in layout.tsx for initial render, then use client-side actions for updates
 - Move client-side state and effects into dedicated client components
 
+# Session Management
+- Sessions expire after 24 hours of inactivity
+- Session expiration is extended on user activity (mouse, keyboard, scroll, touch)
+- Activity events are debounced to prevent excessive database updates
+- Session extension happens server-side via extendSessionAction action
+
 Next.js 15:
 - Dynamic APIs like params, searchParams, cookies(), headers() must be awaited in server components
 - 'use client' directive must be the first line in the file with no preceding whitespace

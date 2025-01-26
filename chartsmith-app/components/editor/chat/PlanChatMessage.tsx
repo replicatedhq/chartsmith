@@ -251,31 +251,35 @@ export function PlanChatMessage({
                   }`}
                 >
                   {plan.actionFiles.map((action, index) => (
-                    <div key={index} className="flex items-center gap-1.5 px-2 py-1 rounded-full text-xs bg-primary/5 min-w-0">
-                      {action.status === 'created' ? (
-                        <div className="text-green-500">
-                          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
+                    <div key={index} className="w-full flex items-center">
+                      <div className="flex items-center gap-1.5 px-2 py-1 rounded-full text-xs bg-primary/5 w-fit">
+                        <div className="flex-shrink-0">
+                          {action.status === 'created' ? (
+                            <div className="text-green-500">
+                              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                            </div>
+                          ) : action.status === 'creating' ? (
+                            <div
+                              className="rounded-full h-3 w-3 border border-primary/70 border-t-transparent"
+                              style={{
+                                animation: 'spin 1s linear infinite',
+                                animationDelay: '0s'
+                              }}
+                            />
+                          ) : (
+                            <>
+                              {action.action === 'create' && <Plus className="h-3 w-3 text-primary/70" />}
+                              {action.action === 'update' && <Pencil className="h-3 w-3 text-primary/70" />}
+                              {action.action === 'delete' && <Trash2 className="h-3 w-3 text-primary/70" />}
+                            </>
+                          )}
                         </div>
-                      ) : action.status === 'creating' ? (
-                        <div
-                          className="rounded-full h-3 w-3 border border-primary/70 border-t-transparent"
-                          style={{
-                            animation: 'spin 1s linear infinite',
-                            animationDelay: '0s'
-                          }}
-                        />
-                      ) : (
-                        <>
-                          {action.action === 'create' && <Plus className="h-3 w-3 text-primary/70" />}
-                          {action.action === 'update' && <Pencil className="h-3 w-3 text-primary/70" />}
-                          {action.action === 'delete' && <Trash2 className="h-3 w-3 text-primary/70" />}
-                        </>
-                      )}
-                      <span className={`${theme === "dark" ? "text-gray-300" : "text-gray-600"}`}>
-                        {action.path}
-                      </span>
+                        <span className={`${theme === "dark" ? "text-gray-300" : "text-gray-600"} truncate font-mono text-[10px]`}>
+                          {action.path}
+                        </span>
+                      </div>
                     </div>
                   ))}
                 </div>
