@@ -226,7 +226,7 @@ export function CreateScenarioModal({ isOpen, onClose, onSubmit }: CreateScenari
                         folding: false,
                         lineDecorationsWidth: 16,
                         lineNumbersMinChars: 3,
-                        padding: { top: 8, bottom: 8, left: 24 }
+                        padding: { top: 8, bottom: 8 }
                       }}
                     />
                   </div>
@@ -257,7 +257,7 @@ service:
                         folding: false,
                         lineDecorationsWidth: 16,
                         lineNumbersMinChars: 3,
-                        padding: { top: 8, bottom: 8, left: 24 },
+                        padding: { top: 8, bottom: 8 },
                         readOnly: true
                       }}
                     />
@@ -287,7 +287,7 @@ service:
                       folding: false,
                       lineDecorationsWidth: 16,
                       lineNumbersMinChars: 3,
-                      padding: { top: 8, bottom: 8, left: 24 },
+                      padding: { top: 8, bottom: 8 },
                       readOnly: activeTab === 'reference'
                     }}
                   />

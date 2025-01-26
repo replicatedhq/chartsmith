@@ -39,7 +39,7 @@ export default function ValuesPage({ params }: { params: Promise<{ id: string }>
         setWorkspace(loadedWorkspace);
 
         // Load scenarios for each chart
-        const scenariosMap = new Map<string, ValuesScenario[]>();
+        const scenariosMap = new Map<string, Scenario[]>();
         for (const chart of loadedWorkspace.charts) {
           const loadedScenarios = await listScenariosAction(session, id, chart.id);
           scenariosMap.set(chart.id, loadedScenarios);
@@ -77,17 +77,37 @@ export default function ValuesPage({ params }: { params: Promise<{ id: string }>
   };
 
   const handleConfirmDelete = () => {
-    if (scenarioToDelete) {
-      setScenarios(scenarios.filter(s => s.id !== scenarioToDelete.id));
+    if (scenarioToDelete?.chartId) {
+      setScenariosByChart(prev => {
+        const newMap = new Map(prev);
+        // Type assertion since we've already checked chartId exists
+        const chartId = scenarioToDelete.chartId as string;
+        const chartScenarios = newMap.get(chartId) || [];
+        newMap.set(
+          chartId,
+          chartScenarios.filter(s => s.id !== scenarioToDelete.id)
+        );
+        return newMap;
+      });
       setScenarioToDelete(null);
     }
   };
 
   const handleToggleEnabled = (scenario: Scenario) => {
-    if (scenario.id === 'default') return;
-    setScenarios(scenarios.map(s =>
-      s.id === scenario.id ? { ...s, enabled: !s.enabled } : s
-    ));
+    if (!scenario.chartId) return;
+    setScenariosByChart(prev => {
+      const newMap = new Map(prev);
+      // Type assertion since we've already checked chartId exists
+      const chartId = scenario.chartId as string;
+      const chartScenarios = newMap.get(chartId) || [];
+      newMap.set(
+        chartId,
+        chartScenarios.map(s =>
+          s.id === scenario.id ? { ...s, enabled: !s.enabled } : s
+        )
+      );
+      return newMap;
+    });
   };
 
   return (
@@ -144,9 +164,19 @@ export default function ValuesPage({ params }: { params: Promise<{ id: string }>
         onClose={() => setSelectedScenario(null)}
         scenario={selectedScenario}
         onUpdate={(updatedScenario) => {
-          setScenarios(scenarios.map(s =>
-            s.id === updatedScenario.id ? updatedScenario : s
-          ));
+          if (!updatedScenario.chartId) return;
+          setScenariosByChart(prev => {
+            const newMap = new Map(prev);
+            const chartId = updatedScenario.chartId as string;
+            const chartScenarios = newMap.get(chartId) || [];
+            newMap.set(
+              chartId,
+              chartScenarios.map(s =>
+                s.id === updatedScenario.id ? updatedScenario : s
+              )
+            );
+            return newMap;
+          });
         }}
       />
 

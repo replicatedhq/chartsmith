@@ -5,7 +5,7 @@ import { FileText, ChevronRight, ChevronDown } from "lucide-react";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useValuesScenarios } from "@/app/contexts/ValuesScenariosContext";
 import { Scenario } from '@/lib/types/workspace';
-import { WorkspaceFile } from "@/lib/types/workspace";
+import { WorkspaceFile, RenderedChart } from "@/lib/types/workspace";
 
 interface RenderedFileBrowserProps {
   charts: RenderedChart[];

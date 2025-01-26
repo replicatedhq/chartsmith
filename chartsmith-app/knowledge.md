@@ -342,6 +342,10 @@ State Management:
 - Activity events are debounced to prevent excessive database updates
 - Session extension happens server-side via extendSessionAction action
 
+# Editor Configuration
+- Monaco editor padding only accepts 'top' and 'bottom' in IEditorPaddingOptions
+- Use padding: { top: 8, bottom: 8 } for consistent editor padding
+
 Next.js 15:
 - Dynamic APIs like params, searchParams, cookies(), headers() must be awaited in server components
 - 'use client' directive must be the first line in the file with no preceding whitespace

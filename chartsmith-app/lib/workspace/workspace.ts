@@ -321,7 +321,7 @@ export async function listWorkspaces(userId: string): Promise<Workspace[]> {
       }
 
       // finally, get the rendered charts for this workspace revision
-      const renderedCharts = await listRenderedChartsForWorkspace(id, w.currentRevisionNumber);
+      const renderedCharts = await listRenderedChartsForWorkspace(row.id, w.currentRevisionNumber);
       w.renderedCharts = renderedCharts;
 
       workspaces.push(w);
