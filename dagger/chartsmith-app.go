@@ -156,10 +156,10 @@ func updateDebugPage(ctx context.Context, source *dagger.Directory, version stri
 	beforeBlock := debugFile[:begin]
 	afterBlock := debugFile[end:]
 
-	// Generate new content for the automated replace block
-	replacement := fmt.Sprintf(`const DEPLOY_TIME: string = "%s";
+	// Generate new content for the automated replace block with timezone
+	replacement := fmt.Sprintf(`const DEPLOY_TIME: string = "%sZ";
 const VERSION: string = "%s";`,
-		time.Now().Format("2006-01-02 15:04:05"), version)
+		time.Now().Format("2006-01-02T15:04:05"), version)
 
 	// Reassemble the file with the updated constants
 	updatedFile := beforeBlock + "// BEGIN AUTOMATED REPLACE\n" + replacement + "\n" + afterBlock
