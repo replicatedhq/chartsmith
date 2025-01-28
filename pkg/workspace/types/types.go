@@ -84,8 +84,9 @@ type ActionFile struct {
 }
 
 type Chat struct {
-	ID          string `json:"id"`
-	WorkspaceID string `json:"-"`
-	Prompt      string `json:"prompt"`
-	Response    string `json:"response"`
+	ID          string    `json:"id"`
+	WorkspaceID string    `json:"-"`
+	Prompt      string    `json:"prompt"`
+	Response    string    `json:"response"`
+	CreatedAt   time.Time `json:"createdAt"`
 }

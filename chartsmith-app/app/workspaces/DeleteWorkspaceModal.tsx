@@ -42,7 +42,7 @@ export function DeleteWorkspaceModal({ isOpen, onClose, onConfirm, workspaceName
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
-      <div 
+      <div
         ref={modalRef}
         className={`w-full max-w-md rounded-lg shadow-lg border ${
         theme === 'dark'
@@ -83,7 +83,6 @@ export function DeleteWorkspaceModal({ isOpen, onClose, onConfirm, workspaceName
             </button>
             <button
               onClick={() => {
-                console.log('Delete button clicked');
                 onConfirm();
               }}
               className="px-4 py-2 text-sm text-white bg-error hover:bg-error/90 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-error focus:ring-offset-2"

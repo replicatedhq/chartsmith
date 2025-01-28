@@ -20,8 +20,6 @@ export function StatusModal({ isOpen, onClose, item }: StatusModalProps) {
   if (!isOpen) return null;
 
   const handleRerun = () => {
-    // Add rerun logic here
-    console.log("Rerunning:", item.label);
   };
 
   return (

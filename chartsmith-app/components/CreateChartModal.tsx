@@ -26,14 +26,12 @@ export function CreateChartModal({ isOpen, onClose }: CreateChartModalProps) {
     const file = e.target.files?.[0];
     if (file) {
       // Handle file upload
-      console.log("Uploading file:", file.name);
     }
   };
 
   const handlePromptSubmit = () => {
     if (promptInput.trim()) {
       // Handle prompt submission
-      console.log("Submitting prompt:", promptInput);
     }
   };
 

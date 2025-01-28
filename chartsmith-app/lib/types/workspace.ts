@@ -1,3 +1,5 @@
+import { Message } from "@/components/editor/types";
+
 export interface Workspace {
   id: string;
   createdAt: Date;
@@ -10,6 +12,7 @@ export interface Workspace {
   incompleteRevisionNumber?: number;
   currentPlans: Plan[];
   previousPlans: Plan[];
+  messages: Message[];
 }
 
 export interface WorkspaceFile {

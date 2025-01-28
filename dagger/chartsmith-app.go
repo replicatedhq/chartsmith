@@ -42,7 +42,6 @@ func buildChartsmithApp(ctx context.Context, source *dagger.Directory, opService
 	stagingBuildContainer := buildContainer.
 		WithEnvVariable("NEXT_PUBLIC_GOOGLE_CLIENT_ID", mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Staging - Chartsmith Oauth Credentials", "client_id")).
 		WithEnvVariable("NEXT_PUBLIC_GOOGLE_REDIRECT_URI", mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Staging - Chartsmith Oauth Credentials", "redirect_uri")).
-		WithSecretVariable("TOKEN_ENCRYPTION", mustGetSecret(context.Background(), opServiceAccount, "Staging - Chartsmith", "token_encryption")).
 		WithEnvVariable("NEXT_PUBLIC_CENTRIFUGO_ADDRESS", mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Staging - Chartsmith Centrifugo", "client_address")).
 		WithEnvVariable("NEXT_PUBLIC_REPLICATED_REDIRECT_URI", mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Staging - Chartsmith", "replicated_redirect_uri")).
 		WithExec([]string{"npm", "run", "build"})
@@ -71,12 +70,10 @@ func buildChartsmithApp(ctx context.Context, source *dagger.Directory, opService
 		`NEXT_PUBLIC_GOOGLE_CLIENT_ID=%s
 NEXT_PUBLIC_GOOGLE_REDIRECT_URI=%s
 NEXT_PUBLIC_CENTRIFUGO_ADDRESS=%s
-TOKEN_ENCRYPTION=%s
 NEXT_PUBLIC_REPLICATED_REDIRECT_URI=%s
 `, mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Staging - Chartsmith Oauth Credentials", "client_id"),
 		mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Staging - Chartsmith Oauth Credentials", "redirect_uri"),
 		mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Staging - Chartsmith Centrifugo", "client_address"),
-		mustGetSecretAsPlaintext(context.Background(), opServiceAccount, "Staging - Chartsmith", "token_encryption"),
 		mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Staging - Chartsmith", "replicated_redirect_uri"),
 	))
 
@@ -84,7 +81,6 @@ NEXT_PUBLIC_REPLICATED_REDIRECT_URI=%s
 		WithEnvVariable("NEXT_PUBLIC_GOOGLE_CLIENT_ID", mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Production - Chartsmith Oauth Credentials", "client_id")).
 		WithEnvVariable("NEXT_PUBLIC_GOOGLE_REDIRECT_URI", mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Production - Chartsmith Oauth Credentials", "redirect_uri")).
 		WithEnvVariable("NEXT_PUBLIC_CENTRIFUGO_ADDRESS", mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Production - Chartsmith Centrifugo", "client_address")).
-		WithSecretVariable("TOKEN_ENCRYPTION", mustGetSecret(context.Background(), opServiceAccount, "Production - Chartsmith", "token_encryption")).
 		WithEnvVariable("NEXT_PUBLIC_REPLICATED_REDIRECT_URI", mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Production - Chartsmith", "replicated_redirect_uri")).
 		WithExec([]string{"npm", "run", "build"})
 	stdout, err = stagingBuildContainer.Stdout(context.Background())
@@ -111,11 +107,9 @@ NEXT_PUBLIC_REPLICATED_REDIRECT_URI=%s
 		`NEXT_PUBLIC_GOOGLE_CLIENT_ID=%s
 NEXT_PUBLIC_GOOGLE_REDIRECT_URI=%s
 NEXT_PUBLIC_CENTRIFUGO_ADDRESS=%s
-TOKEN_ENCRYPTION=%s
 `, mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Production - Chartsmith Oauth Credentials", "client_id"),
 		mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Production - Chartsmith Oauth Credentials", "redirect_uri"),
 		mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Production - Chartsmith Centrifugo", "client_address"),
-		mustGetSecretAsPlaintext(context.Background(), opServiceAccount, "Production - Chartsmith", "token_encryption"),
 	))
 
 	return stagingReleaseContainer, prodReleaseContainer, nil

@@ -78,6 +78,7 @@ export interface RawChatMessage {
   id: string;
   prompt: string;
   response?: string;
+  createdAt: string;  // ISO date string from server
 }
 
 export interface RawArtifact {

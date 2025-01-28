@@ -5,9 +5,6 @@ import { setUserReplicatedToken } from "../token";
 import { logger } from "@/lib/utils/logger";
 
 export async function exchangeReplicatedAuth(session: Session, nonce: string, exchange: string): Promise<boolean> {
-  console.log("Exchanging Replicated nonce:", nonce);
-  console.log("Exchanging Replicated exchange:", exchange);
-
   // make the api request to echange with the nonce
   const response = await fetch(`${exchange}?nonce=${nonce}`);
   if (!response.ok) {

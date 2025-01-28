@@ -34,7 +34,11 @@ export function ChatPanel({ messages, onSendMessage, onApplyChanges, session, wo
   return (
     <>
       <div className={`flex-1 overflow-y-auto p-4 space-y-4 min-h-0 ${theme === "dark" ? "bg-dark-surface" : "bg-gray-50"}`}>
-        {messages.map((message, index) => (
+        {[...messages].sort((a, b) => {
+          const aDate = a.createdAt ? new Date(a.createdAt) : new Date(0);
+          const bDate = b.createdAt ? new Date(b.createdAt) : new Date(0);
+          return aDate.getTime() - bDate.getTime(); // Oldest at top
+        }).map((message, index) => (
           <ChatMessage
             key={message.id || index}
             message={message}

@@ -24,6 +24,8 @@ export async function listMessagesForWorkspace(workspaceID: string): Promise<Mes
                 workspace_chat
             WHERE
                 workspace_chat.workspace_id = $1
+            ORDER BY
+                workspace_chat.created_at ASC
         `,
       [workspaceID],
     );
@@ -43,6 +45,7 @@ export async function listMessagesForWorkspace(workspaceID: string): Promise<Mes
         prompt: row.prompt,
         response: row.response,
         createdAt: row.created_at,
+        isComplete: row.response !== null,  // If there's a response, it's complete
       };
       messages.push(message);
     }
