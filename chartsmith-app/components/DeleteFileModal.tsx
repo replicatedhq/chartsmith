@@ -3,17 +3,39 @@
 import React from "react";
 import { X, AlertTriangle } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useSession } from "@/app/hooks/useSession";
+import { deleteWorkspaceFileAction } from "@/lib/workspace/actions/delete-workspace-file";
+import { toast } from "sonner";
 
 interface DeleteFileModalProps {
   isOpen: boolean;
   onClose: () => void;
   filePath: string;
+  workspaceId: string;
   isRequired?: boolean;
   onConfirm: () => void;
 }
 
-export function DeleteFileModal({ isOpen, onClose, filePath, isRequired, onConfirm }: DeleteFileModalProps) {
+export function DeleteFileModal({ isOpen, onClose, filePath, workspaceId, isRequired, onConfirm }: DeleteFileModalProps) {
   const { theme } = useTheme();
+  const { session } = useSession();
+
+  const handleDelete = async () => {
+    try {
+      if (!session) {
+        toast.error("You must be logged in to delete files");
+        return;
+      }
+      
+      await deleteWorkspaceFileAction(session, workspaceId, filePath);
+      onConfirm();
+      onClose();
+      toast.success("File deleted successfully");
+    } catch (error) {
+      console.error("Failed to delete file:", error);
+      toast.error("Failed to delete file");
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -45,7 +67,10 @@ export function DeleteFileModal({ isOpen, onClose, filePath, isRequired, onConfi
             {isRequired ? "Close" : "Cancel"}
           </button>
           {!isRequired && (
-            <button onClick={onConfirm} className="px-4 py-2 text-sm text-white bg-error hover:bg-error/90 rounded-lg transition-colors">
+            <button 
+              onClick={handleDelete} 
+              className="px-4 py-2 text-sm text-white bg-error hover:bg-error/90 rounded-lg transition-colors"
+            >
               Delete
             </button>
           )}
