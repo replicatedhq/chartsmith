@@ -206,7 +206,7 @@ export function ChatMessage({
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' && !e.shiftKey) {
                           e.preventDefault();
-                          if (chatInput.trim()) {
+                          if (chatInput.trim() && onSendMessage) {
                             onSendMessage(chatInput);
                             setChatInput('');
                           }
