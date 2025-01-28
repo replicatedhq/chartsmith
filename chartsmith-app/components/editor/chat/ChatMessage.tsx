@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, FormEvent } from "react";
 import Image from "next/image";
 import { Message } from "../types";
 import { Session } from "@/lib/types/session";
@@ -7,23 +7,55 @@ import { useTheme } from "../../../contexts/ThemeContext";
 import { Button } from "@/components/ui/Button";
 import { FeedbackModal } from "@/components/FeedbackModal";
 import { ignorePlanAction } from "@/lib/workspace/actions/ignore-plan";
+import { createRevisionAction } from "@/lib/workspace/actions/create-revision";
+import { Send, ThumbsUp, ThumbsDown } from "lucide-react";
 
-interface ChatMessageProps {
+export interface ChatMessageProps {
   message: Message;
   onApplyChanges?: () => void;
   session: Session;
   workspaceId: string;
   showActions?: boolean;
-  /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
   setMessages?: (messages: Message[]) => void;
   setWorkspace?: React.Dispatch<React.SetStateAction<Workspace>>;
+  showChatInput?: boolean;
+  onSendMessage?: (message: string) => void;
+  workspace?: Workspace;
 }
 
-export function ChatMessage({ message, onApplyChanges, session, workspaceId, showActions = true, setMessages, setWorkspace }: ChatMessageProps) {
+export function ChatMessage({ 
+  message, 
+  onApplyChanges, 
+  session, 
+  workspaceId, 
+  showActions = true, 
+  setMessages, 
+  setWorkspace,
+  showChatInput,
+  onSendMessage,
+  workspace
+}: ChatMessageProps) {
   const { theme } = useTheme();
   const [showReportModal, setShowReportModal] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [chatInput, setChatInput] = useState("");
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const handleSubmitChat = (e: FormEvent) => {
+    e.preventDefault();
+    if (chatInput.trim() && onSendMessage) {
+      onSendMessage(chatInput);
+      setChatInput("");
+    }
+  };
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px';
+    }
+  }, [chatInput]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -37,7 +69,6 @@ export function ChatMessage({ message, onApplyChanges, session, workspaceId, sho
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
-
 
   return (
     <div className="space-y-2">
@@ -123,6 +154,85 @@ export function ChatMessage({ message, onApplyChanges, session, workspaceId, sho
                 )}
               </div>
             )}
+            {showChatInput && (
+              <div className="mt-6 border-t border-dark-border/20">
+                <div className="flex items-center justify-between pt-4 pb-3">
+                  <div className="flex gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowReportModal(true)}
+                      className={`p-2 ${theme === "dark" ? "hover:bg-dark-border/40 text-gray-400 hover:text-gray-200" : "hover:bg-gray-100 text-gray-500 hover:text-gray-700"}`}
+                    >
+                      <ThumbsUp className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={async () => {
+                        if (session && workspace?.currentPlans[0]) {
+                          await ignorePlanAction(session, workspaceId, "");
+                        }
+                      }}
+                      className={`p-2 ${theme === "dark" ? "hover:bg-dark-border/40 text-gray-400 hover:text-gray-200" : "hover:bg-gray-100 text-gray-500 hover:text-gray-700"}`}
+                    >
+                      <ThumbsDown className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={async () => {
+                      if (session && workspace?.currentPlans[0]) {
+                        const updatedWorkspace = await createRevisionAction(session, workspace.currentPlans[0].id);
+                        if (updatedWorkspace && setWorkspace) {
+                          setWorkspace(updatedWorkspace);
+                        }
+                      }
+                    }}
+                    className="min-w-[100px] bg-primary hover:bg-primary/80 text-white"
+                  >
+                    Proceed
+                  </Button>
+                </div>
+                <div className="pt-4 border-t border-dark-border/10">
+                  <form onSubmit={handleSubmitChat} className="relative">
+                    <textarea
+                      ref={textareaRef}
+                      value={chatInput}
+                      onChange={(e) => {
+                        setChatInput(e.target.value);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          if (chatInput.trim()) {
+                            onSendMessage(chatInput);
+                            setChatInput('');
+                          }
+                        }
+                      }}
+                      placeholder="Ask a question or suggest changes..."
+                      rows={1}
+                      style={{ height: 'auto', minHeight: '34px', maxHeight: '150px' }}
+                      className={`w-full px-3 py-1.5 pr-10 text-sm rounded-md border resize-none overflow-hidden ${
+                        theme === "dark"
+                          ? "bg-dark border-dark-border/60 text-white placeholder-gray-500"
+                          : "bg-white border-gray-200 text-gray-900 placeholder-gray-400"
+                      } focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50`}
+                    />
+                    <button
+                      type="submit"
+                      className={`absolute right-2 top-[5px] p-1.5 rounded-full ${
+                        theme === "dark" ? "text-gray-400 hover:text-gray-200" : "text-gray-500 hover:text-gray-700"
+                      } hover:bg-gray-100 dark:hover:bg-dark-border/40`}
+                    >
+                      <Send className="w-4 h-4" />
+                    </button>
+                  </form>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -135,7 +245,6 @@ export function ChatMessage({ message, onApplyChanges, session, workspaceId, sho
         workspaceId={workspaceId}
         session={session}
       />
-
     </div>
   );
 }

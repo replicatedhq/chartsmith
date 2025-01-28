@@ -258,6 +258,10 @@ State Management:
     - When optimistically creating related items (e.g. message and plan), use matching temp IDs
     - Update all relevant state (messages, workspace, etc) for complete optimistic UI
     - When optimistically creating messages, match the server message shape exactly (e.g. 'prompt' vs 'content')
+- When comparing message/plan timestamps:
+  - Optimistic messages (temp ID) are always newer than non-optimistic plans
+  - Handle invalid dates gracefully with null checks
+  - Only compare dates when both exist and are valid
     - When optimistically creating related items (e.g. message and plan), use matching temp IDs
     - Show optimistic items immediately, even if relationships aren't established yet
     - For optimistic plans, start with empty description and let streaming updates fill it in  - For streaming message updates, exclude messages state from effect deps to avoid feedback loops

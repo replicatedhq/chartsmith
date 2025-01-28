@@ -4,6 +4,15 @@ const detailedPlanInstructions = `
 - Provide a detailed plan for the high level plan outlined here.
 `
 
+const chatOnlyInstructions = `
+- You will be asked to answer a question.
+- You will be given the question and the context of the question.
+- You will be given the current chat history.
+- You will be asked to answer the question based on the context and the chat history.
+- You can be technical in your response and include inline code snippets identifed with Markdown when appropriate.
+- Never use the <chartsmithArtifact> tag in your response.
+`
+
 const initialPlanInstructions = `
 - Describe a general plan for creating a new helm chart based on the user request.
 - The user will provide a chart to start from. You shoud be inspired by this, but it's not important to copy it exactly.

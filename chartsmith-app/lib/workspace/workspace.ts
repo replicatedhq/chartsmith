@@ -1,7 +1,7 @@
 import { getDB } from "../data/db";
 import { getParam } from "../data/param";
 
-import { Chart, WorkspaceFile, Workspace, Plan, ActionFile, RenderedChart } from "../types/workspace";
+import { Chart, WorkspaceFile, Workspace, Plan, ActionFile, RenderedChart, ChatMessage } from "../types/workspace";
 import * as srs from "secure-random-string";
 import { logger } from "../utils/logger";
 
@@ -111,6 +111,27 @@ export async function createWorkspace(createdType: string, prompt: string | unde
   }
 }
 
+export async function createNonPlanMessage(userId: string, prompt: string, workspaceId: string, planId: string): Promise<ChatMessage> {
+  logger.info("Creating non-plan message", { userId, prompt, workspaceId, planId });
+  try {
+    const client = getDB(await getParam("DB_URI"));
+    const chatMessageId = srs.default({ length: 12, alphanumeric: true });
+    await client.query(
+      `INSERT INTO workspace_chat (id, workspace_id, created_at, sent_by, prompt, response, revision_number)
+      VALUES ($1, $2, now(), $3, $4, 'fake reesponse', 0)`,
+      [chatMessageId, workspaceId, userId, prompt],
+    );
+
+    // notify
+    await client.query(`SELECT pg_notify('new_nonplan_chat_message', $1)`, [chatMessageId]);
+
+    return getChatMessage(chatMessageId);
+  } catch (err) {
+    logger.error("Failed to create non-plan message", { err });
+    throw err;
+  }
+}
+
 export async function createPlan(userId: string, prompt: string, workspaceId: string, superceedingPlanId?: string): Promise<Plan> {
   logger.info("Creating plan", { userId, prompt, workspaceId, superceedingPlanId });
   try {
@@ -166,6 +187,27 @@ export async function createPlan(userId: string, prompt: string, workspaceId: st
     }
   } catch (err) {
     logger.error("Failed to create plan", { err });
+    throw err;
+  }
+}
+
+export async function getChatMessage(chatMessageId: string): Promise<ChatMessage> {
+  try {
+    const db = getDB(await getParam("DB_URI"));
+    const result = await db.query(`SELECT
+id, prompt, response, created_at
+FROM workspace_chat WHERE id = $1`, [chatMessageId]);
+
+    const chatMessage: ChatMessage = {
+      id: result.rows[0].id,
+      prompt: result.rows[0].prompt,
+      response: result.rows[0].response,
+      createdAt: result.rows[0].created_at,
+    };
+
+    return chatMessage;
+  } catch (err) {
+    logger.error("Failed to get chat message", { err });
     throw err;
   }
 }

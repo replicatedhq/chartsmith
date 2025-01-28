@@ -9,6 +9,15 @@ import (
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 )
 
+var listenChannels = []string{
+	"new_plan",
+	"new_file",
+	"new_slack_notification",
+	"execute_plan",
+	"execute_action",
+	"new_nonplan_chat_message",
+}
+
 // executeActionSemaphore is a channel that acts as a semaphore to ensure only one execute_action runs at a time
 var executeActionSemaphore = make(chan struct{}, 1)
 
@@ -45,8 +54,7 @@ func Listen(ctx context.Context) error {
 	conn := persistence.MustGeUunpooledPostgresSession()
 	defer conn.Close(ctx)
 
-	channels := []string{"new_plan", "new_file", "new_slack_notification", "execute_plan", "execute_action"}
-	for _, channel := range channels {
+	for _, channel := range listenChannels {
 		_, err := conn.Exec(ctx, fmt.Sprintf("LISTEN %s", channel))
 		if err != nil {
 			return fmt.Errorf("failed to listen on channel %s: %w", channel, err)
@@ -176,6 +184,7 @@ func Listen(ctx context.Context) error {
 			continue // Skip the switch statement for execute_action
 		}
 
+		fmt.Printf("Processing notification: %+v\n", notification)
 		switch notification.Channel {
 		case "new_file":
 			go func() {
@@ -187,6 +196,12 @@ func Listen(ctx context.Context) error {
 			go func() {
 				if err := handleNewPlanNotification(ctx, notification.Payload); err != nil {
 					fmt.Printf("Error handling new plan notification: %+v\n", err)
+				}
+			}()
+		case "new_nonplan_chat_message":
+			go func() {
+				if err := handleNewNonPlanChatMessageNotification(ctx, notification.Payload); err != nil {
+					fmt.Printf("Error handling new non-plan chat message notification: %+v\n", err)
 				}
 			}()
 		case "execute_plan":

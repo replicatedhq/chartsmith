@@ -10,6 +10,8 @@ import ReactMarkdown from "react-markdown";
 import { createPlanAction } from "@/lib/workspace/actions/create-plan";
 import { Plan, Workspace } from "@/lib/types/workspace";
 import { createRevisionAction } from "@/lib/workspace/actions/create-revision";
+import { isNewPlanAction } from "@/lib/workspace/actions/is-new-plan";
+import { createNonPlanMessageAction } from "@/lib/workspace/actions/create-nonplan-message-action";
 
 interface PlanChatMessageProps {
   showActions?: boolean;
@@ -23,6 +25,7 @@ interface PlanChatMessageProps {
   setMessages?: React.Dispatch<React.SetStateAction<Message[]>>;
   setWorkspace?: React.Dispatch<React.SetStateAction<Workspace>>;
   workspace?: Workspace;
+  messages?: Message[];
 }
 
 export function PlanChatMessage({
@@ -35,7 +38,8 @@ export function PlanChatMessage({
   handlePlanUpdated,
   setMessages,
   setWorkspace,
-  workspace
+  workspace,
+  messages
 }: PlanChatMessageProps) {
   const { theme } = useTheme();
   const [showFeedback, setShowFeedback] = useState(false);
@@ -54,6 +58,7 @@ export function PlanChatMessage({
     }
   }, [plan.status, plan.id]);
   const [chatInput, setChatInput] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const actionsRef = useRef<HTMLDivElement>(null);
 
   // Scroll when new actions are added or when expanded
@@ -109,8 +114,33 @@ export function PlanChatMessage({
     onProceed?.();
   };
 
-  const handleSubmitChat = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const createNonPlanMessage = async () => {
+    if (!session || !plan) return;
+
+    const tempId = `temp-${Date.now()}`;
+
+    // Create optimistic message (without a plan)
+    const optimisticMessage: Message = {
+      id: `msg-${tempId}`,
+      prompt: chatInput,
+      response: "...",
+      role: 'user',
+      createdAt: new Date(),
+      workspaceId: plan.workspaceId,
+      userId: session.user.id,
+    };
+
+    // Optimistically update UI
+    setMessages?.(prev => {
+      return [...prev, optimisticMessage];
+    });
+
+    setChatInput("");
+
+    await createNonPlanMessageAction(session, chatInput, plan.workspaceId, plan.id);
+  };
+
+  const createNewPlan = async () => {
     if (!session || !plan) return;
 
     const tempId = `temp-${Date.now()}`;
@@ -162,6 +192,25 @@ export function PlanChatMessage({
 
     // Make actual API call
     await createPlanAction(session, chatInput, plan.workspaceId, plan.id);
+  }
+  const handleSubmitChat = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!session || !plan) return;
+
+    setIsSubmitting(true);
+    try {
+
+      // The LLM needs to first pass this
+      const isNewPlan = await isNewPlanAction(session, plan.workspaceId, chatInput);
+
+      if (isNewPlan) {
+        await createNewPlan();
+      } else {
+        await createNonPlanMessage();
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -288,7 +337,22 @@ export function PlanChatMessage({
 
           </div>
           {showActions && (
-            (!workspace?.currentRevisionNumber && plan.status === 'review') || // Plan-only view - show in review
+            (!workspace?.currentRevisionNumber && plan.status === 'review' && (!messages || !messages.some(m => {
+              // If there's an optimistic message but no optimistic plan, it must be newer
+              if (m.isOptimistic && !plan.id.startsWith('temp-')) {
+                return true;
+              }
+              
+              // Otherwise compare dates if they exist
+              const messageDate = m.createdAt ? new Date(m.createdAt) : null;
+              const planDate = plan.createdAt ? new Date(plan.createdAt) : null;
+              
+              if (!messageDate || !planDate) {
+                return false;
+              }
+              
+              return messageDate > planDate;
+            }))) || // Plan-only view - show in review if no newer messages
             (workspace?.currentRevisionNumber && plan.status === 'review') // Editor view - only show in review
           ) ? (
             <div className="mt-6 border-t border-dark-border/20">
@@ -335,7 +399,8 @@ export function PlanChatMessage({
                           handleSubmitChat(e);
                         }
                       }}
-                      placeholder="Ask a question or suggest changes..."
+                      placeholder={isSubmitting ? "Submitting..." : "Ask a question or suggest changes..."}
+                      disabled={isSubmitting}
                       rows={1}
                       style={{ height: 'auto', minHeight: '34px', maxHeight: '150px' }}
                       className={`w-full px-3 py-1.5 pr-10 text-sm rounded-md border resize-none overflow-hidden ${
@@ -346,11 +411,23 @@ export function PlanChatMessage({
                     />
                     <button
                       type="submit"
-                      className={`absolute right-2 top-[5px] p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-dark-border/40 ${
+                      disabled={isSubmitting}
+                      className={`absolute right-2 top-[5px] p-1.5 rounded-full ${
+                        !isSubmitting ? 'hover:bg-gray-100 dark:hover:bg-dark-border/40' : ''
+                      } ${
                         theme === "dark" ? "text-gray-400 hover:text-gray-200" : "text-gray-500 hover:text-gray-700"
                       }`}
                     >
-                      <Send className="w-4 h-4" />
+                      {isSubmitting ? (
+                        <div
+                          className="rounded-full h-4 w-4 border border-current border-t-transparent"
+                          style={{
+                            animation: 'spin 1s linear infinite'
+                          }}
+                        />
+                      ) : (
+                        <Send className="w-4 h-4" />
+                      )}
                     </button>
                   </form>
                 </div>

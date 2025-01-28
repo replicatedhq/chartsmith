@@ -9,7 +9,7 @@ import { useWorkspaceUI } from "@/contexts/WorkspaceUIContext";
 import { usePathname } from "next/navigation";
 import { useSession } from "@/app/hooks/useSession";
 import { getWorkspaceMessagesAction } from "@/lib/workspace/actions/get-workspace-messages";
-import { Message, CentrifugoMessageData, RawPlan, RawWorkspace } from "@/components/editor/types";
+import { Message, CentrifugoMessageData, RawPlan, RawWorkspace, RawChatMessage } from "@/components/editor/types";
 
 import { Plan, Workspace, WorkspaceFile } from "@/lib/types/workspace";
 import { Card } from "@/components/ui/Card";
@@ -26,6 +26,8 @@ import { getWorkspaceAction } from "@/lib/workspace/actions/get-workspace";
 import { PlanOnlyLayout } from "../layout/PlanOnlyLayout";
 import { PlanContent } from "./PlanContent";
 import { createPlanAction } from "@/lib/workspace/actions/create-plan";
+import { isNewPlanAction } from "@/lib/workspace/actions/is-new-plan";
+import { createNonPlanMessageAction } from "@/lib/workspace/actions/create-nonplan-message-action";
 
 interface WorkspaceContentProps {
   initialWorkspace: Workspace;
@@ -198,6 +200,14 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     }
   }, [session, workspaceId, setMessages]);
 
+  const handleChatMessageUpdated = (chatMessage: RawChatMessage) => {
+    console.log(`chat message updated`, chatMessage);
+
+    setMessages?.(prev => {
+      return prev.map(msg => msg.id === chatMessage.id ? { ...msg, ...chatMessage } : msg);
+    });
+  }
+
   const handleWorkspaceUpdated = (workspace: RawWorkspace) => {
     console.log(`workspace updated`, workspace);
   }
@@ -227,7 +237,6 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
       const sub = cf.newSubscription(channel);
 
       sub.on("publication", (message: { data: CentrifugoMessageData }) => {
-        console.log("message", message.data);
         const isPlanUpdatedEvent = message.data.plan;
         if (isPlanUpdatedEvent) {
           handlePlanUpdated(message.data.plan!);
@@ -236,6 +245,11 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
         const isWorkspaceUpdatedEvent = message.data.workspace;
         if (isWorkspaceUpdatedEvent) {
           handleWorkspaceUpdated(message.data.workspace!);
+        }
+
+        const isChatMessageUpdatedEvent = message.data.chatMessage;
+        if (isChatMessageUpdatedEvent) {
+          handleChatMessageUpdated(message.data.chatMessage!);
         }
 
         const artifact = message.data.artifact;
@@ -386,6 +400,48 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
   const handleSendMessage = async (message: string) => {
     if (!session || !workspace) return;
 
+    const isNewPlan = await isNewPlanAction(session, workspace.id, message);
+
+    if (isNewPlan) {
+      await createNewPlan(message);
+    } else {
+      await createNonPlanMessage(message);
+    }
+  }
+
+  const createNonPlanMessage = async (message: string) => {
+    if (!session || !workspace) return;
+
+    const tempId = `temp-${Date.now()}`;
+
+    // Create optimistic message (without a plan)
+    const optimisticMessage: Message = {
+      id: `msg-${tempId}`,
+      prompt: message,
+      response: "...",
+      role: 'user',
+      createdAt: new Date(),
+      workspaceId: workspace.id,
+      userId: session.user.id,
+    };
+
+    // Optimistically update UI
+    setMessages?.(prev => {
+      return [...prev, optimisticMessage];
+    });
+
+    const chatMessage = await createNonPlanMessageAction(session, message, workspace.id, "");
+
+    // replace the optimize message with tmpId with the chatMessage
+    setMessages?.(prev => {
+      return prev.map(msg => msg.id === optimisticMessage.id ? { ...msg, ...chatMessage } : msg);
+    });
+  }
+
+  const createNewPlan = async (message: string) => {
+    if (!session || !workspace) return;
+
+    // The LLM needs to first pass this
     const tempId = `temp-${Date.now()}`;
 
     // Create optimistic message

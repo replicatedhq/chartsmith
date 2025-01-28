@@ -6,8 +6,7 @@ import (
 	"fmt"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
-	"github.com/replicatedhq/chartsmith/pkg/chat"
-	chattypes "github.com/replicatedhq/chartsmith/pkg/chat/types"
+	"github.com/replicatedhq/chartsmith/pkg/workspace"
 	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 )
 
@@ -31,9 +30,9 @@ func CreatePlan(ctx context.Context, streamCh chan string, doneCh chan error, w 
 	}
 	messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(currentChartUserMessage)))
 
-	chatMessages := []chattypes.Chat{}
+	chatMessages := []workspacetypes.Chat{}
 	for _, chatMessageID := range plan.ChatMessageIDs {
-		chatMessage, err := chat.GetChatMessage(ctx, chatMessageID)
+		chatMessage, err := workspace.GetChatMessage(ctx, chatMessageID)
 		if err != nil {
 			return err
 		}

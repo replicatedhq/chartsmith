@@ -67,10 +67,17 @@ export interface RawWorkspace {
 
 export interface CentrifugoMessageData {
   workspace?: RawWorkspace;
+  chatMessage?: RawChatMessage;
   message?: RawMessage;
   plan?: RawPlan;
   artifact?: RawArtifact;
   workspaceId: string;
+}
+
+export interface RawChatMessage {
+  id: string;
+  prompt: string;
+  response?: string;
 }
 
 export interface RawArtifact {
