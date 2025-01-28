@@ -42,6 +42,7 @@ export async function listMessagesForWorkspace(workspaceID: string): Promise<Mes
         id: row.id,
         prompt: row.prompt,
         response: row.response,
+        createdAt: row.created_at,
       };
       messages.push(message);
     }

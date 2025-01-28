@@ -11,6 +11,21 @@ import (
 	"github.com/replicatedhq/chartsmith/pkg/workspace/types"
 )
 
+func GetMostRecentPlan(ctx context.Context, workspaceID string) (*types.Plan, error) {
+	conn := persistence.MustGetPooledPostgresSession()
+	defer conn.Release()
+
+	query := `SELECT id FROM workspace_plan WHERE workspace_id = $1 ORDER BY created_at DESC LIMIT 1`
+	row := conn.QueryRow(ctx, query, workspaceID)
+
+	var planID string
+	err := row.Scan(&planID)
+	if err != nil {
+		return nil, fmt.Errorf("error scanning plan: %w", err)
+	}
+	return GetPlan(ctx, nil, planID)
+}
+
 func PendingActionPathsForPlan(ctx context.Context, planID string) ([]string, error) {
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()

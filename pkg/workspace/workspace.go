@@ -39,6 +39,11 @@ func ListUserIDsForWorkspace(ctx context.Context, workspaceID string) ([]string,
 	return []string{userID}, nil
 }
 
+func AppendChatMessageResponse(ctx context.Context, chatMessageID string, response string) error {
+
+	return nil
+}
+
 func GetWorkspace(ctx context.Context, id string) (*types.Workspace, error) {
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()

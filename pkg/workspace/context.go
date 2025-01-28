@@ -7,13 +7,12 @@ import (
 	"path/filepath"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	chattypes "github.com/replicatedhq/chartsmith/pkg/chat/types"
 	"github.com/replicatedhq/chartsmith/pkg/embedding"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 	"github.com/replicatedhq/chartsmith/pkg/workspace/types"
 )
 
-func ChooseRelevantFilesForChatMessage(ctx context.Context, w *types.Workspace, chartID string, revisionNumber int, c *chattypes.Chat) ([]types.File, error) {
+func ChooseRelevantFilesForChatMessage(ctx context.Context, w *types.Workspace, chartID string, revisionNumber int, c *types.Chat) ([]types.File, error) {
 	fmt.Printf("Choosing relevant files for workspace %s, chart %s, revision %d, chat message %s\n", w.ID, chartID, revisionNumber, c.Prompt)
 	// Get embeddings for the prompt
 	promptEmbeddings, err := embedding.Embeddings(c.Prompt)

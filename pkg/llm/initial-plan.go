@@ -6,13 +6,14 @@ import (
 	"fmt"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
-	"github.com/replicatedhq/chartsmith/pkg/chat"
-	chattypes "github.com/replicatedhq/chartsmith/pkg/chat/types"
+	"github.com/replicatedhq/chartsmith/pkg/logger"
 	"github.com/replicatedhq/chartsmith/pkg/workspace"
 	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 )
 
 func CreateInitialPlan(ctx context.Context, streamCh chan string, doneCh chan error, plan *workspacetypes.Plan) error {
+	logger.Infof("Creating initial plan: %+v\n", plan)
+
 	client, err := newAnthropicClient(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to create anthropic client: %w", err)
@@ -30,9 +31,9 @@ func CreateInitialPlan(ctx context.Context, streamCh chan string, doneCh chan er
 	}
 	messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(bootsrapChartUserMessage)))
 
-	chatMessages := []chattypes.Chat{}
+	chatMessages := []workspacetypes.Chat{}
 	for _, chatMessageID := range plan.ChatMessageIDs {
-		chatMessage, err := chat.GetChatMessage(ctx, chatMessageID)
+		chatMessage, err := workspace.GetChatMessage(ctx, chatMessageID)
 		if err != nil {
 			return err
 		}

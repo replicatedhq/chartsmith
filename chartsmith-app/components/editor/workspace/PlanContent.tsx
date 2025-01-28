@@ -9,6 +9,7 @@ import { Plan, Workspace } from "@/lib/types/workspace";
 import { Message } from "../types";
 import { ChatMessage } from "../chat/ChatMessage";
 import { PlanChatMessage } from "../chat/PlanChatMessage";
+import { ChatInput } from "../chat/ChatInput";
 
 // Separate client component for the scrolling behavior
 const ScrollingContent = React.memo(function ScrollingContent({ children }: { children: React.ReactNode }) {
@@ -88,7 +89,7 @@ function createMessagePlanMap(currentPlans: Plan[], messages: Message[]): Map<Me
   return new Map([...userMessagePlanMap.entries()].reverse());
 }
 
-export function PlanContent({ session, workspace, messages, handlePlanUpdated, setMessages, setWorkspace }: PlanContentProps) {
+export function PlanContent({ session, workspace, messages, handlePlanUpdated, setMessages, setWorkspace, onSendMessage }: PlanContentProps) {
   if (!workspace || !messages) {
     if (!workspace) {
       return <div>No workspace found</div>;
@@ -135,18 +136,58 @@ export function PlanContent({ session, workspace, messages, handlePlanUpdated, s
                   setMessages={setMessages}
                   setWorkspace={setWorkspace}
                   workspace={workspace}
+                  messages={messages}
                 />
               </div>
             ))}
             {/* Show any unassociated messages at the bottom */}
-            {unassociatedMessages.map(message => (
-              <ChatMessage
-                key={message.id}
-                message={message}
-                session={session}
-                workspaceId={workspace.id}
-              />
-            ))}
+            {unassociatedMessages.map((message, index) => {
+              const isLastMessage = index === unassociatedMessages.length - 1;
+              const showInput = isLastMessage && messages?.some(m => {
+                console.log('Checking message for input:', {
+                  isLastMessage,
+                  message: m,
+                  latestPlan: workspace.currentPlans[0],
+                  messageDate: m.createdAt ? new Date(m.createdAt) : null,
+                  planDate: workspace.currentPlans[0]?.createdAt ? new Date(workspace.currentPlans[0].createdAt) : null
+                });
+                
+                const latestPlan = workspace.currentPlans[0];
+                if (!latestPlan) return false;
+                
+                if (m.isOptimistic && !latestPlan.id.startsWith('temp-')) {
+                  return true;
+                }
+                
+                const messageDate = m.createdAt ? new Date(m.createdAt) : null;
+                const planDate = latestPlan.createdAt ? new Date(latestPlan.createdAt) : null;
+                
+                if (!messageDate || !planDate) {
+                  return false;
+                }
+                
+                return messageDate > planDate;
+              });
+
+              console.log('Show input decision:', {
+                isLastMessage,
+                showInput,
+                message
+              });
+
+              return (
+                <ChatMessage
+                  key={message.id}
+                  message={message}
+                  session={session}
+                  workspaceId={workspace.id}
+                  showChatInput={showInput}
+                  onSendMessage={onSendMessage}
+                  workspace={workspace}
+                  setWorkspace={setWorkspace}
+                />
+              );
+            })}
           </Card>
         </ScrollingContent>
 

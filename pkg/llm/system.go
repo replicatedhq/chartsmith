@@ -37,6 +37,16 @@ NEVER use the word "artifact" in your final messages to the user. Just follow th
 
 `
 
+const chatOnlySystemPrompt = commonSystemPrompt + `
+<question_instructions>
+  - You will be asked to answer a question.
+  - You will be given the question and the context of the question.
+  - You will be given the current chat history.
+  - You will be asked to answer the question based on the context and the chat history.
+  - You can provide small examples of code, but just use markdown, do no provide any <chartsmithArtifact> tags in your chat response.
+</question_instructions>
+`
+
 const initialPlanSystemPrompt = commonSystemPrompt + `
 <testing_info>
   - The user has access to an extensive set of tools to evalulate and test your output.

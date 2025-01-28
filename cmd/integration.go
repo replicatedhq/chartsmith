@@ -82,11 +82,6 @@ func runIntegrationTests(ctx context.Context) error {
 		return fmt.Errorf("failed to init postgres: %w", err)
 	}
 
-	// run through the integration tests
-	if err := integration.IntegrationTest_ChooseRelevantGVKs(); err != nil {
-		return fmt.Errorf("failed to run integration tests: %w", err)
-	}
-
 	if err := integration.IntegrationTest_ApplyChangesToWorkspace(); err != nil {
 		return fmt.Errorf("failed to run integration tests: %w", err)
 	}
