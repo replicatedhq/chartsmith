@@ -3,39 +3,17 @@
 import React from "react";
 import { X, AlertTriangle } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
-import { useSession } from "@/app/hooks/useSession";
-import { deleteWorkspaceFileAction } from "@/lib/workspace/actions/delete-workspace-file";
-import { toast } from "sonner";
 
 interface DeleteFileModalProps {
   isOpen: boolean;
   onClose: () => void;
   filePath: string;
-  workspaceId: string;
   isRequired?: boolean;
   onConfirm: () => void;
 }
 
-export function DeleteFileModal({ isOpen, onClose, filePath, workspaceId, isRequired, onConfirm }: DeleteFileModalProps) {
+export function DeleteFileModal({ isOpen, onClose, filePath, isRequired, onConfirm }: DeleteFileModalProps) {
   const { theme } = useTheme();
-  const { session } = useSession();
-
-  const handleDelete = async () => {
-    try {
-      if (!session) {
-        toast.error("You must be logged in to delete files");
-        return;
-      }
-      
-      await deleteWorkspaceFileAction(session, workspaceId, filePath);
-      onConfirm();
-      onClose();
-      toast.success("File deleted successfully");
-    } catch (error) {
-      console.error("Failed to delete file:", error);
-      toast.error("Failed to delete file");
-    }
-  };
 
   if (!isOpen) return null;
 
@@ -63,13 +41,23 @@ export function DeleteFileModal({ isOpen, onClose, filePath, workspaceId, isRequ
           )}
         </div>
         <div className={`flex justify-end gap-2 p-4 border-t ${theme === "dark" ? "border-dark-border" : "border-gray-200"}`}>
-          <button onClick={onClose} className={`px-4 py-2 text-sm rounded-lg transition-colors ${theme === "dark" ? "text-gray-300 hover:text-white bg-dark-border/40 hover:bg-dark-border/60" : "text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200"}`}>
+          {/* Cancel button */}
+          <button 
+            onClick={onClose} 
+            className={`px-4 py-2 text-sm rounded-lg transition-colors ${
+              theme === "dark" 
+                ? "text-gray-300 hover:text-white bg-dark-border/40 hover:bg-dark-border/60" 
+                : "text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200"
+            }`}
+          >
             {isRequired ? "Close" : "Cancel"}
           </button>
+
+          {/* Delete button - simplified condition */}
           {!isRequired && (
             <button 
-              onClick={handleDelete} 
-              className="px-4 py-2 text-sm text-white bg-error hover:bg-error/90 rounded-lg transition-colors"
+              onClick={onConfirm} 
+              className="px-4 py-2 text-sm text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
             >
               Delete
             </button>

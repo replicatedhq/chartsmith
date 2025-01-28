@@ -9,10 +9,11 @@ interface FileBrowserProps {
   onFileSelect: (file: WorkspaceFile) => void;
   onFileDelete: (path: string) => void;
   selectedFile?: WorkspaceFile;
-  charts: Chart[];  // Add charts prop
+  charts: Chart[];
+  workspaceId: string;
 }
 
-export function FileBrowser({ nodes, onFileSelect, onFileDelete, selectedFile, charts }: FileBrowserProps) {
+export function FileBrowser({ nodes, onFileSelect, onFileDelete, selectedFile, charts, workspaceId }: FileBrowserProps) {
   const { theme } = useTheme();
 
   const handleNewFile = () => {
@@ -44,7 +45,8 @@ export function FileBrowser({ nodes, onFileSelect, onFileDelete, selectedFile, c
           onFileSelect={onFileSelect}
           onFileDelete={onFileDelete}
           selectedFile={selectedFile}
-          charts={charts}  // Pass charts to FileTree
+          charts={charts}
+          workspaceId={workspaceId}
         />
       </div>
     </div>

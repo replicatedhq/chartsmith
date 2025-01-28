@@ -62,9 +62,25 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     });
   }, [setSelectedFile, setEditorContent, updateFileSelection]);
 
-  const handleFileDelete = useCallback(() => {
-    return;
-  }, []);
+  const handleFileDelete = useCallback((filePath: string) => {
+    // Update workspace state by removing the deleted file
+    setWorkspace(currentWorkspace => ({
+      ...currentWorkspace,
+      // Remove from workspace files
+      files: currentWorkspace.files.filter(f => f.filePath !== filePath),
+      // Remove from chart files
+      charts: currentWorkspace.charts.map(chart => ({
+        ...chart,
+        files: chart.files.filter(f => f.filePath !== filePath)
+      }))
+    }));
+
+    // Clear editor if the deleted file was selected
+    if (selectedFile?.filePath === filePath) {
+      setSelectedFile(undefined);
+      setEditorContent("");
+    }
+  }, [selectedFile, setSelectedFile, setEditorContent]);
 
   const followMode = true; // Always true for now
 
@@ -652,6 +668,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
               editorContent={editorContent}
               onEditorChange={(value) => setEditorContent(value ?? "")}
               isFileTreeVisible={isFileTreeVisible}
+              workspaceId={workspaceId}
             />
             </div>
           );

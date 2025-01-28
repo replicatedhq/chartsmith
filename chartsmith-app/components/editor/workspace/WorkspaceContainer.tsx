@@ -20,9 +20,10 @@ interface WorkspaceContainerProps {
   editorContent: string;
   onEditorChange: (value: string | undefined) => void;
   isFileTreeVisible: boolean;
+  workspaceId: string;  // Add this prop
 }
 
-export function WorkspaceContainer({ view, onViewChange, files, charts, renderedCharts, selectedFile, onFileSelect, onFileDelete, editorContent, onEditorChange, isFileTreeVisible }: WorkspaceContainerProps) {
+export function WorkspaceContainer({ view, onViewChange, files, charts, renderedCharts, selectedFile, onFileSelect, onFileDelete, editorContent, onEditorChange, isFileTreeVisible, workspaceId }: WorkspaceContainerProps) {
   const { resolvedTheme } = useTheme();
 
   const handleViewChange = (newView: EditorView) => {
@@ -43,6 +44,7 @@ export function WorkspaceContainer({ view, onViewChange, files, charts, rendered
                   onFileDelete={onFileDelete}
                   selectedFile={selectedFile}
                   charts={charts}
+                  workspaceId={workspaceId}  // Pass workspaceId here
                 />
               );
             })() :
