@@ -3,6 +3,7 @@ package llm
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
 	llmtypes "github.com/replicatedhq/chartsmith/pkg/llm/types"
@@ -35,6 +36,9 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 		}
 		updateMessage := fmt.Sprintf("Update the file at %s. The current content is: %s", actionPlanWithPath.Path, content)
 		messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(updateMessage)))
+	} else if actionPlanWithPath.Action == "delete" {
+		deleteMessage := fmt.Sprintf("Delete the file at %s if it is not a required file.", actionPlanWithPath.Path)
+		messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(deleteMessage)))
 	}
 
 	stream := client.Messages.NewStreaming(context.TODO(), anthropic.MessageNewParams{
@@ -61,7 +65,15 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 
 				for _, artifact := range artifacts {
 					if artifact.Path == actionPlanWithPath.Path {
-						contentStreamCh <- artifact.Content
+						if actionPlanWithPath.Action == "delete" {
+							if strings.Contains(fullResponseWithTags, fmt.Sprintf(`path="%s" action="delete"`, actionPlanWithPath.Path)) {
+								contentStreamCh <- ""
+								doneCh <- nil
+								return nil
+							}
+						} else {
+							contentStreamCh <- artifact.Content
+						}
 					}
 				}
 			}

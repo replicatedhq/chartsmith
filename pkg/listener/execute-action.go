@@ -83,23 +83,25 @@ func handleExecuteActionNotification(ctx context.Context, planID string, path st
 		Plan:        updatedPlan,
 	}
 
+	// Send initial status update
 	if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
 		return fmt.Errorf("failed to send plan update: %w", err)
 	}
 
+	// Get the action type from the plan
+	action := ""
+	for _, item := range plan.ActionFiles {
+		if item.Path == path {
+			action = item.Action
+			break
+		}
+	}
+
+	// Existing create/update handling...
 	streamCh := make(chan string)
 	doneCh := make(chan error)
 
 	go func() {
-		action := ""
-
-		for _, item := range plan.ActionFiles {
-			if item.Path == path {
-				action = item.Action
-				break
-			}
-		}
-
 		apwp := llmtypes.ActionPlanWithPath{
 			ActionPlan: llmtypes.ActionPlan{
 				Action: action,
@@ -134,18 +136,37 @@ func handleExecuteActionNotification(ctx context.Context, planID string, path st
 		case stream := <-streamCh:
 			finalContent = stream
 
-			// send the final content to the realtime server
-			e := realtimetypes.ArtifactUpdatedEvent{
-				WorkspaceID: updatedPlan.WorkspaceID,
-				Artifact: realtimetypes.Artifact{
-					RevisionNumber: w.CurrentRevision,
-					Path:           path,
-					Content:        finalContent,
-				},
-			}
+			// Handle delete actions based on the plan's action type
+			if action == "delete" {
+				// Delete the file from workspace
+				if err := workspace.DeleteFileFromWorkspace(ctx, updatedPlan.WorkspaceID, w.CurrentRevision, w.Charts[0].ID, path); err != nil {
+					return fmt.Errorf("failed to delete file from workspace: %w", err)
+				}
 
-			if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
-				return fmt.Errorf("failed to send artifact update: %w", err)
+				// Send realtime event to notify UI of file deletion
+				e := realtimetypes.ArtifactDeletedEvent{
+					WorkspaceID: updatedPlan.WorkspaceID,
+					Artifact: realtimetypes.Artifact{
+						RevisionNumber: w.CurrentRevision,
+						Path:           path,
+					},
+				}
+				if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
+					return fmt.Errorf("failed to send artifact deleted event: %w", err)
+				}
+			} else {
+				// Normal create/update flow - send the content to realtime
+				e := realtimetypes.ArtifactUpdatedEvent{
+					WorkspaceID: updatedPlan.WorkspaceID,
+					Artifact: realtimetypes.Artifact{
+						RevisionNumber: w.CurrentRevision,
+						Path:           path,
+						Content:        finalContent,
+					},
+				}
+				if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
+					return fmt.Errorf("failed to send artifact update: %w", err)
+				}
 			}
 		}
 	}
@@ -179,10 +200,12 @@ func handleExecuteActionNotification(ctx context.Context, planID string, path st
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	// save the content of the file
-	c := w.Charts[0]
-	if err := workspace.SetFileContentInWorkspace(ctx, finalUpdatePlan.WorkspaceID, w.CurrentRevision, c.ID, path, finalContent); err != nil {
-		return fmt.Errorf("failed to set file content in workspace: %w", err)
+	// Save content for create/update actions
+	if action != "delete" {
+		c := w.Charts[0]
+		if err := workspace.SetFileContentInWorkspace(ctx, finalUpdatePlan.WorkspaceID, w.CurrentRevision, c.ID, path, finalContent); err != nil {
+			return fmt.Errorf("failed to set file content in workspace: %w", err)
+		}
 	}
 
 	// send the updated plan to the realtime server

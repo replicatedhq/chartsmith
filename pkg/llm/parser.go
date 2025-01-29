@@ -28,6 +28,20 @@ func NewParser() *Parser {
 	}
 }
 
+// Helper to extract attributes from tag
+func extractAttributes(attributes string) (path string, action string) {
+	pathMatch := regexp.MustCompile(`path="([^"]*)"`)
+	actionMatch := regexp.MustCompile(`action="([^"]*)"`)
+
+	if match := pathMatch.FindStringSubmatch(attributes); len(match) > 1 {
+		path = match[1]
+	}
+	if match := actionMatch.FindStringSubmatch(attributes); len(match) > 1 {
+		action = match[1]
+	}
+	return
+}
+
 func (p *Parser) ParseArtifacts(chunk string) {
 	p.buffer += chunk
 
@@ -42,11 +56,9 @@ func (p *Parser) ParseArtifacts(chunk string) {
 		attributes := match[1]
 		content := strings.TrimSpace(match[2])
 
-		// Extract path from attributes - removed extra quote mark from regex
-		pathMatch := regexp.MustCompile(`path="([^"]*)"`).FindStringSubmatch(attributes)
-		if len(pathMatch) > 1 {
-			path := pathMatch[1]
-			p.addArtifact(content, path)
+		path, action := extractAttributes(attributes)
+		if path != "" {
+			p.addArtifact(content, path, action)
 		}
 
 		// Remove complete artifact from buffer
@@ -68,7 +80,7 @@ func (p *Parser) ParseArtifacts(chunk string) {
 				contentStart := strings.Index(partialContent, ">") + 1
 				content := strings.TrimSpace(partialContent[contentStart:])
 				if content != "" {
-					p.addArtifact(content, path)
+					p.addArtifact(content, path, "")
 				}
 			}
 		}
@@ -76,14 +88,15 @@ func (p *Parser) ParseArtifacts(chunk string) {
 }
 
 // Helper to add artifact with content and path
-func (p *Parser) addArtifact(content string, path string) {
+func (p *Parser) addArtifact(content string, path string, action string) {
 	artifact := types.Artifact{
 		Content: content,
 		Path:    path,
+		Action:  action,
 	}
 
-	// Only append if we have content
-	if artifact.Content != "" {
+	// Append if we have content or it's a delete action
+	if artifact.Content != "" || artifact.Action == "delete" {
 		p.result.Artifacts = append(p.result.Artifacts, artifact)
 	}
 }

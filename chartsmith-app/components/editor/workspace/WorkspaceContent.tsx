@@ -63,24 +63,35 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
   }, [setSelectedFile, setEditorContent, updateFileSelection]);
 
   const handleFileDelete = useCallback((filePath: string) => {
+    console.log('handleFileDelete called with:', filePath);
+    console.log('Current workspace state:', {
+      files: workspace.files.map(f => f.filePath),
+      chartFiles: workspace.charts.map(c => c.files.map(f => f.filePath))
+    });
+
     // Update workspace state by removing the deleted file
-    setWorkspace(currentWorkspace => ({
-      ...currentWorkspace,
-      // Remove from workspace files
-      files: currentWorkspace.files.filter(f => f.filePath !== filePath),
-      // Remove from chart files
-      charts: currentWorkspace.charts.map(chart => ({
-        ...chart,
-        files: chart.files.filter(f => f.filePath !== filePath)
-      }))
-    }));
+    setWorkspace(currentWorkspace => {
+      const newState = {
+        ...currentWorkspace,
+        files: currentWorkspace.files.filter(f => f.filePath !== filePath),
+        charts: currentWorkspace.charts.map(chart => ({
+          ...chart,
+          files: chart.files.filter(f => f.filePath !== filePath)
+        }))
+      };
+      console.log('New workspace state:', {
+        files: newState.files.map(f => f.filePath),
+        chartFiles: newState.charts.map(c => c.files.map(f => f.filePath))
+      });
+      return newState;
+    });
 
     // Clear editor if the deleted file was selected
     if (selectedFile?.filePath === filePath) {
       setSelectedFile(undefined);
       setEditorContent("");
     }
-  }, [selectedFile, setSelectedFile, setEditorContent]);
+  }, [selectedFile, setSelectedFile, setEditorContent, workspace]);
 
   const followMode = true; // Always true for now
 
@@ -275,63 +286,38 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
             contentLength: artifact.content.length
           });
 
-          setWorkspace(currentWorkspace => {
-            // Find if file exists in workspace or chart files
-            const existingWorkspaceFile = currentWorkspace.files?.find(f => f.filePath === artifact.path);
-            const chartWithFile = currentWorkspace.charts?.find(chart =>
-              chart.files.some(f => f.filePath === artifact.path)
-            );
-
-            console.log('File location check:', {
-              existingInWorkspace: !!existingWorkspaceFile,
-              existingInChart: !!chartWithFile
-            });
-
-            // If file doesn't exist, add it to the chart
-            if (!existingWorkspaceFile && !chartWithFile) {
-              const newFile = {
-                id: `file-${Date.now()}`,
-                filePath: artifact.path,
-                content: artifact.content
-              };
-
-              // Always add to the first chart
-              return {
-                ...currentWorkspace,
-                charts: currentWorkspace.charts.map((chart, index) =>
-                  index === 0 ? {
-                    ...chart,
-                    files: [...chart.files, newFile]
-                  } : chart
-                )
-              };
-            }
-
-            // Update existing file
-            const updatedFiles = currentWorkspace.files?.map(file =>
-              file.filePath === artifact.path ? { ...file, content: artifact.content } : file
-            ) || [];
-
-            const updatedCharts = currentWorkspace.charts?.map(chart => ({
-              ...chart,
-              files: chart.files.map(file =>
-                file.filePath === artifact.path ? { ...file, content: artifact.content } : file
-              )
-            })) || [];
-
-            return {
-              ...currentWorkspace,
-              files: updatedFiles,
-              charts: updatedCharts
-            };
-          });
-
-          // Auto select the file
           const file = {
             id: `file-${Date.now()}`,
             filePath: artifact.path,
             content: artifact.content
           };
+
+          // Update both workspace files and chart files
+          setWorkspace(currentWorkspace => {
+            // First check if this file exists in any charts
+            const chartWithFile = currentWorkspace.charts?.find(c => 
+              c.files.some(f => f.filePath === file.filePath)
+            );
+            
+            if (chartWithFile) {
+              // Update in charts and add to workspace files
+              return {
+                ...currentWorkspace,
+                files: [...currentWorkspace.files.filter(f => f.filePath !== file.filePath), file],
+                charts: currentWorkspace.charts.map(chart => ({
+                  ...chart,
+                  files: chart.files.map(f => f.filePath === file.filePath ? file : f)
+                }))
+              };
+            } else {
+              // Just add to workspace files
+              return {
+                ...currentWorkspace,
+                files: [...currentWorkspace.files.filter(f => f.filePath !== file.filePath), file]
+              };
+            }
+          });
+
           console.log('Selecting file:', {
             path: file.filePath,
             id: file.id
@@ -344,6 +330,20 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
             content: artifact.content,
             type: 'file' as const
           });
+        }
+
+        // Handle file deletions with a simple refresh
+        if (message.data.type === 'artifact_deleted' && message.data.path) {
+          console.log('Received delete event for:', message.data.path);
+          
+          // Clear editor if deleted file was selected
+          if (selectedFile?.filePath === message.data.path) {
+            setSelectedFile(undefined);
+            setEditorContent("");
+          }
+          
+          // Just call handleFileDelete once - it already does the state update
+          handleFileDelete(message.data.path);
         }
       });
       sub.on("subscribed", () => {});

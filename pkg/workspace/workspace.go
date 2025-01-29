@@ -465,3 +465,36 @@ func ParseGVK(filePath string, content string) (string, error) {
 
 	return "", nil
 }
+
+func DeleteFileFromWorkspace(ctx context.Context, workspaceID string, revisionNumber int, chartID string, filePath string) error {
+	conn := persistence.MustGetPooledPostgresSession()
+	defer conn.Release()
+
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	// Delete from workspace_file
+	query := `
+		DELETE FROM workspace_file 
+		WHERE workspace_id = $1 
+		AND revision_number = $2 
+		AND file_path = $3
+	`
+	result, err := tx.Exec(ctx, query, workspaceID, revisionNumber, filePath)
+	if err != nil {
+		return fmt.Errorf("failed to delete file: %w", err)
+	}
+
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("no file found to delete with path: %s", filePath)
+	}
+
+	if err = tx.Commit(ctx); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return nil
+}

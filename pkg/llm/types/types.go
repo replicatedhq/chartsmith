@@ -22,4 +22,5 @@ type ActionPlan struct {
 type Artifact struct {
 	Path    string
 	Content string
+	Action  string
 }

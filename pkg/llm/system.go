@@ -62,9 +62,11 @@ const detailedPlanSystemPrompt = commonSystemPrompt + `
 <planning_instructions>
   1. When asked to provide a detailed plan, expect that the user will provide a high level plan you must adhere to.
   2. Your final answer must be a ` + "`<chartsmithArtifactPlan>`" + ` block that completely describes the modifications needed:
-	 - Include a ` + "`<chartsmithActionPlan>`" + ` of type ` + "`file`" + ` for each file you expect to edit, create, or delete (` + "`Chart.yaml`" + `, ` + "`values.yaml`" + `, ` + "`templates/*.yaml`" + ` files, ` + "`_helpers.tpl`" + ` if needed).
-	 - Each ` + "`<chartsmithActionPlan>`" + ` must have a ` + "`type`" + ` attribute. Set this equal to ` + "`file`" + `.
-	 - Each ` + "`<chartsmithActionPlan>`" + ` must have an ` + "`action`" + ` attribute. The valid actions are ` + "`create`" + `, ` + "`update`" + `, ` + "`delete`" + `.
+    - First identify any files that need to be deleted and add delete actions for them
+    - Include a ` + "`<chartsmithActionPlan>`" + ` of type ` + "`file`" + ` for each file you expect to edit, create, or delete (` + "`Chart.yaml`" + `, ` + "`values.yaml`" + `, ` + "`templates/*.yaml`" + ` files, ` + "`_helpers.tpl`" + ` if needed).
+    - Each ` + "`<chartsmithActionPlan>`" + ` must have a ` + "`type`" + ` attribute. Set this equal to ` + "`file`" + `.
+    - Each ` + "`<chartsmithActionPlan>`" + ` must have an ` + "`action`" + ` attribute. The valid actions are ` + "`create`" + `, ` + "`update`" + `, ` + "`delete`" + `.
+    - For delete actions, ensure Chart.yaml and values.yaml are never deleted as they are required files.
   3. Each ` + "`<chartsmithArtifactPlan>`" + ` must have a ` + "`path`" + ` attribute. This is the path that the file will be created, updated, or deleted at.
 </planning_instructions>`
 
@@ -74,8 +76,12 @@ const executePlanSystemPrompt = commonSystemPrompt + `
   2. You will be given the current file. If it's empty, you should create the file to meet the requirements provided.
   3. If the file is not empty, you should update the file to meet the requirements provided.
   4. When editing an existing file, you should only edit the file to meet the requirements provided. Do not make any other changes to the file. Attempt to maintain as much of the current file as possible.
-  5. You don't need to explain the change, just provide the artifact(s) in your response.
-  6. Your answer must be include a ` + "`<chartsmithArtifact>`" + ` tag to represent the content of the file you are creating or updating.
+  5. For delete actions:
+    - Confirm the file is safe to delete (not Chart.yaml or values.yaml)
+    - Respond with a chartsmithArtifact tag with action="delete"
+    - Example: <chartsmithArtifact path="templates/deployment.yaml" action="delete"></chartsmithArtifact>
+  6. You don't need to explain the change, just provide the artifact(s) in your response.
+  7. Your answer must be include a ` + "`<chartsmithArtifact>`" + ` tag to represent the content of the file you are creating or updating.
 	 - Each ` + "`<chartsmithArtifact>`" + ` tag must have a ` + "`path`" + ` attribute. This is the path that the file will be created, updated, or deleted at.
 	 - The inner contents of the ` + "`<chartsmithArtifact>`" + ` tag must be the content of the file you are creating or updating.
 </execution_instructions>`
