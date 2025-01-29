@@ -1,80 +1,80 @@
 package main
 
 import (
-	"context"
-	"dagger/chartsmith/internal/dagger"
-	"fmt"
-	"net/http"
-	"strings"
-	"time"
+        "context"
+        "dagger/chartsmith/internal/dagger"
+        "fmt"
+        "net/http"
+        "strings"
+        "time"
 )
 
 func pushTag(ctx context.Context, source *dagger.Directory, githubToken *dagger.Secret, newVersion string) error {
-	err := tryPushTag(ctx, source, githubToken, newVersion)
-	if err == nil {
-		return nil
-	}
+        err := tryPushTag(ctx, source, githubToken, newVersion)
+        if err == nil {
+                return nil
+        }
 
-	if strings.Contains(err.Error(), "tag already exists in the remote") {
-		fmt.Printf("Tag already exists, deleting and pushing again\n")
-		err = deleteTag(ctx, source, githubToken, newVersion)
-		if err != nil {
-			return err
-		}
+        if strings.Contains(err.Error(), "tag already exists in the remote") {
+                fmt.Printf("Tag already exists, deleting and pushing again\n")
+                err = deleteTag(ctx, source, githubToken, newVersion)
+                if err != nil {
+                        return fmt.Errorf("failed to delete tag: %w", err)
+                }
 
-		return tryPushTag(ctx, source, githubToken, newVersion)
-	}
+                return tryPushTag(ctx, source, githubToken, newVersion)
+        }
 
-	return nil
+        return nil
 }
 
 func tryPushTag(ctx context.Context, source *dagger.Directory, githubToken *dagger.Secret, newVersion string) error {
-	// push the tag
-	githubTokenPlaintext, err := githubToken.Plaintext(ctx)
-	if err != nil {
-		return err
-	}
-	tagContainer := dag.Container().
-		From("alpine/git:latest").
-		WithMountedDirectory("/go/src/github.com/replicatedhq/chartsmith", source).
-		WithWorkdir("/go/src/github.com/replicatedhq/chartsmith").
-		WithExec([]string{"git", "remote", "add", "tag", fmt.Sprintf("https://%s@github.com/replicatedhq/chartsmith.git", githubTokenPlaintext)}).
-		WithExec([]string{"git", "tag", newVersion}).
-		WithExec([]string{"git", "push", "tag", newVersion})
-	_, err = tagContainer.Stdout(ctx)
-	if err != nil {
-		return err
-	}
+        // push the tag
+        githubTokenPlaintext, err := githubToken.Plaintext(ctx)
+        if err != nil {
+                return fmt.Errorf("failed to get GitHub token plaintext for pushing tag: %w", err)
+        }
+        tagContainer := dag.Container().
+                From("alpine/git:latest").
+                WithMountedDirectory("/go/src/github.com/replicatedhq/chartsmith", source).
+                WithWorkdir("/go/src/github.com/replicatedhq/chartsmith").
+                WithExec([]string{"git", "remote", "add", "tag", fmt.Sprintf("https://%s@github.com/replicatedhq/chartsmith.git", githubTokenPlaintext)}).
+                WithExec([]string{"git", "tag", newVersion}).
+                WithExec([]string{"git", "push", "tag", newVersion})
+        _, err = tagContainer.Stdout(ctx)
+        if err != nil {
+                return fmt.Errorf("failed to execute git commands for tag: %w", err)
+        }
 
-	return nil
+        return nil
 }
 
 func deleteTag(ctx context.Context, source *dagger.Directory, githubToken *dagger.Secret, tag string) error {
-	fmt.Printf("Deleting tag %s\n", tag)
-	// push the tag
-	githubTokenPlaintext, err := githubToken.Plaintext(ctx)
-	if err != nil {
-		return err
-	}
+        fmt.Printf("Deleting tag %s\n", tag)
+        // push the tag
+        githubTokenPlaintext, err := githubToken.Plaintext(ctx)
+        if err != nil {
+                return fmt.Errorf("failed to get GitHub token plaintext for deleting tag: %w", err)
+        }
 
-	req, err := http.NewRequest("DELETE", fmt.Sprintf("https://api.github.com/repos/replicatedhq/chartsmith/git/refs/tags/%s", tag), nil)
-	if err != nil {
-		return err
-	}
-	req.Header.Add("Authorization", fmt.Sprintf("token %s", githubTokenPlaintext))
-	req.Header.Add("Accept", "application/vnd.github.v3+json")
+        req, err := http.NewRequest("DELETE", fmt.Sprintf("https://api.github.com/repos/replicatedhq/chartsmith/git/refs/tags/%s", tag), nil)
+        if err != nil {
+                return fmt.Errorf("failed to create delete tag request: %w", err)
+        }
+        req.Header.Add("Authorization", fmt.Sprintf("token %s", githubTokenPlaintext))
+        req.Header.Add("Accept", "application/vnd.github.v3+json")
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
+        client := &http.Client{}
+        resp, err := client.Do(req)
+        if err != nil {
+                return fmt.Errorf("failed to execute delete tag request: %w", err)
+        }
+        defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
-	}
+        if resp.StatusCode != http.StatusNoContent {
+                return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+        }
 
-	time.Sleep(time.Second * 10)
-	return nil
+        time.Sleep(time.Second * 10)
+        return nil
 }
