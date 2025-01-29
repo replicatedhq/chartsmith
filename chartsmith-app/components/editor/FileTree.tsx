@@ -159,10 +159,12 @@ export function FileTree({ files = [], charts = [], onFileSelect, onFileDelete, 
     isOpen: boolean;
     filePath: string;
     isRequired: boolean;
+    isLoading: boolean;
   }>({
     isOpen: false,
     filePath: "",
     isRequired: false,
+    isLoading: false,
   });
 
   const treeNodes = buildFileTree(charts);
@@ -182,12 +184,19 @@ export function FileTree({ files = [], charts = [], onFileSelect, onFileDelete, 
     if (node.filePath) {
       const fileName = node.filePath.split("/").pop();
       const isRequired = fileName === "Chart.yaml" || fileName === "values.yaml";
+      const isInTemplatesDir = node.filePath.includes("/templates/");
 
       setDeleteModal({
         isOpen: true,
         filePath: node.filePath,
         isRequired,
+        isLoading: false,
       });
+
+      // If it's a required file, show a warning toast
+      if (isRequired) {
+        console.warn(`Cannot delete required file: ${fileName}`);
+      }
     }
   };
 
@@ -271,14 +280,21 @@ export function FileTree({ files = [], charts = [], onFileSelect, onFileDelete, 
 
       <DeleteFileModal
         isOpen={deleteModal.isOpen}
-        onClose={() => setDeleteModal({ isOpen: false, filePath: "", isRequired: false })}
+        onClose={() => setDeleteModal({ isOpen: false, filePath: "", isRequired: false, isLoading: false })}
         filePath={deleteModal.filePath}
         isRequired={deleteModal.isRequired}
-        onConfirm={() => {
+        isLoading={deleteModal.isLoading}
+        onConfirm={async () => {
           if (!deleteModal.isRequired && deleteModal.filePath) {
-            onFileDelete(deleteModal.filePath);
+            try {
+              setDeleteModal(prev => ({ ...prev, isLoading: true }));
+              await onFileDelete(deleteModal.filePath);
+              setDeleteModal({ isOpen: false, filePath: "", isRequired: false, isLoading: false });
+            } catch (error) {
+              console.error("Failed to delete file:", error);
+              setDeleteModal(prev => ({ ...prev, isLoading: false }));
+            }
           }
-          setDeleteModal({ isOpen: false, filePath: "", isRequired: false });
         }}
       />
     </>

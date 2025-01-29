@@ -63,9 +63,25 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     });
   }, [setSelectedFile, setEditorContent, updateFileSelection]);
 
-  const handleFileDelete = useCallback(() => {
-    return;
-  }, []);
+  const handleFileDelete = useCallback((filePath: string) => {
+    setWorkspace(currentWorkspace => {
+      const newState = {
+        ...currentWorkspace,
+        files: currentWorkspace.files.filter(f => f.filePath !== filePath),
+        charts: currentWorkspace.charts.map(chart => ({
+          ...chart,
+          files: chart.files.filter(f => f.filePath !== filePath)
+        }))
+      };
+      return newState;
+    });
+
+    // Clear editor if the deleted file was selected
+    if (selectedFile?.filePath === filePath) {
+      setSelectedFile(undefined);
+      setEditorContent("");
+    }
+  }, [selectedFile, setSelectedFile, setEditorContent]);
 
   const followMode = true; // Always true for now
 
