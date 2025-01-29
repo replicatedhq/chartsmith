@@ -16,13 +16,9 @@ export function FileBrowser({ nodes, onFileSelect, onFileDelete, selectedFile, c
   const { theme } = useTheme();
 
   const handleNewFile = () => {
-    // TODO: Implement new file creation
-    console.log("Create new file");
   };
 
   const handleNewFolder = () => {
-    // TODO: Implement new folder creation
-    console.log("Create new folder");
   };
 
   return (

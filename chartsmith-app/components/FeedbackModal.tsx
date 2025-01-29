@@ -49,13 +49,6 @@ export function FeedbackModal({ isOpen, onClose, message, chatId, workspaceId, s
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (description.trim()) {
-      // Here you would typically send the feedback to your backend
-      console.log("Feedback submitted:", {
-        chatId,
-        message,
-        description,
-        rating
-      });
       onClose();
     }
   };

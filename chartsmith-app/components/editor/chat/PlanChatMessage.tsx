@@ -10,8 +10,9 @@ import ReactMarkdown from "react-markdown";
 import { createPlanAction } from "@/lib/workspace/actions/create-plan";
 import { Plan, Workspace } from "@/lib/types/workspace";
 import { createRevisionAction } from "@/lib/workspace/actions/create-revision";
-import { isNewPlanAction } from "@/lib/workspace/actions/is-new-plan";
 import { createNonPlanMessageAction } from "@/lib/workspace/actions/create-nonplan-message-action";
+import { promptTypeAction } from "@/lib/workspace/actions/prompt-type-action";
+import { PromptType } from "@/lib/llm/prompt-type";
 
 interface PlanChatMessageProps {
   showActions?: boolean;
@@ -201,9 +202,9 @@ export function PlanChatMessage({
     try {
 
       // The LLM needs to first pass this
-      const isNewPlan = await isNewPlanAction(session, plan.workspaceId, chatInput);
+    const promptType = await promptTypeAction(session, plan.workspaceId, chatInput);
 
-      if (isNewPlan) {
+      if (promptType === PromptType.Plan) {
         await createNewPlan();
       } else {
         await createNonPlanMessage();
@@ -337,22 +338,19 @@ export function PlanChatMessage({
 
           </div>
           {showActions && (
-            (!workspace?.currentRevisionNumber && plan.status === 'review' && (!messages || !messages.some(m => {
-              // If there's an optimistic message but no optimistic plan, it must be newer
-              if (m.isOptimistic && !plan.id.startsWith('temp-')) {
-                return true;
-              }
-              
-              // Otherwise compare dates if they exist
-              const messageDate = m.createdAt ? new Date(m.createdAt) : null;
+            (!workspace?.currentRevisionNumber && plan.status === 'review' && (!messages || (() => {
+              // If any message is newer than this plan (including messages with null dates), don't show input
               const planDate = plan.createdAt ? new Date(plan.createdAt) : null;
-              
-              if (!messageDate || !planDate) {
-                return false;
-              }
-              
-              return messageDate > planDate;
-            }))) || // Plan-only view - show in review if no newer messages
+              const hasNewerMessage = messages.some(m => {
+                // Temp messages are always newer
+                if (m.id.startsWith('msg-temp-')) return true;
+                // Messages without dates are newer
+                if (!m.createdAt) return true;
+                // Compare dates if both exist
+                return planDate && new Date(m.createdAt) > planDate;
+              });
+              return !hasNewerMessage;
+            })())) || // Plan-only view - show in review if no newer messages
             (workspace?.currentRevisionNumber && plan.status === 'review') // Editor view - only show in review
           ) ? (
             <div className="mt-6 border-t border-dark-border/20">

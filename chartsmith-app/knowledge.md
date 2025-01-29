@@ -52,7 +52,34 @@
     - Make action buttons flex-shrink-0 to maintain size
     - Keep hover actions outside of text container
     - Fixed chat input at bottom only shows in editor mode (after first revision)
-    - Chat input appears inside plan bubble in plan-only view
+    - Chat input appears only in the most recent message bubble (plan or chat), never in multiple places
+    - When determining most recent message:
+      - Temp messages (msg-temp-*) are always newer than non-temp messages
+      - Messages without dates are considered newer than messages with dates
+      - Only compare dates when both messages have valid dates
+      - When sorting messages:
+        - Move temp messages and incomplete messages to bottom of list
+        - Keep messages at bottom until both non-temp and complete
+        - Sort messages chronologically within their groups (newest at bottom)
+    - Messages and plans must be rendered in strict chronological order:
+      - Sort plans by their first message's timestamp
+      - Process plans in chronological order
+      - Sort messages within each plan chronologically
+      - Insert non-plan messages between plans based on their createdAt timestamp
+      - Keep plan messages together but respect the overall chronological order
+      - When sorting messages:
+        - Move temp messages and incomplete messages to bottom of list
+        - Keep messages at bottom until both non-temp and complete
+        - Sort messages chronologically within their groups (newest at bottom)
+      - When handling real-time updates:
+        - Capture previous state before updates when needed for transition checks
+        - Check state transitions to trigger side effects (e.g. refresh data)
+        - Append unknown messages rather than ignoring them
+        - When replacing optimistic items:
+          - Match by workspace ID and temp ID prefix
+          - Remove optimistic items when real ones arrive
+          - Keep non-optimistic items during updates
+          - Replace entire optimistic item rather than merging
     - Chat content needs padding to scroll above fixed input
     - Automatically expand parent folders when new files are added
     - Expand new chart nodes and their file paths automatically
@@ -222,6 +249,10 @@ State Management:
 - Files and workspace data come from Centrifugo real-time updates - don't maintain duplicate state
 - Explorer follows new files automatically - selects most recently added file
 - When handling real-time updates, append unknown messages rather than ignoring them
+- When comparing message/plan timestamps:
+  - Optimistic messages (temp ID) are always newer than non-optimistic plans
+  - Handle invalid dates gracefully with null checks
+  - Only compare dates when both exist and are valid
 - Check for undefined rather than falsy values when conditionally rendering responses
 - For streaming responses, validate isComplete as boolean type rather than checking for undefined
 - For streaming UI transitions, check isComplete on last message before showing next step

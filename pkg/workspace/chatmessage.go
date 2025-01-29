@@ -17,7 +17,8 @@ func GetChatMessage(ctx context.Context, chatMessageId string) (*types.Chat, err
 		workspace_chat.id,
 		workspace_chat.workspace_id,
 		workspace_chat.prompt,
-		workspace_chat.response
+		workspace_chat.response,
+		workspace_chat.created_at
 	FROM
 		workspace_chat
 	WHERE
@@ -31,6 +32,7 @@ func GetChatMessage(ctx context.Context, chatMessageId string) (*types.Chat, err
 		&chat.WorkspaceID,
 		&chat.Prompt,
 		&response,
+		&chat.CreatedAt,
 	)
 
 	if err != nil {
@@ -64,7 +66,7 @@ func ListChatMessagesAfterPlan(ctx context.Context, planID string) ([]types.Chat
 		return nil, err
 	}
 
-	query = `SELECT id, prompt, response FROM workspace_chat WHERE workspace_id = $1 AND created_at > $2`
+	query = `SELECT id, prompt, response, created_at FROM workspace_chat WHERE workspace_id = $1 AND created_at > $2`
 	rows, err := conn.Query(ctx, query, workspaceID, mostRecentChatCreatedAt)
 	if err != nil {
 		return nil, err
@@ -74,7 +76,7 @@ func ListChatMessagesAfterPlan(ctx context.Context, planID string) ([]types.Chat
 	var chats []types.Chat
 	for rows.Next() {
 		var chat types.Chat
-		err := rows.Scan(&chat.ID, &chat.Prompt, &chat.Response)
+		err := rows.Scan(&chat.ID, &chat.Prompt, &chat.Response, &chat.CreatedAt)
 		if err != nil {
 			return nil, err
 		}

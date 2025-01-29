@@ -13,8 +13,6 @@ interface ExtendedFileMap {
 export function convertFilesToTree(files: ExtendedFileMap, options: FileTreeOptions = {}): FileNode[] {
   const { sortPaths = true, debug = false } = options;
 
-  if (debug) console.log("Converting files to tree:", files);
-
   const root: FileNode[] = [];
   const paths = sortPaths ? Object.keys(files).sort() : Object.keys(files);
 

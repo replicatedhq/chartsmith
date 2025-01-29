@@ -23,13 +23,13 @@ export interface ChatMessageProps {
   workspace?: Workspace;
 }
 
-export function ChatMessage({ 
-  message, 
-  onApplyChanges, 
-  session, 
-  workspaceId, 
-  showActions = true, 
-  setMessages, 
+export function ChatMessage({
+  message,
+  onApplyChanges,
+  session,
+  workspaceId,
+  showActions = true,
+  setMessages,
   setWorkspace,
   showChatInput,
   onSendMessage,
@@ -76,12 +76,12 @@ export function ChatMessage({
       <div className="px-2 py-1">
         <div className={`p-3 rounded-2xl ${theme === "dark" ? "bg-primary/20" : "bg-primary/10"} rounded-tr-sm w-full`}>
           <div className="flex items-start gap-2">
-            <Image 
-              src={session.user.imageUrl} 
-              alt={session.user.name} 
-              width={24} 
-              height={24} 
-              className="w-6 h-6 rounded-full flex-shrink-0" 
+            <Image
+              src={session.user.imageUrl}
+              alt={session.user.name}
+              width={24}
+              height={24}
+              className="w-6 h-6 rounded-full flex-shrink-0"
             />
             <div className="flex-1">
               <div className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} text-[12px] pt-0.5`}>{message.prompt}</div>
@@ -96,7 +96,9 @@ export function ChatMessage({
           <div className={`p-3 rounded-2xl ${theme === "dark" ? "bg-dark-border/40" : "bg-gray-100"} rounded-tl-sm w-full`}>
             <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"} mb-1`}>ChartSmith</div>
             <div className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} ${message.isIgnored ? "opacity-50 line-through" : ""} text-[12px] whitespace-pre-wrap`}>
-              {message.response || (!message.isComplete ? "..." : "")}
+              {(() => {
+                return message.response || (!message.isComplete ? "..." : "");
+              })()}
             </div>
             {message.isComplete && !message.isApplied && showActions && onApplyChanges && (
               <div className="mt-4 space-y-4 border-t border-gray-700/10 pt-4">

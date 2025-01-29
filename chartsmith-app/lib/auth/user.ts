@@ -37,7 +37,6 @@ export async function upsertUser(email: string, name: string, imageUrl: string):
 }
 
 export async function findUser(email: string): Promise<User | undefined> {
-  console.log(`finding user ${email}`);
   try {
     const db = getDB(await getParam("DB_URI"));
     const result = await db.query(
