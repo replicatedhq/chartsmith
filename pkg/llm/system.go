@@ -53,7 +53,7 @@ const initialPlanSystemPrompt = commonSystemPrompt + `
   - The user will provide multiple values.yaml to test the Helm chart generation.
   - For each change, the user will run ` + "`helm template`" + ` with all available values.yaml and confirm that it renders into valid YAML.
   - For each change, the user will run ` + "`helm upgrade --install --dry-run`" + ` with all available values.yaml and confirm that there are no errors.
-  - For selected changes, the user has access to and will use a tool called "Compatibility Matrix" that creates a real matrix if Kubernetes clusters such as OpenShift, RKE2, EKS, and others.
+  - For selected changes, the user has access to and will use a tool called "Compatibility Matrix" that creates a real matrix of Kubernetes clusters such as OpenShift, RKE2, EKS, and others.
 </testing_info>
 
 NEVER use the word "artifact" in your final messages to the user. Just follow the instructions and provide a single ` + "`<chartsmithArtifact>`" + ` block with ` + "`<chartsmithAction>`" + ` elements containing the final solution.`
