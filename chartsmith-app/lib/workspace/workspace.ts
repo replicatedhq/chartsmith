@@ -10,13 +10,12 @@ import { listMessagesForWorkspace } from "./chat";
  * Creates a new workspace with initialized files, charts, and content
  *
  * @param createdType - The creation method (currently only "prompt" is supported)
- * @param prompt - Optional initial chat message prompt. Required if createdType is "prompt"
  * @param userId - ID of the user creating the workspace
  * @returns A Workspace object containing the new workspace's basic info
  * @throws Will throw an error if database operations fail
  */
-export async function createWorkspace(createdType: string, prompt: string | undefined, userId: string): Promise<Plan> {
-  logger.info("Creating new workspace", { createdType, prompt, userId });
+export async function createWorkspace(createdType: string, userId: string, baseChart?: Chart): Promise<Workspace> {
+  logger.info("Creating new workspace", { createdType, userId });
   try {
     const id = srs.default({ length: 12, alphanumeric: true });
     const db = getDB(await getParam("DB_URI"));
@@ -30,40 +29,73 @@ export async function createWorkspace(createdType: string, prompt: string | unde
         throw new Error("No default-workspace found in bootstrap_workspace table");
       }
 
+      // Determine initial revision number based on baseChart presence
+      const initialRevisionNumber = baseChart ? 1 : 0;
+
       await client.query(
         `INSERT INTO workspace (id, created_at, last_updated_at, name, created_by_user_id, created_type, current_revision_number)
         VALUES ($1, now(), now(), $2, $3, $4, $5)`,
-        [id, boostrapWorkspaceRow.rows[0].name, userId, createdType, boostrapWorkspaceRow.rows[0].current_revision],
+        [id, boostrapWorkspaceRow.rows[0].name, userId, createdType, initialRevisionNumber],
       );
 
-      await client.query(`INSERT INTO workspace_revision (workspace_id, revision_number, created_at, created_by_user_id, created_type, is_complete) VALUES ($1, 0, now(), $2, $3, true)`, [id, userId, createdType]);
+      await client.query(`INSERT INTO workspace_revision (workspace_id, revision_number, created_at, created_by_user_id, created_type, is_complete) VALUES ($1, $2, now(), $3, $4, true)`, [id, initialRevisionNumber, userId, createdType]);
 
-      const bootstrapCharts = await client.query(`SELECT id, name FROM bootstrap_chart`);
-      for (const chart of bootstrapCharts.rows) {
+      if (baseChart) {
+        // Use the provided baseChart
         const chartId = srs.default({ length: 12, alphanumeric: true });
         await client.query(
           `INSERT INTO workspace_chart (id, workspace_id, name, revision_number)
-          VALUES ($1, $2, $3, 0)`,
-          [chartId, id, chart.name],
+          VALUES ($1, $2, $3, $4)`,
+          [chartId, id, baseChart.name, initialRevisionNumber],
         );
 
-        const boostrapChartFiles = await client.query(`SELECT file_path, content, summary, embeddings FROM bootstrap_file WHERE chart_id = $1`, [chart.id]);
-        for (const file of boostrapChartFiles.rows) {
+        for (const file of baseChart.files) {
+          // TODO we need to add summary and embeddings here since we don't have a bootstrap_file
           const fileId = srs.default({ length: 12, alphanumeric: true });
           await client.query(
             `INSERT INTO workspace_file (id, revision_number, chart_id, workspace_id, file_path, content, summary, embeddings)
-            VALUES ($1, 0, $2, $3, $4, $5, $6, $7)`,
-            [fileId, chartId, id, file.file_path, file.content, file.summary, file.embeddings],
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+            [fileId, initialRevisionNumber, chartId, id, file.filePath, file.content, null, null],
           );
         }
 
-        // create the default scenario for this chart too
+        // create the default scenario for this chart
         const scenarioId = srs.default({ length: 12, alphanumeric: true });
         await client.query(
           `INSERT INTO workspace_scenario (id, workspace_id, chart_id, name, description, is_read_only)
           VALUES ($1, $2, $3, 'Default', 'Apply the default values.yaml', true)`,
           [scenarioId, id, chartId],
         );
+
+      } else {
+        // Fallback to bootstrap charts if baseChart is not provided
+        const bootstrapCharts = await client.query(`SELECT id, name FROM bootstrap_chart`);
+        for (const chart of bootstrapCharts.rows) {
+          const chartId = srs.default({ length: 12, alphanumeric: true });
+          await client.query(
+            `INSERT INTO workspace_chart (id, workspace_id, name, revision_number)
+            VALUES ($1, $2, $3, $4)`,
+            [chartId, id, chart.name, initialRevisionNumber],
+          );
+
+          const boostrapChartFiles = await client.query(`SELECT file_path, content, summary, embeddings FROM bootstrap_file WHERE chart_id = $1`, [chart.id]);
+          for (const file of boostrapChartFiles.rows) {
+            const fileId = srs.default({ length: 12, alphanumeric: true });
+            await client.query(
+              `INSERT INTO workspace_file (id, revision_number, chart_id, workspace_id, file_path, content, summary, embeddings)
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+              [fileId, initialRevisionNumber, chartId, id, file.file_path, file.content, file.summary, file.embeddings],
+            );
+          }
+
+          // create the default scenario for each bootstrap chart
+          const scenarioId = srs.default({ length: 12, alphanumeric: true });
+          await client.query(
+            `INSERT INTO workspace_scenario (id, workspace_id, chart_id, name, description, is_read_only)
+            VALUES ($1, $2, $3, 'Default', 'Apply the default values.yaml', true)`,
+            [scenarioId, id, chartId],
+          );
+        }
       }
 
       await client.query("COMMIT");
@@ -76,36 +108,12 @@ export async function createWorkspace(createdType: string, prompt: string | unde
       client.release();
     }
 
-    const chatId: string = srs.default({ length: 12, alphanumeric: true });
-    const chatClient = await db.connect();
-    if (createdType === "prompt") {
-      await chatClient.query(
-        `INSERT INTO workspace_chat (id, workspace_id, created_at, sent_by, prompt, response, revision_number)
-        VALUES ($1, $2, now(), $3, $4, null, 0)`,
-        [chatId, id, userId, prompt],
-      );
+    const w = await getWorkspace(id);
+    if (!w) {
+      throw new Error("Failed to create workspace");
     }
 
-    const planId: string = srs.default({ length: 12, alphanumeric: true });
-    await chatClient.query(
-      `INSERT INTO workspace_plan (id, workspace_id, chat_message_ids, created_at, updated_at, version, status, is_complete)
-      VALUES ($1, $2, $3, now(), now(), 0, 'pending', false)`,
-      [planId, id, [chatId]],
-    );
-
-    await chatClient.query(`SELECT pg_notify('new_plan', $1)`, [planId]);
-
-    const slackNottificationId = srs.default({ length: 12, alphanumeric: true });
-    await chatClient.query(
-      `INSERT INTO slack_notification (id, created_at, user_id, workspace_id, notification_type, additional_data)
-      VALUES ($1, now(), $2, $3, 'new_workspace', $4)`,
-      [slackNottificationId, userId, id, JSON.stringify({ createdType: createdType, prompt: prompt })],
-    );
-    await chatClient.query(`SELECT pg_notify('new_slack_notification', $1)`, [slackNottificationId]);
-
-    // we have a workspace, we need to return the plan
-    return getPlan(planId);
-
+    return w;
   } catch (err) {
     logger.error("Failed to create workspace", { err });
     throw err;

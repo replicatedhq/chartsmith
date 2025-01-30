@@ -6,7 +6,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { PromptInput } from "./PromptInput";
 import { useSession } from "@/app/hooks/useSession";
 import { useRouter } from "next/navigation";
-import { createWorkspaceAction } from "@/lib/workspace/actions/create-workspace-from-prompt";
+import { createWorkspaceFromPromptAction } from "@/lib/workspace/actions/create-workspace-from-prompt";
 import { getGoogleAuthUrl } from "@/lib/auth/google";
 import { logger } from "@/lib/utils/logger";
 
@@ -77,7 +77,7 @@ export function PromptModal({ isOpen, onClose }: PromptModalProps) {
         return;
       }
 
-      const plan = await createWorkspaceAction(session, "prompt", prompt);
+      const plan = await createWorkspaceFromPromptAction(session, prompt);
 
       // set the plan id in local storage, so that the workspace page knows which plan to follow
       localStorage.setItem('planId', plan.id);
