@@ -120,19 +120,20 @@ export async function createWorkspace(createdType: string, userId: string, baseC
   }
 }
 
-export async function createNonPlanMessage(userId: string, prompt: string, workspaceId: string, planId: string): Promise<ChatMessage> {
+export async function createNonPlanMessage(userId: string, prompt: string, workspaceId: string, planId: string, response?: string): Promise<ChatMessage> {
   logger.info("Creating non-plan message", { userId, prompt, workspaceId, planId });
   try {
     const client = getDB(await getParam("DB_URI"));
     const chatMessageId = srs.default({ length: 12, alphanumeric: true });
     await client.query(
       `INSERT INTO workspace_chat (id, workspace_id, created_at, sent_by, prompt, response, revision_number)
-      VALUES ($1, $2, now(), $3, $4, '', 0)`,
-      [chatMessageId, workspaceId, userId, prompt],
+      VALUES ($1, $2, now(), $3, $4, $5, 0)`,
+      [chatMessageId, workspaceId, userId, prompt, response],
     );
 
-    // notify
-    await client.query(`SELECT pg_notify('new_nonplan_chat_message', $1)`, [chatMessageId]);
+    if (!response) {
+      await client.query(`SELECT pg_notify('new_nonplan_chat_message', $1)`, [chatMessageId]);
+    }
 
     return getChatMessage(chatMessageId);
   } catch (err) {

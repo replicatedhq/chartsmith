@@ -20,25 +20,37 @@ func CreateNonPlanChatMessage(ctx context.Context, streamCh chan string, doneCh 
 		anthropic.NewAssistantMessage(anthropic.NewTextBlock(chatOnlyInstructions)),
 	}
 
+	var c *workspacetypes.Chart
+	c = &w.Charts[0]
+
+	currentChartUserMessage, err := summarizeChart(ctx, c)
+	if err != nil {
+		return fmt.Errorf("failed to summarize chart: %w", err)
+	}
+	messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(currentChartUserMessage)))
+
 	// we need to get the previous plan, and then all followup chat messages since that plan
 	plan, err := workspace.GetMostRecentPlan(ctx, w.ID)
-	if err != nil {
+	if err != nil && err != workspace.ErrNoPlan {
 		return fmt.Errorf("failed to get most recent plan: %w", err)
 	}
 
-	previousChatMessages, err := workspace.ListChatMessagesAfterPlan(ctx, plan.ID)
-	if err != nil {
-		return fmt.Errorf("failed to list chat messages: %w", err)
-	}
-
-	for _, chat := range previousChatMessages {
-		if chat.ID == chatMessage.ID {
-			continue
+	if plan != nil {
+		previousChatMessages, err := workspace.ListChatMessagesAfterPlan(ctx, plan.ID)
+		if err != nil {
+			return fmt.Errorf("failed to list chat messages: %w", err)
 		}
-		messages = append(messages, anthropic.NewAssistantMessage(anthropic.NewTextBlock(chat.Prompt)))
-	}
 
-	messages = append(messages, anthropic.NewAssistantMessage(anthropic.NewTextBlock(plan.Description)))
+		for _, chat := range previousChatMessages {
+			if chat.ID == chatMessage.ID {
+				continue
+			}
+			messages = append(messages, anthropic.NewAssistantMessage(anthropic.NewTextBlock(chat.Prompt)))
+		}
+
+		messages = append(messages, anthropic.NewAssistantMessage(anthropic.NewTextBlock(plan.Description)))
+
+	}
 
 	messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(chatMessage.Prompt)))
 	stream := client.Messages.NewStreaming(context.TODO(), anthropic.MessageNewParams{

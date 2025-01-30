@@ -3,6 +3,7 @@ package workspace
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -10,6 +11,8 @@ import (
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 	"github.com/replicatedhq/chartsmith/pkg/workspace/types"
 )
+
+var ErrNoPlan = errors.New("no plan found")
 
 func GetMostRecentPlan(ctx context.Context, workspaceID string) (*types.Plan, error) {
 	conn := persistence.MustGetPooledPostgresSession()
@@ -21,6 +24,9 @@ func GetMostRecentPlan(ctx context.Context, workspaceID string) (*types.Plan, er
 	var planID string
 	err := row.Scan(&planID)
 	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, ErrNoPlan
+		}
 		return nil, fmt.Errorf("error scanning plan: %w", err)
 	}
 	return GetPlan(ctx, nil, planID)
