@@ -219,9 +219,7 @@ export function ChatContainer({ messages, onSendMessage, onApplyChanges, session
           }
         `}</style>
       </div>
-      {workspace?.currentRevisionNumber && workspace?.currentRevisionNumber > 0 && workspace?.currentPlans?.some(plan =>
-        !['planning', 'pending', 'applying'].includes(plan.status)
-      ) && (
+      {workspace?.currentRevisionNumber && workspace?.currentRevisionNumber > 0 && (
         <div className={`absolute bottom-0 left-0 right-0 ${theme === "dark" ? "bg-dark-surface" : "bg-white"} border-t ${theme === "dark" ? "border-dark-border" : "border-gray-200"}`}>
           <form onSubmit={handleSubmitChat} className="p-3 relative">
             <textarea

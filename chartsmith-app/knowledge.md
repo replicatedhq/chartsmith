@@ -52,7 +52,8 @@
     - Make action buttons flex-shrink-0 to maintain size
     - Keep hover actions outside of text container
     - Fixed chat input at bottom only shows in editor mode (after first revision)
-    - Chat input appears only in the most recent message bubble (plan or chat), never in multiple places
+    - Chat input appears whenever there's a revision (currentRevisionNumber > 0), regardless of whether there are plans or not
+- Chat input appears only in the most recent message bubble (plan or chat), never in multiple places
     - When determining most recent message:
       - Temp messages (msg-temp-*) are always newer than non-temp messages
       - Messages without dates are considered newer than messages with dates
