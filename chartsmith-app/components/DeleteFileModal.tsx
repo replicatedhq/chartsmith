@@ -41,24 +41,11 @@ export function DeleteFileModal({ isOpen, onClose, filePath, isRequired, onConfi
           )}
         </div>
         <div className={`flex justify-end gap-2 p-4 border-t ${theme === "dark" ? "border-dark-border" : "border-gray-200"}`}>
-          {/* Cancel button */}
-          <button 
-            onClick={onClose} 
-            className={`px-4 py-2 text-sm rounded-lg transition-colors ${
-              theme === "dark" 
-                ? "text-gray-300 hover:text-white bg-dark-border/40 hover:bg-dark-border/60" 
-                : "text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200"
-            }`}
-          >
+          <button onClick={onClose} className={`px-4 py-2 text-sm rounded-lg transition-colors ${theme === "dark" ? "text-gray-300 hover:text-white bg-dark-border/40 hover:bg-dark-border/60" : "text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200"}`}>
             {isRequired ? "Close" : "Cancel"}
           </button>
-
-          {/* Delete button - simplified condition */}
           {!isRequired && (
-            <button 
-              onClick={onConfirm} 
-              className="px-4 py-2 text-sm text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
-            >
+            <button onClick={onConfirm} className="px-4 py-2 text-sm text-white bg-error hover:bg-error/90 rounded-lg transition-colors">
               Delete
             </button>
           )}

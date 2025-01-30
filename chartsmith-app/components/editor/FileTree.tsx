@@ -3,9 +3,6 @@ import { FileText, ChevronDown, ChevronRight, Trash2 } from "lucide-react";
 import { useTheme } from "../../contexts/ThemeContext";
 import { DeleteFileModal } from "../DeleteFileModal";
 import { Chart, WorkspaceFile } from "@/lib/types/workspace";
-import { deleteWorkspaceFileAction } from "@/lib/workspace/actions/delete-workspace-file";
-import { useSession } from "@/app/hooks/useSession";
-import { useToast } from "@/components/toast/use-toast";
 
 interface TreeNode {
   id: string;
@@ -21,14 +18,11 @@ interface FileTreeProps {
   onFileSelect: (file: WorkspaceFile) => void;
   onFileDelete: (filePath: string) => void;
   selectedFile?: WorkspaceFile;
-  charts: Chart[];
-  workspaceId: string;  // Add this prop
+  charts: Chart[];  // Add charts to props
 }
 
-export function FileTree({ files = [], charts = [], onFileSelect, onFileDelete, selectedFile, workspaceId }: FileTreeProps) {
+export function FileTree({ files = [], charts = [], onFileSelect, onFileDelete, selectedFile }: FileTreeProps) {
   const { theme } = useTheme();
-  const { session } = useSession();
-  const { toast } = useToast();
   // Track previous files to detect new ones
   const prevFilesRef = React.useRef<WorkspaceFile[]>([]);
   const prevChartsRef = React.useRef<Chart[]>([]);
@@ -89,6 +83,8 @@ export function FileTree({ files = [], charts = [], onFileSelect, onFileDelete, 
 
       return chartNode;
     });
+
+
 
     return treeNodes;
   };
@@ -186,7 +182,7 @@ export function FileTree({ files = [], charts = [], onFileSelect, onFileDelete, 
     if (node.filePath) {
       const fileName = node.filePath.split("/").pop();
       const isRequired = fileName === "Chart.yaml" || fileName === "values.yaml";
-      
+
       setDeleteModal({
         isOpen: true,
         filePath: node.filePath,
@@ -278,24 +274,9 @@ export function FileTree({ files = [], charts = [], onFileSelect, onFileDelete, 
         onClose={() => setDeleteModal({ isOpen: false, filePath: "", isRequired: false })}
         filePath={deleteModal.filePath}
         isRequired={deleteModal.isRequired}
-        onConfirm={async () => {
+        onConfirm={() => {
           if (!deleteModal.isRequired && deleteModal.filePath) {
-            try {
-              await deleteWorkspaceFileAction(session!, workspaceId, deleteModal.filePath);
-              onFileDelete(deleteModal.filePath);
-              toast({
-                title: "Success",
-                description: "File deleted successfully",
-                variant: "default"
-              });
-            } catch (error) {
-              console.error("Failed to delete file:", error);
-              toast({
-                title: "Error",
-                description: error instanceof Error ? error.message : "Failed to delete file",
-                variant: "destructive"
-              });
-            }
+            onFileDelete(deleteModal.filePath);
           }
           setDeleteModal({ isOpen: false, filePath: "", isRequired: false });
         }}
