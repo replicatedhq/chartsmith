@@ -277,70 +277,93 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
           handleChatMessageUpdated(message.data.chatMessage!);
         }
 
+        // Handle file deletion events
         const artifact = message.data.artifact;
-        if (artifact && artifact.path && artifact.content) {
+        if (artifact && artifact.path) {
+          // Handle deletion (empty content)
+          if (artifact.content === "") {
+            setWorkspace(currentWorkspace => ({
+              ...currentWorkspace,
+              files: currentWorkspace.files.filter(f => f.filePath !== artifact.path),
+              charts: currentWorkspace.charts.map(chart => ({
+                ...chart,
+                files: chart.files.filter(f => f.filePath !== artifact.path)
+              }))
+            }));
+            
+            // Clear editor if deleted file was selected
+            if (selectedFile?.filePath === artifact.path) {
+              setSelectedFile(undefined);
+              setEditorContent("");
+              updateFileSelection(undefined);
+            }
+            return;
+          }
 
-          setWorkspace(currentWorkspace => {
-            // Find if file exists in workspace or chart files
-            const existingWorkspaceFile = currentWorkspace.files?.find(f => f.filePath === artifact.path);
-            const chartWithFile = currentWorkspace.charts?.find(chart =>
-              chart.files.some(f => f.filePath === artifact.path)
-            );
+          // Handle create/update (has content)
+          if (artifact.content) {
+            setWorkspace(currentWorkspace => {
+              // Find if file exists in workspace or chart files
+              const existingWorkspaceFile = currentWorkspace.files?.find(f => f.filePath === artifact.path);
+              const chartWithFile = currentWorkspace.charts?.find(chart =>
+                chart.files.some(f => f.filePath === artifact.path)
+              );
 
-            // If file doesn't exist, add it to the chart
-            if (!existingWorkspaceFile && !chartWithFile) {
-              const newFile = {
-                id: `file-${Date.now()}`,
-                filePath: artifact.path,
-                content: artifact.content
-              };
+              // If file doesn't exist, add it to the chart
+              if (!existingWorkspaceFile && !chartWithFile) {
+                const newFile = {
+                  id: `file-${Date.now()}`,
+                  filePath: artifact.path,
+                  content: artifact.content
+                };
 
-              // Always add to the first chart
+                // Always add to the first chart
+                return {
+                  ...currentWorkspace,
+                  charts: currentWorkspace.charts.map((chart, index) =>
+                    index === 0 ? {
+                      ...chart,
+                      files: [...chart.files, newFile]
+                    } : chart
+                  )
+                };
+              }
+
+              // Update existing file
+              const updatedFiles = currentWorkspace.files?.map(file =>
+                file.filePath === artifact.path ? { ...file, content: artifact.content } : file
+              ) || [];
+
+              const updatedCharts = currentWorkspace.charts?.map(chart => ({
+                ...chart,
+                files: chart.files.map(file =>
+                  file.filePath === artifact.path ? { ...file, content: artifact.content } : file
+                )
+              })) || [];
+
               return {
                 ...currentWorkspace,
-                charts: currentWorkspace.charts.map((chart, index) =>
-                  index === 0 ? {
-                    ...chart,
-                    files: [...chart.files, newFile]
-                  } : chart
-                )
+                files: updatedFiles,
+                charts: updatedCharts
               };
-            }
+            });
 
-            // Update existing file
-            const updatedFiles = currentWorkspace.files?.map(file =>
-              file.filePath === artifact.path ? { ...file, content: artifact.content } : file
-            ) || [];
-
-            const updatedCharts = currentWorkspace.charts?.map(chart => ({
-              ...chart,
-              files: chart.files.map(file =>
-                file.filePath === artifact.path ? { ...file, content: artifact.content } : file
-              )
-            })) || [];
-
-            return {
-              ...currentWorkspace,
-              files: updatedFiles,
-              charts: updatedCharts
+            // Auto select the file
+            const file = {
+              id: `file-${Date.now()}`,
+              filePath: artifact.path,
+              content: artifact.content
             };
-          });
 
-          // Auto select the file
-          const file = {
-            id: `file-${Date.now()}`,
-            filePath: artifact.path,
-            content: artifact.content
-          };
-
-          handleFileSelect(file);
-          setEditorContent(artifact.content);
-          updateFileSelection({
-            name: artifact.path.split('/').pop() || artifact.path,
-            path: artifact.path,
-            content: artifact.content,
-            type: 'file' as const
-          });
+            handleFileSelect(file);
+            setEditorContent(artifact.content);
+            updateFileSelection({
+              name: artifact.path.split('/').pop() || artifact.path,
+              path: artifact.path,
+              content: artifact.content,
+              type: 'file' as const
+            });
+          }
         }
       });
       sub.on("subscribed", () => {});
