@@ -77,7 +77,6 @@ const executePlanSystemPrompt = commonSystemPrompt + `
   3. If the file is not empty, you should update the file to meet the requirements provided.
   4. When editing an existing file, you should only edit the file to meet the requirements provided. Do not make any other changes to the file. Attempt to maintain as much of the current file as possible.
   5. For delete actions:
-    - Confirm the file is safe to delete (not Chart.yaml or values.yaml)
     - Respond with a chartsmithArtifact tag with action="delete"
     - Example: <chartsmithArtifact path="templates/deployment.yaml" action="delete"></chartsmithArtifact>
   6. You don't need to explain the change, just provide the artifact(s) in your response.
