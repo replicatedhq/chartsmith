@@ -7,10 +7,4 @@ export async function deleteWorkspaceAction(session: Session, workspaceId: strin
   if (!session?.user?.id) {
     throw new AppError("Unauthorized", "UNAUTHORIZED");
   }
-
-  console.log('Server Action - Delete Workspace:', {
-    workspaceId,
-    userId: session.user.id,
-    timestamp: new Date().toISOString()
-  });
 }

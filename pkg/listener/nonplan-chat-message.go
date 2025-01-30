@@ -100,5 +100,6 @@ func handleNewNonPlanChatMessageNotification(ctx context.Context, chatMessageId 
 			done = true
 		}
 	}
+
 	return nil
 }

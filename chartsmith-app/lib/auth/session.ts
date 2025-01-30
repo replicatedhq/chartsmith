@@ -79,8 +79,6 @@ export async function findSession(token: string): Promise<Session | undefined> {
     const decoded = jwt.verify(token, process.env.HMAC_SECRET!) as { id: string };
     const id = decoded.id;
 
-    console.log("finding session", id);
-
     const db = getDB(await getParam("DB_URI"));
     const result = await db.query(
       `

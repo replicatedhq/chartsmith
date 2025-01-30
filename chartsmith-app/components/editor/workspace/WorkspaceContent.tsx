@@ -26,8 +26,9 @@ import { getWorkspaceAction } from "@/lib/workspace/actions/get-workspace";
 import { PlanOnlyLayout } from "../layout/PlanOnlyLayout";
 import { PlanContent } from "./PlanContent";
 import { createPlanAction } from "@/lib/workspace/actions/create-plan";
-import { isNewPlanAction } from "@/lib/workspace/actions/is-new-plan";
 import { createNonPlanMessageAction } from "@/lib/workspace/actions/create-nonplan-message-action";
+import { promptTypeAction } from "@/lib/workspace/actions/prompt-type-action";
+import { PromptType } from "@/lib/llm/prompt-type";
 
 interface WorkspaceContentProps {
   initialWorkspace: Workspace;
@@ -228,15 +229,39 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
   }, [session, workspaceId, setMessages]);
 
   const handleChatMessageUpdated = (chatMessage: RawChatMessage) => {
-    console.log(`chat message updated`, chatMessage);
-
     setMessages?.(prev => {
-      return prev.map(msg => msg.id === chatMessage.id ? { ...msg, ...chatMessage } : msg);
+      // First try to find and replace a temp message
+      const tempMessageIndex = prev.findIndex(m =>
+        m.id.startsWith('msg-temp-') && m.prompt === chatMessage.prompt
+      );
+
+      if (tempMessageIndex !== -1) {
+        // Replace temp message with real one
+        const newMessages = [...prev];
+        newMessages[tempMessageIndex] = {
+          ...chatMessage,
+          isComplete: chatMessage.response !== null,
+          createdAt: chatMessage.createdAt ? new Date(chatMessage.createdAt) : new Date()
+        };
+        return newMessages;
+      }
+
+      // If no temp message found, update existing message
+      return prev.map((m) => {
+        if (m.id === chatMessage.id) {
+          return {
+            ...m,
+            ...chatMessage,
+            isComplete: chatMessage.response !== null,
+            createdAt: chatMessage.createdAt ? new Date(chatMessage.createdAt) : new Date()
+          };
+        }
+        return m;
+      });
     });
   }
 
   const handleWorkspaceUpdated = (workspace: RawWorkspace) => {
-    console.log(`workspace updated`, workspace);
   }
 
   useEffect(() => {
@@ -281,47 +306,60 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
 
         const artifact = message.data.artifact;
         if (artifact && artifact.path && artifact.content) {
-          console.log('Received artifact:', {
-            path: artifact.path,
-            contentLength: artifact.content.length
+
+          setWorkspace(currentWorkspace => {
+            // Find if file exists in workspace or chart files
+            const existingWorkspaceFile = currentWorkspace.files?.find(f => f.filePath === artifact.path);
+            const chartWithFile = currentWorkspace.charts?.find(chart =>
+              chart.files.some(f => f.filePath === artifact.path)
+            );
+
+            // If file doesn't exist, add it to the chart
+            if (!existingWorkspaceFile && !chartWithFile) {
+              const newFile = {
+                id: `file-${Date.now()}`,
+                filePath: artifact.path,
+                content: artifact.content
+              };
+
+              // Always add to the first chart
+              return {
+                ...currentWorkspace,
+                charts: currentWorkspace.charts.map((chart, index) =>
+                  index === 0 ? {
+                    ...chart,
+                    files: [...chart.files, newFile]
+                  } : chart
+                )
+              };
+            }
+
+            // Update existing file
+            const updatedFiles = currentWorkspace.files?.map(file =>
+              file.filePath === artifact.path ? { ...file, content: artifact.content } : file
+            ) || [];
+
+            const updatedCharts = currentWorkspace.charts?.map(chart => ({
+              ...chart,
+              files: chart.files.map(file =>
+                file.filePath === artifact.path ? { ...file, content: artifact.content } : file
+              )
+            })) || [];
+
+            return {
+              ...currentWorkspace,
+              files: updatedFiles,
+              charts: updatedCharts
+            };
           });
 
+          // Auto select the file
           const file = {
             id: `file-${Date.now()}`,
             filePath: artifact.path,
             content: artifact.content
           };
 
-          // Update both workspace files and chart files
-          setWorkspace(currentWorkspace => {
-            // First check if this file exists in any charts
-            const chartWithFile = currentWorkspace.charts?.find(c => 
-              c.files.some(f => f.filePath === file.filePath)
-            );
-            
-            if (chartWithFile) {
-              // Update in charts and add to workspace files
-              return {
-                ...currentWorkspace,
-                files: [...currentWorkspace.files.filter(f => f.filePath !== file.filePath), file],
-                charts: currentWorkspace.charts.map(chart => ({
-                  ...chart,
-                  files: chart.files.map(f => f.filePath === file.filePath ? file : f)
-                }))
-              };
-            } else {
-              // Just add to workspace files
-              return {
-                ...currentWorkspace,
-                files: [...currentWorkspace.files.filter(f => f.filePath !== file.filePath), file]
-              };
-            }
-          });
-
-          console.log('Selecting file:', {
-            path: file.filePath,
-            id: file.id
-          });
           handleFileSelect(file);
           setEditorContent(artifact.content);
           updateFileSelection({
@@ -416,9 +454,9 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
   const handleSendMessage = async (message: string) => {
     if (!session || !workspace) return;
 
-    const isNewPlan = await isNewPlanAction(session, workspace.id, message);
+    const promptType = await promptTypeAction(session, workspace.id, message);
 
-    if (isNewPlan) {
+    if (promptType === PromptType.Plan) {
       await createNewPlan(message);
     } else {
       await createNonPlanMessage(message);
@@ -581,7 +619,6 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
 
   useEffect(() => {
     if (showEditor) {
-      console.log('Setting file tree visible');
       setIsFileTreeVisible(true);
     }
   }, [showEditor, setIsFileTreeVisible]);

@@ -4,6 +4,7 @@ import { getParam } from "../data/param";
 import { Chart, WorkspaceFile, Workspace, Plan, ActionFile, RenderedChart, ChatMessage } from "../types/workspace";
 import * as srs from "secure-random-string";
 import { logger } from "../utils/logger";
+import { listMessagesForWorkspace } from "./chat";
 
 /**
  * Creates a new workspace with initialized files, charts, and content
@@ -118,7 +119,7 @@ export async function createNonPlanMessage(userId: string, prompt: string, works
     const chatMessageId = srs.default({ length: 12, alphanumeric: true });
     await client.query(
       `INSERT INTO workspace_chat (id, workspace_id, created_at, sent_by, prompt, response, revision_number)
-      VALUES ($1, $2, now(), $3, $4, 'fake reesponse', 0)`,
+      VALUES ($1, $2, now(), $3, $4, '', 0)`,
       [chatMessageId, workspaceId, userId, prompt],
     );
 
@@ -332,6 +333,7 @@ export async function listWorkspaces(userId: string): Promise<Workspace[]> {
         currentPlans: [],
         previousPlans: [],
         renderedCharts: [],
+        messages: [],
       };
 
       // get the files, only if revision number is > 0
@@ -414,6 +416,7 @@ export async function getWorkspace(id: string): Promise<Workspace | undefined> {
       currentPlans: [],
       previousPlans: [],
       renderedCharts: [],
+      messages: [],  // Initialize empty messages array
     };
 
     // get the charts and their files, only if revision number is > 0

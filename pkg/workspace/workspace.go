@@ -40,7 +40,14 @@ func ListUserIDsForWorkspace(ctx context.Context, workspaceID string) ([]string,
 }
 
 func AppendChatMessageResponse(ctx context.Context, chatMessageID string, response string) error {
+	conn := persistence.MustGetPooledPostgresSession()
+	defer conn.Release()
 
+	query := `UPDATE workspace_chat SET response = COALESCE(response, '') || $1 WHERE id = $2`
+	_, err := conn.Exec(ctx, query, response, chatMessageID)
+	if err != nil {
+		return fmt.Errorf("error updating chat message response: %w", err)
+	}
 	return nil
 }
 

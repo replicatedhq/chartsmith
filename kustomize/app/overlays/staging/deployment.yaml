@@ -48,6 +48,11 @@ spec:
                 configMapKeyRef:
                   name: chartsmith-configs
                   key: NEXT_PUBLIC_GOOGLE_REDIRECT_URI
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: chartsmith-secrets
+                  key: ANTHROPIC_API_KEY
           resources:
             requests:
               cpu: 100m
