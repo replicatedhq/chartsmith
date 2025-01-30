@@ -1,10 +1,13 @@
 "use server";
 
 import { Session } from "@/lib/types/session";
-import { createWorkspace } from "../workspace";
+import { createPlan, createWorkspace } from "../workspace";
 import { Plan } from "@/lib/types/workspace";
+import { logger } from "@/lib/utils/logger";
 
-export async function createWorkspaceAction(session: Session, createdType: string, prompt: string): Promise<Plan> {
-  const plan = await createWorkspace(createdType, prompt, session.user.id);
-  return plan;
+export async function createWorkspaceFromPromptAction(session: Session, prompt: string): Promise<Plan> {
+  logger.info("Creating workspace from prompt", { prompt, userId: session.user.id });
+  const w = await createWorkspace("prompt", session.user.id);
+  const p = await createPlan(session.user.id, prompt, w.id);
+  return p;
 }

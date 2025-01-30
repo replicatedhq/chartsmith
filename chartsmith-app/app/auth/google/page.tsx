@@ -6,7 +6,7 @@ import { Loader2 } from "lucide-react";
 import { useToast } from "@/components/toast/use-toast";
 import { Card } from "@/components/ui/Card";
 import { exchangeGoogleCodeForSession } from "@/lib/auth/actions/exchange-google-code";
-import { createWorkspaceAction } from "@/lib/workspace/actions/create-workspace-from-prompt";
+import { createWorkspaceFromPromptAction } from "@/lib/workspace/actions/create-workspace-from-prompt";
 import { findSession } from "@/lib/auth/session";
 import { logger } from "@/lib/utils/logger";
 
@@ -43,7 +43,7 @@ function GoogleCallback() {
               if (!session) {
                 throw new Error("Failed to get session");
               }
-              const plan = await createWorkspaceAction(session, "prompt", pendingPrompt);
+              const plan = await createWorkspaceFromPromptAction(session, pendingPrompt);
 
               // set the plan id in local storage, so that the workspace page knows which plan to follow
               localStorage.setItem('planId', plan.id);

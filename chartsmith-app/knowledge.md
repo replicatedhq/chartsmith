@@ -148,6 +148,11 @@
   - Use h-[calc(100vh-3.5rem)] for containers below nav bar (3.5rem is nav height)
   - Use h-full with overflow-auto on parent and py-8 on child for padding
   - Add min-h-0 to prevent flex children from expanding beyond parent
+  - For centered single-card layouts:
+    - Use max-w-3xl with mx-auto for consistent width
+    - Add px-4 for mobile padding
+    - Use border-dark-border/40 for subtle card borders
+    - Add pb-16 for bottom spacing
   - For mobile viewport height:
     - Set CSS variable --vh using window.innerHeight * 0.01
     - Update on window resize
@@ -196,7 +201,8 @@ Button styling:
 
 Message styling:
 - Regular chat messages: bg-dark-border/40 (dark) or bg-gray-100 (light)
-- User messages: bg-primary/20 (dark) or bg-primary/10 (light) with rounded-tr-sm
+- User messages: bg-primary/20 with rounded-tr-sm and text-gray-200 (dark) or bg-primary/10 with text-gray-700 (light)
+- Assistant messages: bg-dark-border/40 with text-gray-200 and label text-gray-400 (dark) or bg-gray-100 with text-gray-700 and label text-gray-500 (light)
 - Plan messages: bg-dark-border/40 (dark) or bg-gray-100 (light) with rounded-tl-sm and "Proposed Plan" label
 
 Dark theme:
