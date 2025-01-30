@@ -21,13 +21,13 @@ export function ImportChart({ url }: ImportChartProps) {
     if (!session) return;
 
     createWorkspaceFromUrlAction(session, url).then((w) => setWorkspace(w));
-  }, [session]);
+  }, [session, url]);
 
   useEffect(() => {
     if (workspace) {
       router.push(`/workspace/${workspace.id}`);
     }
-  }, [workspace]);
+  }, [workspace, router]);
 
   return (
     <div className="px-4 w-full max-w-3xl py-8 pb-16 mx-auto relative">

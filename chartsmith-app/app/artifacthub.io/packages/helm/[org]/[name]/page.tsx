@@ -1,15 +1,14 @@
 import { ImportChart } from "@/components/ImportChart";
 
 interface ArtifactHubImportPageProps {
-  params: {
+  params: Promise<{
     org: string;
     name: string;
-  };
+  }>;
 }
 
 export default async function ArtifactHubImportPage({ params }: ArtifactHubImportPageProps) {
-  const resolvedParams = await params;
-  const { org, name } = resolvedParams;
+  const { org, name } = await params;
 
   const url = `https://artifacthub.io/packages/helm/${org}/${name}`;
 
