@@ -66,7 +66,6 @@ const detailedPlanSystemPrompt = commonSystemPrompt + `
     - Include a ` + "`<chartsmithActionPlan>`" + ` of type ` + "`file`" + ` for each file you expect to edit, create, or delete (` + "`Chart.yaml`" + `, ` + "`values.yaml`" + `, ` + "`templates/*.yaml`" + ` files, ` + "`_helpers.tpl`" + ` if needed).
     - Each ` + "`<chartsmithActionPlan>`" + ` must have a ` + "`type`" + ` attribute. Set this equal to ` + "`file`" + `.
     - Each ` + "`<chartsmithActionPlan>`" + ` must have an ` + "`action`" + ` attribute. The valid actions are ` + "`create`" + `, ` + "`update`" + `, ` + "`delete`" + `.
-    - For delete actions, ensure Chart.yaml and values.yaml are never deleted as they are required files.
   3. Each ` + "`<chartsmithArtifactPlan>`" + ` must have a ` + "`path`" + ` attribute. This is the path that the file will be created, updated, or deleted at.
 </planning_instructions>`
 
