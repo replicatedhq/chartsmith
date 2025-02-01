@@ -9,7 +9,7 @@ import (
 	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 )
 
-func CreateNonPlanChatMessage(ctx context.Context, streamCh chan string, doneCh chan error, w *workspacetypes.Workspace, chatMessage *workspacetypes.Chat) error {
+func ConversationalChatMessage(ctx context.Context, streamCh chan string, doneCh chan error, w *workspacetypes.Workspace, chatMessage *workspacetypes.Chat) error {
 	client, err := newAnthropicClient(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to create anthropic client: %w", err)
@@ -23,11 +23,14 @@ func CreateNonPlanChatMessage(ctx context.Context, streamCh chan string, doneCh 
 	var c *workspacetypes.Chart
 	c = &w.Charts[0]
 
-	currentChartUserMessage, err := summarizeChart(ctx, c)
+	relevantFiles, err := workspace.ChooseRelevantFilesForChatMessage(ctx, w, c.ID, w.CurrentRevision, chatMessage.Prompt)
 	if err != nil {
-		return fmt.Errorf("failed to summarize chart: %w", err)
+		return fmt.Errorf("failed to choose relevant files: %w", err)
 	}
-	messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(currentChartUserMessage)))
+
+	for _, file := range relevantFiles {
+		fmt.Printf("Relevant file: %s, length: %d\n", file.FilePath, len(file.Content))
+	}
 
 	// we need to get the previous plan, and then all followup chat messages since that plan
 	plan, err := workspace.GetMostRecentPlan(ctx, w.ID)

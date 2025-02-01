@@ -16,7 +16,7 @@ import (
 )
 
 func handleExecuteActionNotification(ctx context.Context, planID string, path string) error {
-	logger.Info("Handling execute action notification", zap.String("planID", planID), zap.String("path", path))
+	logger.Info("New execute action notification received", zap.String("plan_id", planID), zap.String("path", path))
 
 	conn := persistence.MustGeUunpooledPostgresSession()
 	defer conn.Close(ctx)
@@ -215,6 +215,11 @@ func handleExecuteActionNotification(ctx context.Context, planID string, path st
 
 			if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
 				return fmt.Errorf("failed to send plan update: %w", err)
+			}
+
+			// trigger embeddings for the files in this workspace
+			if err := workspace.NotifyWorkerToCaptureEmbeddings(ctx, finalUpdatePlan.WorkspaceID, w.CurrentRevision); err != nil {
+				return fmt.Errorf("failed to notify worker to capture embeddings: %w", err)
 			}
 		}
 	}

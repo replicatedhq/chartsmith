@@ -46,12 +46,12 @@ type Workspace struct {
 }
 
 type Revision struct {
-	WorkspaceID     string
-	RevisionNumber  int
-	CreatedAt       time.Time
-	CreatedByUserID string
-	CreatedType     string
-	IsComplete      bool
+	WorkspaceID     string    `json:"workspaceId"`
+	RevisionNumber  int       `json:"revisionNumber"`
+	CreatedAt       time.Time `json:"-"`
+	CreatedByUserID string    `json:"-"`
+	CreatedType     string    `json:"-"`
+	IsComplete      bool      `json:"isComplete"`
 }
 
 type PlanStatus string
@@ -84,9 +84,20 @@ type ActionFile struct {
 }
 
 type Chat struct {
-	ID          string    `json:"id"`
-	WorkspaceID string    `json:"-"`
-	Prompt      string    `json:"prompt"`
-	Response    string    `json:"response"`
-	CreatedAt   time.Time `json:"createdAt"`
+	ID               string    `json:"id"`
+	WorkspaceID      string    `json:"-"`
+	Prompt           string    `json:"prompt"`
+	Response         string    `json:"response"`
+	CreatedAt        time.Time `json:"createdAt"`
+	IsIntentComplete bool      `json:"isIntentComplete"`
+	Intent           *Intent   `json:"intent"`
+}
+
+type Intent struct {
+	IsOffTopic       bool `json:"isOffTopic"`
+	IsPlan           bool `json:"isPlan"`
+	IsConversational bool `json:"isConversational"`
+	IsChartDeveloper bool `json:"isChartDeveloper"`
+	IsChartOperator  bool `json:"isChartOperator"`
+	IsProceed        bool `json:"isProceed"`
 }

@@ -2,18 +2,25 @@ package listener
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/replicatedhq/chartsmith/pkg/llm"
+	"github.com/replicatedhq/chartsmith/pkg/logger"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 	"github.com/replicatedhq/chartsmith/pkg/realtime"
 	realtimetypes "github.com/replicatedhq/chartsmith/pkg/realtime/types"
 	"github.com/replicatedhq/chartsmith/pkg/workspace"
 	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
+	"go.uber.org/zap"
 )
 
 func handleNewPlanNotification(ctx context.Context, planID string) error {
+	logger.Info("New plan notification received",
+		zap.String("plan_id", planID))
+
 	conn := persistence.MustGeUunpooledPostgresSession()
 	defer conn.Close(ctx)
 
@@ -36,8 +43,6 @@ func handleNewPlanNotification(ctx context.Context, planID string) error {
 			fmt.Printf("Failed to update notification status: %v\n", updateErr)
 		}
 	}()
-
-	fmt.Printf("Handling new plan notification: %s\n", planID)
 
 	plan, err := workspace.GetPlan(ctx, nil, planID)
 	if err != nil {
@@ -68,14 +73,14 @@ func handleNewPlanNotification(ctx context.Context, planID string) error {
 	doneCh := make(chan error, 1)
 	go func() {
 		if w.CurrentRevision == 0 {
-			if err := llm.CreateInitialPlan(ctx, streamCh, doneCh, plan); err != nil {
+			if err := createInitialPlan(ctx, streamCh, doneCh, w, plan); err != nil {
 				fmt.Printf("Failed to create initial plan: %v\n", err)
 				processingErr = fmt.Errorf("error creating initial plan: %w", err)
 			}
 		} else {
-			if err := llm.CreatePlan(ctx, streamCh, doneCh, w, plan); err != nil {
-				fmt.Printf("Failed to create plan: %v\n", err)
-				processingErr = fmt.Errorf("error creating plan: %w", err)
+			if err := createUpdatePlan(ctx, streamCh, doneCh, w, plan); err != nil {
+				fmt.Printf("Failed to create update plan: %v\n", err)
+				processingErr = fmt.Errorf("error creating update plan: %w", err)
 			}
 		}
 	}()
@@ -129,4 +134,89 @@ func handleNewPlanNotification(ctx context.Context, planID string) error {
 	}
 
 	return nil
+}
+
+func createInitialPlan(ctx context.Context, streamCh chan string, doneCh chan error, w *workspacetypes.Workspace, plan *workspacetypes.Plan) error {
+	chatMessages, err := workspace.ListChatMessagesForWorkspace(ctx, w.ID)
+	if err != nil {
+		return fmt.Errorf("error listing chat messages after plan: %w", err)
+	}
+
+	opts := llm.CreateInitialPlanOpts{
+		ChatMessages: chatMessages,
+	}
+	if err := llm.CreateInitialPlan(ctx, streamCh, doneCh, opts); err != nil {
+		return fmt.Errorf("error creating initial plan: %w", err)
+	}
+
+	return nil
+}
+
+// createUpdatePlan is our background processing task that creates a plan for any revision that's not the initial
+func createUpdatePlan(ctx context.Context, streamCh chan string, doneCh chan error, w *workspacetypes.Workspace, plan *workspacetypes.Plan) error {
+	chartFiles := []workspacetypes.File{}
+	chartFileNamesWithoutPath := map[string]workspacetypes.File{}
+	chartFileNamesWithPath := map[string]workspacetypes.File{}
+	for _, file := range w.Charts[0].Files {
+		chartFiles = append(chartFiles, file)
+		chartFileNamesWithoutPath[strings.ToLower(filepath.Base(file.FilePath))] = file
+		chartFileNamesWithPath[strings.ToLower(file.FilePath)] = file
+	}
+
+	chartFilesMentioned := []workspacetypes.File{}
+
+	chatMessages := []workspacetypes.Chat{}
+	for _, chatMessageID := range plan.ChatMessageIDs {
+		chatMessage, err := workspace.GetChatMessage(ctx, chatMessageID)
+		if err != nil {
+			return err
+		}
+
+		// split the user message on words and check if any of the words are in the chart file names
+		words := strings.Fields(chatMessage.Prompt)
+
+		for _, word := range words {
+			if file, ok := chartFileNamesWithoutPath[strings.ToLower(word)]; ok {
+				chartFilesMentioned = append(chartFilesMentioned, file)
+			}
+
+			if file, ok := chartFileNamesWithPath[word]; ok {
+				chartFilesMentioned = append(chartFilesMentioned, file)
+			}
+		}
+
+		chatMessages = append(chatMessages, *chatMessage)
+	}
+
+	chartSummary, err := summarizeChart(ctx, &w.Charts[0])
+	if err != nil {
+		return fmt.Errorf("failed to summarize chart: %w", err)
+	}
+
+	opts := llm.CreatePlanOpts{
+		ChatMessages: chatMessages,
+		Chart:        &w.Charts[0],
+		ChartSummary: chartSummary,
+	}
+
+	if err := llm.CreatePlan(ctx, streamCh, doneCh, opts); err != nil {
+		return fmt.Errorf("error creating update plan: %w", err)
+	}
+
+	return nil
+}
+
+func summarizeChart(ctx context.Context, c *workspacetypes.Chart) (string, error) {
+	filesWithContent := map[string]string{}
+
+	for _, file := range c.Files {
+		filesWithContent[file.FilePath] = file.Content
+	}
+
+	encoded, err := json.Marshal(filesWithContent)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal files with content: %w", err)
+	}
+
+	return fmt.Sprintf("The chart we are basing our work on looks like this: \n %s", string(encoded)), nil
 }

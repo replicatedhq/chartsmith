@@ -4,7 +4,6 @@ import React, { useEffect, useState } from "react";
 import { X, AlertTriangle, Star } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { Message, Prompt } from "./editor/types";
-import { getChatMessageForFeedback } from "@/lib/workspace/actions/chat-chat-message";
 import { Session } from "@/lib/types/session";
 
 interface FeedbackModalProps {
@@ -21,12 +20,6 @@ export function FeedbackModal({ isOpen, onClose, message, chatId, workspaceId, s
   const [description, setDescription] = useState("");
   const [rating, setRating] = useState<number>(0);
   const [prompt, setPrompt] = useState<Prompt | null>(null);
-
-  useEffect(() => {
-    if (isOpen && chatId) {
-      getChatMessageForFeedback(session, workspaceId, chatId).then(setPrompt);
-    }
-  }, [chatId, session, workspaceId, isOpen]);
 
   // Handle ESC key
   useEffect(() => {

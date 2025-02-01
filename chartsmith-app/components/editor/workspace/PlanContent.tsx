@@ -14,7 +14,7 @@ interface PlanContentProps {
   handlePlanUpdated: (plan: Plan) => void;
   setMessages?: React.Dispatch<React.SetStateAction<Message[]>>;
   setWorkspace?: React.Dispatch<React.SetStateAction<Workspace>>;
-  onSendMessage?: (message: string) => void;
+  onSendMessage: (message: string) => void;
 }
 
 export function PlanContent({ session, workspace, messages, handlePlanUpdated, setMessages, setWorkspace, onSendMessage }: PlanContentProps) {
@@ -137,6 +137,7 @@ export function PlanContent({ session, workspace, messages, handlePlanUpdated, s
                       setWorkspace={setWorkspace}
                       workspace={workspace}
                       messages={messages}
+                      onSendMessage={onSendMessage}
                     />
                   </>
                 ) : (

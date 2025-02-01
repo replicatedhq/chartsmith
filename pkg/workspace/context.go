@@ -8,14 +8,22 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/replicatedhq/chartsmith/pkg/embedding"
+	"github.com/replicatedhq/chartsmith/pkg/logger"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 	"github.com/replicatedhq/chartsmith/pkg/workspace/types"
+	"go.uber.org/zap"
 )
 
-func ChooseRelevantFilesForChatMessage(ctx context.Context, w *types.Workspace, chartID string, revisionNumber int, c *types.Chat) ([]types.File, error) {
-	fmt.Printf("Choosing relevant files for workspace %s, chart %s, revision %d, chat message %s\n", w.ID, chartID, revisionNumber, c.Prompt)
+func ChooseRelevantFilesForChatMessage(ctx context.Context, w *types.Workspace, chartID string, revisionNumber int, prompt string) ([]types.File, error) {
+	logger.Debug("Choosing relevant files for chat message",
+		zap.String("workspace_id", w.ID),
+		zap.String("chart_id", chartID),
+		zap.Int("revision_number", revisionNumber),
+		zap.String("prompt", prompt),
+	)
+
 	// Get embeddings for the prompt
-	promptEmbeddings, err := embedding.Embeddings(c.Prompt)
+	promptEmbeddings, err := embedding.Embeddings(prompt)
 	if err != nil {
 		return nil, fmt.Errorf("error getting embeddings for prompt: %w", err)
 	}
@@ -54,7 +62,6 @@ func ChooseRelevantFilesForChatMessage(ctx context.Context, w *types.Workspace, 
 		FROM similarities
 		WHERE similarity > 0.7  -- Threshold for relevance
 		ORDER BY similarity DESC
-		LIMIT 10  -- Limit to most relevant files
 	`
 
 	rows, err := conn.Query(ctx, query, promptEmbeddings, w.ID, revisionNumber)

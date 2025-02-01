@@ -263,6 +263,14 @@ State Management:
 - Check for undefined rather than falsy values when conditionally rendering responses
 - For streaming responses, validate isComplete as boolean type rather than checking for undefined
 - For streaming UI transitions, check isComplete on last message before showing next step
+- When handling revision updates:
+  - Always fetch fresh workspace state from server
+  - Refresh messages along with workspace state
+  - Use workspaceId from revision event for reliability
+- For chat messages:
+  - Show "thinking..." while determining intent (isIntentComplete is false)
+  - Show "generating response..." after intent is determined but before response arrives
+  - ChatMessage type requires isIntentComplete and intent fields from backend
 - When updating state from real-time events:
   - Update local state immediately for optimistic UI
   - Handle errors and revert state if needed
@@ -347,6 +355,10 @@ State Management:
 - Check for undefined rather than falsy values when conditionally rendering responses
 - For streaming responses, validate isComplete as boolean type rather than checking for undefined
 - For streaming UI transitions, check isComplete on last message before showing next step
+- For plan messages:
+  - Show loading plan state when intent is complete but no plan exists yet
+  - Match plans to messages using plan.chatMessageIds.includes(message.id)
+  - Remove loading state when matching plan is found
 - When normalizing Centrifugo messages:
   - Check both top-level message.data and nested message fields for state flags
   - Use strict boolean comparison (=== true) for all flags

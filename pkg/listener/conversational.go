@@ -14,8 +14,9 @@ import (
 	"go.uber.org/zap"
 )
 
-func handleNewNonPlanChatMessageNotification(ctx context.Context, chatMessageId string) error {
-	logger.Info("Handling new non-plan chat message notification", zap.String("chatMessageId", chatMessageId))
+func handleConverationalNotification(ctx context.Context, chatMessageId string) error {
+	logger.Info("Handling new conversational chat message notification",
+		zap.String("chatMessageId", chatMessageId))
 
 	conn := persistence.MustGeUunpooledPostgresSession()
 	defer conn.Close(ctx)
@@ -40,8 +41,6 @@ func handleNewNonPlanChatMessageNotification(ctx context.Context, chatMessageId 
 		}
 	}()
 
-	fmt.Printf("Handling new non-plan chat message notification: %s\n", chatMessageId)
-
 	chatMessage, err := workspace.GetChatMessage(ctx, chatMessageId)
 	if err != nil {
 		return fmt.Errorf("error getting chat message: %w", err)
@@ -64,9 +63,9 @@ func handleNewNonPlanChatMessageNotification(ctx context.Context, chatMessageId 
 	streamCh := make(chan string, 1)
 	doneCh := make(chan error, 1)
 	go func() {
-		if err := llm.CreateNonPlanChatMessage(ctx, streamCh, doneCh, w, chatMessage); err != nil {
-			fmt.Printf("Failed to create non-plan chat message: %v\n", err)
-			processingErr = fmt.Errorf("error creating non-plan chat message: %w", err)
+		if err := llm.ConversationalChatMessage(ctx, streamCh, doneCh, w, chatMessage); err != nil {
+			fmt.Printf("Failed to create conversational chat message: %v\n", err)
+			processingErr = fmt.Errorf("error creating conversational chat message: %w", err)
 		}
 	}()
 

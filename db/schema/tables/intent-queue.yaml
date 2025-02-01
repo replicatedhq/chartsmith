@@ -1,0 +1,19 @@
+database: chartsmith
+name: intent_queue
+schema:
+  postgres:
+    primaryKey:
+    - chat_message_id
+    columns:
+    - name: chat_message_id
+      type: text
+      constraints:
+        notNull: true
+    - name: created_at
+      type: timestamp
+      constraints:
+        notNull: true
+    - name: started_at
+      type: timestamp
+    - name: completed_at
+      type: timestamp

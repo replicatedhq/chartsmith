@@ -1,0 +1,24 @@
+database: chartsmith
+name: summarize_queue
+schema:
+  postgres:
+    primaryKey:
+    - file_id
+    - revision
+    columns:
+    - name: file_id
+      type: text
+      constraints:
+        notNull: true
+    - name: revision
+      type: integer
+      constraints:
+        notNull: true
+    - name: created_at
+      type: timestamp
+      constraints:
+        notNull: true
+    - name: started_at
+      type: timestamp
+    - name: completed_at
+      type: timestamp

@@ -19,6 +19,11 @@ const initialPlanInstructions = `
 - Refer the the process as "creating" a chart, not "editing" a chart.
 - The user is a developer who understands Helm and Kubernetes.
 - You can be technical in your response, but don't write code.
+- Avoid refering to the base chart in your response. For the purpose of this plan, you will describe your plan as if you are creating a new chart.
+- Minimize the use of bullet lists in your response.
+- Be specific when describing the types of environments and versions of Kubernetes and Helm you will support.
+- Be specific when describing any and all end customer requirements you are aware of.
+- Be specific when describing any dependencies you are including.
 `
 
 const createKnowledge = `

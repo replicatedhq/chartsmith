@@ -6,6 +6,16 @@ export enum PromptType {
   Chat = "chat",
 }
 
+export enum PromptRole {
+  Packager = "packager",
+  User = "user",
+}
+
+export interface PromptIntent {
+  intent: PromptType;
+  role: PromptRole;
+}
+
 export async function promptType(message: string): Promise<PromptType> {
   try {
     const anthropic = new Anthropic({
