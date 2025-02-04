@@ -2,15 +2,19 @@ package llm
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
-	"github.com/replicatedhq/chartsmith/pkg/workspace"
 	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 )
 
-func CreatePlan(ctx context.Context, streamCh chan string, doneCh chan error, w *workspacetypes.Workspace, plan *workspacetypes.Plan) error {
+type CreatePlanOpts struct {
+	ChatMessages []workspacetypes.Chat
+	Chart        *workspacetypes.Chart
+	ChartSummary string
+}
+
+func CreatePlan(ctx context.Context, streamCh chan string, doneCh chan error, opts CreatePlanOpts) error {
 	client, err := newAnthropicClient(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to create anthropic client: %w", err)
@@ -21,25 +25,9 @@ func CreatePlan(ctx context.Context, streamCh chan string, doneCh chan error, w 
 		anthropic.NewAssistantMessage(anthropic.NewTextBlock(initialPlanInstructions)),
 	}
 
-	var c *workspacetypes.Chart
-	c = &w.Charts[0]
+	messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(opts.ChartSummary)))
 
-	currentChartUserMessage, err := summarizeChart(ctx, c)
-	if err != nil {
-		return fmt.Errorf("failed to summarize chart: %w", err)
-	}
-	messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(currentChartUserMessage)))
-
-	chatMessages := []workspacetypes.Chat{}
-	for _, chatMessageID := range plan.ChatMessageIDs {
-		chatMessage, err := workspace.GetChatMessage(ctx, chatMessageID)
-		if err != nil {
-			return err
-		}
-		chatMessages = append(chatMessages, *chatMessage)
-	}
-
-	for _, chatMessage := range chatMessages {
+	for _, chatMessage := range opts.ChatMessages {
 		messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(chatMessage.Prompt)))
 		if chatMessage.Response != "" {
 			messages = append(messages, anthropic.NewAssistantMessage(anthropic.NewTextBlock(chatMessage.Response)))
@@ -75,19 +63,4 @@ func CreatePlan(ctx context.Context, streamCh chan string, doneCh chan error, w 
 
 	doneCh <- nil
 	return nil
-}
-
-func summarizeChart(ctx context.Context, c *workspacetypes.Chart) (string, error) {
-	filesWithContent := map[string]string{}
-
-	for _, file := range c.Files {
-		filesWithContent[file.FilePath] = file.Content
-	}
-
-	encoded, err := json.Marshal(filesWithContent)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal files with content: %w", err)
-	}
-
-	return fmt.Sprintf("The chart we are basing our work on looks like this: \n %s", string(encoded)), nil
 }

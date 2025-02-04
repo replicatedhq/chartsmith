@@ -4,8 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -37,6 +35,18 @@ func ListUserIDsForWorkspace(ctx context.Context, workspaceID string) ([]string,
 	}
 
 	return []string{userID}, nil
+}
+
+func SetChatMessageResponse(ctx context.Context, chatMessageID string, response string) error {
+	conn := persistence.MustGetPooledPostgresSession()
+	defer conn.Release()
+
+	query := `UPDATE workspace_chat SET response = $1 WHERE id = $2`
+	_, err := conn.Exec(ctx, query, response, chatMessageID)
+	if err != nil {
+		return fmt.Errorf("error updating chat message response: %w", err)
+	}
+	return nil
 }
 
 func AppendChatMessageResponse(ctx context.Context, chatMessageID string, response string) error {
@@ -344,6 +354,10 @@ func SetCurrentRevision(ctx context.Context, tx pgx.Tx, workspace *types.Workspa
 		}
 	}
 
+	if err := NotifyWorkerToCaptureEmbeddings(ctx, workspace.ID, revision); err != nil {
+		return nil, fmt.Errorf("error notifying worker to capture embeddings: %w", err)
+	}
+
 	return GetWorkspace(ctx, workspace.ID)
 }
 
@@ -394,8 +408,11 @@ func NotifyWorkerToCaptureEmbeddings(ctx context.Context, workspaceID string, re
 	for _, file := range filesNeedingSummariesAndEmbeddings {
 		payload := fmt.Sprintf("%s/%d", file.ID, file.RevisionNumber)
 
+		// write to the summarize_queue table
+		conn.Exec(ctx, `INSERT INTO summarize_queue (file_id, revision, created_at) VALUES ($1, $2, now())`, file.ID, file.RevisionNumber)
+
 		// pg_notify this with the payload
-		conn.Exec(ctx, `SELECT pg_notify('new_file', $1)`, payload)
+		conn.Exec(ctx, `SELECT pg_notify('new_summarize', $1)`, payload)
 	}
 
 	return nil
@@ -429,46 +446,4 @@ func SetFileContentInWorkspace(ctx context.Context, workspaceID string, revision
 	}
 
 	return nil
-}
-
-func ParseGVK(filePath string, content string) (string, error) {
-	if filepath.Ext(filePath) != ".yaml" {
-		return "", nil
-	}
-
-	if filepath.Base(filePath) == "values.yaml" {
-		return "values", nil
-	}
-
-	if filepath.Base(filePath) == "Chart.yaml" {
-		return "chart", nil
-	}
-
-	var group string
-	var version string
-	var kind string
-
-	lines := strings.Split(content, "\n")
-	for _, line := range lines {
-		if strings.HasPrefix(line, "apiVersion:") {
-			groupVersionParts := strings.Split(strings.TrimSpace(strings.TrimPrefix(line, "apiVersion:")), "/")
-			if len(groupVersionParts) == 2 {
-				group = groupVersionParts[0]
-				version = groupVersionParts[1]
-			} else {
-				version = groupVersionParts[0]
-			}
-		}
-		if strings.HasPrefix(line, "kind:") {
-			kind = strings.TrimSpace(strings.TrimPrefix(line, "kind:"))
-		}
-	}
-
-	if group == "" && version != "" && kind != "" {
-		return fmt.Sprintf("%s/%s", version, kind), nil
-	} else if group != "" && version != "" && kind != "" {
-		return fmt.Sprintf("%s/%s/%s", group, version, kind), nil
-	}
-
-	return "", nil
 }

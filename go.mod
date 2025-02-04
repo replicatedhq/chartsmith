@@ -1,12 +1,16 @@
 module github.com/replicatedhq/chartsmith
 
-go 1.23.0
+go 1.23.4
+
+toolchain go1.23.5
 
 require (
 	github.com/anthropics/anthropic-sdk-go v0.2.0-alpha.8
 	github.com/aws/aws-sdk-go v1.55.5
 	github.com/gin-gonic/gin v1.10.0
 	github.com/jackc/pgx/v5 v5.7.2
+	github.com/jpoz/groq v0.0.0-20240513145022-7a02894105a0
+	github.com/ollama/ollama v0.5.7
 	github.com/slack-go/slack v0.15.0
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/viper v1.19.0
@@ -14,6 +18,7 @@ require (
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.35.0
 	github.com/tuvistavie/securerandom v0.0.0-20140719024926-15512123a948
 	go.uber.org/zap v1.27.0
+	golang.org/x/time v0.8.0
 	gopkg.in/yaml.v2 v2.4.0
 )
 
@@ -21,10 +26,12 @@ require (
 	dario.cat/mergo v1.0.0 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
+	github.com/buger/jsonparser v1.1.1 // indirect
 	github.com/bytedance/sonic v1.12.7 // indirect
 	github.com/bytedance/sonic/loader v0.2.2 // indirect
 	github.com/cenkalti/backoff/v4 v4.2.1 // indirect
 	github.com/cloudwego/base64x v0.1.4 // indirect
+	github.com/conneroisu/groq-go v0.9.5 // indirect
 	github.com/containerd/containerd v1.7.18 // indirect
 	github.com/containerd/log v0.1.0 // indirect
 	github.com/containerd/platforms v0.2.1 // indirect

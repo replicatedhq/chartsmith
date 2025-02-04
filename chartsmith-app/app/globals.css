@@ -35,7 +35,7 @@ body {
 }
 
 .markdown-content {
-  @apply prose max-w-none text-[12px];
+  @apply text-[11px];
 }
 
 .dark .markdown-content {
@@ -43,7 +43,7 @@ body {
 }
 
 .markdown-content p {
-  @apply my-1.5;
+  @apply mb-2;
 }
 
 .markdown-content ul {
@@ -55,11 +55,11 @@ body {
 }
 
 .markdown-content code {
-  @apply px-1.5 py-0.5 rounded bg-gray-100 dark:bg-dark-border/80 font-mono text-sm text-gray-800 dark:text-gray-200;
+  @apply font-mono text-[11px];
 }
 
 .markdown-content pre {
-  @apply p-3 my-3 rounded bg-gray-100 dark:bg-dark-border/80 overflow-auto;
+  @apply bg-dark-surface/40 p-4 rounded-md my-2 overflow-x-auto;
 }
 
 .markdown-content pre code {

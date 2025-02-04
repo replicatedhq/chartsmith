@@ -8,8 +8,11 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/replicatedhq/chartsmith/pkg/logger"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 	"github.com/replicatedhq/chartsmith/pkg/workspace/types"
+	"github.com/tuvistavie/securerandom"
+	"go.uber.org/zap"
 )
 
 var ErrNoPlan = errors.New("no plan found")
@@ -271,5 +274,29 @@ func SetPlanIsComplete(ctx context.Context, planID string, isComplete bool) erro
 	if err != nil {
 		return fmt.Errorf("error updating plan is complete: %w", err)
 	}
+	return nil
+}
+
+func CreatePlan(ctx context.Context, chatMessageID string, workspaceID string) error {
+	logger.Info("creating plan", zap.String("chat_message_id", chatMessageID), zap.String("workspace_id", workspaceID))
+	conn := persistence.MustGetPooledPostgresSession()
+	defer conn.Release()
+
+	id, err := securerandom.Hex(6)
+	if err != nil {
+		return fmt.Errorf("error generating plan ID: %w", err)
+	}
+
+	chatMessageIDs := []string{chatMessageID}
+	query := `INSERT INTO workspace_plan
+(id, workspace_id, chat_message_ids, created_at, updated_at, version, status, description, is_complete)
+VALUES
+($1, $2, $3, $4, $5, $6, $7, $8, $9)`
+	_, err = conn.Exec(ctx, query, id, workspaceID, chatMessageIDs, time.Now(), time.Now(), 1, types.PlanStatusPending, "", false)
+	if err != nil {
+		return fmt.Errorf("error creating plan: %w", err)
+	}
+
+	conn.Exec(ctx, `SELECT pg_notify('new_plan', $1)`, id)
 	return nil
 }

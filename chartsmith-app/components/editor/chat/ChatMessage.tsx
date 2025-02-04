@@ -9,6 +9,7 @@ import { FeedbackModal } from "@/components/FeedbackModal";
 import { ignorePlanAction } from "@/lib/workspace/actions/ignore-plan";
 import { createRevisionAction } from "@/lib/workspace/actions/create-revision";
 import { Send, ThumbsUp, ThumbsDown } from "lucide-react";
+import ReactMarkdown from 'react-markdown';
 
 export interface ChatMessageProps {
   message: Message;
@@ -84,21 +85,34 @@ export function ChatMessage({
               className="w-6 h-6 rounded-full flex-shrink-0"
             />
             <div className="flex-1">
+              <div className="flex-1">
               <div className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} text-[12px] pt-0.5`}>{message.prompt}</div>
+              {!message.isIntentComplete && (
+                <div className="flex items-center gap-2 mt-2 border-t border-primary/20 pt-2">
+                  <div className="flex-shrink-0 animate-spin rounded-full h-3 w-3 border border-t-transparent border-primary"></div>
+                  <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>thinking...</div>
+                </div>
+              )}
+            </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Assistant Message - only show if there's a response */}
-      {message.response && (
+      {/* Assistant Message - show if there's a response, or if intent is complete for non-plan messages */}
+      {(message.response || (message.isIntentComplete && !message.intent?.isPlan)) && (
         <div className="px-2 py-1">
           <div className={`p-3 rounded-2xl ${theme === "dark" ? "bg-dark-border/40" : "bg-gray-100"} rounded-tl-sm w-full`}>
             <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"} mb-1`}>ChartSmith</div>
-            <div className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} ${message.isIgnored ? "opacity-50 line-through" : ""} text-[12px] whitespace-pre-wrap`}>
-              {(() => {
-                return message.response || (!message.isComplete ? "..." : "");
-              })()}
+            <div className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} ${message.isIgnored ? "opacity-50 line-through" : ""} text-[12px] markdown-content`}>
+              {message.response ? (
+                <ReactMarkdown>{message.response}</ReactMarkdown>
+              ) : (!message.intent?.isPlan && (
+                <div className="flex items-center gap-2">
+                  <div className="flex-shrink-0 animate-spin rounded-full h-3 w-3 border border-t-transparent border-primary"></div>
+                  <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>generating response...</div>
+                </div>
+              ))}
             </div>
             {message.isComplete && !message.isApplied && showActions && onApplyChanges && (
               <div className="mt-4 space-y-4 border-t border-gray-700/10 pt-4">
@@ -158,46 +172,48 @@ export function ChatMessage({
             )}
             {showChatInput && (
               <div className="mt-6 border-t border-dark-border/20">
-                <div className="flex items-center justify-between pt-4 pb-3">
-                  <div className="flex gap-2">
+                {message.intent?.isPlan && (
+                  <div className="flex items-center justify-between pt-4 pb-3">
+                    <div className="flex gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowReportModal(true)}
+                        className={`p-2 ${theme === "dark" ? "hover:bg-dark-border/40 text-gray-400 hover:text-gray-200" : "hover:bg-gray-100 text-gray-500 hover:text-gray-700"}`}
+                      >
+                        <ThumbsUp className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={async () => {
+                          if (session && workspace?.currentPlans[0]) {
+                            await ignorePlanAction(session, workspaceId, "");
+                          }
+                        }}
+                        className={`p-2 ${theme === "dark" ? "hover:bg-dark-border/40 text-gray-400 hover:text-gray-200" : "hover:bg-gray-100 text-gray-500 hover:text-gray-700"}`}
+                      >
+                        <ThumbsDown className="h-4 w-4" />
+                      </Button>
+                    </div>
                     <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setShowReportModal(true)}
-                      className={`p-2 ${theme === "dark" ? "hover:bg-dark-border/40 text-gray-400 hover:text-gray-200" : "hover:bg-gray-100 text-gray-500 hover:text-gray-700"}`}
-                    >
-                      <ThumbsUp className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
+                      variant="default"
                       size="sm"
                       onClick={async () => {
                         if (session && workspace?.currentPlans[0]) {
-                          await ignorePlanAction(session, workspaceId, "");
+                          const updatedWorkspace = await createRevisionAction(session, workspace.currentPlans[0].id);
+                          if (updatedWorkspace && setWorkspace) {
+                            setWorkspace(updatedWorkspace);
+                          }
                         }
                       }}
-                      className={`p-2 ${theme === "dark" ? "hover:bg-dark-border/40 text-gray-400 hover:text-gray-200" : "hover:bg-gray-100 text-gray-500 hover:text-gray-700"}`}
+                      className="min-w-[100px] bg-primary hover:bg-primary/80 text-white"
                     >
-                      <ThumbsDown className="h-4 w-4" />
+                      Proceed
                     </Button>
                   </div>
-                  <Button
-                    variant="default"
-                    size="sm"
-                    onClick={async () => {
-                      if (session && workspace?.currentPlans[0]) {
-                        const updatedWorkspace = await createRevisionAction(session, workspace.currentPlans[0].id);
-                        if (updatedWorkspace && setWorkspace) {
-                          setWorkspace(updatedWorkspace);
-                        }
-                      }
-                    }}
-                    className="min-w-[100px] bg-primary hover:bg-primary/80 text-white"
-                  >
-                    Proceed
-                  </Button>
-                </div>
-                <div className="pt-4 border-t border-dark-border/10">
+                )}
+                <div className={`pt-4 ${message.intent?.isPlan ? "border-t border-dark-border/10" : ""}`}>
                   <form onSubmit={handleSubmitChat} className="relative">
                     <textarea
                       ref={textareaRef}

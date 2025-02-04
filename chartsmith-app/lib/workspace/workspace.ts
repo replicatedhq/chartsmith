@@ -99,6 +99,13 @@ export async function createWorkspace(createdType: string, userId: string, baseC
       }
 
       await client.query("COMMIT");
+
+      // now that that's commited, let's get all of the file ids, and notify the worker so that we capture embeddings
+      const files = await listFilesForWorkspace(id, initialRevisionNumber);
+      for (const file of files) {
+        await client.query(`INSERT INTO summarize_queue (file_id, revision, created_at) VALUES ($1, $2, now())`, [file.id, initialRevisionNumber]);
+        await client.query(`SELECT pg_notify('new_summarize', $1)`, [file.id + "/" + initialRevisionNumber]);
+      }
     } catch (err) {
       // Rollback transaction on error
       await client.query("ROLLBACK");
@@ -120,30 +127,52 @@ export async function createWorkspace(createdType: string, userId: string, baseC
   }
 }
 
-export async function createNonPlanMessage(userId: string, prompt: string, workspaceId: string, planId: string, response?: string): Promise<ChatMessage> {
-  logger.info("Creating non-plan message", { userId, prompt, workspaceId, planId });
+export enum ChatMessageIntent {
+  PLAN = "plan",
+  NON_PLAN = "non-plan",
+}
+
+export interface CreateChatMessageParams {
+  prompt?: string;
+  response?: string;
+  knownIntent?: ChatMessageIntent;
+}
+
+export async function createChatMessage(userId: string, workspaceId: string, params: CreateChatMessageParams): Promise<ChatMessage> {
+  logger.info("Creating chat message", { userId, workspaceId, params });
   try {
     const client = getDB(await getParam("DB_URI"));
     const chatMessageId = srs.default({ length: 12, alphanumeric: true });
     await client.query(
       `INSERT INTO workspace_chat (id, workspace_id, created_at, sent_by, prompt, response, revision_number)
       VALUES ($1, $2, now(), $3, $4, $5, 0)`,
-      [chatMessageId, workspaceId, userId, prompt, response],
+      [chatMessageId, workspaceId, userId, params.prompt, params.response],
     );
 
-    if (!response) {
+    if (!params.knownIntent) {
+      // Insert into intent_queue before sending notification
+      await client.query(
+        `INSERT INTO intent_queue (chat_message_id, created_at)
+        VALUES ($1, NOW())`,
+        [chatMessageId]
+      );
+      await client.query(`SELECT pg_notify('new_intent', $1)`, [chatMessageId]);
+    } else if (params.knownIntent === ChatMessageIntent.PLAN) {
+      const p = await createPlan(userId, workspaceId, chatMessageId);
+      await client.query(`SELECT pg_notify('new_plan', $1)`, [p.id]);
+    } else if (params.knownIntent === ChatMessageIntent.NON_PLAN) {
       await client.query(`SELECT pg_notify('new_nonplan_chat_message', $1)`, [chatMessageId]);
     }
 
     return getChatMessage(chatMessageId);
   } catch (err) {
-    logger.error("Failed to create non-plan message", { err });
+    logger.error("Failed to create chat message", { err });
     throw err;
   }
 }
 
-export async function createPlan(userId: string, prompt: string, workspaceId: string, superceedingPlanId?: string): Promise<Plan> {
-  logger.info("Creating plan", { userId, prompt, workspaceId, superceedingPlanId });
+export async function createPlan(userId: string, workspaceId: string, chatMessageId: string, superceedingPlanId?: string): Promise<Plan> {
+  logger.info("Creating plan", { userId, workspaceId, chatMessageId, superceedingPlanId });
   try {
     const client = getDB(await getParam("DB_URI"));
 
@@ -157,13 +186,6 @@ export async function createPlan(userId: string, prompt: string, workspaceId: st
       const workspaceRow = await client.query(`SELECT current_revision_number FROM workspace WHERE id = $1`, [workspaceId]);
 
       const currentRevisionNumber = workspaceRow.rows[0].current_revision_number;
-      const chatId: string = srs.default({ length: 12, alphanumeric: true });
-      await client.query(
-        `INSERT INTO workspace_chat (id, workspace_id, created_at, sent_by, prompt, response, revision_number)
-        VALUES ($1, $2, now(), $3, $4, null, $5)`,
-        [chatId, workspaceId, userId, prompt, currentRevisionNumber],
-      );
-
       const planId: string = srs.default({ length: 12, alphanumeric: true });
 
       const newPlanChatIds = [];
@@ -177,7 +199,7 @@ export async function createPlan(userId: string, prompt: string, workspaceId: st
         }
       }
 
-      newPlanChatIds.push(chatId);
+      newPlanChatIds.push(chatMessageId);
 
       await client.query(
         `INSERT INTO workspace_plan (id, workspace_id, chat_message_ids, created_at, updated_at, version, status, is_complete)
@@ -186,9 +208,6 @@ export async function createPlan(userId: string, prompt: string, workspaceId: st
       );
 
       await client.query("COMMIT");
-
-      // notify
-      await client.query(`SELECT pg_notify('new_plan', $1)`, [planId]);
 
       return getPlan(planId);
     } catch (err) {
@@ -213,6 +232,15 @@ FROM workspace_chat WHERE id = $1`, [chatMessageId]);
       prompt: result.rows[0].prompt,
       response: result.rows[0].response,
       createdAt: result.rows[0].created_at,
+      isIntentComplete: result.rows[0].is_intent_complete,
+      intent: {
+        isConversational: result.rows[0].is_intent_conversational,
+        isPlan: result.rows[0].is_intent_plan,
+        isOffTopic: result.rows[0].is_intent_off_topic,
+        isChartDeveloper: result.rows[0].is_intent_chart_developer,
+        isChartOperator: result.rows[0].is_intent_chart_operator,
+        isProceed: result.rows[0].is_intent_proceed,
+      }
     };
 
     return chatMessage;

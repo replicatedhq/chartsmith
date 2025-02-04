@@ -1,17 +1,15 @@
 import React, { useState, useRef, useEffect, useLayoutEffect } from "react";
+import ReactMarkdown from 'react-markdown';
 import { Message } from "../types";
 import { Session } from "@/lib/types/session";
 import { useTheme } from "../../../contexts/ThemeContext";
 import { Button } from "@/components/ui/Button";
 import { FeedbackModal } from "@/components/FeedbackModal";
 import { ignorePlanAction } from "@/lib/workspace/actions/ignore-plan";
-import { ThumbsUp, ThumbsDown, Send, ChevronDown, ChevronUp, Plus, Pencil, Trash2 } from "lucide-react";
-import ReactMarkdown from "react-markdown";
+import { ThumbsUp, ThumbsDown, Send, ChevronDown, ChevronUp, Plus, Pencil, Trash2 } from "lucide-react"; 
 import { createPlanAction } from "@/lib/workspace/actions/create-plan";
 import { Plan, Workspace } from "@/lib/types/workspace";
 import { createRevisionAction } from "@/lib/workspace/actions/create-revision";
-import { createNonPlanMessageAction } from "@/lib/workspace/actions/create-nonplan-message-action";
-import { promptTypeAction } from "@/lib/workspace/actions/prompt-type-action";
 import { PromptType } from "@/lib/llm/prompt-type";
 
 interface PlanChatMessageProps {
@@ -27,6 +25,7 @@ interface PlanChatMessageProps {
   setWorkspace?: React.Dispatch<React.SetStateAction<Workspace>>;
   workspace?: Workspace;
   messages?: Message[];
+  onSendMessage: (message: string) => void;
 }
 
 export function PlanChatMessage({
@@ -40,7 +39,8 @@ export function PlanChatMessage({
   setMessages,
   setWorkspace,
   workspace,
-  messages
+  messages,
+  onSendMessage
 }: PlanChatMessageProps) {
   const { theme } = useTheme();
   const [showFeedback, setShowFeedback] = useState(false);
@@ -115,100 +115,15 @@ export function PlanChatMessage({
     onProceed?.();
   };
 
-  const createNonPlanMessage = async () => {
-    if (!session || !plan) return;
 
-    const tempId = `temp-${Date.now()}`;
-
-    // Create optimistic message (without a plan)
-    const optimisticMessage: Message = {
-      id: `msg-${tempId}`,
-      prompt: chatInput,
-      response: "...",
-      role: 'user',
-      createdAt: new Date(),
-      workspaceId: plan.workspaceId,
-      userId: session.user.id,
-    };
-
-    // Optimistically update UI
-    setMessages?.(prev => {
-      return [...prev, optimisticMessage];
-    });
-
-    setChatInput("");
-
-    await createNonPlanMessageAction(session, chatInput, plan.workspaceId, plan.id);
-  };
-
-  const createNewPlan = async () => {
-    if (!session || !plan) return;
-
-    const tempId = `temp-${Date.now()}`;
-
-    // Create optimistic message
-    const optimisticMessage: Message = {
-      id: `msg-${tempId}`,
-      prompt: chatInput,
-      response: undefined,
-      role: 'user',
-      createdAt: new Date(),
-      workspaceId: plan.workspaceId,
-      planId: tempId,
-      userId: session.user.id,
-      isOptimistic: true // Add flag to identify optimistic messages
-    };
-
-    // Create optimistic plan with planning status
-    const optimisticPlan: Plan = {
-      id: tempId,
-      description: '', // Empty by default, will be filled by streaming updates
-      status: 'planning',
-      workspaceId: plan.workspaceId,
-      chatMessageIds: [optimisticMessage.id],
-      createdAt: new Date(),
-      actionFiles: [], // Initialize with empty array
-      isComplete: false
-    };
-
-    // Optimistically update UI if handlers provided
-    setMessages?.(prev => {
-      return [...prev, optimisticMessage];
-    });
-
-    // Mark other plans as ignored when adding new plan
-    setWorkspace?.(currentWorkspace => ({
-      ...currentWorkspace,
-      currentPlans: [
-        optimisticPlan,
-        ...currentWorkspace.currentPlans.map(existingPlan => ({
-          ...existingPlan,
-          status: 'ignored'
-        }))
-      ]
-    }));
-
-    // Clear input immediately for better UX
-    setChatInput("");
-
-    // Make actual API call
-    await createPlanAction(session, chatInput, plan.workspaceId, plan.id);
-  }
   const handleSubmitChat = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!session || !plan) return;
+    if (!session || !plan || !chatInput.trim()) return;
 
     setIsSubmitting(true);
     try {
-
-      // The LLM needs to first pass this
-    const promptType = await promptTypeAction(session, plan.workspaceId, chatInput);
-
-      if (promptType === PromptType.Plan) {
-        await createNewPlan();
-      } else {
-        await createNonPlanMessage();
-      }
+      onSendMessage(chatInput);
+      setChatInput("");
     } finally {
       setIsSubmitting(false);
     }
@@ -242,10 +157,10 @@ export function PlanChatMessage({
             plan.status === 'ignored'
               ? `${theme === "dark" ? "text-gray-400" : "text-gray-500"}`
               : `${theme === "dark" ? "text-gray-200" : "text-gray-700"}`
-          } text-[11px] markdown-content ${plan.status === 'ignored' ? 'opacity-75' : ''}`}>
+          } text-[11px] ${plan.status === 'ignored' ? 'opacity-75' : ''}`}>
             {plan.status === 'ignored' && !isExpanded ? (
               <div className="flex items-center justify-between">
-                <div className="line-clamp-2">
+                <div className="line-clamp-2 markdown-content">
                   <ReactMarkdown>{plan.description}</ReactMarkdown>
                 </div>
                 <Button
@@ -258,7 +173,7 @@ export function PlanChatMessage({
                 </Button>
               </div>
             ) : (
-              <div className="relative">
+              <div className="relative markdown-content">
                 <ReactMarkdown>{plan.description}</ReactMarkdown>
                 {plan.status === 'ignored' && (
                   <div className="absolute top-0 right-0">

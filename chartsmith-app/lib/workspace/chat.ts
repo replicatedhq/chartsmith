@@ -18,8 +18,14 @@ export async function listMessagesForWorkspace(workspaceID: string): Promise<Mes
                 workspace_chat.created_at,
                 workspace_chat.sent_by,
                 workspace_chat.prompt,
-                workspace_chat.response
-
+                workspace_chat.response,
+                workspace_chat.is_intent_complete,
+                workspace_chat.is_intent_conversational,
+                workspace_chat.is_intent_plan,
+                workspace_chat.is_intent_off_topic,
+                workspace_chat.is_intent_chart_developer,
+                workspace_chat.is_intent_chart_operator,
+                workspace_chat.is_intent_proceed
             FROM
                 workspace_chat
             WHERE
@@ -46,6 +52,15 @@ export async function listMessagesForWorkspace(workspaceID: string): Promise<Mes
         response: row.response,
         createdAt: row.created_at,
         isComplete: row.response !== null,  // If there's a response, it's complete
+        isIntentComplete: row.is_intent_complete,
+        intent: {
+          isConversational: row.is_intent_conversational,
+          isPlan: row.is_intent_plan,
+          isOffTopic: row.is_intent_off_topic,
+          isChartDeveloper: row.is_intent_chart_developer,
+          isChartOperator: row.is_intent_chart_operator,
+          isProceed: row.is_intent_proceed,
+        },
       };
       messages.push(message);
     }
@@ -95,7 +110,14 @@ export async function getChatMessage(workspaceID: string, chatID: string): Promi
           workspace_chat.created_at,
           workspace_chat.sent_by,
           workspace_chat.prompt,
-          workspace_chat.response
+          workspace_chat.response,
+          workspace_chat.is_intent_complete,
+          workspace_chat.is_intent_conversational,
+          workspace_chat.is_intent_plan,
+          workspace_chat.is_intent_off_topic,
+          workspace_chat.is_intent_chart_developer,
+          workspace_chat.is_intent_chart_operator,
+          workspace_chat.is_intent_proceed
         FROM
           workspace_chat
         WHERE
@@ -113,6 +135,15 @@ export async function getChatMessage(workspaceID: string, chatID: string): Promi
       id: row.id,
       prompt: row.prompt,
       response: row.response,
+      isIntentComplete: row.is_intent_complete,
+      intent: {
+        isConversational: row.is_intent_conversational,
+        isPlan: row.is_intent_plan,
+        isOffTopic: row.is_intent_off_topic,
+        isChartDeveloper: row.is_intent_chart_developer,
+        isChartOperator: row.is_intent_chart_operator,
+        isProceed: row.is_intent_proceed,
+      },
     };
 
     return message;

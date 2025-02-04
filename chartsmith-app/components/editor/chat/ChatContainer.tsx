@@ -162,6 +162,7 @@ export function ChatContainer({ messages, onSendMessage, onApplyChanges, session
                   handlePlanUpdated={handlePlanUpdated}
                   setMessages={setMessages}
                   setWorkspace={setWorkspace}
+                  onSendMessage={onSendMessage}
                 />
               </>
             ) : (

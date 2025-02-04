@@ -9,10 +9,20 @@ import (
 	"github.com/replicatedhq/chartsmith/pkg/logger"
 	"github.com/replicatedhq/chartsmith/pkg/workspace"
 	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
+	"go.uber.org/zap"
 )
 
-func CreateInitialPlan(ctx context.Context, streamCh chan string, doneCh chan error, plan *workspacetypes.Plan) error {
-	logger.Infof("Creating initial plan: %+v\n", plan)
+type CreateInitialPlanOpts struct {
+	ChatMessages  []workspacetypes.Chat
+	PreviousPlans []workspacetypes.Plan
+}
+
+func CreateInitialPlan(ctx context.Context, streamCh chan string, doneCh chan error, opts CreateInitialPlanOpts) error {
+	chatMessageFields := []zap.Field{}
+	for _, chatMessage := range opts.ChatMessages {
+		chatMessageFields = append(chatMessageFields, zap.String("prompt", chatMessage.Prompt))
+	}
+	logger.Info("Creating initial plan", chatMessageFields...)
 
 	client, err := newAnthropicClient(ctx)
 	if err != nil {
@@ -31,16 +41,7 @@ func CreateInitialPlan(ctx context.Context, streamCh chan string, doneCh chan er
 	}
 	messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(bootsrapChartUserMessage)))
 
-	chatMessages := []workspacetypes.Chat{}
-	for _, chatMessageID := range plan.ChatMessageIDs {
-		chatMessage, err := workspace.GetChatMessage(ctx, chatMessageID)
-		if err != nil {
-			return err
-		}
-		chatMessages = append(chatMessages, *chatMessage)
-	}
-
-	for _, chatMessage := range chatMessages {
+	for _, chatMessage := range opts.ChatMessages {
 		messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(chatMessage.Prompt)))
 		if chatMessage.Response != "" {
 			messages = append(messages, anthropic.NewAssistantMessage(anthropic.NewTextBlock(chatMessage.Response)))

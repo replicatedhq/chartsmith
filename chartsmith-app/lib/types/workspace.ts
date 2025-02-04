@@ -62,6 +62,17 @@ export interface ChatMessage {
   prompt: string;
   response: string;
   createdAt: Date;
+  isIntentComplete: boolean;
+  intent?: Intent;
+}
+
+export interface Intent {
+  isConversational: boolean;
+  isPlan: boolean;
+  isOffTopic: boolean;
+  isChartDeveloper: boolean;
+  isChartOperator: boolean;
+  isProceed: boolean;
 }
 
 export interface Scenario {

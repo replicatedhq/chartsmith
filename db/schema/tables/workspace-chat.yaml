@@ -31,3 +31,20 @@ schema:
         notNull: true
     - name: response
       type: text
+    - name: is_intent_complete
+      type: boolean
+      constraints:
+        notNull: true
+      default: "false"
+    - name: is_intent_conversational
+      type: boolean
+    - name: is_intent_plan
+      type: boolean
+    - name: is_intent_off_topic
+      type: boolean
+    - name: is_intent_chart_developer
+      type: boolean
+    - name: is_intent_chart_operator
+      type: boolean
+    - name: is_intent_proceed
+      type: boolean

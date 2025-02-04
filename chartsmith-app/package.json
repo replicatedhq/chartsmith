@@ -6,7 +6,8 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint --fix"
+    "lint": "next lint --fix",
+    "test": "npx playwright test"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.36.3",
@@ -33,6 +34,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
+    "@playwright/test": "^1.50.1",
     "@types/gunzip-maybe": "^1.4.2",
     "@types/jsonwebtoken": "^9.0.7",
     "@types/node": "^22.10.8",
