@@ -70,7 +70,13 @@ func IntegrationCmd() *cobra.Command {
 }
 
 func runIntegrationTests(ctx context.Context) error {
-	pgTestContainer, err := testhelpers.CreatePostgresContainer(ctx)
+	opts := testhelpers.CreatePostgresContainerOpts{
+		InstallExtensions: true,
+		CreateSchema:      true,
+		StaticData:        true,
+	}
+
+	pgTestContainer, err := testhelpers.CreatePostgresContainer(ctx, opts)
 	if err != nil {
 		return fmt.Errorf("failed to create postgres container: %w", err)
 	}
@@ -82,7 +88,7 @@ func runIntegrationTests(ctx context.Context) error {
 		return fmt.Errorf("failed to init postgres: %w", err)
 	}
 
-	if err := integration.IntegrationTest_ApplyChangesToWorkspace(); err != nil {
+	if err := integration.IntegrationTest_ChooseRelevantFilesForChatMessage(); err != nil {
 		return fmt.Errorf("failed to run integration tests: %w", err)
 	}
 

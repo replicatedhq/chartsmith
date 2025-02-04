@@ -33,6 +33,10 @@ var (
 // It will first check if the content has already been summarized, and if so, return the cached summary.
 // If not, it will summarize the content and cache the result.
 func SummarizeContent(ctx context.Context, content string) (string, error) {
+	if content == "" {
+		return "", nil
+	}
+
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
 

@@ -23,13 +23,39 @@ func ConversationalChatMessage(ctx context.Context, streamCh chan string, doneCh
 	var c *workspacetypes.Chart
 	c = &w.Charts[0]
 
-	relevantFiles, err := workspace.ChooseRelevantFilesForChatMessage(ctx, w, c.ID, w.CurrentRevision, chatMessage.Prompt)
+	chartStructure, err := getChartStructure(ctx, c)
+	if err != nil {
+		return fmt.Errorf("failed to get chart structure: %w", err)
+	}
+
+	expandedPrompt, err := ExpandPrompt(ctx, chatMessage.Prompt)
+	if err != nil {
+		return fmt.Errorf("failed to expand prompt: %w", err)
+	}
+
+	relevantFiles, err := workspace.ChooseRelevantFilesForChatMessage(
+		ctx,
+		w,
+		c.ID,
+		w.CurrentRevision,
+		expandedPrompt,
+	)
 	if err != nil {
 		return fmt.Errorf("failed to choose relevant files: %w", err)
 	}
 
+	// we want to limit the number of files to 10
+	relevantFiles = relevantFiles[:10]
+
+	// add the context of the workspace to the chat
+	messages = append(messages,
+		anthropic.NewAssistantMessage(
+			anthropic.NewTextBlock(fmt.Sprintf(`I am working on a Helm chart that has the following structure: %s`, chartStructure)),
+		),
+	)
+
 	for _, file := range relevantFiles {
-		fmt.Printf("Relevant file: %s, length: %d\n", file.FilePath, len(file.Content))
+		messages = append(messages, anthropic.NewAssistantMessage(anthropic.NewTextBlock(fmt.Sprintf(`File: %s, Content: %s`, file.File.FilePath, file.File.Content))))
 	}
 
 	// we need to get the previous plan, and then all followup chat messages since that plan
@@ -81,4 +107,12 @@ func ConversationalChatMessage(ctx context.Context, streamCh chan string, doneCh
 
 	doneCh <- nil
 	return nil
+}
+
+func getChartStructure(ctx context.Context, c *workspacetypes.Chart) (string, error) {
+	structure := ""
+	for _, file := range c.Files {
+		structure += fmt.Sprintf(`File: %s`, file.FilePath)
+	}
+	return structure, nil
 }

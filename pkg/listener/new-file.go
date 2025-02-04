@@ -7,11 +7,9 @@ import (
 	"strings"
 
 	"github.com/replicatedhq/chartsmith/pkg/embedding"
-	"github.com/replicatedhq/chartsmith/pkg/llm"
 	"github.com/replicatedhq/chartsmith/pkg/logger"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 	"github.com/replicatedhq/chartsmith/pkg/workspace"
-	"go.uber.org/zap"
 )
 
 func handleNewFileNotification(ctx context.Context, id string) error {
@@ -38,7 +36,6 @@ func handleNewFileNotification(ctx context.Context, id string) error {
 		}
 	}()
 
-	logger.Debug("Starting file notification handling", zap.String("id", id))
 	parts := strings.Split(id, "/")
 	fileID := parts[0]
 	revisionNumber, err := strconv.Atoi(parts[1])
@@ -53,42 +50,16 @@ func handleNewFileNotification(ctx context.Context, id string) error {
 		return processingErr
 	}
 
-	if fileRevision.Summary != "" {
-		logger.Debug("File already has summary, skipping",
-			zap.String("file_id", fileID),
-			zap.Int("revision", revisionNumber))
-		return nil
-	}
-
-	logger.Debug("Getting summary for file",
-		zap.String("file_id", fileID),
-		zap.Int("revision", revisionNumber))
-	summary, err := llm.SummarizeContent(ctx, fileRevision.Content)
-	if err != nil {
-		processingErr = fmt.Errorf("failed to summarize content: %w", err)
-		return processingErr
-	}
-
-	logger.Debug("Getting embeddings for summary",
-		zap.String("file_id", fileID),
-		zap.Int("revision", revisionNumber))
-	embeddings, err := embedding.Embeddings(summary)
+	embeddings, err := embedding.Embeddings(fileRevision.Content)
 	if err != nil {
 		processingErr = fmt.Errorf("failed to get embeddings: %w", err)
 		return processingErr
 	}
 
-	logger.Debug("Setting file summary and embeddings",
-		zap.String("file_id", fileID),
-		zap.Int("revision", revisionNumber))
-	err = workspace.SetFileSummaryAndEmbeddings(ctx, fileID, revisionNumber, summary, embeddings)
+	err = workspace.SetFileEmbeddings(ctx, fileID, revisionNumber, embeddings)
 	if err != nil {
 		processingErr = fmt.Errorf("failed to set summary and embeddings: %w", err)
 		return processingErr
 	}
-
-	logger.Debug("Successfully completed file notification handling",
-		zap.String("file_id", fileID),
-		zap.Int("revision", revisionNumber))
 	return nil
 }

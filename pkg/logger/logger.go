@@ -83,6 +83,8 @@ func (e *kvEncoder) EncodeEntry(ent zapcore.Entry, fields []zapcore.Field) (*buf
 			} else {
 				line.AppendString("false")
 			}
+		case zapcore.Int64Type, zapcore.Int32Type, zapcore.Int16Type, zapcore.Int8Type:
+			line.AppendString(fmt.Sprint(f.Integer))
 		default:
 			line.AppendString(fmt.Sprint(f.Interface))
 		}

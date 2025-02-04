@@ -26,6 +26,17 @@ const initialPlanInstructions = `
 - Be specific when describing any dependencies you are including.
 `
 
+const updatePlanInstructions = `
+- Describe a general plan for editing an existing helm chart based on the user request.
+- The user already has a chart. You will be given the chart structure and the files that are relevant to the user request.
+- The user is a developer who understands Helm and Kubernetes.
+- You can be technical in your response, but don't write code.
+- Minimize the use of bullet lists in your response.
+- Be specific when describing any changes to the types of environments and versions of Kubernetes and Helm you will support.
+- Be specific when describing any and all changed end customer requirements you are aware of.
+- Be specific when describing any new dependencies you are including or removing.
+`
+
 const createKnowledge = `
 - If the chart is named 'new-chart', rename it to an appopriate name. The word "replicated" is not part of the name.
 - If the chart is named 'new-chart', don't share that we are editing a chart or transforming a chart. Phrase everything as if we are creating a new chart.

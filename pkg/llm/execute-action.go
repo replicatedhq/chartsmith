@@ -33,7 +33,7 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 				content = file.Content
 			}
 		}
-		updateMessage := fmt.Sprintf("Update the file at %s. The current content is: %s", actionPlanWithPath.Path, content)
+		updateMessage := fmt.Sprintf("Update the file and provide the git .patch file to apply to the file at %s. Do not rewrite the entire file, just provide a patch. The current content is: %s", actionPlanWithPath.Path, content)
 		messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(updateMessage)))
 	}
 

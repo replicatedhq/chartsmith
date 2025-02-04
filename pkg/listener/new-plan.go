@@ -2,9 +2,7 @@ package listener
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"github.com/replicatedhq/chartsmith/pkg/llm"
@@ -154,49 +152,50 @@ func createInitialPlan(ctx context.Context, streamCh chan string, doneCh chan er
 
 // createUpdatePlan is our background processing task that creates a plan for any revision that's not the initial
 func createUpdatePlan(ctx context.Context, streamCh chan string, doneCh chan error, w *workspacetypes.Workspace, plan *workspacetypes.Plan) error {
-	chartFiles := []workspacetypes.File{}
-	chartFileNamesWithoutPath := map[string]workspacetypes.File{}
-	chartFileNamesWithPath := map[string]workspacetypes.File{}
-	for _, file := range w.Charts[0].Files {
-		chartFiles = append(chartFiles, file)
-		chartFileNamesWithoutPath[strings.ToLower(filepath.Base(file.FilePath))] = file
-		chartFileNamesWithPath[strings.ToLower(file.FilePath)] = file
-	}
-
-	chartFilesMentioned := []workspacetypes.File{}
-
 	chatMessages := []workspacetypes.Chat{}
+	mostRecentPrompt := ""
 	for _, chatMessageID := range plan.ChatMessageIDs {
 		chatMessage, err := workspace.GetChatMessage(ctx, chatMessageID)
 		if err != nil {
 			return err
 		}
 
-		// split the user message on words and check if any of the words are in the chart file names
-		words := strings.Fields(chatMessage.Prompt)
-
-		for _, word := range words {
-			if file, ok := chartFileNamesWithoutPath[strings.ToLower(word)]; ok {
-				chartFilesMentioned = append(chartFilesMentioned, file)
-			}
-
-			if file, ok := chartFileNamesWithPath[word]; ok {
-				chartFilesMentioned = append(chartFilesMentioned, file)
-			}
-		}
-
 		chatMessages = append(chatMessages, *chatMessage)
+
+		mostRecentPrompt = chatMessage.Prompt
 	}
 
-	chartSummary, err := summarizeChart(ctx, &w.Charts[0])
+	expandedPrompt, err := llm.ExpandPrompt(ctx, mostRecentPrompt)
 	if err != nil {
-		return fmt.Errorf("failed to summarize chart: %w", err)
+		return fmt.Errorf("failed to expand prompt: %w", err)
+	}
+
+	relevantFiles, err := workspace.ChooseRelevantFilesForChatMessage(
+		ctx,
+		w,
+		w.Charts[0].ID,
+		w.CurrentRevision,
+		expandedPrompt,
+	)
+
+	for _, file := range relevantFiles {
+		fmt.Printf("Relevant file: %s, similarity: %f\n", file.File.FilePath, file.Similarity)
+	}
+
+	// make sure we only change 10 files max, and nothing lower than a 0.8 similarity score
+	relevantFiles = relevantFiles[:10]
+	finalRelevantFiles := []workspacetypes.File{}
+	for _, file := range relevantFiles {
+		if file.Similarity >= 0.8 {
+			finalRelevantFiles = append(finalRelevantFiles, file.File)
+		}
 	}
 
 	opts := llm.CreatePlanOpts{
-		ChatMessages: chatMessages,
-		Chart:        &w.Charts[0],
-		ChartSummary: chartSummary,
+		ChatMessages:  chatMessages,
+		Chart:         &w.Charts[0],
+		RelevantFiles: finalRelevantFiles,
+		IsUpdate:      true,
 	}
 
 	if err := llm.CreatePlan(ctx, streamCh, doneCh, opts); err != nil {
@@ -204,19 +203,4 @@ func createUpdatePlan(ctx context.Context, streamCh chan string, doneCh chan err
 	}
 
 	return nil
-}
-
-func summarizeChart(ctx context.Context, c *workspacetypes.Chart) (string, error) {
-	filesWithContent := map[string]string{}
-
-	for _, file := range c.Files {
-		filesWithContent[file.FilePath] = file.Content
-	}
-
-	encoded, err := json.Marshal(filesWithContent)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal files with content: %w", err)
-	}
-
-	return fmt.Sprintf("The chart we are basing our work on looks like this: \n %s", string(encoded)), nil
 }

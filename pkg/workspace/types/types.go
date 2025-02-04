@@ -11,7 +11,6 @@ type File struct {
 	WorkspaceID    string `json:"workspace_id"`
 	FilePath       string `json:"filePath"`
 	Content        string `json:"content"`
-	Summary        string `json:"-"`
 }
 
 type Chart struct {

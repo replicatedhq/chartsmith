@@ -226,8 +226,7 @@ func listFilesForChart(ctx context.Context, chartID string, revisionNumber int) 
 		chart_id,
 		workspace_id,
 		file_path,
-		content,
-		summary
+		content
 	FROM
 		workspace_file
 	WHERE
@@ -243,7 +242,6 @@ func listFilesForChart(ctx context.Context, chartID string, revisionNumber int) 
 	var files []types.File
 	for rows.Next() {
 		var file types.File
-		var summary sql.NullString
 		err := rows.Scan(
 			&file.ID,
 			&file.RevisionNumber,
@@ -251,14 +249,11 @@ func listFilesForChart(ctx context.Context, chartID string, revisionNumber int) 
 			&file.WorkspaceID,
 			&file.FilePath,
 			&file.Content,
-			&summary,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("error scanning file: %w", err)
 		}
-		if summary.Valid {
-			file.Summary = summary.String
-		}
+
 		files = append(files, file)
 	}
 	rows.Close()
@@ -276,8 +271,7 @@ func listFilesWithoutChartsForWorkspace(ctx context.Context, workspaceID string,
 		chart_id,
 		workspace_id,
 		file_path,
-		content,
-		summary
+		content
 	FROM
 		workspace_file
 	WHERE
@@ -295,7 +289,6 @@ func listFilesWithoutChartsForWorkspace(ctx context.Context, workspaceID string,
 	var files []types.File
 	for rows.Next() {
 		var file types.File
-		var summary sql.NullString
 		err := rows.Scan(
 			&file.ID,
 			&file.RevisionNumber,
@@ -303,14 +296,11 @@ func listFilesWithoutChartsForWorkspace(ctx context.Context, workspaceID string,
 			&file.WorkspaceID,
 			&file.FilePath,
 			&file.Content,
-			&summary,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("error scanning file: %w", err)
 		}
-		if summary.Valid {
-			file.Summary = summary.String
-		}
+
 		files = append(files, file)
 	}
 
@@ -374,7 +364,7 @@ func NotifyWorkerToCaptureEmbeddings(ctx context.Context, workspaceID string, re
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
 
-	filesNeedingSummariesAndEmbeddings := []types.File{}
+	filesNeedingEmbeddings := []types.File{}
 
 	query := `SELECT
 		id,
@@ -386,7 +376,7 @@ func NotifyWorkerToCaptureEmbeddings(ctx context.Context, workspaceID string, re
 	FROM
 		workspace_file
 	WHERE
-		workspace_id = $1 AND revision_number = $2 AND (summary IS NULL OR embeddings IS NULL)`
+		workspace_id = $1 AND revision_number = $2 AND embeddings IS NULL`
 
 	rows, err := conn.Query(ctx, query, workspaceID, revisionNumber)
 	if err != nil {
@@ -400,12 +390,12 @@ func NotifyWorkerToCaptureEmbeddings(ctx context.Context, workspaceID string, re
 		if err != nil {
 			return fmt.Errorf("error scanning file: %w", err)
 		}
-		filesNeedingSummariesAndEmbeddings = append(filesNeedingSummariesAndEmbeddings, file)
+		filesNeedingEmbeddings = append(filesNeedingEmbeddings, file)
 	}
 	rows.Close()
 
 	// the payload is file_id/revision_number
-	for _, file := range filesNeedingSummariesAndEmbeddings {
+	for _, file := range filesNeedingEmbeddings {
 		payload := fmt.Sprintf("%s/%d", file.ID, file.RevisionNumber)
 
 		// write to the summarize_queue table

@@ -99,8 +99,8 @@ func (p *Parser) ParsePlan(chunk string) {
 		}
 	}
 
-	// Find all action plans including their content
-	fileStartRegex := regexp.MustCompile(`(?s)<chartsmithActionPlan\s+type="([^"]+)"\s+action="([^"]+)"\s+path="([^"]+)"[^>]*>.*?</chartsmithActionPlan>`)
+	// Find all action plans - modified regex to be more flexible
+	fileStartRegex := regexp.MustCompile(`<chartsmithActionPlan\s+type="([^"]+)"\s+action="([^"]+)"\s+path="([^"]+)"[^>]*>`)
 	startMatches := fileStartRegex.FindAllStringSubmatch(p.buffer, -1)
 
 	for _, match := range startMatches {
