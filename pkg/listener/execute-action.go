@@ -45,6 +45,7 @@ func handleExecuteActionNotification(ctx context.Context, planID string, path st
 			item.Status = string(llmtypes.ActionPlanStatusCreating)
 
 			plan.ActionFiles[i] = item
+
 			break
 		}
 	}
@@ -87,6 +88,15 @@ func handleExecuteActionNotification(ctx context.Context, planID string, path st
 		return fmt.Errorf("failed to send plan update: %w", err)
 	}
 
+	currentContent := ""
+	c := w.Charts[0]
+	for _, file := range c.Files {
+		if file.FilePath == path {
+			currentContent = file.Content
+			break
+		}
+	}
+
 	streamCh := make(chan string)
 	doneCh := make(chan error)
 
@@ -109,14 +119,7 @@ func handleExecuteActionNotification(ctx context.Context, planID string, path st
 			Path: path,
 		}
 
-		// get the current chart too
-		var c *workspacetypes.Chart
-		for _, chart := range w.Charts {
-			// TODO the action should specify the chart, for now we assume there is only one
-			c = &chart
-		}
-
-		if err := llm.ExecuteAction(ctx, apwp, plan, c, streamCh, doneCh); err != nil {
+		if err := llm.ExecuteAction(ctx, apwp, plan, currentContent, streamCh, doneCh); err != nil {
 			logger.Error(fmt.Errorf("failed to execute action: %w", err))
 		}
 	}()
@@ -140,7 +143,8 @@ func handleExecuteActionNotification(ctx context.Context, planID string, path st
 				Artifact: realtimetypes.Artifact{
 					RevisionNumber: w.CurrentRevision,
 					Path:           path,
-					Content:        finalContent,
+					Content:        currentContent,
+					PendingPatch:   finalContent,
 				},
 			}
 
@@ -180,8 +184,7 @@ func handleExecuteActionNotification(ctx context.Context, planID string, path st
 	}
 
 	// save the content of the file
-	c := w.Charts[0]
-	if err := workspace.SetFileContentInWorkspace(ctx, finalUpdatePlan.WorkspaceID, w.CurrentRevision, c.ID, path, finalContent); err != nil {
+	if err := workspace.CreateOrPatchFile(ctx, finalUpdatePlan.WorkspaceID, w.CurrentRevision, c.ID, path, finalContent); err != nil {
 		return fmt.Errorf("failed to set file content in workspace: %w", err)
 	}
 

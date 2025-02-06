@@ -6,6 +6,7 @@ type Artifact struct {
 	RevisionNumber int    `json:"revisionNumber"`
 	Path           string `json:"path"`
 	Content        string `json:"content"`
+	PendingPatch   string `json:"pendingPatch"`
 }
 
 type ArtifactUpdatedEvent struct {

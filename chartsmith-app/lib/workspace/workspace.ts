@@ -736,7 +736,8 @@ async function listFilesForChart(workspaceID: string, chartID: string, revisionN
           chart_id,
           workspace_id,
           file_path,
-          content
+          content,
+          pending_patch
         FROM
           workspace_file
         WHERE
@@ -749,11 +750,12 @@ async function listFilesForChart(workspaceID: string, chartID: string, revisionN
       return [];
     }
 
-    const files: WorkspaceFile[] = result.rows.map((row: { id: string; file_path: string; content: string; summary: string }) => {
+    const files: WorkspaceFile[] = result.rows.map((row: { id: string; file_path: string; content: string; summary: string, pending_patch: string }) => {
       return {
         id: row.id,
         filePath: row.file_path,
         content: row.content,
+        pendingPatch: row.pending_patch,
       };
     });
 
@@ -775,7 +777,8 @@ async function listFilesWithoutChartsForWorkspace(workspaceID: string, revisionN
           chart_id,
           workspace_id,
           file_path,
-          content
+          content,
+          pending_patch
         FROM
           workspace_file
         WHERE
@@ -790,11 +793,12 @@ async function listFilesWithoutChartsForWorkspace(workspaceID: string, revisionN
       return [];
     }
 
-    const files: WorkspaceFile[] = result.rows.map((row: { id: string; file_path: string; content: string; summary: string }) => {
+    const files: WorkspaceFile[] = result.rows.map((row: { id: string; file_path: string; content: string; summary: string, pending_patch: string }) => {
       return {
         id: row.id,
         filePath: row.file_path,
         content: row.content,
+        pendingPatch: row.pending_patch,
       };
     });
 

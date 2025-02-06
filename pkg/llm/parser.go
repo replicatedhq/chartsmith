@@ -110,7 +110,6 @@ func (p *Parser) ParsePlan(chunk string) {
 		actionType := match[1] // "file"
 		action := match[2]     // "create" or "update"
 		path := match[3]       // file path
-
 		// strip any leading /
 		path = strings.TrimPrefix(path, "/")
 
@@ -130,6 +129,7 @@ func (p *Parser) ParsePlan(chunk string) {
 			}
 
 			p.result.Actions[path] = actionPlan
+
 		}
 	}
 }

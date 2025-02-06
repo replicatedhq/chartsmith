@@ -3,13 +3,15 @@ package llm
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
 	llmtypes "github.com/replicatedhq/chartsmith/pkg/llm/types"
+	"github.com/replicatedhq/chartsmith/pkg/logger"
 	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 )
 
-func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWithPath, plan *workspacetypes.Plan, c *workspacetypes.Chart, contentStreamCh chan string, doneCh chan error) error {
+func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWithPath, plan *workspacetypes.Plan, currentContent string, contentStreamCh chan string, doneCh chan error) error {
 	client, err := newAnthropicClient(ctx)
 	if err != nil {
 		return err
@@ -27,13 +29,19 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 		createMessage := fmt.Sprintf("Create the file at %s", actionPlanWithPath.Path)
 		messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(createMessage)))
 	} else if actionPlanWithPath.Action == "update" {
-		content := ""
-		for _, file := range c.Files {
-			if file.FilePath == actionPlanWithPath.Path {
-				content = file.Content
-			}
-		}
-		updateMessage := fmt.Sprintf("Update the file and provide the git .patch file to apply to the file at %s. Do not rewrite the entire file, just provide a patch. The current content is: %s", actionPlanWithPath.Path, content)
+
+		updateMessage := fmt.Sprintf(`The file at %s needs to be updated according to the plan.
+Here is the current content between XML tags:
+
+<current_content>
+%s
+</current_content>
+
+Generate a git .patch file to apply this update. Use correct line numbers based on the current_content provided.
+The patch should be formatted with unified diff format.
+Follow the instructions to provide the patch in proper <chartsmithArtifact> tags.`,
+			actionPlanWithPath.Path, strings.TrimSpace(currentContent))
+
 		messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(updateMessage)))
 	}
 
@@ -72,6 +80,7 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 		doneCh <- stream.Err()
 	}
 
+	logger.Debugf("Full response with tags: %s", fullResponseWithTags)
 	doneCh <- nil
 	return nil
 }

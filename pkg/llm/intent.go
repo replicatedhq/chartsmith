@@ -6,11 +6,17 @@ import (
 	"fmt"
 
 	"github.com/jpoz/groq"
+	"github.com/replicatedhq/chartsmith/pkg/logger"
 	"github.com/replicatedhq/chartsmith/pkg/param"
 	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
+	"go.uber.org/zap"
 )
 
 func GetChatMessageIntent(ctx context.Context, prompt string, isInitialPrompt bool) (*workspacetypes.Intent, error) {
+	logger.Debug("GetChatMessageIntent",
+		zap.String("prompt", prompt),
+		zap.Bool("isInitialPrompt", isInitialPrompt),
+	)
 	client := groq.NewClient(groq.WithAPIKey(param.Get().GroqAPIKey))
 
 	// deepseek r1 recommends no system prompt, include everything in the user prompt
@@ -83,6 +89,9 @@ Important: Do not respond with anything other than the JSON object.`,
 		intent.IsProceed = false
 	}
 
+	logger.Debug("GetChatMessageIntent",
+		zap.Any("intent", intent),
+	)
 	return intent, nil
 }
 

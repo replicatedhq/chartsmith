@@ -45,7 +45,11 @@ func ConversationalChatMessage(ctx context.Context, streamCh chan string, doneCh
 	}
 
 	// we want to limit the number of files to 10
-	relevantFiles = relevantFiles[:10]
+	maxFiles := 10
+	if len(relevantFiles) < maxFiles {
+		maxFiles = len(relevantFiles)
+	}
+	relevantFiles = relevantFiles[:maxFiles]
 
 	// add the context of the workspace to the chat
 	messages = append(messages,

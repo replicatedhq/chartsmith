@@ -84,8 +84,6 @@ export function FileTree({ files = [], charts = [], onFileSelect, onFileDelete, 
       return chartNode;
     });
 
-
-
     return treeNodes;
   };
 
@@ -191,7 +189,30 @@ export function FileTree({ files = [], charts = [], onFileSelect, onFileDelete, 
     }
   };
 
-  const renderNode = (node: TreeNode, level: number) => (
+  const getPatchStats = (patch?: string) => {
+    if (!patch) return null;
+    const lines = patch.split('\n');
+    let additions = 0;
+    let deletions = 0;
+    let contentStarted = false;
+
+    for (const line of lines) {
+      if (!contentStarted && line.startsWith('@')) {
+        contentStarted = true;
+        continue;
+      }
+      if (contentStarted) {
+        if (line.startsWith('+')) additions++;
+        if (line.startsWith('-')) deletions++;
+      }
+    }
+    return { additions, deletions };
+  };
+
+  const renderNode = (node: TreeNode, level: number) => {
+    const patchStats = node.type === "file" ? getPatchStats(node.pendingPatch) : null;
+
+    return (
     <div key={node.filePath}>
       <div
         className={`flex items-center py-1 px-2 cursor-pointer rounded-sm group ${selectedFile?.filePath === node.filePath ? `bg-primary/10 text-primary` : theme === "dark" ? "text-gray-300 hover:text-gray-100 hover:bg-dark-border/40" : "text-gray-700 hover:text-gray-900 hover:bg-gray-100"}`}
@@ -206,7 +227,8 @@ export function FileTree({ files = [], charts = [], onFileSelect, onFileDelete, 
             onFileSelect({
               id: rest.id,
               filePath: rest.filePath,
-              content: rest.content || ''
+              content: rest.content || '',
+              pendingPatch: rest.pendingPatch
             });
           }
         }}
@@ -225,6 +247,19 @@ export function FileTree({ files = [], charts = [], onFileSelect, onFileDelete, 
         )}
         <div className="flex-1 flex items-center min-w-0">
           <span className="text-xs truncate">{node.name}</span>
+          {patchStats && (
+            <span className="ml-2 text-[10px] font-mono whitespace-nowrap">
+              {patchStats.additions > 0 && (
+                <span className="text-green-500">+{patchStats.additions}</span>
+              )}
+              {patchStats.additions > 0 && patchStats.deletions > 0 && (
+                <span className="mx-0.5">/</span>
+              )}
+              {patchStats.deletions > 0 && (
+                <span className="text-red-500">-{patchStats.deletions}</span>
+              )}
+            </span>
+          )}
         </div>
         <button
           onClick={(e) => node.type === "file" && handleDelete(node, e)}
@@ -254,7 +289,7 @@ export function FileTree({ files = [], charts = [], onFileSelect, onFileDelete, 
         </div>
       )}
     </div>
-  );
+  )};
 
   return (
     <>
