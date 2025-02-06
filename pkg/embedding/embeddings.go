@@ -2,13 +2,17 @@ package embedding
 
 import (
 	"bytes"
+	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/replicatedhq/chartsmith/pkg/param"
+	"github.com/replicatedhq/chartsmith/pkg/persistence"
 )
 
 const VOYAGE_API_URL = "https://api.voyageai.com/v1/embeddings"
@@ -26,6 +30,21 @@ type embeddingResponse struct {
 
 // Embeddings generates embeddings and returns them in PostgreSQL vector format
 func Embeddings(content string) (string, error) {
+	conn := persistence.MustGetPooledPostgresSession()
+	defer conn.Release()
+
+	contentSHA256 := sha256.Sum256([]byte(content))
+	query := `select embeddings from content_cache where content_sha256 = $1`
+	row := conn.QueryRow(context.Background(), query, fmt.Sprintf("%x", contentSHA256))
+	var cachedEmbeddings string
+	if err := row.Scan(&cachedEmbeddings); err != nil {
+		if err != pgx.ErrNoRows {
+			return "", fmt.Errorf("error scanning embeddings: %v", err)
+		}
+	} else {
+		return cachedEmbeddings, nil
+	}
+
 	if param.Get().VoyageAPIKey == "" {
 		return "", fmt.Errorf("VOYAGE_API_KEY environment variable not set")
 	}
@@ -78,5 +97,13 @@ func Embeddings(content string) (string, error) {
 		strValues[i] = fmt.Sprintf("%.6f", v)
 	}
 
-	return "[" + strings.Join(strValues, ",") + "]", nil
+	newEmbeddings := "[" + strings.Join(strValues, ",") + "]"
+
+	query = `insert into content_cache (content_sha256, embeddings) values ($1, $2) on conflict (content_sha256) do update set embeddings = $2`
+	_, err = conn.Exec(context.Background(), query, fmt.Sprintf("%x", contentSHA256), newEmbeddings)
+	if err != nil {
+		return "", fmt.Errorf("error inserting embeddings: %v", err)
+	}
+
+	return newEmbeddings, nil
 }

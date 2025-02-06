@@ -17,7 +17,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/jackc/pgx/v5"
 	"github.com/replicatedhq/chartsmith/pkg/embedding"
-	"github.com/replicatedhq/chartsmith/pkg/llm"
 	"github.com/replicatedhq/chartsmith/pkg/param"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 	"github.com/spf13/cobra"
@@ -181,23 +180,16 @@ func runBootstrap(ctx context.Context, pgURI string, workspaceDir string, force 
 				}
 				chartName = n
 			}
-
-			fmt.Printf("summarizing %s...\n", relativePath)
-			summary, err := llm.SummarizeContent(ctx, string(content))
-			if err != nil {
-				return fmt.Errorf("failed to summarize GVK: %w", err)
-			}
-
 			fmt.Printf("embedding %s...\n", relativePath)
-			embeddings, err := embedding.Embeddings(summary)
+			embeddings, err := embedding.Embeddings(string(content))
 			if err != nil {
 				return fmt.Errorf("failed to get embeddings: %w", err)
 			}
 
 			_, err = tx.Exec(ctx, `
-				INSERT INTO bootstrap_file (id, chart_id, workspace_id, file_path, content, summary, embeddings)
-				VALUES ($1, $2, $3, $4, $5, $6, $7)
-			`, hashString(relativePath), chartID, workspaceID, relativePath, content, summary, embeddings)
+				INSERT INTO bootstrap_file (id, chart_id, workspace_id, file_path, content, embeddings)
+				VALUES ($1, $2, $3, $4, $5, $6)
+			`, hashString(relativePath), chartID, workspaceID, relativePath, content, embeddings)
 			if err != nil {
 				return fmt.Errorf("failed to insert file: %w", err)
 			}

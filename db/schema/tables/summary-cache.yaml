@@ -1,5 +1,5 @@
 database: chartsmith
-name: summary_cache
+name: content_cache
 schema:
   postgres:
     primaryKey:
@@ -9,9 +9,7 @@ schema:
       type: text
       constraints:
         notNull: true
-    - name: summary
-      type: text
-      constraints:
-        notNull: true
     - name: embeddings
       type: vector (1024)
+      constraints:
+        notNull: true

@@ -53,9 +53,9 @@ export async function createWorkspace(createdType: string, userId: string, baseC
           // TODO we need to add summary and embeddings here since we don't have a bootstrap_file
           const fileId = srs.default({ length: 12, alphanumeric: true });
           await client.query(
-            `INSERT INTO workspace_file (id, revision_number, chart_id, workspace_id, file_path, content, summary, embeddings)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-            [fileId, initialRevisionNumber, chartId, id, file.filePath, file.content, null, null],
+            `INSERT INTO workspace_file (id, revision_number, chart_id, workspace_id, file_path, content, embeddings)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [fileId, initialRevisionNumber, chartId, id, file.filePath, file.content, null],
           );
         }
 
@@ -78,13 +78,13 @@ export async function createWorkspace(createdType: string, userId: string, baseC
             [chartId, id, chart.name, initialRevisionNumber],
           );
 
-          const boostrapChartFiles = await client.query(`SELECT file_path, content, summary, embeddings FROM bootstrap_file WHERE chart_id = $1`, [chart.id]);
+          const boostrapChartFiles = await client.query(`SELECT file_path, content, embeddings FROM bootstrap_file WHERE chart_id = $1`, [chart.id]);
           for (const file of boostrapChartFiles.rows) {
             const fileId = srs.default({ length: 12, alphanumeric: true });
             await client.query(
-              `INSERT INTO workspace_file (id, revision_number, chart_id, workspace_id, file_path, content, summary, embeddings)
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-              [fileId, initialRevisionNumber, chartId, id, file.file_path, file.content, file.summary, file.embeddings],
+              `INSERT INTO workspace_file (id, revision_number, chart_id, workspace_id, file_path, content, embeddings)
+              VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+              [fileId, initialRevisionNumber, chartId, id, file.file_path, file.content, file.embeddings],
             );
           }
 
@@ -303,8 +303,7 @@ async function listFilesForWorkspace(workspaceID: string, revisionNumber: number
           chart_id,
           workspace_id,
           file_path,
-          content,
-          summary
+          content
         FROM
           workspace_file
         WHERE
@@ -631,7 +630,6 @@ export async function createRevision(plan: Plan, userID: string): Promise<number
           workspace_id,
           file_path,
           content,
-          summary,
           embeddings
         FROM workspace_file
         WHERE workspace_id = $1
@@ -646,9 +644,9 @@ export async function createRevision(plan: Plan, userID: string): Promise<number
         `
           INSERT INTO workspace_file (
             id, revision_number, chart_id, workspace_id, file_path,
-            content, summary, embeddings
+            content, embeddings
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          VALUES ($1, $2, $3, $4, $5, $6, $7)
         `,
         [
           file.id,  // Keep the same ID
@@ -657,7 +655,6 @@ export async function createRevision(plan: Plan, userID: string): Promise<number
           file.workspace_id,
           file.file_path,
           file.content,
-          file.summary,
           file.embeddings
         ]
       );
@@ -739,8 +736,7 @@ async function listFilesForChart(workspaceID: string, chartID: string, revisionN
           chart_id,
           workspace_id,
           file_path,
-          content,
-          summary
+          content
         FROM
           workspace_file
         WHERE
@@ -779,8 +775,7 @@ async function listFilesWithoutChartsForWorkspace(workspaceID: string, revisionN
           chart_id,
           workspace_id,
           file_path,
-          content,
-          summary
+          content
         FROM
           workspace_file
         WHERE

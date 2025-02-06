@@ -23,7 +23,5 @@ schema:
       type: text
       constraints:
         notNull: true
-    - name: summary
-      type: text
     - name: embeddings
       type: vector (1024)

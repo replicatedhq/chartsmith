@@ -3,6 +3,7 @@ package testhelpers
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -18,46 +19,39 @@ type PostgresContainer struct {
 	Logs             *bytes.Buffer
 }
 
-func CreatePostgresContainer(ctx context.Context) (*PostgresContainer, error) {
-	initDatafiles := []string{
-		"testdata/01-extensions.sql",
-		"testdata/02-fixtures.sql",
+type CreatePostgresContainerOpts struct {
+	InstallExtensions bool
+	CreateSchema      bool
+	StaticData        bool
+}
+
+func CreatePostgresContainer(ctx context.Context, opts CreatePostgresContainerOpts) (*PostgresContainer, error) {
+	initDatafiles := []string{}
+
+	if opts.InstallExtensions {
+		initDatafiles = append(initDatafiles, "testdata/01-extensions.sql")
 	}
 
-	// for some reason, i need to put the testdata from the data into the fixtures file
-	// or testcontainers acts like something is wrong. i don't know testcontainers
-	// well enough, but also getting real tired or fighting it
-
-	if err := filepath.Walk("testdata/gen-data", func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info.IsDir() {
-			return nil
-		}
-		if filepath.Ext(path) == ".sql" {
-			// make sure it's not already there
-			initDatafiles = append(initDatafiles, path)
-		}
-		return nil
-	}); err != nil {
-		return nil, err
+	if opts.CreateSchema {
+		initDatafiles = append(initDatafiles, "testdata/02-fixtures.sql")
 	}
 
-	if err := filepath.Walk("testdata/static-data", func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info.IsDir() {
+	if opts.StaticData {
+		if err := filepath.Walk("testdata/static-data", func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if info.IsDir() {
+				return nil
+			}
+			if filepath.Ext(path) == ".sql" {
+				// make sure it's not already there
+				initDatafiles = append(initDatafiles, path)
+			}
 			return nil
+		}); err != nil {
+			return nil, err
 		}
-		if filepath.Ext(path) == ".sql" {
-			// make sure it's not already there
-			initDatafiles = append(initDatafiles, path)
-		}
-		return nil
-	}); err != nil {
-		return nil, err
 	}
 
 	mergedFilename := filepath.Join("testdata", "init-scripts-merged.sql")
@@ -87,9 +81,32 @@ func CreatePostgresContainer(ctx context.Context) (*PostgresContainer, error) {
 	}
 	mergedFile.Close()
 
-	pgContainer, err := postgres.RunContainer(ctx,
-		testcontainers.WithImage("pgvector/pgvector:pg16"),
-		postgres.WithInitScripts(mergedFile.Name()),
+	csvFilenames := []string{}
+	if opts.StaticData {
+		if err := filepath.Walk("testdata/static-data", func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if info.IsDir() {
+				return nil
+			}
+			if filepath.Ext(path) == ".csv" {
+				csvFilenames = append(csvFilenames, path)
+			}
+			return nil
+		}); err != nil {
+			return nil, err
+		}
+	}
+
+	initScripts := []string{mergedFile.Name()}
+	for _, csvFilename := range csvFilenames {
+		initScripts = append(initScripts, csvFilename)
+	}
+
+	pgContainer, err := postgres.Run(ctx,
+		"pgvector/pgvector:pg16",
+		postgres.WithInitScripts(initScripts...),
 		postgres.WithDatabase("test-db"),
 		postgres.WithUsername("postgres"),
 		postgres.WithPassword("postgres"),
@@ -100,7 +117,18 @@ func CreatePostgresContainer(ctx context.Context) (*PostgresContainer, error) {
 				WithStartupTimeout(10*time.Second)),
 	)
 	if err != nil {
-		return nil, err
+		// Capture logs before returning error
+		logReader, logErr := pgContainer.Logs(ctx)
+		if logErr != nil {
+			return nil, fmt.Errorf("container failed: %v (failed to get logs: %v)", err, logErr)
+		}
+		defer logReader.Close()
+
+		logs := new(bytes.Buffer)
+		if _, err := logs.ReadFrom(logReader); err != nil {
+			return nil, fmt.Errorf("container failed: %v (failed to read logs: %v)", err, err)
+		}
+		return nil, fmt.Errorf("container failed: %v\nLogs:\n%s", err, logs.String())
 	}
 	connStr, err := pgContainer.ConnectionString(ctx, "sslmode=disable")
 	if err != nil {

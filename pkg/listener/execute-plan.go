@@ -99,7 +99,28 @@ func handleExecutePlanNotification(ctx context.Context, planID string) error {
 	detailedPlanActionCreatedCh := make(chan llmtypes.ActionPlanWithPath, 1)
 	detailedPlanDoneCh := make(chan error, 1)
 	go func() {
-		llm.CreateDetailedPlan(ctx, detailedPlanActionCreatedCh, detailedPlanStreamCh, detailedPlanDoneCh, plan)
+		expandedPrompt, err := llm.ExpandPrompt(ctx, plan.Description)
+		if err != nil {
+			detailedPlanDoneCh <- fmt.Errorf("failed to expand prompt: %w", err)
+			return
+		}
+		relevantFiles, err := workspace.ChooseRelevantFilesForChatMessage(
+			ctx,
+			w,
+			w.Charts[0].ID,
+			w.CurrentRevision,
+			expandedPrompt,
+		)
+
+		// make sure we only change 10 files max, and nothing lower than a 0.8 similarity score
+		relevantFiles = relevantFiles[:10]
+		finalRelevantFiles := []workspacetypes.File{}
+		for _, file := range relevantFiles {
+			if file.Similarity >= 0.8 {
+				finalRelevantFiles = append(finalRelevantFiles, file.File)
+			}
+		}
+		llm.CreateExecutePlan(ctx, detailedPlanActionCreatedCh, detailedPlanStreamCh, detailedPlanDoneCh, w, plan, &w.Charts[0], finalRelevantFiles)
 	}()
 
 	var buffer strings.Builder

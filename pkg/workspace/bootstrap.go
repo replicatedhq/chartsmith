@@ -2,7 +2,6 @@ package workspace
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
@@ -99,8 +98,7 @@ func listFilesForBootstrapChart(ctx context.Context, bootstrapChartID string, re
 		chart_id,
 		workspace_id,
 		file_path,
-		content,
-		summary
+		content
 	FROM
 		bootstrap_file
 	WHERE
@@ -116,21 +114,17 @@ func listFilesForBootstrapChart(ctx context.Context, bootstrapChartID string, re
 	var files []types.File
 	for rows.Next() {
 		var file types.File
-		var summary sql.NullString
 		err := rows.Scan(
 			&file.ID,
 			&file.ChartID,
 			&file.WorkspaceID,
 			&file.FilePath,
 			&file.Content,
-			&summary,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("error scanning file: %w", err)
 		}
-		if summary.Valid {
-			file.Summary = summary.String
-		}
+
 		files = append(files, file)
 	}
 	rows.Close()

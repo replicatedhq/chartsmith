@@ -2,11 +2,12 @@ package workspace
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"path/filepath"
+	"slices"
+	"sort"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5"
 	"github.com/replicatedhq/chartsmith/pkg/embedding"
 	"github.com/replicatedhq/chartsmith/pkg/logger"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
@@ -14,16 +15,26 @@ import (
 	"go.uber.org/zap"
 )
 
-func ChooseRelevantFilesForChatMessage(ctx context.Context, w *types.Workspace, chartID string, revisionNumber int, prompt string) ([]types.File, error) {
+type RelevantFile struct {
+	File       types.File
+	Similarity float64
+}
+
+func ChooseRelevantFilesForChatMessage(ctx context.Context,
+	w *types.Workspace,
+	chartID string,
+	revisionNumber int,
+	expandedPrompt string,
+) ([]RelevantFile, error) {
 	logger.Debug("Choosing relevant files for chat message",
 		zap.String("workspace_id", w.ID),
 		zap.String("chart_id", chartID),
 		zap.Int("revision_number", revisionNumber),
-		zap.String("prompt", prompt),
+		zap.Int("expanded_prompt_len", len(expandedPrompt)),
 	)
 
 	// Get embeddings for the prompt
-	promptEmbeddings, err := embedding.Embeddings(prompt)
+	promptEmbeddings, err := embedding.Embeddings(expandedPrompt)
 	if err != nil {
 		return nil, fmt.Errorf("error getting embeddings for prompt: %w", err)
 	}
@@ -31,9 +42,33 @@ func ChooseRelevantFilesForChatMessage(ctx context.Context, w *types.Workspace, 
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
 
+	filesWithRelevance := map[types.File]float64{}
+
+	// get the chart.yaml
+	query := `SELECT id, revision_number, chart_id, workspace_id, file_path, content FROM workspace_file WHERE workspace_id = $1 AND revision_number = $2 AND file_path = 'Chart.yaml'`
+	row := conn.QueryRow(ctx, query, w.ID, revisionNumber)
+	var chartYAML types.File
+	err = row.Scan(&chartYAML.ID, &chartYAML.RevisionNumber, &chartYAML.ChartID, &chartYAML.WorkspaceID, &chartYAML.FilePath, &chartYAML.Content)
+	if err != nil && err != pgx.ErrNoRows {
+		return nil, fmt.Errorf("error scanning chart.yaml: %w", err)
+	} else if err == nil {
+		filesWithRelevance[chartYAML] = 1
+	}
+
+	// get the values.yaml
+	query = `SELECT id, revision_number, chart_id, workspace_id, file_path, content FROM workspace_file WHERE workspace_id = $1 AND revision_number = $2 AND file_path = 'values.yaml'`
+	row = conn.QueryRow(ctx, query, w.ID, revisionNumber)
+	var valuesYAML types.File
+	err = row.Scan(&valuesYAML.ID, &valuesYAML.RevisionNumber, &valuesYAML.ChartID, &valuesYAML.WorkspaceID, &valuesYAML.FilePath, &valuesYAML.Content)
+	if err != nil && err != pgx.ErrNoRows {
+		return nil, fmt.Errorf("error scanning values.yaml: %w", err)
+	} else if err == nil {
+		filesWithRelevance[valuesYAML] = 1
+	}
+
 	// Query files with embeddings and calculate cosine similarity
 	// Note: Using pgvector's <=> operator for cosine distance
-	query := `
+	query = `
 		WITH similarities AS (
 			SELECT
 				id,
@@ -42,7 +77,6 @@ func ChooseRelevantFilesForChatMessage(ctx context.Context, w *types.Workspace, 
 				workspace_id,
 				file_path,
 				content,
-				summary,
 				embeddings,
 				1 - (embeddings <=> $1) as similarity
 			FROM workspace_file
@@ -57,10 +91,8 @@ func ChooseRelevantFilesForChatMessage(ctx context.Context, w *types.Workspace, 
 			workspace_id,
 			file_path,
 			content,
-			summary,
 			similarity
 		FROM similarities
-		WHERE similarity > 0.7  -- Threshold for relevance
 		ORDER BY similarity DESC
 	`
 
@@ -70,11 +102,10 @@ func ChooseRelevantFilesForChatMessage(ctx context.Context, w *types.Workspace, 
 	}
 	defer rows.Close()
 
-	var files []types.File
+	extensionsWithHighSimilarity := []string{".yaml", ".yml", ".tpl"}
 	for rows.Next() {
 		var file types.File
 		var similarity float64
-		var summary sql.NullString
 
 		err := rows.Scan(
 			&file.ID,
@@ -83,89 +114,29 @@ func ChooseRelevantFilesForChatMessage(ctx context.Context, w *types.Workspace, 
 			&file.WorkspaceID,
 			&file.FilePath,
 			&file.Content,
-			&summary,
 			&similarity,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("error scanning file: %w", err)
 		}
 
-		if summary.Valid {
-			file.Summary = summary.String
+		if !slices.Contains(extensionsWithHighSimilarity, filepath.Ext(file.FilePath)) {
+			similarity = similarity - 0.25
 		}
 
-		// Always include Chart.yaml and values.yaml if they exist
-		if filepath.Base(file.FilePath) == "Chart.yaml" ||
-			filepath.Base(file.FilePath) == "values.yaml" {
-			files = append(files, file)
-			continue
+		if file.FilePath == "Chart.yaml" || file.FilePath == "values.yaml" {
+			similarity = 1.0
 		}
 
-		// Add other relevant files based on similarity
-		if similarity > 0.7 {
-			files = append(files, file)
-		}
+		filesWithRelevance[file] = similarity
 	}
 
-	// If no files were found relevant, at least return Chart.yaml and values.yaml
-	if len(files) == 0 {
-		baseFiles, err := getBaseChartFiles(ctx, conn, w.ID, chartID, revisionNumber)
-		if err != nil {
-			return nil, fmt.Errorf("error getting base chart files: %w", err)
-		}
-		files = append(files, baseFiles...)
+	sorted := make([]RelevantFile, 0, len(filesWithRelevance))
+	for file := range filesWithRelevance {
+		sorted = append(sorted, RelevantFile{File: file, Similarity: filesWithRelevance[file]})
 	}
-
-	return files, nil
-}
-
-func getBaseChartFiles(ctx context.Context, conn *pgxpool.Conn, workspaceID string, chartID string, revisionNumber int) ([]types.File, error) {
-	query := `
-		SELECT
-			id,
-			revision_number,
-			chart_id,
-			workspace_id,
-			file_path,
-			content,
-			summary
-		FROM workspace_file
-		WHERE workspace_id = $1
-		AND chart_id = $2
-		AND revision_number = $3
-		AND (file_path = 'Chart.yaml' OR file_path = 'values.yaml')
-	`
-
-	rows, err := conn.Query(ctx, query, workspaceID, chartID, revisionNumber)
-	if err != nil {
-		return nil, fmt.Errorf("error querying base files: %w", err)
-	}
-	defer rows.Close()
-
-	var files []types.File
-	for rows.Next() {
-		var file types.File
-		var summary sql.NullString
-
-		err := rows.Scan(
-			&file.ID,
-			&file.RevisionNumber,
-			&file.ChartID,
-			&file.WorkspaceID,
-			&file.FilePath,
-			&file.Content,
-			&summary,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("error scanning file: %w", err)
-		}
-
-		if summary.Valid {
-			file.Summary = summary.String
-		}
-
-		files = append(files, file)
-	}
-
-	return files, nil
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[i].Similarity > sorted[j].Similarity
+	})
+	return sorted, nil
 }
