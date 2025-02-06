@@ -19,6 +19,7 @@ export interface WorkspaceFile {
   id: string;
   filePath: string;  // Required - files without paths are filtered out
   content: string;   // Required but may be empty string
+  pendingPatch?: string;
 }
 
 export interface Chart {

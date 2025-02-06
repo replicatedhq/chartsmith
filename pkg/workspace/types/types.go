@@ -11,6 +11,7 @@ type File struct {
 	WorkspaceID    string `json:"workspace_id"`
 	FilePath       string `json:"filePath"`
 	Content        string `json:"content"`
+	PendingPatch   string `json:"pending_patch"`
 }
 
 type Chart struct {

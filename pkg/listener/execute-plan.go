@@ -113,7 +113,11 @@ func handleExecutePlanNotification(ctx context.Context, planID string) error {
 		)
 
 		// make sure we only change 10 files max, and nothing lower than a 0.8 similarity score
-		relevantFiles = relevantFiles[:10]
+		maxFiles := 10
+		if len(relevantFiles) < maxFiles {
+			maxFiles = len(relevantFiles)
+		}
+		relevantFiles = relevantFiles[:maxFiles]
 		finalRelevantFiles := []workspacetypes.File{}
 		for _, file := range relevantFiles {
 			if file.Similarity >= 0.8 {

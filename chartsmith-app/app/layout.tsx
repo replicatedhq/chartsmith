@@ -3,9 +3,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { CommandMenuProvider } from '@/contexts/CommandMenuContext';
 import { Toaster } from "@/components/toast/toaster";
-import { cookies, headers } from "next/headers";
-import type { Theme } from "@/contexts/ThemeContext";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -22,29 +21,21 @@ export const metadata: Metadata = {
   description: "An assistent for creating and validating Helm charts",
 };
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
-  const cookieStore = await cookies();
-  const savedTheme = (cookieStore.get('theme')?.value || 'auto') as Theme;
-  const headersList = await headers();
-  const systemTheme = headersList.get('Sec-CH-Prefers-Color-Scheme') === 'dark' ? 'dark' : 'light';
-  const theme = savedTheme === 'auto' ? systemTheme : savedTheme;
-
+}) {
   return (
-    <html lang="en" className={theme} suppressHydrationWarning>
-      <head>
-        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-      </head>
-      <body suppressHydrationWarning className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <AuthProvider>
-          <ThemeProvider defaultTheme={theme}>
-            {children}
-            <Toaster />
-          </ThemeProvider>
-        </AuthProvider>
+    <html lang="en" suppressHydrationWarning>
+      <body suppressHydrationWarning>
+        <ThemeProvider>
+          <AuthProvider>
+            <CommandMenuProvider>
+              {children}
+            </CommandMenuProvider>
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

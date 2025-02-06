@@ -2,7 +2,6 @@
 
 import React, { useState } from "react";
 import { Sparkles, Upload, FileQuestion } from "lucide-react";
-// import { ReplicatedModal } from '../modals/ReplicatedModal';
 import { useRouter } from "next/navigation";
 import { useTheme } from "@/contexts/ThemeContext";
 import { PromptModal } from "./PromptModal";
@@ -51,7 +50,7 @@ export function CreateChartOptions() {
 
   return (
     <>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto px-4 mt-16">
+      <div suppressHydrationWarning className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto px-4 mt-16">
         {options.map((option, index) => (
           <button key={index} onClick={option.action} className={`p-8 rounded-lg border transition-colors flex flex-col items-center text-center group ${theme === "dark" ? "border-dark-border hover:border-primary/50 bg-dark-surface" : "border-gray-200 hover:border-primary/50 bg-white"}`}>
             <div className={`mb-6 ${theme === "dark" ? "text-gray-400" : "text-gray-500"} group-hover:text-primary transition-colors`}>{option.icon}</div>
@@ -63,13 +62,6 @@ export function CreateChartOptions() {
       </div>
 
       <PromptModal isOpen={showPromptModal} onClose={() => setShowPromptModal(false)} />
-      {/*
-
-
-      <ReplicatedModal
-        isOpen={showReplicatedModal}
-        onClose={() => setShowReplicatedModal(false)}
-      /> */}
     </>
   );
 }

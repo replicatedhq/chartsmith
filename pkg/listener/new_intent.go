@@ -121,7 +121,7 @@ func handleNewIntentNotification(ctx context.Context, payload string) error {
 	}
 
 	// if the intent is proceed, we need to send a message to the planner
-	if intent.IsProceed {
+	if intent.IsProceed && plan != nil {
 		// create a revision
 		rev, err := workspace.CreateRevision(ctx, w.ID, plan.ID, userIDs[0])
 		if err != nil {

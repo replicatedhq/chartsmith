@@ -5,14 +5,17 @@ import { RenderedFileBrowser } from "../RenderedFileBrowser";
 import { CodeEditor } from "../CodeEditor";
 import { useTheme } from "../../../contexts/ThemeContext";
 import { EditorView } from "../../../hooks/useEditorView";
+import { useEffect } from "react";
 
 import { WorkspaceFile, Chart, RenderedChart } from "@/lib/types/workspace";
+import { Session } from "@/lib/types/session";
 
 interface WorkspaceContainerProps {
+  session: Session;
   view: EditorView;
   onViewChange: (newView: EditorView) => void;
   files: WorkspaceFile[];
-  charts: Chart[];  // Add charts
+  charts: Chart[];
   renderedCharts: RenderedChart[];
   selectedFile?: WorkspaceFile;
   onFileSelect: (file: WorkspaceFile) => void;
@@ -20,17 +23,34 @@ interface WorkspaceContainerProps {
   editorContent: string;
   onEditorChange: (value: string | undefined) => void;
   isFileTreeVisible: boolean;
+  onCommandK?: () => void;
 }
 
-export function WorkspaceContainer({ view, onViewChange, files, charts, renderedCharts, selectedFile, onFileSelect, onFileDelete, editorContent, onEditorChange, isFileTreeVisible }: WorkspaceContainerProps) {
+export function WorkspaceContainer({ 
+  session, 
+  view, 
+  onViewChange, 
+  files, 
+  charts, 
+  renderedCharts, 
+  selectedFile, 
+  onFileSelect, 
+  onFileDelete, 
+  editorContent, 
+  onEditorChange, 
+  isFileTreeVisible,
+  onCommandK 
+}: WorkspaceContainerProps) {
   const { resolvedTheme } = useTheme();
+
+  console.log('WorkspaceContainer render, onCommandK is:', onCommandK);
 
   const handleViewChange = (newView: EditorView) => {
     onViewChange(newView);
   };
 
   return (
-    <div className="flex-1 flex flex-col h-[calc(100vh-3.5rem)] min-h-0">
+    <div className="flex-1 flex flex-col h-[calc(100vh-3.5rem)] min-h-0 max-w-[calc(100vw-554px)] overflow-hidden">
       <EditorNav view={view} onViewChange={handleViewChange} />
       <div className="flex-1 flex min-h-0">
         <div className="w-[260px] flex-shrink-0">
@@ -54,14 +74,20 @@ export function WorkspaceContainer({ view, onViewChange, files, charts, rendered
           )}
         </div>
         <div className={`w-px ${resolvedTheme === "dark" ? "bg-dark-border" : "bg-gray-200"} flex-shrink-0`} />
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 overflow-auto">
           {view === "source" && selectedFile && (
             <>
               <CodeEditor
+                session={session}
                 file={selectedFile}
                 theme={resolvedTheme}
                 value={editorContent}
                 onChange={onEditorChange}
+                onCommandK={() => {
+                  console.log("WorkspaceContainer onCommandK handler called");
+                  onCommandK?.();
+                  console.log("WorkspaceContainer onCommandK handler finished");
+                }}
               />
             </>
           )}

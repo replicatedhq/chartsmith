@@ -20,14 +20,15 @@ import { getWorkspaceAction } from "@/lib/workspace/actions/get-workspace";
 import { PlanOnlyLayout } from "../layout/PlanOnlyLayout";
 import { PlanContent } from "./PlanContent";
 import { createChatMessageAction } from "@/lib/workspace/actions/create-chat-message";
+import { useCommandMenu } from '@/contexts/CommandMenuContext';
 
 interface WorkspaceContentProps {
   initialWorkspace: Workspace;
   workspaceId: string;
+  onOpenCommandMenu?: () => void;
 }
 
 export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceContentProps) {
-  // All hooks at the top level
   const { session } = useSession();
   const [workspace, setWorkspace] = useState<Workspace>(initialWorkspace);
   const { isFileTreeVisible, setIsFileTreeVisible } = useWorkspaceUI();
@@ -35,6 +36,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
   const [selectedFile, setSelectedFile] = useState<WorkspaceFile | undefined>();
   const [editorContent, setEditorContent] = useState<string>("");
   const [centrifugoToken, setCentrifugoToken] = useState<string | null>(null);
+  const { openCommandMenu } = useCommandMenu();
   const centrifugeRef = useRef<Centrifuge | null>(null);
   const handlersRef = useRef<{
     onMessage: ((message: { data: CentrifugoMessageData }) => void) | null;
@@ -43,9 +45,13 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     usePathname()?.endsWith('/rendered') ? 'rendered' : 'source'
   );
 
-  // useCallback hooks
+  console.log('WorkspaceContent render, isCommandMenuOpen:', openCommandMenu);
+
   const handleFileSelect = useCallback((file: WorkspaceFile) => {
-    setSelectedFile(file);
+    setSelectedFile({
+      ...file,
+      content: file.content || ""
+    });
     setEditorContent(file.content || "");
     updateFileSelection({
       name: file.filePath.split('/').pop() || file.filePath,
@@ -59,7 +65,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     return;
   }, []);
 
-  const followMode = true; // Always true for now
+  const followMode = true;
 
   const renderedFiles: WorkspaceFile[] = workspace?.files || [];
 
@@ -73,10 +79,9 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     getWorkspaceMessagesAction(session, workspaceId).then(messages => {
       setMessages(messages);
     });
-  }, [session, workspaceId]); // Include workspaceId since we need to reload messages when it changes
+  }, [session, workspaceId]);
 
   const handlePlanUpdated = React.useCallback((plan: RawPlan | Plan) => {
-    // If it's a RawPlan, normalize it
     const p: Plan = 'createdAt' in plan && typeof plan.createdAt === 'string' ? {
       id: plan.id,
       description: plan.description,
@@ -89,7 +94,6 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     } : plan as Plan;
 
     setWorkspace(currentWorkspace => {
-      // If this is a new pending plan, mark all other plans as ignored
       if (p.status === 'pending') {
         const updatedCurrentPlans = currentWorkspace.currentPlans.map(existingPlan => {
           if (existingPlan.id === p.id) {
@@ -98,7 +102,6 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
           return { ...existingPlan, status: 'ignored' };
         });
 
-        // Add new plan to start if it doesn't exist
         if (!updatedCurrentPlans.some(plan => plan.id === p.id)) {
           updatedCurrentPlans.unshift(p);
         }
@@ -110,15 +113,12 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
         };
       }
 
-      // For all other cases, just update or add the plan
       const existingPlanIndex = currentWorkspace.currentPlans.findIndex(plan => plan.id === p.id);
       const updatedCurrentPlans = [...currentWorkspace.currentPlans];
 
       if (existingPlanIndex !== -1) {
-        // Update existing plan
         updatedCurrentPlans[existingPlanIndex] = p;
       } else {
-        // Add new plan to start
         updatedCurrentPlans.unshift(p);
       }
 
@@ -129,7 +129,6 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
       };
     });
 
-    // Refresh messages when we get a new plan or when plan status changes
     if (session && (p.status === 'review' || p.status === 'pending')) {
       getWorkspaceMessagesAction(session, workspaceId).then(updatedMessages => {
         setMessages(updatedMessages);
@@ -140,12 +139,10 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
   const handleRevisionCreated = async (revision: RawRevision) => {
     if (!session || !revision.workspaceId) return;
 
-    // Get fresh workspace state after revision
     const freshWorkspace = await getWorkspaceAction(session, revision.workspaceId);
     if (freshWorkspace) {
       setWorkspace(freshWorkspace);
 
-      // Also refresh messages since we have a new revision
       const updatedMessages = await getWorkspaceMessagesAction(session, revision.workspaceId);
       setMessages(updatedMessages);
     }
@@ -153,13 +150,11 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
 
   const handleChatMessageUpdated = (chatMessage: RawChatMessage) => {
     setMessages?.(prev => {
-      // First try to find and replace a temp message
       const tempMessageIndex = prev.findIndex(m =>
         m.id.startsWith('msg-temp-') && m.prompt === chatMessage.prompt
       );
 
       if (tempMessageIndex !== -1) {
-        // Replace temp message with real one
         const newMessages = [...prev];
         newMessages[tempMessageIndex] = {
           ...chatMessage,
@@ -169,7 +164,6 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
         return newMessages;
       }
 
-      // If no temp message found, update existing message
       return prev.map((m) => {
         if (m.id === chatMessage.id) {
           return {
@@ -187,7 +181,6 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
   const handleWorkspaceUpdated = (workspace: RawWorkspace) => {
   }
 
-  // First, move the handler functions outside the effect and memoize them properly
   const handleCentrifugoMessage = useCallback((message: { data: CentrifugoMessageData }) => {
     const isPlanUpdatedEvent = message.data.plan;
     if (isPlanUpdatedEvent) {
@@ -215,23 +208,21 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     }
   }, [handlePlanUpdated, handleWorkspaceUpdated, handleChatMessageUpdated, handleRevisionCreated]);
 
-  const handleArtifactReceived = useCallback((artifact: { path: string, content: string }) => {
+  const handleArtifactReceived = useCallback((artifact: { path: string, content: string, pendingPatch?: string }) => {
     setWorkspace(currentWorkspace => {
-      // Find if file exists in workspace or chart files
       const existingWorkspaceFile = currentWorkspace.files?.find(f => f.filePath === artifact.path);
       const chartWithFile = currentWorkspace.charts?.find(chart =>
         chart.files.some(f => f.filePath === artifact.path)
       );
 
-      // If file doesn't exist, add it to the chart
       if (!existingWorkspaceFile && !chartWithFile) {
         const newFile = {
           id: `file-${Date.now()}`,
           filePath: artifact.path,
-          content: artifact.content
+          content: artifact.content,
+          pendingPatch: artifact.pendingPatch
         };
 
-        // Always add to the first chart
         return {
           ...currentWorkspace,
           charts: currentWorkspace.charts.map((chart, index) =>
@@ -243,15 +234,22 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
         };
       }
 
-      // Update existing file
       const updatedFiles = currentWorkspace.files?.map(file =>
-        file.filePath === artifact.path ? { ...file, content: artifact.content } : file
+        file.filePath === artifact.path ? {
+          ...file,
+          content: artifact.content,
+          pendingPatch: artifact.pendingPatch
+        } : file
       ) || [];
 
       const updatedCharts = currentWorkspace.charts?.map(chart => ({
         ...chart,
         files: chart.files.map(file =>
-          file.filePath === artifact.path ? { ...file, content: artifact.content } : file
+          file.filePath === artifact.path ? {
+            ...file,
+            content: artifact.content,
+            pendingPatch: artifact.pendingPatch
+          } : file
         )
       })) || [];
 
@@ -262,11 +260,11 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
       };
     });
 
-    // Auto select the file
     const file = {
       id: `file-${Date.now()}`,
       filePath: artifact.path,
-      content: artifact.content
+      content: artifact.content,
+      pendingPatch: artifact.pendingPatch
     };
 
     handleFileSelect(file);
@@ -279,18 +277,15 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     });
   }, [handleFileSelect, setEditorContent, updateFileSelection]);
 
-  // Update the handlers ref whenever the callbacks change
   useEffect(() => {
     handlersRef.current.onMessage = handleCentrifugoMessage;
   }, [handleCentrifugoMessage]);
 
-  // Separate effect for Centrifugo connection with minimal dependencies
   useEffect(() => {
     if (!centrifugoToken || !session || !workspace?.id) {
       return;
     }
 
-    // Don't recreate if we already have a connection
     if (centrifugeRef.current) {
       return;
     }
@@ -350,16 +345,13 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     };
   }, [centrifugoToken, session?.user.id, workspace?.id]);
 
-  // Track previous workspace state for follow mode
   const prevWorkspaceRef = React.useRef<Workspace | null>(null);
 
-  // Handle auto-selecting new files and content updates in follow mode
   useEffect(() => {
     if (!followMode || !workspace) {
       return;
     }
 
-    // Helper to get all files including those in charts
     const getAllFiles = (workspace: Workspace): WorkspaceFile[] => {
       const chartFiles = workspace.charts.flatMap(chart => chart.files);
       return [...workspace.files, ...chartFiles];
@@ -368,14 +360,12 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     const currentFiles = getAllFiles(workspace);
     const prevFiles = prevWorkspaceRef.current ? getAllFiles(prevWorkspaceRef.current) : [];
 
-    // Find new or modified files
     const newOrModifiedFile = currentFiles.find(currentFile => {
       const prevFile = prevFiles.find(p => p.filePath === currentFile.filePath);
       return !prevFile || prevFile.content !== currentFile.content;
     });
 
     if (newOrModifiedFile) {
-
       setSelectedFile(newOrModifiedFile);
       setEditorContent(newOrModifiedFile.content || "");
       updateFileSelection({
@@ -389,7 +379,6 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     prevWorkspaceRef.current = workspace;
   }, [workspace, followMode, updateFileSelection]);
 
-  // Keep editor content in sync with selected file's content
   useEffect(() => {
     if (selectedFile && workspace?.files) {
       const currentFile = workspace.files.find((f) => f.filePath === selectedFile.filePath);
@@ -402,11 +391,8 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
   const handleSendMessage = async (message: string) => {
     if (!session || !workspace) return;
 
-
-    // Make API call
     const chatMessage = await createChatMessageAction(session, workspace.id, message);
 
-    // Add chatMessage to messages
     setMessages(prev => [...prev, chatMessage]);
   }
 
@@ -417,20 +403,16 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
       const updatedWorkspace = await createRevisionAction(session, message.planId || workspace.id);
       if (!updatedWorkspace) return;
 
-      // Get a fresh workspace state after revision
       if (session) {
         const freshWorkspace = await getWorkspaceAction(session, workspace.id);
         if (freshWorkspace) {
-          // Set workspace state and wait for it to complete
           await new Promise<void>(resolve => {
             setWorkspace(freshWorkspace);
-            // Use a short timeout to ensure state is updated
             setTimeout(resolve, 0);
           });
         }
       }
 
-      // Refresh messages after workspace state is updated
       const updatedMessages = await getWorkspaceMessagesAction(session, workspace.id);
       setMessages(updatedMessages);
     } catch (err) {
@@ -439,19 +421,16 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     return;
   };
 
-  // Reference for auto-scrolling
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // Scroll to bottom when messages update
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
-  // Handle window resize for mobile viewport height
   useEffect(() => {
     const handleResize = () => {
       const vh = window.innerHeight * 0.01;
@@ -464,9 +443,8 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     return () => {
       window.removeEventListener("resize", handleResize);
     };
-  }, []); // Empty dependency array since this effect only handles window resize
+  }, []);
 
-  // Handle chat transition end
   useEffect(() => {
     const chatContainer = document.querySelector('.chat-container-wrapper');
     if (!chatContainer) return;
@@ -505,7 +483,6 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
       type: 'file' as const
     }));
 
-    // Clear selected file and editor content when switching to rendered view
     if (newView === "rendered") {
       setSelectedFile(undefined);
       setEditorContent("");
@@ -514,9 +491,6 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     toggleView(newFiles);
   };
 
-
-
-  // Show chat-only view when there's no revision yet
   if (!showEditor) {
     return (
       <PlanOnlyLayout>
@@ -535,10 +509,11 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
 
   return (
     <EditorLayout>
-      <div className="flex w-full overflow-hidden relative">          <div className={`chat-container-wrapper transition-all duration-300 ease-in-out absolute ${
+      <div className="flex w-full overflow-hidden relative">
+        <div className={`chat-container-wrapper transition-all duration-300 ease-in-out absolute ${
             (!workspace?.currentRevisionNumber && !workspace?.incompleteRevisionNumber) || (workspace.currentRevisionNumber === 0 && !workspace.incompleteRevisionNumber) ? 'inset-0 flex justify-center' : 'left-0 top-0 bottom-0'
           }`}>
-            <div className={`${(!workspace?.currentRevisionNumber && !workspace?.incompleteRevisionNumber) || (workspace.currentRevisionNumber === 0 && !workspace.incompleteRevisionNumber) ? 'w-full max-w-3xl px-4' : 'w-[480px]'}`}>
+          <div className={`${(!workspace?.currentRevisionNumber && !workspace?.incompleteRevisionNumber) || (workspace.currentRevisionNumber === 0 && !workspace.incompleteRevisionNumber) ? 'w-full max-w-3xl px-4' : 'w-[480px]'}`}>
             <ChatContainer
               messages={messages}
               onSendMessage={handleSendMessage}
@@ -559,19 +534,21 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
 
           return (
             <div className="flex-1 h-full translate-x-[480px]">
-            <WorkspaceContainer
-              view={view}
-              onViewChange={handleViewChange}
-              files={allFiles}
-              charts={workspace.charts || []}
-              renderedCharts={workspace.renderedCharts || []}
-              selectedFile={selectedFile}
-              onFileSelect={handleFileSelect}
-              onFileDelete={handleFileDelete}
-              editorContent={editorContent}
-              onEditorChange={(value) => setEditorContent(value ?? "")}
-              isFileTreeVisible={isFileTreeVisible}
-            />
+              <WorkspaceContainer
+                session={session}
+                view={view}
+                onViewChange={handleViewChange}
+                files={allFiles}
+                charts={workspace.charts || []}
+                renderedCharts={workspace.renderedCharts || []}
+                selectedFile={selectedFile}
+                onFileSelect={handleFileSelect}
+                onFileDelete={handleFileDelete}
+                editorContent={editorContent}
+                onEditorChange={(value) => setEditorContent(value ?? "")}
+                isFileTreeVisible={isFileTreeVisible}
+                onCommandK={openCommandMenu}
+              />
             </div>
           );
         })()}

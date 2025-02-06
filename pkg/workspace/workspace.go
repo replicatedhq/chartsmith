@@ -9,7 +9,6 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 	"github.com/replicatedhq/chartsmith/pkg/workspace/types"
-	"github.com/tuvistavie/securerandom"
 )
 
 func ListUserIDsForWorkspace(ctx context.Context, workspaceID string) ([]string, error) {
@@ -403,36 +402,6 @@ func NotifyWorkerToCaptureEmbeddings(ctx context.Context, workspaceID string, re
 
 		// pg_notify this with the payload
 		conn.Exec(ctx, `SELECT pg_notify('new_summarize', $1)`, payload)
-	}
-
-	return nil
-}
-
-func SetFileContentInWorkspace(ctx context.Context, workspaceID string, revisionNumber int, chartID string, filePath string, content string) error {
-	conn := persistence.MustGetPooledPostgresSession()
-	defer conn.Release()
-
-	query := `SELECT id FROM workspace_file WHERE chart_id = $1 AND file_path = $2 AND workspace_id = $3 AND revision_number = $4`
-	row := conn.QueryRow(ctx, query, chartID, filePath, workspaceID, revisionNumber)
-	var fileID string
-	err := row.Scan(&fileID)
-	if err == pgx.ErrNoRows {
-		id, err := securerandom.Hex(6)
-		if err != nil {
-			return fmt.Errorf("error generating file ID: %w", err)
-		}
-
-		query := `INSERT INTO workspace_file (id, revision_number, chart_id, workspace_id, file_path, content) VALUES ($1, $2, $3, $4, $5, $6)`
-		_, err = conn.Exec(ctx, query, id, revisionNumber, chartID, workspaceID, filePath, content)
-		if err != nil {
-			return fmt.Errorf("error inserting file in workspace: %w", err)
-		}
-	} else {
-		query := `UPDATE workspace_file SET content = $1 WHERE chart_id = $2 AND file_path = $3 AND workspace_id = $4 AND revision_number = $5`
-		_, err := conn.Exec(ctx, query, content, chartID, filePath, workspaceID, revisionNumber)
-		if err != nil {
-			return fmt.Errorf("error updating file in workspace: %w", err)
-		}
 	}
 
 	return nil
