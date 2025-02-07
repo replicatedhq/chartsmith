@@ -26,10 +26,8 @@ var listenChannels = []string{
 
 // Configuration for concurrency limits
 var (
-	maxConcurrentSummarize = 1
-
 	// Semaphores for different handlers
-	summarizeSemaphore     = make(chan struct{}, maxConcurrentSummarize)
+	summarizeSemaphore     = make(chan struct{}, 1)
 	executeActionSemaphore = make(chan struct{}, 1)
 	intentSemaphore        = make(chan struct{}, 1)
 )
