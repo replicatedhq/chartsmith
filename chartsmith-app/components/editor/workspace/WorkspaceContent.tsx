@@ -22,6 +22,7 @@ import { useCommandMenu } from '@/contexts/CommandMenuContext';
 import { CommandMenuWrapper } from "@/components/CommandMenuWrapper";
 import { Send } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
+import { ChatContainer } from "../chat/ChatContainer";
 
 interface WorkspaceContentProps {
   initialWorkspace: Workspace;
@@ -47,6 +48,18 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
   const handlersRef = useRef<{
     onMessage: ((message: { data: CentrifugoMessageData }) => void) | null;
   }>({ onMessage: null });
+
+  useEffect(() => {
+    console.log('Initial workspace loaded:', {
+      id: initialWorkspace.id,
+      fileCount: initialWorkspace.files.length,
+      chartFileCount: initialWorkspace.charts?.reduce((acc, chart) => acc + chart.files.length, 0),
+      filesWithPatches: initialWorkspace.files.filter(f => f.pendingPatch).length,
+      chartFilesWithPatches: initialWorkspace.charts?.reduce((acc, chart) => 
+        acc + chart.files.filter(f => f.pendingPatch).length, 0
+      )
+    });
+  }, [initialWorkspace]);
 
   const handleFileSelect = useCallback((file: WorkspaceFile) => {
     setSelectedFile({
@@ -185,11 +198,23 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
   const handleArtifactReceivedRef = useRef<((artifact: { path: string, content: string, pendingPatch?: string }) => void) | null>(null);
 
   const handleArtifactReceived = useCallback((artifact: { path: string, content: string, pendingPatch?: string }) => {
+    console.log('Received artifact:', {
+      path: artifact.path,
+      contentLength: artifact.content.length,
+      hasPatch: !!artifact.pendingPatch,
+      patchLength: artifact.pendingPatch?.length
+    });
+
     setWorkspace(currentWorkspace => {
       const existingWorkspaceFile = currentWorkspace.files?.find(f => f.filePath === artifact.path);
       const chartWithFile = currentWorkspace.charts?.find(chart =>
         chart.files.some(f => f.filePath === artifact.path)
       );
+
+      console.log('Existing file check:', {
+        hasExistingFile: !!existingWorkspaceFile,
+        hasChartWithFile: !!chartWithFile
+      });
 
       if (!existingWorkspaceFile && !chartWithFile) {
         const newFile = {
@@ -198,6 +223,13 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
           content: artifact.content,
           pendingPatch: artifact.pendingPatch
         };
+
+        console.log('Creating new file:', {
+          id: newFile.id,
+          filePath: newFile.filePath,
+          contentLength: newFile.content.length,
+          hasPendingPatch: !!newFile.pendingPatch
+        });
 
         return {
           ...currentWorkspace,
@@ -229,6 +261,12 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
         )
       })) || [];
 
+      console.log('Updated existing file:', {
+        path: artifact.path,
+        filesUpdated: updatedFiles.some(f => f.filePath === artifact.path),
+        chartsUpdated: updatedCharts.some(c => c.files.some(f => f.filePath === artifact.path))
+      });
+
       return {
         ...currentWorkspace,
         files: updatedFiles,
@@ -242,6 +280,13 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
       content: artifact.content,
       pendingPatch: artifact.pendingPatch
     };
+
+    console.log('Selecting file:', {
+      id: file.id,
+      filePath: file.path,
+      contentLength: file.content.length,
+      hasPendingPatch: !!file.pendingPatch
+    });
 
     handleFileSelect(file);
     setEditorContent(artifact.content);
@@ -280,6 +325,13 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
 
     const artifact = message.data.artifact;
     if (artifact && artifact.path && artifact.content) {
+      console.log('Centrifugo artifact message:', {
+        path: artifact.path,
+        contentLength: artifact.content.length,
+        hasPatch: !!artifact.pendingPatch,
+        patchLength: artifact.pendingPatch?.length,
+        rawMessage: message.data
+      });
       handleArtifactReceivedRef.current?.(artifact);
     }
   }, [handlePlanUpdated, handleWorkspaceUpdated, handleChatMessageUpdated, handleRevisionCreated]);
@@ -585,6 +637,8 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     setChatInput("");
   };
 
+  const isPlanOnlyView = !workspace?.currentRevisionNumber && !workspace?.incompleteRevisionNumber;
+
   return (
     <EditorLayout>
       <div className="flex w-full overflow-hidden relative">
@@ -593,6 +647,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
           }`}>
           <div className={`${(!workspace?.currentRevisionNumber && !workspace?.incompleteRevisionNumber) || (workspace.currentRevisionNumber === 0 && !workspace.incompleteRevisionNumber) ? 'w-full max-w-3xl px-4' : 'w-[480px] h-full flex flex-col'}`}>
             <div className="flex-1 overflow-y-auto">
+              {isPlanOnlyView ? (
               <PlanContent
                 messages={messages}
                 onSendMessage={handleSendMessage}
@@ -602,39 +657,19 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
                 setWorkspace={setWorkspace}
                 handlePlanUpdated={handlePlanUpdated}
               />
+              ) : (
+                <ChatContainer
+                  messages={messages}
+                  onSendMessage={handleSendMessage}
+                  onApplyChanges={handleApplyChanges}
+                  session={session}
+                  workspaceId={workspaceId}
+                  setMessages={setMessages}
+                  workspace={workspace}
+                  setWorkspace={setWorkspace}
+                />
+              )}
             </div>
-            {workspace?.currentRevisionNumber && workspace?.currentRevisionNumber > 0 && (
-              <div className={`flex-shrink-0 border-t ${theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"}`}>
-                <form onSubmit={handleSubmitChat} className="p-3 relative">
-                  <textarea
-                    value={chatInput}
-                    onChange={(e) => setChatInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSubmitChat(e);
-                      }
-                    }}
-                    placeholder="Type your message..."
-                    rows={3}
-                    style={{ height: 'auto', minHeight: '72px', maxHeight: '150px' }}
-                    className={`w-full px-3 py-1.5 pr-10 text-sm rounded-md border resize-none overflow-hidden ${
-                      theme === "dark"
-                        ? "bg-dark border-dark-border/60 text-white placeholder-gray-500"
-                        : "bg-white border-gray-200 text-gray-900 placeholder-gray-400"
-                    } focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50`}
-                  />
-                  <button
-                    type="submit"
-                    className={`absolute right-4 top-[18px] p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-dark-border/40 ${
-                      theme === "dark" ? "text-gray-400 hover:text-gray-200" : "text-gray-500 hover:text-gray-700"
-                    }`}
-                  >
-                    <Send className="w-4 h-4" />
-                  </button>
-                </form>
-              </div>
-            )}
           </div>
         </div>
         {showEditor && (() => {

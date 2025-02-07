@@ -28,35 +28,38 @@ export function CodeEditor({ session, file, revision, theme = "light", value, on
   const [isAcceptDropdownOpen, setIsAcceptDropdownOpen] = useState(false);
 
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsAcceptDropdownOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  useEffect(() => {
-    if (editorRef.current && value) {
-      setTimeout(() => {
-        editorRef.current?.revealLine(Number.MAX_SAFE_INTEGER);
-      }, 0);
-    }
-  }, [value]);
+    console.log('CodeEditor file update:', {
+      filePath: file?.filePath,
+      hasContent: !!file?.content,
+      contentLength: file?.content?.length,
+      hasPendingPatch: !!file?.pendingPatch,
+      patchLength: file?.pendingPatch?.length,
+      value: value?.length
+    });
+  }, [file, value]);
 
   useEffect(() => {
     if (file?.pendingPatch && diffEditorRef.current) {
+      console.log('Setting up diff editor:', {
+        filePath: file.filePath,
+        originalContent: value,
+        originalLength: value?.length,
+        patchLength: file.pendingPatch.length
+      });
+
       const attemptScroll = (attempt = 1, maxAttempts = 5) => {
         setTimeout(() => {
           const editor = diffEditorRef.current;
-          if (!editor) return;
+          if (!editor) {
+            console.log('No diff editor ref on attempt', attempt);
+            return;
+          }
 
           const modifiedEditor = editor.getModifiedEditor();
           const modifiedModel = modifiedEditor.getModel();
 
           if (!modifiedModel) {
+            console.log('No modified model on attempt', attempt);
             if (attempt < maxAttempts) {
               attemptScroll(attempt + 1);
             }
@@ -64,6 +67,12 @@ export function CodeEditor({ session, file, revision, theme = "light", value, on
           }
 
           const changes = editor.getLineChanges();
+          console.log('Diff editor changes:', {
+            hasChanges: !!changes,
+            changeCount: changes?.length,
+            firstChange: changes?.[0]
+          });
+
           if (changes && changes.length > 0) {
             const firstChange = changes[0];
             modifiedEditor.revealLineInCenter(firstChange.modifiedStartLineNumber);
@@ -79,31 +88,25 @@ export function CodeEditor({ session, file, revision, theme = "light", value, on
 
       attemptScroll();
     }
-  }, [file?.pendingPatch]);
+  }, [file?.pendingPatch, value]);
 
   const handleEditorMount = (editor: editor.IStandaloneCodeEditor, monaco: typeof import("monaco-editor")) => {
     editorRef.current = editor;
     handleEditorInit(editor, monaco);
 
-    // Register a new command
     const commandId = 'chartsmith.openCommandPalette';
     editor.addAction({
       id: commandId,
       label: 'Open Command Palette',
       keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK],
       run: () => {
-        console.log("Running command palette action in editor");
-        console.log("onCommandK value at execution:", onCommandK);
         if (onCommandK) {
-          console.log("Calling onCommandK");
           onCommandK();
-          console.log("onCommandK called");
         }
       }
     });
 
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK, () => {
-      console.log("Command K triggered in editor");
       if (onCommandK) {
         onCommandK();
         return null;
@@ -112,27 +115,23 @@ export function CodeEditor({ session, file, revision, theme = "light", value, on
   };
 
   const handleDiffEditorMount = (editor: editor.IStandaloneDiffEditor, monaco: typeof import("monaco-editor")) => {
+    console.log('Diff editor mounted');
     diffEditorRef.current = editor;
 
     const modifiedEditor = editor.getModifiedEditor();
     const originalEditor = editor.getOriginalEditor();
 
-    // Register command for both editors in diff view
     const commandId = 'chartsmith.openCommandPalette';
     [modifiedEditor, originalEditor].forEach(ed => {
       ed.addAction({
         id: commandId,
         label: 'Open Command Palette',
         keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK],
-        run: () => {
-          console.log("Running command palette action from diff editor");
-          onCommandK?.();
-        }
+        run: () => onCommandK?.()
       });
     });
 
     modifiedEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK, () => {
-      console.log("Command K triggered in diff editor (modified)");
       if (onCommandK) {
         onCommandK();
         return null;
@@ -140,7 +139,6 @@ export function CodeEditor({ session, file, revision, theme = "light", value, on
     });
 
     originalEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK, () => {
-      console.log("Command K triggered in diff editor (original)");
       if (onCommandK) {
         onCommandK();
         return null;
@@ -255,6 +253,17 @@ export function CodeEditor({ session, file, revision, theme = "light", value, on
   );
 
   if (file?.pendingPatch) {
+    console.log('Rendering diff view:', {
+      filePath: file.filePath,
+      patchLength: file.pendingPatch.length,
+      originalContent: value,
+      originalLength: value?.length,
+      patchFirstLine: file.pendingPatch.split('\n')[0],
+      patchLineCount: file.pendingPatch.split('\n').length,
+      isPatchValidFormat: file.pendingPatch.includes('@@ '),
+      rawPatch: file.pendingPatch
+    });
+
     const lines = file.pendingPatch.split('\n');
     const modified = value || "";
     let currentLine = 0;
@@ -263,6 +272,7 @@ export function CodeEditor({ session, file, revision, theme = "light", value, on
 
     for (const line of lines) {
       if (line.startsWith('---') || line.startsWith('+++')) {
+        console.log('Processing patch header:', { line });
         continue;
       }
       if (!contentStarted && !line.startsWith('@')) {
@@ -270,6 +280,13 @@ export function CodeEditor({ session, file, revision, theme = "light", value, on
       }
       if (line.startsWith('@')) {
         const match = line.match(/@@ -(\d+),?(\d+)? \+(\d+),?(\d+)? @@/);
+        console.log('Processing hunk header:', { 
+          line,
+          hasMatch: !!match,
+          matchGroups: match ? match.slice(1) : null,
+          currentLine,
+          modifiedLinesLength: modifiedLines.length
+        });
         if (match) {
           currentLine = parseInt(match[3]) - 1;
           contentStarted = true;
@@ -278,15 +295,45 @@ export function CodeEditor({ session, file, revision, theme = "light", value, on
       }
       if (contentStarted) {
         if (line.startsWith('+')) {
+          console.log('Adding line:', { 
+            lineNumber: currentLine,
+            content: line.substring(1),
+            modifiedLinesLength: modifiedLines.length
+          });
           modifiedLines.splice(currentLine, 0, line.substring(1));
           currentLine++;
         } else if (line.startsWith('-')) {
-          modifiedLines.splice(currentLine, 1);
-        } else {
+          console.log('Removing line:', { 
+            lineNumber: currentLine,
+            content: line.substring(1),
+            modifiedLinesLength: modifiedLines.length
+          });
+          if (currentLine < modifiedLines.length) {
+            modifiedLines.splice(currentLine, 1);
+          }
+        } else if (line.trim() !== '') {
+          console.log('Context line:', {
+            lineNumber: currentLine,
+            content: line,
+            modifiedLinesLength: modifiedLines.length
+          });
+          if (currentLine >= modifiedLines.length) {
+            modifiedLines.push(line);
+          } else {
+            modifiedLines[currentLine] = line;
+          }
           currentLine++;
         }
       }
     }
+
+    console.log('Final modified content:', {
+      originalLineCount: value?.split('\n').length || 0,
+      modifiedLineCount: modifiedLines.length,
+      firstLine: modifiedLines[0],
+      lastLine: modifiedLines[modifiedLines.length - 1],
+      allLines: modifiedLines
+    });
 
     return (
       <div className="flex-1 h-full flex flex-col">
