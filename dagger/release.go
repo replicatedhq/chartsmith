@@ -175,6 +175,28 @@ func (m *Chartsmith) Release(
 	}
 
 	if production {
+		databaseFile := source.File("db/database.yaml")
+		if err := pushYAMLToRepo(ctx, databaseFile, PushFileOpts{
+			RepoFullName:    "replicatedcom/gitops-deploy",
+			Branch:          "release",
+			DestinationPath: "chartsmith/database.yaml",
+			CommitMessage:   fmt.Sprintf("Update Chartsmith database to %s", newVersion),
+			GithubToken:     githubToken,
+		}); err != nil {
+			return err
+		}
+
+		migrations := getChartsmithMigrations(ctx, source)
+		if err := pushYAMLsToRepo(ctx, migrations, PushFileOpts{
+			RepoFullName:    "replicatedcom/gitops-deploy",
+			Branch:          "release",
+			DestinationPath: "chartsmith/migrations.yaml",
+			CommitMessage:   fmt.Sprintf("Update Chartsmith database to %s", newVersion),
+			GithubToken:     githubToken,
+		}); err != nil {
+			return err
+		}
+
 		prodHostname := fmt.Sprintf("%s.dkr.ecr.%s.amazonaws.com", productionAccountID, "us-east-1")
 		prodAppImageName := fmt.Sprintf("%s/%s:%s", prodHostname, "chartsmith-app", newVersion)
 		prodWorkerImageName := fmt.Sprintf("%s/%s:%s", prodHostname, "chartsmith-worker", newVersion)
