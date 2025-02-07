@@ -230,7 +230,9 @@ func (m *Chartsmith) Release(
 		}); err != nil {
 			return err
 		}
+	}
 
+	if build {
 		// create a release on github
 		if err := dag.Gh().
 			WithToken(githubToken).

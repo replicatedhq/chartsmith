@@ -83,11 +83,11 @@ NEXT_PUBLIC_REPLICATED_REDIRECT_URI=%s
 		WithEnvVariable("NEXT_PUBLIC_CENTRIFUGO_ADDRESS", mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Production - Chartsmith Centrifugo", "client_address")).
 		WithEnvVariable("NEXT_PUBLIC_REPLICATED_REDIRECT_URI", mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Production - Chartsmith", "replicated_redirect_uri")).
 		WithExec([]string{"npm", "run", "build"})
-	stdout, err = stagingBuildContainer.Stdout(context.Background())
+	stdout, err = prodBuildContainer.Stdout(context.Background())
 	if err != nil {
 		return nil, nil, err
 	}
-	fmt.Printf("Staging build container stdout:\n%s\n", stdout)
+	fmt.Printf("Production build container stdout:\n%s\n", stdout)
 	prodStandalone := prodBuildContainer.Directory("/src/.next/standalone")
 	prodStatic := prodBuildContainer.Directory("/src/.next/static")
 	prodStandalone = prodStandalone.WithDirectory("/.next/static", prodStatic)
@@ -103,7 +103,7 @@ NEXT_PUBLIC_REPLICATED_REDIRECT_URI=%s
 	prodReleaseContainer = prodReleaseContainer.WithDefaultArgs([]string{
 		"/app/server.js",
 	})
-	prodReleaseContainer = stagingReleaseContainer.WithNewFile("/app/.env.local", fmt.Sprintf(
+	prodReleaseContainer = prodReleaseContainer.WithNewFile("/app/.env.local", fmt.Sprintf(
 		`NEXT_PUBLIC_GOOGLE_CLIENT_ID=%s
 NEXT_PUBLIC_GOOGLE_REDIRECT_URI=%s
 NEXT_PUBLIC_CENTRIFUGO_ADDRESS=%s
