@@ -70,10 +70,28 @@ func CreatePlan(ctx context.Context, streamCh chan string, doneCh chan error, op
 
 	messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(initialUserMessage)))
 
+	// tools := []anthropic.ToolParam{
+	// 	{
+	// 		Name:        anthropic.F("recommended_dependency"),
+	// 		Description: anthropic.F("Recommend a specific subchart or version of a subchart given a requirement"),
+	// 		InputSchema: anthropic.F(interface{}(map[string]interface{}{
+	// 			"type": "object",
+	// 			"properties": map[string]interface{}{
+	// 				"requirement": map[string]interface{}{
+	// 					"type":        "string",
+	// 					"description": "The requirement to recommend a dependency for, e.g. Redis, Mysql",
+	// 				},
+	// 			},
+	// 			"required": []string{"requirement"},
+	// 		})),
+	// 	},
+	// }
+
 	stream := client.Messages.NewStreaming(context.TODO(), anthropic.MessageNewParams{
 		Model:     anthropic.F(anthropic.ModelClaude3_5Sonnet20241022),
 		MaxTokens: anthropic.F(int64(8192)),
-		Messages:  anthropic.F(messages),
+		// Tools:     anthropic.F(tools),
+		Messages: anthropic.F(messages),
 	})
 
 	message := anthropic.Message{}

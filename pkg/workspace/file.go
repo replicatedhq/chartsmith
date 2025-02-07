@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
@@ -68,8 +69,17 @@ func CreateOrPatchFile(ctx context.Context, workspaceID string, revisionNumber i
 			return fmt.Errorf("error generating file ID: %w", err)
 		}
 
-		query := `INSERT INTO workspace_file (id, revision_number, chart_id, workspace_id, file_path, content) VALUES ($1, $2, $3, $4, $5, $6)`
-		_, err = conn.Exec(ctx, query, id, revisionNumber, chartID, workspaceID, filePath, content)
+		// Generate a git-style patch for new file
+		generatedPatch := fmt.Sprintf(`diff --git a/%s b/%s
+new file mode 100644
+index 0000000..0000000
+--- /dev/null
++++ b/%s
+@@ -0,0 +1,%d @@
+%s`, filePath, filePath, filePath, len(strings.Split(content, "\n")), content)
+
+		query := `INSERT INTO workspace_file (id, revision_number, chart_id, workspace_id, file_path, content, pending_patch) VALUES ($1, $2, $3, $4, $5, $6, $7)`
+		_, err = conn.Exec(ctx, query, id, revisionNumber, chartID, workspaceID, filePath, "", generatedPatch)
 		if err != nil {
 			return fmt.Errorf("error inserting file in workspace: %w", err)
 		}

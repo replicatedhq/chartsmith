@@ -4,13 +4,11 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useEditorView } from "@/hooks/useEditorView";
 import { EditorLayout } from "@/components/editor/layout/EditorLayout";
 import { WorkspaceContainer } from "@/components/editor/workspace/WorkspaceContainer";
-import { ChatContainer } from "@/components/editor/chat/ChatContainer";
 import { useWorkspaceUI } from "@/contexts/WorkspaceUIContext";
 import { usePathname } from "next/navigation";
 import { useSession } from "@/app/hooks/useSession";
 import { getWorkspaceMessagesAction } from "@/lib/workspace/actions/get-workspace-messages";
 import { Message, CentrifugoMessageData, RawPlan, RawWorkspace, RawChatMessage, RawRevision } from "@/components/editor/types";
-
 import { Plan, Workspace, WorkspaceFile } from "@/lib/types/workspace";
 import { getCentrifugoTokenAction } from "@/lib/centrifugo/actions/get-centrifugo-token-action";
 import { Centrifuge } from "centrifuge";
@@ -22,6 +20,8 @@ import { PlanContent } from "./PlanContent";
 import { createChatMessageAction } from "@/lib/workspace/actions/create-chat-message";
 import { useCommandMenu } from '@/contexts/CommandMenuContext';
 import { CommandMenuWrapper } from "@/components/CommandMenuWrapper";
+import { Send } from "lucide-react";
+import { useTheme } from "@/contexts/ThemeContext";
 
 interface WorkspaceContentProps {
   initialWorkspace: Workspace;
@@ -30,6 +30,7 @@ interface WorkspaceContentProps {
 }
 
 export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceContentProps) {
+  const { theme } = useTheme();
   const { session } = useSession();
   const [workspace, setWorkspace] = useState<Workspace>(initialWorkspace);
   const { isFileTreeVisible, setIsFileTreeVisible } = useWorkspaceUI();
@@ -38,13 +39,14 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
   const [editorContent, setEditorContent] = useState<string>("");
   const [centrifugoToken, setCentrifugoToken] = useState<string | null>(null);
   const { openCommandMenu } = useCommandMenu();
+  const [chatInput, setChatInput] = useState("");
+  const { view, toggleView, updateFileSelection } = useEditorView(
+    usePathname()?.endsWith('/rendered') ? 'rendered' : 'source'
+  );
   const centrifugeRef = useRef<Centrifuge | null>(null);
   const handlersRef = useRef<{
     onMessage: ((message: { data: CentrifugoMessageData }) => void) | null;
   }>({ onMessage: null });
-  const { view, toggleView, updateFileSelection } = useEditorView(
-    usePathname()?.endsWith('/rendered') ? 'rendered' : 'source'
-  );
 
   const handleFileSelect = useCallback((file: WorkspaceFile) => {
     setSelectedFile({
@@ -251,7 +253,6 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     });
   }, [handleFileSelect, setEditorContent, updateFileSelection]);
 
-  // Update the ref whenever handleArtifactReceived changes
   useEffect(() => {
     handleArtifactReceivedRef.current = handleArtifactReceived;
   }, [handleArtifactReceived]);
@@ -303,12 +304,32 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
       minReconnectDelay: 500,
       maxReconnectDelay: 5000,
       timeout: 5000,
+      maxRetry: 10,
+      refreshAttempts: 5,
+      onPrivateSubscribe: async (ctx) => {
+        const newToken = await getCentrifugoTokenAction(session);
+        return { token: newToken };
+      }
     });
 
     centrifugeRef.current = cf;
 
-    cf.on("connected", () => {});
-    cf.on("disconnected", () => {});
+    cf.on("connected", () => {
+      logger.info("Centrifugo connected");
+    });
+
+    cf.on("disconnected", (ctx) => {
+      logger.warn("Centrifugo disconnected", { ctx });
+      if (session) {
+        getCentrifugoTokenAction(session).then(newToken => {
+          if (centrifugeRef.current && newToken) {
+            centrifugeRef.current.setToken(newToken);
+            centrifugeRef.current.connect();
+          }
+        });
+      }
+    });
+
     cf.on("error", (ctx) => {
       logger.error("Centrifugo error", { ctx });
     });
@@ -322,11 +343,21 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
       handlersRef.current.onMessage?.(message);
     });
 
-    sub.on("subscribed", () => {});
+    sub.on("subscribing", (ctx) => {
+      logger.info("Subscribing to channel", { channel });
+    });
+
+    sub.on("subscribed", (ctx) => {
+      logger.info("Subscribed to channel", { channel });
+    });
+
+    sub.on("unsubscribed", (ctx) => {
+      logger.info("Unsubscribed from channel", { channel });
+    });
+
     sub.on("error", (ctx) => {
       logger.error("Centrifugo subscription error", { ctx });
     });
-    sub.on("unsubscribed", () => {});
 
     sub.subscribe();
 
@@ -546,23 +577,64 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     ...(workspace.charts?.flatMap(chart => chart.files) || [])
   ];
 
+  const handleSubmitChat = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chatInput.trim()) return;
+
+    onSendMessage(chatInput.trim());
+    setChatInput("");
+  };
+
   return (
     <EditorLayout>
       <div className="flex w-full overflow-hidden relative">
         <div className={`chat-container-wrapper transition-all duration-300 ease-in-out absolute ${
             (!workspace?.currentRevisionNumber && !workspace?.incompleteRevisionNumber) || (workspace.currentRevisionNumber === 0 && !workspace.incompleteRevisionNumber) ? 'inset-0 flex justify-center' : 'left-0 top-0 bottom-0'
           }`}>
-          <div className={`${(!workspace?.currentRevisionNumber && !workspace?.incompleteRevisionNumber) || (workspace.currentRevisionNumber === 0 && !workspace.incompleteRevisionNumber) ? 'w-full max-w-3xl px-4' : 'w-[480px]'}`}>
-            <ChatContainer
-              messages={messages}
-              onSendMessage={handleSendMessage}
-              onApplyChanges={handleApplyChanges}
-              session={session}
-              workspaceId={workspaceId}
-              setMessages={setMessages}
-              workspace={workspace}
-              setWorkspace={setWorkspace}
-            />
+          <div className={`${(!workspace?.currentRevisionNumber && !workspace?.incompleteRevisionNumber) || (workspace.currentRevisionNumber === 0 && !workspace.incompleteRevisionNumber) ? 'w-full max-w-3xl px-4' : 'w-[480px] h-full flex flex-col'}`}>
+            <div className="flex-1 overflow-y-auto">
+              <PlanContent
+                messages={messages}
+                onSendMessage={handleSendMessage}
+                session={session}
+                setMessages={setMessages}
+                workspace={workspace}
+                setWorkspace={setWorkspace}
+                handlePlanUpdated={handlePlanUpdated}
+              />
+            </div>
+            {workspace?.currentRevisionNumber && workspace?.currentRevisionNumber > 0 && (
+              <div className={`flex-shrink-0 border-t ${theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"}`}>
+                <form onSubmit={handleSubmitChat} className="p-3 relative">
+                  <textarea
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSubmitChat(e);
+                      }
+                    }}
+                    placeholder="Type your message..."
+                    rows={3}
+                    style={{ height: 'auto', minHeight: '72px', maxHeight: '150px' }}
+                    className={`w-full px-3 py-1.5 pr-10 text-sm rounded-md border resize-none overflow-hidden ${
+                      theme === "dark"
+                        ? "bg-dark border-dark-border/60 text-white placeholder-gray-500"
+                        : "bg-white border-gray-200 text-gray-900 placeholder-gray-400"
+                    } focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50`}
+                  />
+                  <button
+                    type="submit"
+                    className={`absolute right-4 top-[18px] p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-dark-border/40 ${
+                      theme === "dark" ? "text-gray-400 hover:text-gray-200" : "text-gray-500 hover:text-gray-700"
+                    }`}
+                  >
+                    <Send className="w-4 h-4" />
+                  </button>
+                </form>
+              </div>
+            )}
           </div>
         </div>
         {showEditor && (() => {

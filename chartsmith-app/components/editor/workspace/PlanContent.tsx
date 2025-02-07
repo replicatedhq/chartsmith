@@ -109,8 +109,8 @@ export function PlanContent({ session, workspace, messages, handlePlanUpdated, s
   }
 
   return (
-    <div className="h-full w-full overflow-auto transition-all duration-300 ease-in-out">
-      <div className="px-4 w-full max-w-3xl py-8 pb-16 mx-auto relative">
+    <div className="min-h-full w-full">
+      <div className="px-4 w-full max-w-3xl py-8 mx-auto">
         <ScrollingContent>
           <Card className="p-6 w-full border-dark-border/40 shadow-lg">
             {renderItems.map((item, index) => (
