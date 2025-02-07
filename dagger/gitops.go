@@ -57,6 +57,7 @@ func pushYAMLToRepo(ctx context.Context, yamlFile *dagger.File, opts PushFileOpt
 		fmt.Sprintf(`
             git clone https://oauth2:${GITHUB_TOKEN}@github.com/%s.git repo &&
             cd repo &&
+			git checkout %s &&
             cp /tmp/file.yaml %s &&
             git add %s &&
             if git diff --cached --quiet; then
@@ -68,6 +69,7 @@ func pushYAMLToRepo(ctx context.Context, yamlFile *dagger.File, opts PushFileOpt
             fi
         `,
 			opts.RepoFullName,
+			opts.Branch,
 			opts.DestinationPath,
 			opts.DestinationPath,
 			opts.CommitMessage,
