@@ -6,4 +6,11 @@ export interface User {
   createdAt: Date;
   lastLoginAt?: Date;
   lastActiveAt?: Date;
+
+  settings: UserSetting;
+}
+
+export interface UserSetting {
+  automaticallyAcceptPatches: boolean;
+  evalBeforeAccept: boolean;
 }

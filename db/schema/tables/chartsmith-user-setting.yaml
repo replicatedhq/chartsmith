@@ -1,0 +1,18 @@
+database: chartsmith
+name: chartsmith_user_setting
+schema:
+  postgres:
+    primaryKey:
+    - user_id
+    - key
+    columns:
+    - name: user_id
+      type: text
+      constraints:
+        notNull: true
+    - name: key
+      type: text
+      constraints:
+        notNull: true
+    - name: value
+      type: text

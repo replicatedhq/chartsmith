@@ -8,6 +8,7 @@ import { SettingsModal } from "./SettingsModal";
 import { LogOut, Settings, FolderOpen } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
+import { useSession } from "@/app/hooks/useSession";
 
 export function UserMenu() {
   const { user, signOut } = useAuth();
@@ -16,6 +17,7 @@ export function UserMenu() {
   const [isOpen, setIsOpen] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const { session } = useSession();
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -69,7 +71,13 @@ export function UserMenu() {
           </button>
         </div>
       )}
-      {showSettings && <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} />}
+      {showSettings && session && (
+        <SettingsModal 
+          isOpen={showSettings} 
+          onClose={() => setShowSettings(false)} 
+          session={session}
+        />
+      )}
     </div>
   );
 }

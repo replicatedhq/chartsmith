@@ -1,25 +1,40 @@
-import React, { useState } from 'react';
-import { X, Trash2, Key } from 'lucide-react';
-import { useTheme, Theme } from '@/contexts/ThemeContext';
+"use client"
 
+import React, { useState, useEffect } from 'react';
+import { X, Trash2, Key, Check } from 'lucide-react';
+import { useTheme, Theme } from '@/contexts/ThemeContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { updateUserSettingAction } from '@/lib/auth/actions/update-user-setting';
+import { useSession } from '@/app/hooks/useSession';
+import { Session } from '@/lib/types/session';
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
+  session: Session;
 }
 
 interface SettingsSection {
-  id: 'general' | 'replicated' | 'appearance' | 'editor';
+  id: 'general' | 'replicated' | 'appearance' | 'editor' | 'changes';
   label: string;
   icon: React.ReactNode;
   content: React.ReactNode;
 }
 
-export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
-  const [activeSection, setActiveSection] = useState<SettingsSection['id']>('general');
-  const { theme, setTheme } = useTheme();
+export function SettingsModal({ isOpen, onClose, session }: SettingsModalProps) {
+  const { theme } = useTheme();
+  const [activeSection, setActiveSection] = useState<'general' | 'replicated' | 'appearance' | 'editor' | 'changes'>('general');
+  const [autoAcceptChanges, setAutoAcceptChanges] = useState(session.user?.settings?.automaticallyAcceptPatches || false);
+  const [validateBeforeAccept, setValidateBeforeAccept] = useState(session.user?.settings?.evalBeforeAccept || false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [apiToken, setApiToken] = useState('');
+
+  useEffect(() => {
+    if (session.user?.settings) {
+      setAutoAcceptChanges(session.user.settings.automaticallyAcceptPatches);
+      setValidateBeforeAccept(session.user.settings.evalBeforeAccept);
+    }
+  }, [session.user?.settings]);
 
   if (!isOpen) return null;
 
@@ -43,6 +58,18 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const handleReplicatedConnect = () => {
     const redirectUri = process.env.NEXT_PUBLIC_REPLICATED_REDIRECT_URI || "";
     window.location.href = redirectUri;
+  };
+
+  const handleAutoAcceptChange = async (checked: boolean) => {
+    if (!session.user) return;
+    setAutoAcceptChanges(checked);
+    await updateUserSettingAction(session, 'automatically_accept_patches', checked.toString());
+  };
+
+  const handleValidateBeforeAcceptChange = async (checked: boolean) => {
+    if (!session.user) return;
+    setValidateBeforeAccept(checked);
+    await updateUserSettingAction(session, 'eval_before_accept', checked.toString());
   };
 
   const sections: SettingsSection[] = [
@@ -200,6 +227,58 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         </div>
       ),
     },
+    {
+      id: 'changes' as const,
+      label: 'Changes',
+      icon: <Check className="w-4 h-4" />,
+      content: (
+        <div className="space-y-4">
+          <div className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              id="auto-accept"
+              checked={autoAcceptChanges}
+              onChange={(e) => handleAutoAcceptChange(e.target.checked)}
+              className={`rounded border transition-colors ${
+                theme === 'dark'
+                  ? 'border-dark-border bg-dark text-primary'
+                  : 'border-gray-300 bg-white text-primary'
+              } focus:ring-primary`}
+            />
+            <label htmlFor="auto-accept" className={`text-sm ${
+              theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+            }`}>
+              Automatically accept all changes (YOLO)
+            </label>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              id="validate-before-accept"
+              checked={validateBeforeAccept}
+              disabled={autoAcceptChanges}
+              onChange={(e) => handleValidateBeforeAcceptChange(e.target.checked)}
+              className={`rounded border transition-colors ${
+                theme === 'dark'
+                  ? 'border-dark-border bg-dark text-primary disabled:opacity-50 disabled:cursor-not-allowed'
+                  : 'border-gray-300 bg-white text-primary disabled:opacity-50 disabled:cursor-not-allowed'
+              } focus:ring-primary`}
+            />
+            <label
+              htmlFor="validate-before-accept"
+              className={`text-sm ${
+                theme === 'dark'
+                  ? `text-gray-300 ${autoAcceptChanges ? 'opacity-50' : ''}`
+                  : `text-gray-700 ${autoAcceptChanges ? 'opacity-50' : ''}`
+              }`}
+            >
+              Run eval/validation before patches are accepted
+            </label>
+          </div>
+        </div>
+      ),
+    }
   ];
 
   return (

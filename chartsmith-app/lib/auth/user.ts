@@ -1,8 +1,13 @@
 import * as srs from "secure-random-string";
-import { User } from "../types/user";
+import { User, UserSetting } from "../types/user";
 import { getDB } from "../data/db";
 import { getParam } from "../data/param";
 import { logger } from "../utils/logger";
+
+const defaultUserSettings: UserSetting = {
+  automaticallyAcceptPatches: false,
+  evalBeforeAccept: false,
+};
 
 export async function upsertUser(email: string, name: string, imageUrl: string): Promise<User> {
   const user = await findUser(email);
@@ -29,6 +34,7 @@ export async function upsertUser(email: string, name: string, imageUrl: string):
       createdAt: new Date(),
       lastLoginAt: new Date(),
       lastActiveAt: new Date(),
+      settings: await getUserSettings(id),
     };
   } catch (err) {
     logger.error("Failed to upsert user", { err });
@@ -63,7 +69,7 @@ export async function findUser(email: string): Promise<User | undefined> {
 
     const row = result.rows[0];
 
-    return {
+    const user: User = {
       id: row.id,
       email: row.email,
       name: row.name,
@@ -71,9 +77,66 @@ export async function findUser(email: string): Promise<User | undefined> {
       createdAt: row.created_at,
       lastLoginAt: row.last_login_at,
       lastActiveAt: row.last_active_at,
+      settings: await getUserSettings(row.id),
     };
+
+    return user;
   } catch (err) {
     logger.error("Failed to find user", { err });
+    throw err;
+  }
+}
+
+export async function updateUserSetting(id: string, key: string, value: string): Promise<UserSetting> {
+  try {
+    const db = getDB(await getParam("DB_URI"));
+    await db.query(
+      `
+            INSERT INTO chartsmith_user_setting (user_id, key, value)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (user_id, key) DO UPDATE SET value = $3
+        `,
+      [id, key, value],
+    );
+
+    return await getUserSettings(id);
+  } catch (err) {
+    logger.error("Failed to update user setting", { err });
+    throw err;
+  }
+}
+
+async function getUserSettings(id: string): Promise<UserSetting> {
+  try {
+    const db = getDB(await getParam("DB_URI"));
+    const result = await db.query(
+      `
+            SELECT
+                chartsmith_user_setting.key,
+                chartsmith_user_setting.value
+            FROM
+                chartsmith_user_setting
+            WHERE
+                chartsmith_user_setting.user_id = $1
+        `,
+      [id],
+    );
+
+    const userSettings: UserSetting = { ...defaultUserSettings };
+
+    for (const row of result.rows) {
+      switch (row.key) {
+        case "automatically_accept_patches":
+          userSettings.automaticallyAcceptPatches = row.value === "true";
+          break;
+        case "eval_before_accept":
+          userSettings.evalBeforeAccept = row.value === "true";
+      }
+    }
+
+    return userSettings;
+  } catch (err) {
+    logger.error("Failed to get user settings", { err });
     throw err;
   }
 }
@@ -113,6 +176,7 @@ export async function getUser(id: string): Promise<User | undefined> {
       createdAt: row.created_at,
       lastLoginAt: row.last_login_at,
       lastActiveAt: row.last_active_at,
+      settings: await getUserSettings(row.id),
     };
   } catch (err) {
     logger.error("Failed to get user", { err });
