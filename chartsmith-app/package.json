@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint --fix",
-    "test": "npx playwright test"
+    "test": "npx playwright test",
+    "test:unit": "jest"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.36.3",
@@ -46,6 +47,7 @@
     "@playwright/test": "^1.50.1",
     "@types/diff-match-patch": "^1.0.36",
     "@types/gunzip-maybe": "^1.4.2",
+    "@types/jest": "^29.5.12",
     "@types/jsonwebtoken": "^9.0.7",
     "@types/node": "^22.10.8",
     "@types/pg": "^8.11.10",
@@ -56,8 +58,12 @@
     "@typescript-eslint/parser": "^8.21.0",
     "eslint": "^9.18.0",
     "eslint-config-next": "^15.1.6",
+    "jest": "^29.7.0",
+    "jest-environment-node": "^29.7.0",
     "postcss": "^8.5.1",
     "tailwindcss": "^3.4.17",
+    "ts-jest": "^29.1.2",
+    "ts-node": "^10.9.2",
     "typescript": "^5.7.3"
   }
 }

@@ -24,6 +24,12 @@ func (m *Chartsmith) Validate(
 	}
 	allTestResults["schema"] = schemaResults
 
+	unitTestResults, err := unitTestChartsmithApp(source, opServiceAccount)
+	if err != nil {
+		return false, err
+	}
+	allTestResults["unit-tests"] = unitTestResults
+
 	functionalTestResults, err := functionalTests(source, opServiceAccount)
 	if err != nil {
 		return false, err

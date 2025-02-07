@@ -3,7 +3,7 @@
 import { Session } from "@/lib/types/session";
 import { WorkspaceFile } from "@/lib/types/workspace";
 import { logger } from "@/lib/utils/logger";
-import { applyPatch, getFileByIdAndRevision } from "../patch";
+import { applyPatch, getFileByIdAndRevision, updateFileAfterPatchOperation } from "../patch";
 
 export async function acceptPatchAction(session: Session, fileId: string, revision: number): Promise<WorkspaceFile> {
   const { user } = session;
@@ -15,6 +15,8 @@ export async function acceptPatchAction(session: Session, fileId: string, revisi
 
   const file = await getFileByIdAndRevision(fileId, revision);
   const updatedFile = await applyPatch(file);
+
+  await updateFileAfterPatchOperation(fileId, revision, updatedFile.content, updatedFile.pendingPatch);
 
   return updatedFile;
 }

@@ -34,6 +34,32 @@ func lintChartsmithApp(
 	}, nil
 }
 
+func unitTestChartsmithApp(
+	source *dagger.Directory,
+	opServiceAccount *dagger.Secret,
+) (*ValidateResult, error) {
+	buildContainer := buildEnvChartsmithApp(source, opServiceAccount)
+
+	testContainer := buildContainer.WithExec([]string{"npm", "run", "test:unit"})
+
+	isSuccess := true
+	stdout, err := testContainer.Stdout(context.Background())
+	if err != nil {
+		isSuccess = false
+	}
+
+	stderr, err := testContainer.Stderr(context.Background())
+	if err != nil {
+		isSuccess = false
+	}
+
+	return &ValidateResult{
+		Passed: isSuccess,
+		Stdout: stdout,
+		Stderr: stderr,
+	}, nil
+}
+
 func buildChartsmithApp(ctx context.Context, source *dagger.Directory, opServiceAccount *dagger.Secret, version string) (*dagger.Container, *dagger.Container, error) {
 	source = updateDebugPage(ctx, source, version)
 
