@@ -2,7 +2,7 @@ import React from "react";
 import { useTheme } from "../../../contexts/ThemeContext";
 import { TopNav } from "@/components/TopNav";
 import { DebugPanel } from "@/components/DebugPanel";
-import { CommandMenu } from "@/components/CommandMenu";
+import CommandMenu from "@/components/CommandMenu";
 import { useCommandMenu } from "@/contexts/CommandMenuContext";
 
 interface EditorLayoutProps {

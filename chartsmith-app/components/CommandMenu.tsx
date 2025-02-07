@@ -1,3 +1,5 @@
+"use client";
+
 import React from 'react';
 import { Command } from 'cmdk';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -9,8 +11,8 @@ interface CommandMenuProps {
   isDebugVisible: boolean;
 }
 
-export function CommandMenu({ isOpen, onClose, onToggleDebug, isDebugVisible }: CommandMenuProps) {
-  const { resolvedTheme } = useTheme();
+export default function CommandMenu({ isOpen, onClose, onToggleDebug, isDebugVisible }: CommandMenuProps) {
+  const { resolvedTheme, theme, setTheme } = useTheme();
   const inputRef = React.useRef<HTMLInputElement>(null);
 
   // Focus input when menu opens
@@ -48,6 +50,11 @@ export function CommandMenu({ isOpen, onClose, onToggleDebug, isDebugVisible }: 
 
   if (!isOpen) return null;
 
+  const getAvailableThemes = () => {
+    const themes = ['light', 'dark', 'auto'] as const;
+    return themes.filter(t => t !== theme);
+  };
+
   return (
     <div className="fixed inset-0 bg-black/50 z-50">
       <div className="fixed top-[20%] left-1/2 -translate-x-1/2 w-full max-w-[640px]">
@@ -57,6 +64,7 @@ export function CommandMenu({ isOpen, onClose, onToggleDebug, isDebugVisible }: 
               ? "bg-dark-surface border-dark-border text-gray-300"
               : "bg-white border-gray-200 text-gray-700"
           }`}
+          loop
         >
           <Command.Input
             ref={inputRef}
@@ -68,41 +76,31 @@ export function CommandMenu({ isOpen, onClose, onToggleDebug, isDebugVisible }: 
             }`}
           />
           <Command.List className="max-h-[300px] overflow-auto p-2">
-            <Command.Group heading="Workspace">
-              <Command.Item
-                onSelect={() => {
-                  onClose();
-                  // TODO: Handle new workspace creation
-                }}
-                className={`px-3 py-2 rounded-sm text-sm cursor-pointer ${
-                  resolvedTheme === "dark"
-                    ? "hover:bg-dark-border/40"
-                    : "hover:bg-gray-100"
-                }`}
-              >
-                Create a new workspace
-              </Command.Item>
-              <Command.Item
-                onSelect={() => {
-                  onClose();
-                  // TODO: Handle subchart addition
-                }}
-                className={`px-3 py-2 rounded-sm text-sm cursor-pointer ${
-                  resolvedTheme === "dark"
-                    ? "hover:bg-dark-border/40"
-                    : "hover:bg-gray-100"
-                }`}
-              >
-                Add a subchart
-              </Command.Item>
+            <Command.Group heading="Theme">
+              {getAvailableThemes().map((themeOption) => (
+                <Command.Item
+                  key={themeOption}
+                  onSelect={() => {
+                    setTheme(themeOption);
+                    onClose();
+                  }}
+                  className={`px-3 py-2 rounded-sm text-sm cursor-pointer ${
+                    resolvedTheme === "dark"
+                      ? "hover:bg-dark-border/40 aria-selected:bg-dark-border/40"
+                      : "hover:bg-gray-100 aria-selected:bg-gray-100"
+                  }`}
+                >
+                  Switch to {themeOption} theme
+                </Command.Item>
+              ))}
             </Command.Group>
             <Command.Group heading="Tools">
               <Command.Item
                 onSelect={onToggleDebug}
                 className={`px-3 py-2 rounded-sm text-sm cursor-pointer ${
                   resolvedTheme === "dark"
-                    ? "hover:bg-dark-border/40"
-                    : "hover:bg-gray-100"
+                    ? "hover:bg-dark-border/40 aria-selected:bg-dark-border/40"
+                    : "hover:bg-gray-100 aria-selected:bg-gray-100"
                 }`}
               >
                 {isDebugVisible ? "Hide" : "Show"} Debug Terminal
