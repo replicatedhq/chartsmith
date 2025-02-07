@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from 'react';
-import { X, Trash2, Key, Check } from 'lucide-react';
+import { X, Trash2, Key, Check, Loader2 } from 'lucide-react';
 import { useTheme, Theme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { updateUserSettingAction } from '@/lib/auth/actions/update-user-setting';
@@ -28,6 +28,8 @@ export function SettingsModal({ isOpen, onClose, session }: SettingsModalProps) 
   const [validateBeforeAccept, setValidateBeforeAccept] = useState(session.user?.settings?.evalBeforeAccept || false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [apiToken, setApiToken] = useState('');
+  const [savingAutoAccept, setSavingAutoAccept] = useState(false);
+  const [savingValidate, setSavingValidate] = useState(false);
 
   useEffect(() => {
     if (session.user?.settings) {
@@ -40,14 +42,12 @@ export function SettingsModal({ isOpen, onClose, session }: SettingsModalProps) 
 
   const handleDeleteChats = () => {
     setIsDeleting(true);
-    // Simulate deletion
     setTimeout(() => {
       setIsDeleting(false);
     }, 1000);
   };
 
   const handleSaveToken = async () => {
-    // Simulate API call
     return new Promise<void>((resolve) => {
       setTimeout(() => {
         resolve();
@@ -62,14 +62,24 @@ export function SettingsModal({ isOpen, onClose, session }: SettingsModalProps) 
 
   const handleAutoAcceptChange = async (checked: boolean) => {
     if (!session.user) return;
-    setAutoAcceptChanges(checked);
-    await updateUserSettingAction(session, 'automatically_accept_patches', checked.toString());
+    setSavingAutoAccept(true);
+    try {
+      setAutoAcceptChanges(checked);
+      await updateUserSettingAction(session, 'automatically_accept_patches', checked.toString());
+    } finally {
+      setSavingAutoAccept(false);
+    }
   };
 
   const handleValidateBeforeAcceptChange = async (checked: boolean) => {
     if (!session.user) return;
-    setValidateBeforeAccept(checked);
-    await updateUserSettingAction(session, 'eval_before_accept', checked.toString());
+    setSavingValidate(true);
+    try {
+      setValidateBeforeAccept(checked);
+      await updateUserSettingAction(session, 'eval_before_accept', checked.toString());
+    } finally {
+      setSavingValidate(false);
+    }
   };
 
   const sections: SettingsSection[] = [
@@ -234,17 +244,21 @@ export function SettingsModal({ isOpen, onClose, session }: SettingsModalProps) 
       content: (
         <div className="space-y-4">
           <div className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              id="auto-accept"
-              checked={autoAcceptChanges}
-              onChange={(e) => handleAutoAcceptChange(e.target.checked)}
-              className={`rounded border transition-colors ${
-                theme === 'dark'
-                  ? 'border-dark-border bg-dark text-primary'
-                  : 'border-gray-300 bg-white text-primary'
-              } focus:ring-primary`}
-            />
+            {savingAutoAccept ? (
+              <Loader2 className="w-4 h-4 animate-spin text-primary" />
+            ) : (
+              <input
+                type="checkbox"
+                id="auto-accept"
+                checked={autoAcceptChanges}
+                onChange={(e) => handleAutoAcceptChange(e.target.checked)}
+                className={`rounded border transition-colors ${
+                  theme === 'dark'
+                    ? 'border-dark-border bg-dark text-primary'
+                    : 'border-gray-300 bg-white text-primary'
+                } focus:ring-primary`}
+              />
+            )}
             <label htmlFor="auto-accept" className={`text-sm ${
               theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
             }`}>
@@ -253,18 +267,22 @@ export function SettingsModal({ isOpen, onClose, session }: SettingsModalProps) 
           </div>
 
           <div className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              id="validate-before-accept"
-              checked={validateBeforeAccept}
-              disabled={autoAcceptChanges}
-              onChange={(e) => handleValidateBeforeAcceptChange(e.target.checked)}
-              className={`rounded border transition-colors ${
-                theme === 'dark'
-                  ? 'border-dark-border bg-dark text-primary disabled:opacity-50 disabled:cursor-not-allowed'
-                  : 'border-gray-300 bg-white text-primary disabled:opacity-50 disabled:cursor-not-allowed'
-              } focus:ring-primary`}
-            />
+            {savingValidate ? (
+              <Loader2 className="w-4 h-4 animate-spin text-primary" />
+            ) : (
+              <input
+                type="checkbox"
+                id="validate-before-accept"
+                checked={validateBeforeAccept}
+                disabled={autoAcceptChanges}
+                onChange={(e) => handleValidateBeforeAcceptChange(e.target.checked)}
+                className={`rounded border transition-colors ${
+                  theme === 'dark'
+                    ? 'border-dark-border bg-dark text-primary disabled:opacity-50 disabled:cursor-not-allowed'
+                    : 'border-gray-300 bg-white text-primary disabled:opacity-50 disabled:cursor-not-allowed'
+                } focus:ring-primary`}
+              />
+            )}
             <label
               htmlFor="validate-before-accept"
               className={`text-sm ${
@@ -288,7 +306,6 @@ export function SettingsModal({ isOpen, onClose, session }: SettingsModalProps) 
           ? 'bg-dark-surface border-dark-border'
           : 'bg-white border-gray-200'
       }`}>
-        {/* Left Navigation */}
         <div className={`w-48 border-r p-2 ${
           theme === 'dark' ? 'border-dark-border' : 'border-gray-200'
         }`}>
@@ -310,7 +327,6 @@ export function SettingsModal({ isOpen, onClose, session }: SettingsModalProps) 
           ))}
         </div>
 
-        {/* Content Area */}
         <div className="flex-1 flex flex-col">
           <div className={`flex items-center justify-between p-4 border-b ${
             theme === 'dark' ? 'border-dark-border' : 'border-gray-200'
