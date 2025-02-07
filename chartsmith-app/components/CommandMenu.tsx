@@ -15,7 +15,6 @@ export default function CommandMenu({ isOpen, onClose, onToggleDebug, isDebugVis
   const { resolvedTheme, theme, setTheme } = useTheme();
   const inputRef = React.useRef<HTMLInputElement>(null);
 
-  // Focus input when menu opens
   React.useEffect(() => {
     if (isOpen) {
       requestAnimationFrame(() => {
@@ -24,7 +23,6 @@ export default function CommandMenu({ isOpen, onClose, onToggleDebug, isDebugVis
     }
   }, [isOpen]);
 
-  // Handle Escape key and click outside
   React.useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isOpen) {
@@ -48,12 +46,12 @@ export default function CommandMenu({ isOpen, onClose, onToggleDebug, isDebugVis
     };
   }, [isOpen, onClose]);
 
-  if (!isOpen) return null;
-
   const getAvailableThemes = () => {
     const themes = ['light', 'dark', 'auto'] as const;
     return themes.filter(t => t !== theme);
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50">

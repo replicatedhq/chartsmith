@@ -49,6 +49,7 @@ export async function sessionToken(session: Session): Promise<string> {
       name: session.user.name,
       email: session.user.email,
       picture: session.user.imageUrl,
+      userSettings: session.user.settings,
     },
     process.env.HMAC_SECRET!,
     options,

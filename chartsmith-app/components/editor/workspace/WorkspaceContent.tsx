@@ -21,6 +21,7 @@ import { PlanOnlyLayout } from "../layout/PlanOnlyLayout";
 import { PlanContent } from "./PlanContent";
 import { createChatMessageAction } from "@/lib/workspace/actions/create-chat-message";
 import { useCommandMenu } from '@/contexts/CommandMenuContext';
+import { CommandMenuWrapper } from "@/components/CommandMenuWrapper";
 
 interface WorkspaceContentProps {
   initialWorkspace: Workspace;
@@ -44,8 +45,6 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
   const { view, toggleView, updateFileSelection } = useEditorView(
     usePathname()?.endsWith('/rendered') ? 'rendered' : 'source'
   );
-
-  console.log('WorkspaceContent render, isCommandMenuOpen:', openCommandMenu);
 
   const handleFileSelect = useCallback((file: WorkspaceFile) => {
     setSelectedFile({
@@ -496,21 +495,56 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     toggleView(newFiles);
   };
 
-  if (!showEditor) {
-    return (
-      <PlanOnlyLayout>
-        <PlanContent
-          session={session}
-          workspace={workspace!}
-          messages={messages}
-          handlePlanUpdated={handlePlanUpdated}
-          setMessages={setMessages}
-          setWorkspace={setWorkspace}
-          onSendMessage={handleSendMessage}
-        />
-      </PlanOnlyLayout>
-    );
-  }
+  const handleFileUpdate = (updatedFile: WorkspaceFile) => {
+    setWorkspace(currentWorkspace => {
+      const updatedFiles = currentWorkspace.files.map(file =>
+        file.id === updatedFile.id ? updatedFile : file
+      );
+
+      const updatedCharts = currentWorkspace.charts.map(chart => ({
+        ...chart,
+        files: chart.files.map(file =>
+          file.id === updatedFile.id ? updatedFile : file
+        )
+      }));
+
+      return {
+        ...currentWorkspace,
+        files: updatedFiles,
+        charts: updatedCharts
+      };
+    });
+
+    if (selectedFile?.id === updatedFile.id) {
+      setSelectedFile(updatedFile);
+    }
+  };
+
+  const handleAcceptPatch = async () => {
+    if (!session || !selectedFile?.pendingPatch) return;
+    const updatedFile = await acceptPatchAction(session, selectedFile.id, workspace.currentRevisionNumber);
+    setEditorContent(updatedFile.content);
+    handleFileUpdate(updatedFile);
+  };
+
+  const handleRejectPatch = () => {
+    if (!session || !selectedFile?.pendingPatch) return;
+    rejectPatchAction(session, selectedFile.id, workspace.currentRevisionNumber);
+  };
+
+  const handleAcceptAllPatches = async () => {
+    if (!session) return;
+    const filesWithPatches = allFiles.filter(f => f.pendingPatch);
+    for (const patchFile of filesWithPatches) {
+      const updatedFile = await acceptPatchAction(session, patchFile.id, workspace.currentRevisionNumber);
+      handleFileUpdate(updatedFile);
+    }
+  };
+
+  const allFiles = [
+    ...(workspace.files || []),
+    ...(workspace.charts?.flatMap(chart => chart.files) || [])
+  ];
 
   return (
     <EditorLayout>
@@ -545,6 +579,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
                 onViewChange={handleViewChange}
                 files={allFiles}
                 charts={workspace.charts || []}
+                revision={workspace.currentRevisionNumber}
                 renderedCharts={workspace.renderedCharts || []}
                 selectedFile={selectedFile}
                 onFileSelect={handleFileSelect}
@@ -553,11 +588,13 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
                 onEditorChange={(value) => setEditorContent(value ?? "")}
                 isFileTreeVisible={isFileTreeVisible}
                 onCommandK={openCommandMenu}
+                onFileUpdate={handleFileUpdate}
               />
             </div>
           );
         })()}
       </div>
+      <CommandMenuWrapper />
     </EditorLayout>
   );
 }

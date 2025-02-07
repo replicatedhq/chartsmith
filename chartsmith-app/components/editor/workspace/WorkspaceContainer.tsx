@@ -16,6 +16,7 @@ interface WorkspaceContainerProps {
   onViewChange: (newView: EditorView) => void;
   files: WorkspaceFile[];
   charts: Chart[];
+  revision: number;
   renderedCharts: RenderedChart[];
   selectedFile?: WorkspaceFile;
   onFileSelect: (file: WorkspaceFile) => void;
@@ -24,6 +25,7 @@ interface WorkspaceContainerProps {
   onEditorChange: (value: string | undefined) => void;
   isFileTreeVisible: boolean;
   onCommandK?: () => void;
+  onFileUpdate?: (file: WorkspaceFile) => void;
 }
 
 export function WorkspaceContainer({
@@ -33,17 +35,17 @@ export function WorkspaceContainer({
   files,
   charts,
   renderedCharts,
+  revision,
   selectedFile,
   onFileSelect,
   onFileDelete,
   editorContent,
   onEditorChange,
   isFileTreeVisible,
-  onCommandK
+  onCommandK,
+  onFileUpdate
 }: WorkspaceContainerProps) {
   const { resolvedTheme } = useTheme();
-
-  console.log('WorkspaceContainer render, onCommandK is:', onCommandK);
 
   const handleViewChange = (newView: EditorView) => {
     onViewChange(newView);
@@ -80,6 +82,7 @@ export function WorkspaceContainer({
               <CodeEditor
                 session={session}
                 file={selectedFile}
+                revision={revision}
                 theme={resolvedTheme}
                 value={editorContent}
                 onChange={onEditorChange}
@@ -88,6 +91,8 @@ export function WorkspaceContainer({
                   onCommandK?.();
                   console.log("WorkspaceContainer onCommandK handler finished");
                 }}
+                onFileUpdate={onFileUpdate}
+                files={files}
               />
             </>
           )}

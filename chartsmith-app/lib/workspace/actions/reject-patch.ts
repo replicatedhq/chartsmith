@@ -2,6 +2,6 @@
 
 import { Session } from "@/lib/types/session";
 
-export async function rejectPatchAction(session: Session, path: string): Promise<void> {
+export async function rejectPatchAction(session: Session, fileId: string, revision: number): Promise<void> {
 
 }
