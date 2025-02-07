@@ -64,3 +64,14 @@ release:
 		--github-token env:GITHUB_TOKEN \
 		--op-service-account env:OP_SERVICE_ACCOUNT \
 		--progress plain
+
+.PHONY: production
+production:
+	dagger call release \
+		--version $(version) \
+		--build=false \
+		--staging=false \
+		--production=true \
+		--github-token env:GITHUB_TOKEN \
+		--op-service-account env:OP_SERVICE_ACCOUNT \
+		--progress plain
