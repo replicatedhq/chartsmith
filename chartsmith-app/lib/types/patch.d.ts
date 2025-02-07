@@ -17,7 +17,7 @@ declare module 'parse-git-patch' {
 }
 
 declare module 'patch' {
-  export function applyPatch(content: string, hunks: any[]): string;
+  export function applyPatch(content: string, hunks: import('parse-git-patch').Hunk[]): string;
 }
 
 declare module 'unified-diff' {

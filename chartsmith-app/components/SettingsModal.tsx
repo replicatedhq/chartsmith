@@ -22,7 +22,7 @@ interface SettingsSection {
 }
 
 export function SettingsModal({ isOpen, onClose, session }: SettingsModalProps) {
-  const { theme } = useTheme();
+  const { theme, setTheme } = useTheme();
   const [activeSection, setActiveSection] = useState<'general' | 'replicated' | 'appearance' | 'editor' | 'changes'>('general');
   const [autoAcceptChanges, setAutoAcceptChanges] = useState(session.user?.settings?.automaticallyAcceptPatches || false);
   const [validateBeforeAccept, setValidateBeforeAccept] = useState(session.user?.settings?.evalBeforeAccept || false);

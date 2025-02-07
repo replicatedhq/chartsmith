@@ -88,7 +88,7 @@ export function CodeEditor({ session, file, revision, theme = "light", value, on
 
       attemptScroll();
     }
-  }, [file?.pendingPatch, value]);
+  }, [file?.pendingPatch, file?.filePath, value]);
 
   const handleEditorMount = (editor: editor.IStandaloneCodeEditor, monaco: typeof import("monaco-editor")) => {
     editorRef.current = editor;
@@ -280,7 +280,7 @@ export function CodeEditor({ session, file, revision, theme = "light", value, on
       }
       if (line.startsWith('@')) {
         const match = line.match(/@@ -(\d+),?(\d+)? \+(\d+),?(\d+)? @@/);
-        console.log('Processing hunk header:', { 
+        console.log('Processing hunk header:', {
           line,
           hasMatch: !!match,
           matchGroups: match ? match.slice(1) : null,
@@ -295,7 +295,7 @@ export function CodeEditor({ session, file, revision, theme = "light", value, on
       }
       if (contentStarted) {
         if (line.startsWith('+')) {
-          console.log('Adding line:', { 
+          console.log('Adding line:', {
             lineNumber: currentLine,
             content: line.substring(1),
             modifiedLinesLength: modifiedLines.length
@@ -303,7 +303,7 @@ export function CodeEditor({ session, file, revision, theme = "light", value, on
           modifiedLines.splice(currentLine, 0, line.substring(1));
           currentLine++;
         } else if (line.startsWith('-')) {
-          console.log('Removing line:', { 
+          console.log('Removing line:', {
             lineNumber: currentLine,
             content: line.substring(1),
             modifiedLinesLength: modifiedLines.length

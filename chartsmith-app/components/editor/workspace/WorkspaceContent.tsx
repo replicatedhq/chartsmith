@@ -11,7 +11,7 @@ import { getWorkspaceMessagesAction } from "@/lib/workspace/actions/get-workspac
 import { Message, CentrifugoMessageData, RawPlan, RawWorkspace, RawChatMessage, RawRevision } from "@/components/editor/types";
 import { Plan, Workspace, WorkspaceFile } from "@/lib/types/workspace";
 import { getCentrifugoTokenAction } from "@/lib/centrifugo/actions/get-centrifugo-token-action";
-import { Centrifuge } from "centrifuge";
+import { Centrifuge, Options } from "centrifuge";
 import { createRevisionAction } from "@/lib/workspace/actions/create-revision";
 import { logger } from "@/lib/utils/logger";
 import { getWorkspaceAction } from "@/lib/workspace/actions/get-workspace";
@@ -23,6 +23,8 @@ import { CommandMenuWrapper } from "@/components/CommandMenuWrapper";
 import { Send } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { ChatContainer } from "../chat/ChatContainer";
+import { acceptPatchAction } from "@/lib/workspace/actions/accept-patch";
+import { rejectPatchAction } from "@/lib/workspace/actions/reject-patch";
 
 interface WorkspaceContentProps {
   initialWorkspace: Workspace;
@@ -55,7 +57,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
       fileCount: initialWorkspace.files.length,
       chartFileCount: initialWorkspace.charts?.reduce((acc, chart) => acc + chart.files.length, 0),
       filesWithPatches: initialWorkspace.files.filter(f => f.pendingPatch).length,
-      chartFilesWithPatches: initialWorkspace.charts?.reduce((acc, chart) => 
+      chartFilesWithPatches: initialWorkspace.charts?.reduce((acc, chart) =>
         acc + chart.files.filter(f => f.pendingPatch).length, 0
       )
     });
@@ -283,7 +285,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
 
     console.log('Selecting file:', {
       id: file.id,
-      filePath: file.path,
+      filePath: file.filePath,
       contentLength: file.content.length,
       hasPendingPatch: !!file.pendingPatch
     });
@@ -350,27 +352,18 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     }
 
     const channel = `${workspace.id}#${session.user.id}`;
-    const cf = new Centrifuge(process.env.NEXT_PUBLIC_CENTRIFUGO_ADDRESS!, {
-      debug: true,
-      token: centrifugoToken,
-      minReconnectDelay: 500,
-      maxReconnectDelay: 5000,
+    const centrifuge = new Centrifuge(process.env.NEXT_PUBLIC_CENTRIFUGO_URL!, {
       timeout: 5000,
-      maxRetry: 10,
-      refreshAttempts: 5,
-      onPrivateSubscribe: async (ctx) => {
-        const newToken = await getCentrifugoTokenAction(session);
-        return { token: newToken };
-      }
+      token: centrifugoToken
     });
 
-    centrifugeRef.current = cf;
+    centrifugeRef.current = centrifuge;
 
-    cf.on("connected", () => {
+    centrifuge.on("connected", () => {
       logger.info("Centrifugo connected");
     });
 
-    cf.on("disconnected", (ctx) => {
+    centrifuge.on("disconnected", (ctx) => {
       logger.warn("Centrifugo disconnected", { ctx });
       if (session) {
         getCentrifugoTokenAction(session).then(newToken => {
@@ -382,12 +375,12 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
       }
     });
 
-    cf.on("error", (ctx) => {
+    centrifuge.on("error", (ctx) => {
       logger.error("Centrifugo error", { ctx });
     });
-    cf.on("connecting", () => {});
+    centrifuge.on("connecting", () => {});
 
-    const sub = cf.newSubscription(channel, {
+    const sub = centrifuge.newSubscription(channel, {
       data: {}
     });
 
@@ -414,7 +407,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     sub.subscribe();
 
     try {
-      cf.connect();
+      centrifuge.connect();
     } catch (err) {
       logger.error("Error connecting to Centrifugo:", err);
     }
@@ -633,8 +626,12 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     e.preventDefault();
     if (!chatInput.trim()) return;
 
-    onSendMessage(chatInput.trim());
-    setChatInput("");
+    try {
+      await handleSendMessage(chatInput.trim());
+      setChatInput("");
+    } catch (error) {
+      logger.error("Error sending message:", error);
+    }
   };
 
   const isPlanOnlyView = !workspace?.currentRevisionNumber && !workspace?.incompleteRevisionNumber;
