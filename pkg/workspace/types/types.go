@@ -52,6 +52,7 @@ type Revision struct {
 	CreatedByUserID string    `json:"-"`
 	CreatedType     string    `json:"-"`
 	IsComplete      bool      `json:"isComplete"`
+	IsRendered      bool      `json:"isRendered"`
 }
 
 type PlanStatus string

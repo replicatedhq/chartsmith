@@ -26,20 +26,20 @@ interface WorkspaceContainerProps {
   onCommandK?: () => void;
 }
 
-export function WorkspaceContainer({ 
-  session, 
-  view, 
-  onViewChange, 
-  files, 
-  charts, 
-  renderedCharts, 
-  selectedFile, 
-  onFileSelect, 
-  onFileDelete, 
-  editorContent, 
-  onEditorChange, 
+export function WorkspaceContainer({
+  session,
+  view,
+  onViewChange,
+  files,
+  charts,
+  renderedCharts,
+  selectedFile,
+  onFileSelect,
+  onFileDelete,
+  editorContent,
+  onEditorChange,
   isFileTreeVisible,
-  onCommandK 
+  onCommandK
 }: WorkspaceContainerProps) {
   const { resolvedTheme } = useTheme();
 
@@ -50,7 +50,7 @@ export function WorkspaceContainer({
   };
 
   return (
-    <div className="flex-1 flex flex-col h-[calc(100vh-3.5rem)] min-h-0 max-w-[calc(100vw-554px)] overflow-hidden">
+    <div className="flex-1 flex flex-col h-[calc(100vh-3.5rem)] min-h-0 max-w-[calc(100vw-545px)] overflow-hidden">
       <EditorNav view={view} onViewChange={handleViewChange} />
       <div className="flex-1 flex min-h-0">
         <div className="w-[260px] flex-shrink-0">

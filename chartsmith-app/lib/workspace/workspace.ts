@@ -38,7 +38,8 @@ export async function createWorkspace(createdType: string, userId: string, baseC
         [id, boostrapWorkspaceRow.rows[0].name, userId, createdType, initialRevisionNumber],
       );
 
-      await client.query(`INSERT INTO workspace_revision (workspace_id, revision_number, created_at, created_by_user_id, created_type, is_complete) VALUES ($1, $2, now(), $3, $4, true)`, [id, initialRevisionNumber, userId, createdType]);
+      await client.query(`INSERT INTO workspace_revision (workspace_id, revision_number, created_at, created_by_user_id, created_type, is_complete, is_rendered) VALUES ($1, $2, now(), $3, $4, true, false)`, [
+        id, initialRevisionNumber, userId, createdType]);
 
       if (baseChart) {
         // Use the provided baseChart
@@ -582,7 +583,7 @@ export async function createRevision(plan: Plan, userID: string): Promise<number
         )
         INSERT INTO workspace_revision (
           workspace_id, revision_number, created_at,
-          created_by_user_id, created_type, is_complete
+          created_by_user_id, created_type, is_complete, is_rendered
         )
         SELECT
           $1,
@@ -590,6 +591,7 @@ export async function createRevision(plan: Plan, userID: string): Promise<number
           NOW(),
           $2,
           COALESCE(lr.created_type, 'manual'),
+          false,
           false
         FROM next_revision
         LEFT JOIN latest_revision lr ON true

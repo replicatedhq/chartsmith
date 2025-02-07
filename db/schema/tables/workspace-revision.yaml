@@ -28,6 +28,11 @@ schema:
         type: text
         constraints:
           notNull: true
+      - name: is_rendered
+        type: boolean
+        constraints:
+          notNull: true
+        default: "false"
       - name: is_complete
         type: boolean
         constraints:

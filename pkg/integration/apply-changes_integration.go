@@ -244,7 +244,7 @@ func IntegrationTestData_ChooseRelevantFilesForChatMessage(ctx context.Context) 
 		return fmt.Errorf("failed to create workspace: %w", err)
 	}
 
-	query = `INSERT INTO workspace_revision (workspace_id, revision_number, created_at, plan_id, created_by_user_id, created_type, is_complete) VALUES ($1, 1, now(), null, $2, $3, true)`
+	query = `INSERT INTO workspace_revision (workspace_id, revision_number, created_at, plan_id, created_by_user_id, created_type, is_complete, is_rendered) VALUES ($1, 1, now(), null, $2, $3, true, false)`
 	_, err = conn.Exec(ctx, query, IntegrationTestOpts_ChooseRelevantFilesForChatMessage.WorkspaceID, "testuser", "testtype")
 	if err != nil {
 		return fmt.Errorf("failed to create workspace revision: %w", err)

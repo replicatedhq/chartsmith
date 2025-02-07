@@ -107,7 +107,7 @@ func dumpData(ctx context.Context) error {
 		},
 		"workspace_revision": {
 			"workspace_id", "revision_number", "created_at", "plan_id",
-			"created_by_user_id", "created_type", "is_complete",
+			"created_by_user_id", "created_type", "is_complete", "is_rendered",
 		},
 		"workspace_file": {
 			"id", "revision_number", "chart_id", "workspace_id",

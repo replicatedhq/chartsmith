@@ -1,5 +1,5 @@
 database: chartsmith
-name: workspace_rendered_chart
+name: workspace_rendered_chart_file
 schema:
   postgres:
     primaryKey:
@@ -7,6 +7,7 @@ schema:
     - revision_number
     - chart_id
     - scenario_id
+    - file_id
     columns:
     - name: workspace_id
       type: text
@@ -24,10 +25,9 @@ schema:
       type: text
       constraints:
         notNull: true
-    - name: is_success
-      type: boolean
+    - name: file_id
+      type: text
       constraints:
         notNull: true
-      default: "false"
-    - name: error_message
+    - name: rendered_content
       type: text
