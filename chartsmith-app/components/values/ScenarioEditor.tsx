@@ -9,9 +9,10 @@ import { useCommandMenu } from '@/contexts/CommandMenuContext';
 interface ScenarioEditorProps {
   value: string;
   onChange: (value: string) => void;
+  referenceValues: string;
 }
 
-export function ScenarioEditor({ value, onChange }: ScenarioEditorProps) {
+export function ScenarioEditor({ value, onChange, referenceValues }: ScenarioEditorProps) {
   const { theme } = useTheme();
   const { setIsCommandMenuOpen } = useCommandMenu();
   const [activeTab, setActiveTab] = useState<'values' | 'reference'>('values');
@@ -36,19 +37,9 @@ export function ScenarioEditor({ value, onChange }: ScenarioEditorProps) {
     });
   };
 
-  const referenceValues = `# Default values for my-helm-chart
-replicaCount: 1
-image:
-  repository: nginx
-  tag: "1.16.0"
-  pullPolicy: IfNotPresent
-service:
-  type: ClusterIP
-  port: 80`;
-
   return (
-    <div>
-      <div className={`flex items-center border-b ${theme === "dark" ? "border-dark-border" : "border-gray-200"}`}>
+    <div className="h-[700px]">
+      <div className={`flex-none flex items-center border-b ${theme === "dark" ? "border-dark-border" : "border-gray-200"}`}>
         {!isSplitView && (
           <>
             <button
@@ -67,7 +58,7 @@ service:
                     : 'text-gray-600 border-transparent hover:text-gray-700'
               }`}
             >
-              Scenario values (to test)
+              Scenario values (empty)
             </button>
             <button
               type="button"
@@ -123,76 +114,85 @@ service:
         </div>
       </div>
 
-      <div className={`w-full rounded-b-lg border-x border-b ${theme === "dark" ? "border-dark-border" : "border-gray-300"}`}>
+      <div className={`h-[calc(100%-40px)] w-full rounded-b-lg border-x border-b ${theme === "dark" ? "border-dark-border" : "border-gray-300"}`}>
         {isSplitView ? (
-          <div className={`grid grid-cols-2 divide-x ${theme === "dark" ? "divide-dark-border" : "divide-gray-200"}`}>
-            <div>
-              <div className={`px-4 py-2 text-sm font-medium border-b ${theme === "dark" ? "border-dark-border text-gray-300" : "border-gray-200 text-gray-700"}`}>
-                Scenario values (to test)
+          <div className={`grid grid-cols-2 divide-x h-full ${theme === "dark" ? "divide-dark-border" : "divide-gray-200"}`}>
+            <div className="h-full">
+              <div className={`h-[32px] px-4 py-2 text-sm font-medium border-b ${theme === "dark" ? "border-dark-border text-gray-300" : "border-gray-200 text-gray-700"}`}>
+                Scenario values (empty)
               </div>
-              <Editor
-                height="300px"
-                defaultLanguage="yaml"
-                theme={theme === 'dark' ? 'vs-dark' : 'light'}
-                value={value}
-                onChange={(val) => onChange(val || '')}
-                onMount={handleEditorMount}
-                options={{
-                  minimap: { enabled: false },
-                  scrollBeyondLastLine: false,
-                  fontSize: 11,
-                  lineNumbers: 'on',
-                  folding: false,
-                  lineDecorationsWidth: 16,
-                  lineNumbersMinChars: 3,
-                  padding: { top: 8, bottom: 8 }
-                }}
-              />
+              <div className="h-[calc(100%-32px)]">
+                <Editor
+                  key="scenario-editor"
+                  height="100%"
+                  defaultLanguage="yaml"
+                  theme={theme === 'dark' ? 'vs-dark' : 'light'}
+                  value={value}
+                  onChange={(val) => onChange(val || '')}
+                  onMount={handleEditorMount}
+                  options={{
+                    minimap: { enabled: false },
+                    scrollBeyondLastLine: false,
+                    fontSize: 11,
+                    lineNumbers: 'on',
+                    folding: false,
+                    lineDecorationsWidth: 16,
+                    lineNumbersMinChars: 3,
+                    padding: { top: 8, bottom: 8 }
+                  }}
+                />
+              </div>
             </div>
-            <div>
-              <div className={`px-4 py-2 text-sm font-medium border-b ${theme === "dark" ? "border-dark-border text-gray-300" : "border-gray-200 text-gray-700"}`}>
+            <div className="h-full">
+              <div className={`h-[32px] px-4 py-2 text-sm font-medium border-b ${theme === "dark" ? "border-dark-border text-gray-300" : "border-gray-200 text-gray-700"}`}>
                 Built-in values (reference)
               </div>
-              <Editor
-                height="300px"
-                defaultLanguage="yaml"
-                theme={theme === 'dark' ? 'vs-dark' : 'light'}
-                value={referenceValues}
-                onMount={handleEditorMount}
-                options={{
-                  minimap: { enabled: false },
-                  scrollBeyondLastLine: false,
-                  fontSize: 11,
-                  lineNumbers: 'on',
-                  folding: false,
-                  lineDecorationsWidth: 16,
-                  lineNumbersMinChars: 3,
-                  padding: { top: 8, bottom: 8 },
-                  readOnly: true
-                }}
-              />
+              <div className="h-[calc(100%-32px)]">
+                <Editor
+                  key="reference-editor"
+                  height="100%"
+                  defaultLanguage="yaml"
+                  theme={theme === 'dark' ? 'vs-dark' : 'light'}
+                  value={referenceValues}
+                  onMount={handleEditorMount}
+                  options={{
+                    minimap: { enabled: false },
+                    scrollBeyondLastLine: false,
+                    fontSize: 11,
+                    lineNumbers: 'on',
+                    folding: false,
+                    lineDecorationsWidth: 16,
+                    lineNumbersMinChars: 3,
+                    padding: { top: 8, bottom: 8 },
+                    readOnly: true
+                  }}
+                />
+              </div>
             </div>
           </div>
         ) : (
-          <Editor
-            height="300px"
-            defaultLanguage="yaml"
-            theme={theme === 'dark' ? 'vs-dark' : 'light'}
-            value={activeTab === 'values' ? value : referenceValues}
-            onChange={activeTab === 'values' ? (val) => onChange(val || '') : undefined}
-            onMount={handleEditorMount}
-            options={{
-              minimap: { enabled: false },
-              scrollBeyondLastLine: false,
-              fontSize: 11,
-              lineNumbers: 'on',
-              folding: false,
-              lineDecorationsWidth: 16,
-              lineNumbersMinChars: 3,
-              padding: { top: 8, bottom: 8 },
-              readOnly: activeTab === 'reference'
-            }}
-          />
+          <div className="h-full">
+            <Editor
+              key={activeTab}
+              height="100%"
+              defaultLanguage="yaml"
+              theme={theme === 'dark' ? 'vs-dark' : 'light'}
+              value={activeTab === 'values' ? value : referenceValues}
+              onChange={activeTab === 'values' ? (val) => onChange(val || '') : undefined}
+              onMount={handleEditorMount}
+              options={{
+                minimap: { enabled: false },
+                scrollBeyondLastLine: false,
+                fontSize: 11,
+                lineNumbers: 'on',
+                folding: false,
+                lineDecorationsWidth: 16,
+                lineNumbersMinChars: 3,
+                padding: { top: 8, bottom: 8 },
+                readOnly: activeTab === 'reference'
+              }}
+            />
+          </div>
         )}
       </div>
     </div>

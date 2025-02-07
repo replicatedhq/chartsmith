@@ -6,6 +6,7 @@ import { validateSession } from '@/lib/auth/actions/validate-session';
 import { getWorkspaceAction } from '@/lib/workspace/actions/get-workspace';
 import { cookies } from 'next/headers';
 import { CommandMenuWrapper } from '@/components/CommandMenuWrapper';
+import { notFound } from 'next/navigation';
 
 interface CreateScenarioPageProps {
   params: { id: string, chartName: string };
@@ -13,7 +14,7 @@ interface CreateScenarioPageProps {
 }
 
 export default async function ScenarioPage({ params, searchParams }: CreateScenarioPageProps) {
-  const { id: workspaceId, chartName } = params;
+  const { id: workspaceId, chartName } = (await params);
 
   const cookieStore = await cookies();
   const sessionToken = cookieStore.get('session')?.value;
@@ -27,12 +28,12 @@ export default async function ScenarioPage({ params, searchParams }: CreateScena
 
   const workspace = await getWorkspaceAction(session, workspaceId);
   if (!workspace) {
-    return null;
+    notFound();
   }
 
-  const chart = workspace?.charts.find(chart => chart.name === chartName);
+  const chart = workspace.charts.find(chart => chart.name === chartName);
   if (!chart) {
-    return null;
+    notFound();
   }
 
   return (

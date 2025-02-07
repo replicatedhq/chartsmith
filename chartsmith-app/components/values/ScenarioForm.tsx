@@ -27,10 +27,13 @@ export function ScenarioForm({ workspace, chartId }: ScenarioFormProps) {
   const chart = workspace.charts.find(chart => chart.id === chartId);
   if (!chart) return null;
 
+  const valuesFile = chart.files.find(file => file.filePath === "values.yaml");
+  const referenceValues = valuesFile?.content || '';
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !values || !session) return;
-    
+
     try {
       await createScenarioAction(session, workspace.id, chartId, name, description, values);
       router.push(`/workspace/${workspace.id}/values`);
@@ -41,10 +44,10 @@ export function ScenarioForm({ workspace, chartId }: ScenarioFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col h-[calc(100vh-theme(spacing.14))]">
-      <div className="max-w-6xl mx-auto w-full px-6 flex flex-col flex-1 pb-6">
+      <div className="max-w-6xl mx-auto w-full px-6 flex flex-col flex-1">
         <div className="flex-none py-6 flex flex-col gap-4">
           <div className="flex items-center text-sm">
-            <button 
+            <button
               type="button"
               onClick={() => router.push(`/workspace/${workspace.id}`)}
               className={`hover:underline ${theme === "dark" ? "text-gray-300 hover:text-white" : "text-gray-600 hover:text-gray-900"}`}
@@ -52,7 +55,7 @@ export function ScenarioForm({ workspace, chartId }: ScenarioFormProps) {
               Workspace
             </button>
             <ChevronRight className="w-4 h-4 mx-2 text-gray-400" />
-            <button 
+            <button
               type="button"
               onClick={() => router.push(`/workspace/${workspace.id}/values`)}
               className={`hover:underline ${theme === "dark" ? "text-gray-300 hover:text-white" : "text-gray-600 hover:text-gray-900"}`}
@@ -71,6 +74,9 @@ export function ScenarioForm({ workspace, chartId }: ScenarioFormProps) {
             </h1>
             <p className={`text-md ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>
               Create a new values scenario to test different configurations for your Helm chart.
+            </p>
+            <p className={`text-sm px-4 py-3 rounded-lg bg-blue-500/10 border border-blue-500/20 ${theme === "dark" ? "text-blue-200" : "text-blue-700"}`}>
+              The default values.yaml will still be applied when this scenario is active. Your values will be merged into the values.yaml.
             </p>
           </div>
         </div>
@@ -104,20 +110,18 @@ export function ScenarioForm({ workspace, chartId }: ScenarioFormProps) {
               />
             </div>
 
-            <div className="flex-1 flex flex-col min-h-0">
-              <label className={`block text-sm font-medium mb-2 ${theme === "dark" ? "text-gray-300" : "text-gray-700"}`}>
-                Values
-              </label>
+            <div className="flex-1 flex flex-col">
               <div className="flex-1">
                 <ScenarioEditor
                   value={values}
                   onChange={setValues}
+                  referenceValues={referenceValues}
                 />
               </div>
             </div>
           </div>
 
-          <div className="flex-none p-4 bg-[var(--background)] border-t border-dark-border">
+          <div className={`flex-none p-4 bg-[var(--background)] border-t ${theme === "dark" ? "border-dark-border" : "border-gray-200"} mt-auto`}>
             <div className="flex justify-end">
               <button
                 type="submit"
