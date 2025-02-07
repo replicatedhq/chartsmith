@@ -125,8 +125,8 @@ func (m *Chartsmith) Release(
 	}
 
 	stagingHostname := fmt.Sprintf("%s.dkr.ecr.%s.amazonaws.com", stagingAccountID, "us-east-1")
-	appImageName := fmt.Sprintf("%s/%s:%s", stagingHostname, "chartsmith-app", newVersion)
-	workerImageName := fmt.Sprintf("%s/%s:%s", stagingHostname, "chartsmith-worker", newVersion)
+	stagingAppImageName := fmt.Sprintf("%s/%s:%s", stagingHostname, "chartsmith-app", newVersion)
+	stagingWorkerImageName := fmt.Sprintf("%s/%s:%s", stagingHostname, "chartsmith-worker", newVersion)
 
 	stagingEditedSource := dag.
 		Kustomize().
@@ -136,9 +136,9 @@ func (m *Chartsmith) Release(
 		Set().
 		Namespace("chartsmith").
 		Set().
-		Image(fmt.Sprintf("chartsmith-worker=%s", workerImageName)).
+		Image(fmt.Sprintf("chartsmith-worker=%s", stagingWorkerImageName)).
 		Set().
-		Image(fmt.Sprintf("chartsmith-app=%s", appImageName)).
+		Image(fmt.Sprintf("chartsmith-app=%s", stagingAppImageName)).
 		Directory()
 
 	stagingManifests := dag.Kustomize().Build(
@@ -158,20 +158,39 @@ func (m *Chartsmith) Release(
 		return err
 	}
 
-	// productionMergedManifests := dag.
-	// 	Kustomize().
-	// 	Build(source, dagger.KustomizeBuildOpts{
-	// 		Dir: "kustomize/overlays/production",
-	// 	})
-	// if err := pushYAMLToRepo(ctx, productionMergedManifests, PushFileOpts{
-	// 	RepoFullName:    "replicatedcom/gitops-deploy",
-	// 	Branch:          "release",
-	// 	DestinationPath: "chartsmith.yaml",
-	// 	CommitMessage:   fmt.Sprintf("Update Chartsmith manifests to %s", newVersion),
-	// 	GithubToken:     githubToken,
-	// }); err != nil {
-	// 	return err
-	// }
+	prodHostname := fmt.Sprintf("%s.dkr.ecr.%s.amazonaws.com", productionAccountID, "us-east-1")
+	prodAppImageName := fmt.Sprintf("%s/%s:%s", prodHostname, "chartsmith-app", newVersion)
+	prodWorkerImageName := fmt.Sprintf("%s/%s:%s", prodHostname, "chartsmith-worker", newVersion)
+
+	prodEditedSource := dag.
+		Kustomize().
+		Edit(source, dagger.KustomizeEditOpts{
+			Dir: "kustomize/overlays/production",
+		}).
+		Set().
+		Namespace("chartsmith").
+		Set().
+		Image(fmt.Sprintf("chartsmith-worker=%s", prodWorkerImageName)).
+		Set().
+		Image(fmt.Sprintf("chartsmith-app=%s", prodAppImageName)).
+		Directory()
+
+	prodManifests := dag.Kustomize().Build(
+		prodEditedSource,
+		dagger.KustomizeBuildOpts{
+			Dir: "kustomize/overlays/production",
+		},
+	)
+
+	if err := pushYAMLToRepo(ctx, prodManifests, PushFileOpts{
+		RepoFullName:    "replicatedcom/gitops-deploy",
+		Branch:          "release",
+		DestinationPath: "chartsmith/chartsmith.yaml",
+		CommitMessage:   fmt.Sprintf("Update Chartsmith manifests to %s", newVersion),
+		GithubToken:     githubToken,
+	}); err != nil {
+		return err
+	}
 
 	// create a release on github
 	if err := dag.Gh().

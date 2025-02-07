@@ -12,8 +12,48 @@ spec:
             - containerPort: 3000
               protocol: TCP
               name: http
+          env:
+            - name: CENTRIFUGO_TOKEN_HMAC_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: chartsmith-secrets
+                  key: CENTRIFUGO_TOKEN_HMAC_SECRET
+            - name: GOOGLE_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: chartsmith-secrets
+                  key: GOOGLE_CLIENT_SECRET
+            - name: NEXT_PUBLIC_GOOGLE_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: chartsmith-secrets
+                  key: NEXT_PUBLIC_GOOGLE_CLIENT_ID
+            - name: HMAC_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: chartsmith-secrets
+                  key: HMAC_SECRET
+            - name: DB_URI
+              valueFrom:
+                secretKeyRef:
+                  name: chartsmith-secrets
+                  key: DB_URI
+            - name: NEXT_PUBLIC_CENTRIFUGO_ADDRESS
+              valueFrom:
+                configMapKeyRef:
+                  name: chartsmith-configs
+                  key: NEXT_PUBLIC_CENTRIFUGO_ADDRESS
+            - name: NEXT_PUBLIC_GOOGLE_REDIRECT_URI
+              valueFrom:
+                configMapKeyRef:
+                  name: chartsmith-configs
+                  key: NEXT_PUBLIC_GOOGLE_REDIRECT_URI
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: chartsmith-secrets
+                  key: ANTHROPIC_API_KEY
           resources:
             requests:
               cpu: 100m
               memory: 256Mi
-

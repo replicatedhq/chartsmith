@@ -1,5 +1,3 @@
 resources:
-  - ../../worker/overlays/staging
-  - ../../app/overlays/staging
-  - ../../migrations/overlays/staging
-
+  - ../../worker/overlays/production
+  - ../../app/overlays/production
