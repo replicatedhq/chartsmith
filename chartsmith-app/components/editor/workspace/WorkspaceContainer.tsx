@@ -16,6 +16,7 @@ interface WorkspaceContainerProps {
   onViewChange: (newView: EditorView) => void;
   files: WorkspaceFile[];
   charts: Chart[];
+  revision: number;
   renderedCharts: RenderedChart[];
   selectedFile?: WorkspaceFile;
   onFileSelect: (file: WorkspaceFile) => void;
@@ -33,6 +34,7 @@ export function WorkspaceContainer({
   files,
   charts,
   renderedCharts,
+  revision,
   selectedFile,
   onFileSelect,
   onFileDelete,
@@ -80,6 +82,7 @@ export function WorkspaceContainer({
               <CodeEditor
                 session={session}
                 file={selectedFile}
+                revision={revision}
                 theme={resolvedTheme}
                 value={editorContent}
                 onChange={onEditorChange}

@@ -6,17 +6,19 @@ import { useMonacoEditor } from "../../hooks/useMonacoEditor";
 import { Check, X, ChevronUp, ChevronDown } from "lucide-react";
 import { Session } from "@/lib/types/session";
 import { rejectPatchAction } from "@/lib/workspace/actions/reject-patch";
+import { acceptPatchAction } from "@/lib/workspace/actions/accept-patch";
 
 interface CodeEditorProps {
   session: Session;
   file?: WorkspaceFile;
+  revision: number;
   theme?: "light" | "dark";
   value?: string;
   onChange?: (value: string | undefined) => void;
   onCommandK?: () => void;
 }
 
-export function CodeEditor({ session, file, theme = "light", value, onChange, onCommandK }: CodeEditorProps) {
+export function CodeEditor({ session, file, revision, theme = "light", value, onChange, onCommandK }: CodeEditorProps) {
   console.log('CodeEditor render, onCommandK is:', onCommandK);
 
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
@@ -223,7 +225,10 @@ export function CodeEditor({ session, file, theme = "light", value, onChange, on
                 ? "bg-green-600 text-white hover:bg-green-700"
                 : "bg-green-600 text-white hover:bg-green-700"
             }`}
-            onClick={() => {/* TODO: Handle apply */}}
+            onClick={async () => {
+              const updatedFile = await acceptPatchAction(session, file.id, revision);
+              onChange?.(updatedFile.content);
+            }}
           >
             <Check className="w-3 h-3" />
             Accept
@@ -235,7 +240,7 @@ export function CodeEditor({ session, file, theme = "light", value, onChange, on
                 : "bg-red-600 text-white hover:bg-red-700"
             }`}
             onClick={() => {
-              rejectPatchAction(session, file.filePath);
+              rejectPatchAction(session, file.id, revision);
             }}
           >
             <X className="w-3 h-3" />

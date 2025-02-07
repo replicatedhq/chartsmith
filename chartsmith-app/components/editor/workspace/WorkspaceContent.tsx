@@ -545,6 +545,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
                 onViewChange={handleViewChange}
                 files={allFiles}
                 charts={workspace.charts || []}
+                revision={workspace.currentRevisionNumber}
                 renderedCharts={workspace.renderedCharts || []}
                 selectedFile={selectedFile}
                 onFileSelect={handleFileSelect}
