@@ -6,6 +6,8 @@
 - Avoid using browser-only APIs in the initial render (window, document, etc)
 - For dynamic content that differs between server and client, use useEffect to update the content after initial render
 - Avoid using browser-only APIs in the initial render (window, document, etc)
+- When using useSearchParams() in client components, wrap in Suspense boundary to prevent hydration errors
+- For dynamic routes, wrap components using searchParams in Suspense to prevent hydration mismatches
 
 # State Management
 
@@ -419,10 +421,23 @@ Next.js 15:
 - Server-side render layout components when possible to avoid loading states
 - Server-side fetch data in layout.tsx for initial render, then use client-side actions for updates
 - Move client-side state and effects into dedicated client components
+- Server-side fetch data in layout.tsx for initial render, then use client-side actions for updates
+- Move client-side state and effects into dedicated client components
 
-Next.js 15:
+# Next.js 15
 - Dynamic APIs like params, searchParams, cookies(), headers() must be awaited in server components
 - Use React.use() to unwrap these promises in client components
 - Prefer awaiting as late as possible to allow more static rendering
 - Must await params in both layout.tsx and page.tsx when using dynamic routes
 - After awaiting params, pass the extracted values to child components rather than passing params directly
+- In client components, params is a Promise that must be unwrapped with React.use() before accessing properties
+- Type params as Promise<{ [key: string]: string }> in client components
+- When using cookies() in server components, must await before accessing values
+- Server-side render layout components when possible to avoid loading states
+- Server-side fetch data in layout.tsx for initial render, then use client-side actions for updates
+- Move client-side state and effects into dedicated client components
+- When using params in page.tsx, type it as Promise<{ id: string }> for dynamic routes
+- When using cookies() in server components, must await before accessing values
+- Server-side render layout components when possible to avoid loading states
+- Server-side fetch data in layout.tsx for initial render, then use client-side actions for updates
+- Move client-side state and effects into dedicated client components

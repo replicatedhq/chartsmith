@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Loader2, CheckCircle2, XCircle } from "lucide-react";
@@ -9,7 +9,7 @@ import { exchangeReplicatedAuth } from "@/lib/auth/actions/exchange-replicated-n
 import { useSession } from "@/app/hooks/useSession";
 import { logger } from "@/lib/utils/logger";
 
-function ReplicatedCallback() {
+function ReplicatedCallbackInner() {
   const { session } = useSession();
   const searchParams = useSearchParams();
   const exchangeComplete = useRef(false);
@@ -81,5 +81,18 @@ function ReplicatedCallback() {
 }
 
 export default function ReplicatedCallbackPage() {
-  return <ReplicatedCallback />;
+  return (
+    <Suspense fallback={
+      <div className="container mx-auto flex items-center justify-center min-h-screen">
+        <Card className="w-full max-w-md p-6">
+          <div className="flex flex-col items-center justify-center space-y-4 text-center">
+            <Loader2 className="h-6 w-6 animate-spin" />
+            <h2 className="text-2xl font-bold">Loading...</h2>
+          </div>
+        </Card>
+      </div>
+    }>
+      <ReplicatedCallbackInner />
+    </Suspense>
+  );
 }

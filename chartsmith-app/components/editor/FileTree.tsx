@@ -6,11 +6,12 @@ import { Chart, WorkspaceFile } from "@/lib/types/workspace";
 
 interface TreeNode {
   id: string;
-  filePath: string;  // Match backend property name
-  content?: string;  // Make content optional to match File type
+  filePath: string;
+  content?: string;
   type: "file" | "folder";
-  children: TreeNode[];  // Make children required for folders
+  children: TreeNode[];
   name: string;
+  pendingPatch?: string;
 }
 
 interface FileTreeProps {
@@ -18,20 +19,16 @@ interface FileTreeProps {
   onFileSelect: (file: WorkspaceFile) => void;
   onFileDelete: (filePath: string) => void;
   selectedFile?: WorkspaceFile;
-  charts: Chart[];  // Add charts to props
+  charts: Chart[];
 }
 
 export function FileTree({ files = [], charts = [], onFileSelect, onFileDelete, selectedFile }: FileTreeProps) {
   const { theme } = useTheme();
-  // Track previous files to detect new ones
   const prevFilesRef = React.useRef<WorkspaceFile[]>([]);
   const prevChartsRef = React.useRef<Chart[]>([]);
 
-  // Convert flat file list into tree structure
   const buildFileTree = (charts: Chart[] = []) => {
-    // Create tree nodes for each chart
     const treeNodes = charts.map(chart => {
-      // Create the chart root node
       const chartNode: TreeNode = {
         name: chart.name,
         id: chart.id,
@@ -41,10 +38,8 @@ export function FileTree({ files = [], charts = [], onFileSelect, onFileDelete, 
         children: []
       };
 
-      // Create a map to store folder nodes for this chart
       const folderMap: Record<string, TreeNode> = {};
 
-      // Add all files under this chart, maintaining their path structure
       chart.files.forEach((file) => {
         if (!file || !file.filePath) {
           console.warn('Invalid file:', file);
@@ -54,7 +49,6 @@ export function FileTree({ files = [], charts = [], onFileSelect, onFileDelete, 
         const parts = file.filePath.split('/');
         let currentNode = chartNode;
 
-        // Create folder structure
         for (let i = 0; i < parts.length - 1; i++) {
           const folderPath = parts.slice(0, i + 1).join('/');
           if (!folderMap[folderPath]) {
@@ -72,7 +66,6 @@ export function FileTree({ files = [], charts = [], onFileSelect, onFileDelete, 
           currentNode = folderMap[folderPath];
         }
 
-        // Add the file to its parent folder
         currentNode.children.push({
           ...file,
           name: parts[parts.length - 1],
@@ -87,16 +80,13 @@ export function FileTree({ files = [], charts = [], onFileSelect, onFileDelete, 
     return treeNodes;
   };
 
-  // Initialize expanded folders state with all chart IDs and folder paths
   const [expandedFolders, setExpandedFolders] = React.useState<Set<string>>(() => {
     const expanded = new Set(charts.map(chart => chart.id));
 
-    // Add all folder paths to expanded set
     charts.forEach(chart => {
       chart.files.forEach(file => {
         const parts = file.filePath.split('/');
         let path = '';
-        // Add each level of the path to expanded folders
         for (let i = 0; i < parts.length - 1; i++) {
           path = path ? `${path}/${parts[i]}` : parts[i];
           expanded.add(path);
@@ -107,7 +97,6 @@ export function FileTree({ files = [], charts = [], onFileSelect, onFileDelete, 
     return expanded;
   });
 
-  // Expand parent folders when new files are added
   React.useEffect(() => {
     const newFiles = files.filter(file =>
       !prevFilesRef.current.some(prevFile => prevFile.filePath === file.filePath)
@@ -121,7 +110,6 @@ export function FileTree({ files = [], charts = [], onFileSelect, onFileDelete, 
       setExpandedFolders(prev => {
         const expanded = new Set(prev);
 
-        // Expand parent folders of new files
         newFiles.forEach(file => {
           const parts = file.filePath.split('/');
           let path = '';
@@ -131,10 +119,8 @@ export function FileTree({ files = [], charts = [], onFileSelect, onFileDelete, 
           }
         });
 
-        // Expand new charts
         newCharts.forEach(chart => {
           expanded.add(chart.id);
-          // Also expand parent folders of all files in new charts
           chart.files.forEach(file => {
             const parts = file.filePath.split('/');
             let path = '';
@@ -221,8 +207,6 @@ export function FileTree({ files = [], charts = [], onFileSelect, onFileDelete, 
           if (node.type === "folder") {
             toggleFolder(node.filePath);
           } else {
-            // Strip out tree-specific properties before passing to parent
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const { type: _type, children: _children, ...rest } = node;
             onFileSelect({
               id: rest.id,
@@ -280,7 +264,6 @@ export function FileTree({ files = [], charts = [], onFileSelect, onFileDelete, 
         <div>
           {node.children
             .sort((a, b) => {
-              // Folders first, then files
               if (a.type === "folder" && b.type !== "folder") return -1;
               if (a.type !== "folder" && b.type === "folder") return 1;
               return a.name.localeCompare(b.name);
@@ -296,7 +279,6 @@ export function FileTree({ files = [], charts = [], onFileSelect, onFileDelete, 
       <div className="flex-1 overflow-auto p-2">
         {treeNodes
           .sort((a, b) => {
-            // Folders first, then files
             if (a.type === "folder" && b.type !== "folder") return -1;
             if (a.type !== "folder" && b.type === "folder") return 1;
             return a.name.localeCompare(b.name);

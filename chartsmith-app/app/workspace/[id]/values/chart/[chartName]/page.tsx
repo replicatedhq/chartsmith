@@ -8,13 +8,14 @@ import { cookies } from 'next/headers';
 import { CommandMenuWrapper } from '@/components/CommandMenuWrapper';
 import { notFound } from 'next/navigation';
 
-interface CreateScenarioPageProps {
-  params: { id: string, chartName: string };
-  searchParams: { [key: string]: string };
+interface PageProps {
+  params: Promise<{ id: string, chartName: string }>;
+  searchParams: Promise<{ [key: string]: string }>;
 }
 
-export default async function ScenarioPage({ params, searchParams }: CreateScenarioPageProps) {
-  const { id: workspaceId, chartName } = (await params);
+export default async function ScenarioPage({ params, searchParams }: PageProps) {
+  const { id: workspaceId, chartName } = await params;
+  await searchParams; // We need to await this even if we don't use it
 
   const cookieStore = await cookies();
   const sessionToken = cookieStore.get('session')?.value;

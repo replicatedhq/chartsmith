@@ -6,9 +6,10 @@ import { ValuesTable } from '@/components/values/ValuesTable';
 import { ViewValuesModal } from '@/components/values/ViewValuesModal';
 import { DeleteScenarioModal } from '@/components/values/DeleteScenarioModal';
 import { Plus } from 'lucide-react';
-import { Scenario, Workspace, Chart } from '@/lib/types/workspace';
+import { Scenario, Workspace } from '@/lib/types/workspace';
 import { useSession } from '@/app/hooks/useSession';
 import { useRouter } from 'next/navigation';
+import { createScenarioAction } from '@/lib/workspace/actions/create-scenario';
 
 interface ValuesContentProps {
   workspace: Workspace;
@@ -26,13 +27,12 @@ export function ValuesContent({ workspace, initialScenariosByChart }: ValuesCont
   const handleCreateScenario = async (newScenario: Scenario) => {
     try {
       if (!session) return;
-      if (!selectedChart) return;
-      const chartId = selectedChart.id;
-      const scenario = await createScenarioAction(session, workspace.id, chartId, newScenario.name, newScenario.description, newScenario.values);
+      if (!newScenario.chartId) return;
+      const scenario = await createScenarioAction(session, workspace.id, newScenario.chartId, newScenario.name, newScenario.description, newScenario.values);
       setScenariosByChart(prev => {
         const newMap = new Map(prev);
-        const chartScenarios = newMap.get(chartId) || [];
-        newMap.set(chartId, [...chartScenarios, { ...scenario, enabled: true }]);
+        const chartScenarios = newMap.get(newScenario.chartId!) || [];
+        newMap.set(newScenario.chartId!, [...chartScenarios, { ...scenario, enabled: true }]);
         return newMap;
       });
     } catch (err) {

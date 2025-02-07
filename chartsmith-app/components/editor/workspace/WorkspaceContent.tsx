@@ -136,7 +136,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     }
   }, [session, workspaceId, setMessages]);
 
-  const handleRevisionCreated = async (revision: RawRevision) => {
+  const handleRevisionCreated = useCallback(async (revision: RawRevision) => {
     if (!session || !revision.workspaceId) return;
 
     const freshWorkspace = await getWorkspaceAction(session, revision.workspaceId);
@@ -146,9 +146,9 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
       const updatedMessages = await getWorkspaceMessagesAction(session, revision.workspaceId);
       setMessages(updatedMessages);
     }
-  }
+  }, [session, setMessages, setWorkspace]);
 
-  const handleChatMessageUpdated = (chatMessage: RawChatMessage) => {
+  const handleChatMessageUpdated = useCallback((chatMessage: RawChatMessage) => {
     setMessages?.(prev => {
       const tempMessageIndex = prev.findIndex(m =>
         m.id.startsWith('msg-temp-') && m.prompt === chatMessage.prompt
@@ -176,37 +176,12 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
         return m;
       });
     });
-  }
+  }, []);
 
-  const handleWorkspaceUpdated = (workspace: RawWorkspace) => {
-  }
+  const handleWorkspaceUpdated = useCallback((workspace: RawWorkspace) => {
+  }, []);
 
-  const handleCentrifugoMessage = useCallback((message: { data: CentrifugoMessageData }) => {
-    const isPlanUpdatedEvent = message.data.plan;
-    if (isPlanUpdatedEvent) {
-      handlePlanUpdated(message.data.plan!);
-    }
-
-    const isWorkspaceUpdatedEvent = message.data.workspace;
-    if (isWorkspaceUpdatedEvent) {
-      handleWorkspaceUpdated(message.data.workspace!);
-    }
-
-    const isChatMessageUpdatedEvent = message.data.chatMessage;
-    if (isChatMessageUpdatedEvent) {
-      handleChatMessageUpdated(message.data.chatMessage!);
-    }
-
-    const isRevisionCreatedEvent = message.data.revision;
-    if (isRevisionCreatedEvent) {
-      handleRevisionCreated(message.data.revision!);
-    }
-
-    const artifact = message.data.artifact;
-    if (artifact && artifact.path && artifact.content) {
-      handleArtifactReceived(artifact);
-    }
-  }, [handlePlanUpdated, handleWorkspaceUpdated, handleChatMessageUpdated, handleRevisionCreated]);
+  const handleArtifactReceivedRef = useRef<((artifact: { path: string, content: string, pendingPatch?: string }) => void) | null>(null);
 
   const handleArtifactReceived = useCallback((artifact: { path: string, content: string, pendingPatch?: string }) => {
     setWorkspace(currentWorkspace => {
@@ -277,6 +252,38 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     });
   }, [handleFileSelect, setEditorContent, updateFileSelection]);
 
+  // Update the ref whenever handleArtifactReceived changes
+  useEffect(() => {
+    handleArtifactReceivedRef.current = handleArtifactReceived;
+  }, [handleArtifactReceived]);
+
+  const handleCentrifugoMessage = useCallback((message: { data: CentrifugoMessageData }) => {
+    const isPlanUpdatedEvent = message.data.plan;
+    if (isPlanUpdatedEvent) {
+      handlePlanUpdated(message.data.plan!);
+    }
+
+    const isWorkspaceUpdatedEvent = message.data.workspace;
+    if (isWorkspaceUpdatedEvent) {
+      handleWorkspaceUpdated(message.data.workspace!);
+    }
+
+    const isChatMessageUpdatedEvent = message.data.chatMessage;
+    if (isChatMessageUpdatedEvent) {
+      handleChatMessageUpdated(message.data.chatMessage!);
+    }
+
+    const isRevisionCreatedEvent = message.data.revision;
+    if (isRevisionCreatedEvent) {
+      handleRevisionCreated(message.data.revision!);
+    }
+
+    const artifact = message.data.artifact;
+    if (artifact && artifact.path && artifact.content) {
+      handleArtifactReceivedRef.current?.(artifact);
+    }
+  }, [handlePlanUpdated, handleWorkspaceUpdated, handleChatMessageUpdated, handleRevisionCreated]);
+
   useEffect(() => {
     handlersRef.current.onMessage = handleCentrifugoMessage;
   }, [handleCentrifugoMessage]);
@@ -294,9 +301,8 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     const cf = new Centrifuge(process.env.NEXT_PUBLIC_CENTRIFUGO_ADDRESS!, {
       debug: true,
       token: centrifugoToken,
-      maxRetry: 10,
-      minRetry: 500,
-      maxRetry: 5000,
+      minReconnectDelay: 500,
+      maxReconnectDelay: 5000,
       timeout: 5000,
     });
 
@@ -310,8 +316,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     cf.on("connecting", () => {});
 
     const sub = cf.newSubscription(channel, {
-      recover: true,
-      position: true
+      data: {}
     });
 
     sub.on("publication", (message) => {
@@ -343,7 +348,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
         logger.error("Error during Centrifugo cleanup:", err);
       }
     };
-  }, [centrifugoToken, session?.user.id, workspace?.id]);
+  }, [centrifugoToken, session, workspace?.id, handlersRef]);
 
   const prevWorkspaceRef = React.useRef<Workspace | null>(null);
 

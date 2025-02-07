@@ -18,7 +18,7 @@ export function ScenarioEditor({ value, onChange, referenceValues }: ScenarioEdi
   const [activeTab, setActiveTab] = useState<'values' | 'reference'>('values');
   const [isSplitView, setIsSplitView] = useState(false);
 
-  const handleEditorMount = (editor: any, monaco: any) => {
+  const handleEditorMount = (editor: import("monaco-editor").editor.IStandaloneCodeEditor, monaco: typeof import("monaco-editor")) => {
     const commandId = 'chartsmith.openCommandPalette';
     editor.addAction({
       id: commandId,

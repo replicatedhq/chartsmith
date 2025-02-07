@@ -136,17 +136,17 @@ export function CodeEditor({ session, file, theme = "light", value, onChange, on
   const editorOptions = {
     minimap: { enabled: false },
     fontSize: 11,
-    lineNumbers: "on",
+    lineNumbers: 'on' as const,
     scrollBeyondLastLine: false,
     automaticLayout: true,
     tabSize: 2,
     readOnly: !onChange,
     glyphMargin: true,
     lineDecorationsWidth: 5,
-    renderLineHighlight: "all",
+    renderLineHighlight: "all" as const,
     folding: true,
-    wordWrap: "on",
-    wrappingIndent: "indent",
+    wordWrap: 'on' as const,
+    wrappingIndent: "indent" as const,
     fixedOverflowWidgets: true,
     overviewRulerBorder: false,
     overviewRulerLanes: 2,
@@ -155,7 +155,7 @@ export function CodeEditor({ session, file, theme = "light", value, onChange, on
 
   if (file?.pendingPatch) {
     const lines = file.pendingPatch.split('\n');
-    let modified = value || "";
+    const modified = value || "";
     let currentLine = 0;
     let contentStarted = false;
     const modifiedLines = modified.split('\n');
