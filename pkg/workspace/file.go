@@ -59,24 +59,22 @@ func CreateOrPatchFile(ctx context.Context, workspaceID string, revisionNumber i
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
 
-	query := `SELECT id FROM workspace_file WHERE chart_id = $1 AND file_path = $2 AND workspace_id = $3 AND revision_number = $4`
+	query := `SELECT id, content FROM workspace_file WHERE chart_id = $1 AND file_path = $2 AND workspace_id = $3 AND revision_number = $4`
 	row := conn.QueryRow(ctx, query, chartID, filePath, workspaceID, revisionNumber)
 	var fileID string
-	err := row.Scan(&fileID)
+	var existingContent string
+	err := row.Scan(&fileID, &existingContent)
 	if err == pgx.ErrNoRows {
 		id, err := securerandom.Hex(6)
 		if err != nil {
 			return fmt.Errorf("error generating file ID: %w", err)
 		}
 
-		// Generate a git-style patch for new file
-		generatedPatch := fmt.Sprintf(`diff --git a/%s b/%s
-new file mode 100644
-index 0000000..0000000
---- /dev/null
-+++ b/%s
+		// For new files, create a patch showing the entire file as new
+		generatedPatch := fmt.Sprintf(`--- %[1]s
++++ %[1]s
 @@ -0,0 +1,%d @@
-%s`, filePath, filePath, filePath, len(strings.Split(content, "\n")), content)
+%s`, filePath, len(strings.Split(content, "\n")), content)
 
 		query := `INSERT INTO workspace_file (id, revision_number, chart_id, workspace_id, file_path, content, pending_patch) VALUES ($1, $2, $3, $4, $5, $6, $7)`
 		_, err = conn.Exec(ctx, query, id, revisionNumber, chartID, workspaceID, filePath, "", generatedPatch)
@@ -84,8 +82,17 @@ index 0000000..0000000
 			return fmt.Errorf("error inserting file in workspace: %w", err)
 		}
 	} else {
+		// For existing files, create a patch showing the differences
+		oldLines := strings.Split(existingContent, "\n")
+		newLines := strings.Split(content, "\n")
+
+		generatedPatch := fmt.Sprintf(`--- %[1]s
++++ %[1]s
+@@ -1,%d +1,%d @@
+%s`, filePath, len(oldLines), len(newLines), content)
+
 		query := `UPDATE workspace_file SET pending_patch = $1 WHERE chart_id = $2 AND file_path = $3 AND workspace_id = $4 AND revision_number = $5`
-		_, err := conn.Exec(ctx, query, content, chartID, filePath, workspaceID, revisionNumber)
+		_, err := conn.Exec(ctx, query, generatedPatch, chartID, filePath, workspaceID, revisionNumber)
 		if err != nil {
 			return fmt.Errorf("error updating file in workspace: %w", err)
 		}
