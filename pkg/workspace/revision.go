@@ -20,7 +20,8 @@ func GetRevision(ctx context.Context, workspaceID string, revisionNumber int) (*
         workspace_revision.created_at,
         workspace_revision.created_by_user_id,
         workspace_revision.created_type,
-        workspace_revision.is_complete
+        workspace_revision.is_complete,
+		workspace_revision.is_rendered
     FROM
         workspace_revision
     WHERE
@@ -35,6 +36,7 @@ func GetRevision(ctx context.Context, workspaceID string, revisionNumber int) (*
 		&revision.CreatedByUserID,
 		&revision.CreatedType,
 		&revision.IsComplete,
+		&revision.IsRendered,
 	)
 	if err != nil {
 		return nil, err
@@ -75,7 +77,7 @@ func CreateRevision(ctx context.Context, workspaceID string, planID string, user
         )
         INSERT INTO workspace_revision (
             workspace_id, revision_number, created_at,
-            created_by_user_id, created_type, is_complete, plan_id
+            created_by_user_id, created_type, is_complete, is_rendered, plan_id
         )
         SELECT
             $1,
@@ -83,6 +85,7 @@ func CreateRevision(ctx context.Context, workspaceID string, planID string, user
             NOW(),
             $2,
             COALESCE(lr.created_type, 'manual'),
+            false,
             false,
             $3
         FROM next_revision
