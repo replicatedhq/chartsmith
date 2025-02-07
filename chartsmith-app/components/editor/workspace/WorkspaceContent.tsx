@@ -49,6 +49,18 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     onMessage: ((message: { data: CentrifugoMessageData }) => void) | null;
   }>({ onMessage: null });
 
+  useEffect(() => {
+    console.log('Initial workspace loaded:', {
+      id: initialWorkspace.id,
+      fileCount: initialWorkspace.files.length,
+      chartFileCount: initialWorkspace.charts?.reduce((acc, chart) => acc + chart.files.length, 0),
+      filesWithPatches: initialWorkspace.files.filter(f => f.pendingPatch).length,
+      chartFilesWithPatches: initialWorkspace.charts?.reduce((acc, chart) => 
+        acc + chart.files.filter(f => f.pendingPatch).length, 0
+      )
+    });
+  }, [initialWorkspace]);
+
   const handleFileSelect = useCallback((file: WorkspaceFile) => {
     setSelectedFile({
       ...file,
@@ -186,11 +198,23 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
   const handleArtifactReceivedRef = useRef<((artifact: { path: string, content: string, pendingPatch?: string }) => void) | null>(null);
 
   const handleArtifactReceived = useCallback((artifact: { path: string, content: string, pendingPatch?: string }) => {
+    console.log('Received artifact:', {
+      path: artifact.path,
+      contentLength: artifact.content.length,
+      hasPatch: !!artifact.pendingPatch,
+      patchLength: artifact.pendingPatch?.length
+    });
+
     setWorkspace(currentWorkspace => {
       const existingWorkspaceFile = currentWorkspace.files?.find(f => f.filePath === artifact.path);
       const chartWithFile = currentWorkspace.charts?.find(chart =>
         chart.files.some(f => f.filePath === artifact.path)
       );
+
+      console.log('Existing file check:', {
+        hasExistingFile: !!existingWorkspaceFile,
+        hasChartWithFile: !!chartWithFile
+      });
 
       if (!existingWorkspaceFile && !chartWithFile) {
         const newFile = {
@@ -199,6 +223,13 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
           content: artifact.content,
           pendingPatch: artifact.pendingPatch
         };
+
+        console.log('Creating new file:', {
+          id: newFile.id,
+          filePath: newFile.filePath,
+          contentLength: newFile.content.length,
+          hasPendingPatch: !!newFile.pendingPatch
+        });
 
         return {
           ...currentWorkspace,
@@ -230,6 +261,12 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
         )
       })) || [];
 
+      console.log('Updated existing file:', {
+        path: artifact.path,
+        filesUpdated: updatedFiles.some(f => f.filePath === artifact.path),
+        chartsUpdated: updatedCharts.some(c => c.files.some(f => f.filePath === artifact.path))
+      });
+
       return {
         ...currentWorkspace,
         files: updatedFiles,
@@ -243,6 +280,13 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
       content: artifact.content,
       pendingPatch: artifact.pendingPatch
     };
+
+    console.log('Selecting file:', {
+      id: file.id,
+      filePath: file.path,
+      contentLength: file.content.length,
+      hasPendingPatch: !!file.pendingPatch
+    });
 
     handleFileSelect(file);
     setEditorContent(artifact.content);
@@ -281,6 +325,13 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
 
     const artifact = message.data.artifact;
     if (artifact && artifact.path && artifact.content) {
+      console.log('Centrifugo artifact message:', {
+        path: artifact.path,
+        contentLength: artifact.content.length,
+        hasPatch: !!artifact.pendingPatch,
+        patchLength: artifact.pendingPatch?.length,
+        rawMessage: message.data
+      });
       handleArtifactReceivedRef.current?.(artifact);
     }
   }, [handlePlanUpdated, handleWorkspaceUpdated, handleChatMessageUpdated, handleRevisionCreated]);
