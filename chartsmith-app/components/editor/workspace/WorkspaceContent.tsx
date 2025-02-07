@@ -22,6 +22,7 @@ import { useCommandMenu } from '@/contexts/CommandMenuContext';
 import { CommandMenuWrapper } from "@/components/CommandMenuWrapper";
 import { Send } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
+import { ChatContainer } from "../chat/ChatContainer";
 
 interface WorkspaceContentProps {
   initialWorkspace: Workspace;
@@ -585,6 +586,8 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     setChatInput("");
   };
 
+  const isPlanOnlyView = !workspace?.currentRevisionNumber && !workspace?.incompleteRevisionNumber;
+
   return (
     <EditorLayout>
       <div className="flex w-full overflow-hidden relative">
@@ -593,6 +596,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
           }`}>
           <div className={`${(!workspace?.currentRevisionNumber && !workspace?.incompleteRevisionNumber) || (workspace.currentRevisionNumber === 0 && !workspace.incompleteRevisionNumber) ? 'w-full max-w-3xl px-4' : 'w-[480px] h-full flex flex-col'}`}>
             <div className="flex-1 overflow-y-auto">
+              {isPlanOnlyView ? (
               <PlanContent
                 messages={messages}
                 onSendMessage={handleSendMessage}
@@ -602,39 +606,19 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
                 setWorkspace={setWorkspace}
                 handlePlanUpdated={handlePlanUpdated}
               />
+              ) : (
+                <ChatContainer
+                  messages={messages}
+                  onSendMessage={handleSendMessage}
+                  onApplyChanges={handleApplyChanges}
+                  session={session}
+                  workspaceId={workspaceId}
+                  setMessages={setMessages}
+                  workspace={workspace}
+                  setWorkspace={setWorkspace}
+                />
+              )}
             </div>
-            {workspace?.currentRevisionNumber && workspace?.currentRevisionNumber > 0 && (
-              <div className={`flex-shrink-0 border-t ${theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"}`}>
-                <form onSubmit={handleSubmitChat} className="p-3 relative">
-                  <textarea
-                    value={chatInput}
-                    onChange={(e) => setChatInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSubmitChat(e);
-                      }
-                    }}
-                    placeholder="Type your message..."
-                    rows={3}
-                    style={{ height: 'auto', minHeight: '72px', maxHeight: '150px' }}
-                    className={`w-full px-3 py-1.5 pr-10 text-sm rounded-md border resize-none overflow-hidden ${
-                      theme === "dark"
-                        ? "bg-dark border-dark-border/60 text-white placeholder-gray-500"
-                        : "bg-white border-gray-200 text-gray-900 placeholder-gray-400"
-                    } focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50`}
-                  />
-                  <button
-                    type="submit"
-                    className={`absolute right-4 top-[18px] p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-dark-border/40 ${
-                      theme === "dark" ? "text-gray-400 hover:text-gray-200" : "text-gray-500 hover:text-gray-700"
-                    }`}
-                  >
-                    <Send className="w-4 h-4" />
-                  </button>
-                </form>
-              </div>
-            )}
           </div>
         </div>
         {showEditor && (() => {
