@@ -153,9 +153,15 @@ export async function createChatMessage(userId: string, workspaceId: string, par
     if (!params.knownIntent) {
       // Insert into intent_queue before sending notification
       await client.query(
-        `INSERT INTO intent_queue (chat_message_id, created_at)
-        VALUES ($1, NOW())`,
-        [chatMessageId]
+        `INSERT INTO intent_queue (id, payload, created_at, started_at, completed_at)
+        VALUES ($1, $2, NOW(), NOW(), NULL)`,
+        [srs.default({ length: 12, alphanumeric: true }), JSON.stringify({
+          chatMessageId,
+          workspaceId,
+          userId,
+          prompt: params.prompt,
+          response: params.response,
+        })]
       );
       await client.query(`SELECT pg_notify('new_intent', $1)`, [chatMessageId]);
     } else if (params.knownIntent === ChatMessageIntent.PLAN) {

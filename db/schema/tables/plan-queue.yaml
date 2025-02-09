@@ -1,5 +1,5 @@
 database: chartsmith
-name: summarize_queue
+name: plan_queue
 schema:
   postgres:
     primaryKey:

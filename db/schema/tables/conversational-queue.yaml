@@ -1,5 +1,5 @@
 database: chartsmith
-name: summarize_queue
+name: conversational_queue
 schema:
   postgres:
     primaryKey:

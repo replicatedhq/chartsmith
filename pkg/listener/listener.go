@@ -20,20 +20,46 @@ type Listener struct {
 	handlers          map[string]NotificationHandler
 	reconnectInterval time.Duration
 	maxReconnectRetry int
+	maxWorkers        int // Maximum concurrent workers per queue
+	processors        map[string]*queueProcessor
+	pgURI             string // Store the connection string for pooled connections
+}
+
+type queueProcessor struct {
+	channel        string
+	handler        NotificationHandler
+	workerPool     chan struct{}
+	processing     bool
+	pollTicker     *time.Ticker
+	queueTableName string
 }
 
 // NewListener creates a new Listener instance
-func NewListener() *Listener {
+func NewListener(maxWorkers int) *Listener {
 	return &Listener{
 		handlers:          make(map[string]NotificationHandler),
 		reconnectInterval: 10 * time.Second,
 		maxReconnectRetry: 10,
+		maxWorkers:        maxWorkers,
+		processors:        make(map[string]*queueProcessor),
+		pgURI:             param.Get().PGURI,
 	}
 }
 
-// AddHandler registers a handler for a specific channel
-func (l *Listener) AddHandler(channel string, handler NotificationHandler) {
+// AddHandler registers a handler and creates necessary table for the queue
+func (l *Listener) AddHandler(ctx context.Context, channel string, queueTableName string, handler NotificationHandler) error {
 	l.handlers[channel] = handler
+
+	// Initialize queue processor
+	l.processors[channel] = &queueProcessor{
+		channel:        channel,
+		handler:        handler,
+		workerPool:     make(chan struct{}, l.maxWorkers),
+		pollTicker:     time.NewTicker(5 * time.Second), // Poll every 5 seconds
+		queueTableName: queueTableName,
+	}
+
+	return nil
 }
 
 // Start begins listening for notifications
@@ -57,7 +83,7 @@ func (l *Listener) Start(ctx context.Context) error {
 	return nil
 }
 
-// processNotifications handles incoming notifications
+// processNotifications now triggers message processing instead of directly handling
 func (l *Listener) processNotifications(ctx context.Context) {
 	for {
 		notification, err := l.conn.WaitForNotification(ctx)
@@ -76,16 +102,104 @@ func (l *Listener) processNotifications(ctx context.Context) {
 			continue
 		}
 
-		// Look up the handler for this channel
-		handler, exists := l.handlers[notification.Channel]
+		processor, exists := l.processors[notification.Channel]
 		if !exists {
-			log.Printf("No handler registered for channel: %s", notification.Channel)
+			log.Printf("No processor registered for channel: %s", notification.Channel)
 			continue
 		}
 
-		// Execute the handler
-		if err := handler(notification); err != nil {
-			log.Printf("Error handling notification on channel %s: %v", notification.Channel, err)
+		// Trigger processing if not already processing
+		if !processor.processing {
+			processor.processing = true
+			go l.processQueue(ctx, processor)
+		}
+	}
+}
+
+// processQueue handles message processing for a specific queue
+func (l *Listener) processQueue(ctx context.Context, processor *queueProcessor) {
+	defer func() { processor.processing = false }()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-processor.pollTicker.C:
+			// Continue processing on ticker
+		default:
+			// Process immediately on notification
+		}
+
+		// Use a pooled connection for queue operations
+		poolConn, err := pgx.Connect(ctx, l.pgURI)
+		if err != nil {
+			log.Printf("Error connecting to database for queue processing: %v", err)
+			return
+		}
+		defer poolConn.Close(ctx)
+
+		// Query for unprocessed messages
+		rows, err := poolConn.Query(ctx, fmt.Sprintf(`
+			SELECT id, payload FROM %s
+			WHERE completed_at IS NULL
+			ORDER BY created_at ASC
+			LIMIT %d`, processor.queueTableName, l.maxWorkers))
+		if err != nil {
+			log.Printf("Error querying messages: %v", err)
+			return
+		}
+
+		hasMessages := false
+		for rows.Next() {
+			hasMessages = true
+			var id int64
+			var payload []byte
+			if err := rows.Scan(&id, &payload); err != nil {
+				log.Printf("Error scanning message: %v", err)
+				continue
+			}
+
+			// Wait for worker slot
+			processor.workerPool <- struct{}{}
+
+			go func(messageID int64, messagePayload []byte) {
+				defer func() { <-processor.workerPool }()
+
+				// Create notification with payload
+				notification := &pgconn.Notification{
+					Channel: processor.channel,
+					Payload: string(messagePayload),
+				}
+
+				// Process message
+				if err := processor.handler(notification); err != nil {
+					log.Printf("Error processing message %d: %v", messageID, err)
+					return
+				}
+
+				// Use a new pooled connection for updating the message
+				updateConn, err := pgx.Connect(ctx, l.pgURI)
+				if err != nil {
+					log.Printf("Error connecting to database for message update: %v", err)
+					return
+				}
+				defer updateConn.Close(ctx)
+
+				// Mark as completed
+				_, err = updateConn.Exec(ctx, fmt.Sprintf(`
+					UPDATE %s
+					SET completed_at = NOW()
+					WHERE id = $1`, processor.queueTableName), messageID)
+				if err != nil {
+					log.Printf("Error marking message %d as completed: %v", messageID, err)
+				}
+			}(id, payload)
+		}
+		rows.Close()
+
+		// If no messages found, stop processing until next notification
+		if !hasMessages {
+			return
 		}
 	}
 }

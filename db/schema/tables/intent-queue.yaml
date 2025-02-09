@@ -3,10 +3,14 @@ name: intent_queue
 schema:
   postgres:
     primaryKey:
-    - chat_message_id
+    - id
     columns:
-    - name: chat_message_id
+    - name: id
       type: text
+      constraints:
+        notNull: true
+    - name: payload
+      type: jsonb
       constraints:
         notNull: true
     - name: created_at

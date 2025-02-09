@@ -197,17 +197,8 @@ func HandleNewIntentNotification(ctx context.Context, payload string) error {
 		// the message is already in the database, we just need to notify the worker
 		conn := persistence.MustGetPooledPostgresSession()
 		defer conn.Release()
-		conn.Exec(ctx, `SELECT pg_notify('new_converational', $1)`, chatMessage.ID)
+		conn.Exec(ctx, `SELECT pg_notify('new_conversational', $1)`, chatMessage.ID)
 		conn.Release()
-	}
-
-	// if the message suggests a conversational response, send a message to the conversational llm
-	if intent.IsConversational {
-		conn := persistence.MustGetPooledPostgresSession()
-		defer conn.Release()
-		conn.Exec(ctx, `SELECT pg_notify('new_converational', $1)`, chatMessage.ID)
-		conn.Release()
-		return nil
 	}
 
 	return nil

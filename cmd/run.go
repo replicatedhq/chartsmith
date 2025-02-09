@@ -69,9 +69,9 @@ func runWorker(ctx context.Context) error {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	l := listener.NewListener()
+	l := listener.NewListener(1)
 
-	l.AddHandler("new_intent", func(notification *pgconn.Notification) error {
+	l.AddHandler(ctx, "new_intent", "intent_queue", func(notification *pgconn.Notification) error {
 		go func() {
 			if err := listener.HandleNewIntentNotification(ctx, notification.Payload); err != nil {
 				fmt.Printf("Error handling new intent notification: %+v\n", err)
@@ -80,7 +80,7 @@ func runWorker(ctx context.Context) error {
 		return nil
 	})
 
-	l.AddHandler("execute_plan", func(notification *pgconn.Notification) error {
+	l.AddHandler(ctx, "execute_plan", "execpteplan_queue", func(notification *pgconn.Notification) error {
 		go func() {
 			if err := listener.HandleExecutePlanNotification(ctx, notification.Payload); err != nil {
 				fmt.Printf("Error handling execute plan notification: %+v\n", err)
@@ -89,7 +89,7 @@ func runWorker(ctx context.Context) error {
 		return nil
 	})
 
-	l.AddHandler("new_converational", func(notification *pgconn.Notification) error {
+	l.AddHandler(ctx, "new_conversational", "conversational_queue", func(notification *pgconn.Notification) error {
 		go func() {
 			if err := listener.HandleConverationalNotification(ctx, notification.Payload); err != nil {
 				fmt.Printf("Error handling conversational chat message notification: %+v\n", err)
@@ -98,7 +98,7 @@ func runWorker(ctx context.Context) error {
 		return nil
 	})
 
-	l.AddHandler("execute_action", func(notification *pgconn.Notification) error {
+	l.AddHandler(ctx, "execute_action", "executeaction_queue", func(notification *pgconn.Notification) error {
 		go func() {
 			planID, pathID, err := listener.GetNextExecuteActionNotification(ctx)
 			if err != nil {
@@ -112,7 +112,7 @@ func runWorker(ctx context.Context) error {
 		return nil
 	})
 
-	l.AddHandler("new_summarize", func(notification *pgconn.Notification) error {
+	l.AddHandler(ctx, "new_summarize", "summarize_queue", func(notification *pgconn.Notification) error {
 		go func() {
 			if err := listener.HandleNewFileNotification(ctx, notification.Payload); err != nil {
 				fmt.Printf("Error handling new summarize notification: %+v\n", err)
@@ -121,7 +121,7 @@ func runWorker(ctx context.Context) error {
 		return nil
 	})
 
-	l.AddHandler("new_plan", func(notification *pgconn.Notification) error {
+	l.AddHandler(ctx, "new_plan", "plan_queue", func(notification *pgconn.Notification) error {
 		go func() {
 			if err := listener.HandleNewPlanNotification(ctx, notification.Payload); err != nil {
 				fmt.Printf("Error handling new plan notification: %+v\n", err)
