@@ -352,7 +352,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     }
 
     const channel = `${workspace.id}#${session.user.id}`;
-    const centrifuge = new Centrifuge(process.env.NEXT_PUBLIC_CENTRIFUGO_URL!, {
+    const centrifuge = new Centrifuge(process.env.NEXT_PUBLIC_CENTRIFUGO_ADDRESS!, {
       timeout: 5000,
       token: centrifugoToken
     });
