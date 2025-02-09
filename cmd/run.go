@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -101,13 +100,12 @@ func runWorker(ctx context.Context) error {
 
 	l.AddHandler("execute_action", func(notification *pgconn.Notification) error {
 		go func() {
-			parts := strings.Split(notification.Payload, "/")
-			if len(parts) != 2 {
-				fmt.Printf("Invalid payload: %s\n", notification.Payload)
-				return
+			planID, pathID, err := listener.GetNextExecuteActionNotification(ctx)
+			if err != nil {
+				fmt.Printf("Error handling execute action notification: %+v\n", err)
 			}
 
-			if err := listener.HandleExecuteActionNotification(ctx, parts[0], parts[1]); err != nil {
+			if err := listener.HandleExecuteActionNotification(ctx, planID, pathID); err != nil {
 				fmt.Printf("Error handling execute action notification: %+v\n", err)
 			}
 		}()

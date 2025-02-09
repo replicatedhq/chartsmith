@@ -15,6 +15,29 @@ import (
 	"go.uber.org/zap"
 )
 
+func GetNextExecuteActionNotification(ctx context.Context) (string, string, error) {
+	conn := persistence.MustGeUunpooledPostgresSession()
+	defer conn.Close(ctx)
+
+	query := `
+		SELECT plan_id, path
+		FROM action_queue
+		WHERE started_at IS NULL
+		OR started_at < NOW() - INTERVAL '1 minute'
+		ORDER BY created_at ASC
+		LIMIT 1
+		FOR UPDATE SKIP LOCKED
+	`
+
+	var planID, path string
+	err := conn.QueryRow(ctx, query).Scan(&planID, &path)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to get next execute action notification: %w", err)
+	}
+
+	return planID, path, nil
+}
+
 func HandleExecuteActionNotification(ctx context.Context, planID string, path string) error {
 	logger.Info("New execute action notification received", zap.String("plan_id", planID), zap.String("path", path))
 
