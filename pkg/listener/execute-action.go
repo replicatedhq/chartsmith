@@ -15,7 +15,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func handleExecuteActionNotification(ctx context.Context, planID string, path string) error {
+func HandleExecuteActionNotification(ctx context.Context, planID string, path string) error {
 	logger.Info("New execute action notification received", zap.String("plan_id", planID), zap.String("path", path))
 
 	conn := persistence.MustGeUunpooledPostgresSession()

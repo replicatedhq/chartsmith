@@ -3,11 +3,14 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/replicatedhq/chartsmith/pkg/listener"
 	"github.com/replicatedhq/chartsmith/pkg/param"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
@@ -46,10 +49,14 @@ func RunCmd() *cobra.Command {
 				APIKey:  param.Get().CentrifugoAPIKey,
 			})
 
-			ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-			defer stop()
+			pgOpts := persistence.PostgresOpts{
+				URI: param.Get().PGURI,
+			}
+			if err := persistence.InitPostgres(pgOpts); err != nil {
+				return fmt.Errorf("failed to initialize postgres connection: %w", err)
+			}
 
-			if err := runWorker(ctx, param.Get().PGURI); err != nil {
+			if err := runWorker(cmd.Context()); err != nil {
 				return fmt.Errorf("worker error: %w", err)
 			}
 			return nil
@@ -59,17 +66,85 @@ func RunCmd() *cobra.Command {
 	return runCmd
 }
 
-func runWorker(ctx context.Context, pgURI string) error {
-	pgOpts := persistence.PostgresOpts{
-		URI: pgURI,
-	}
-	if err := persistence.InitPostgres(pgOpts); err != nil {
-		return fmt.Errorf("failed to initialize postgres connection: %w", err)
-	}
+func runWorker(ctx context.Context) error {
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	if err := listener.Listen(ctx); err != nil {
+	l := listener.NewListener()
+
+	l.AddHandler("new_intent", func(notification *pgconn.Notification) error {
+		go func() {
+			if err := listener.HandleNewIntentNotification(ctx, notification.Payload); err != nil {
+				fmt.Printf("Error handling new intent notification: %+v\n", err)
+			}
+		}()
+		return nil
+	})
+
+	l.AddHandler("execute_plan", func(notification *pgconn.Notification) error {
+		go func() {
+			if err := listener.HandleExecutePlanNotification(ctx, notification.Payload); err != nil {
+				fmt.Printf("Error handling execute plan notification: %+v\n", err)
+			}
+		}()
+		return nil
+	})
+
+	l.AddHandler("new_converational", func(notification *pgconn.Notification) error {
+		go func() {
+			if err := listener.HandleConverationalNotification(ctx, notification.Payload); err != nil {
+				fmt.Printf("Error handling conversational chat message notification: %+v\n", err)
+			}
+		}()
+		return nil
+	})
+
+	l.AddHandler("execute_action", func(notification *pgconn.Notification) error {
+		go func() {
+			parts := strings.Split(notification.Payload, "/")
+			if len(parts) != 2 {
+				fmt.Printf("Invalid payload: %s\n", notification.Payload)
+				return
+			}
+
+			if err := listener.HandleExecuteActionNotification(ctx, parts[0], parts[1]); err != nil {
+				fmt.Printf("Error handling execute action notification: %+v\n", err)
+			}
+		}()
+		return nil
+	})
+
+	l.AddHandler("new_summarize", func(notification *pgconn.Notification) error {
+		go func() {
+			if err := listener.HandleNewFileNotification(ctx, notification.Payload); err != nil {
+				fmt.Printf("Error handling new summarize notification: %+v\n", err)
+			}
+		}()
+		return nil
+	})
+
+	l.AddHandler("new_plan", func(notification *pgconn.Notification) error {
+		go func() {
+			if err := listener.HandleNewPlanNotification(ctx, notification.Payload); err != nil {
+				fmt.Printf("Error handling new plan notification: %+v\n", err)
+			}
+		}()
+		return nil
+	})
+
+	if err := l.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start listener: %w", err)
 	}
 
-	return nil
+	defer l.Stop(ctx)
+	for {
+		select {
+		case <-sigChan:
+			fmt.Println("\nReceived interrupt signal. Shutting down...")
+			if err := l.Stop(ctx); err != nil {
+				fmt.Printf("Error during shutdown: %v\n", err)
+			}
+			return nil
+		}
+	}
 }

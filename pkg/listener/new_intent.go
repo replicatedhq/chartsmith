@@ -14,7 +14,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func handleNewIntentNotification(ctx context.Context, payload string) error {
+func HandleNewIntentNotification(ctx context.Context, payload string) error {
 	logger.Info("New intent notification received", zap.String("payload", payload))
 
 	chatMessage, err := workspace.GetChatMessage(ctx, payload)

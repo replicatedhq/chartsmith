@@ -15,7 +15,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func handleNewPlanNotification(ctx context.Context, planID string) error {
+func HandleNewPlanNotification(ctx context.Context, planID string) error {
 	logger.Info("New plan notification received",
 		zap.String("plan_id", planID))
 

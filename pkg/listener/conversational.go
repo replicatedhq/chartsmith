@@ -14,7 +14,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func handleConverationalNotification(ctx context.Context, chatMessageId string) error {
+func HandleConverationalNotification(ctx context.Context, chatMessageId string) error {
 	logger.Info("Handling new conversational chat message notification",
 		zap.String("chatMessageId", chatMessageId))
 

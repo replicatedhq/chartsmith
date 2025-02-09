@@ -36,7 +36,7 @@ func sendExecuteActionNotification(ctx context.Context, planID string, path stri
 	return nil
 }
 
-func handleExecutePlanNotification(ctx context.Context, planID string) error {
+func HandleExecutePlanNotification(ctx context.Context, planID string) error {
 	conn := persistence.MustGeUunpooledPostgresSession()
 	defer conn.Close(ctx)
 

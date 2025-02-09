@@ -12,7 +12,7 @@ import (
 	"github.com/replicatedhq/chartsmith/pkg/workspace"
 )
 
-func handleNewFileNotification(ctx context.Context, id string) error {
+func HandleNewFileNotification(ctx context.Context, id string) error {
 	conn := persistence.MustGeUunpooledPostgresSession()
 	defer conn.Close(ctx)
 
