@@ -25,15 +25,5 @@ export default async function WorkspacePage({
     return null; // This should never happen as layout redirects if no workspace
   }
 
-  console.log('Server loading workspace:', {
-    id: workspace.id,
-    fileCount: workspace.files.length,
-    chartFileCount: workspace.charts?.reduce((acc, chart) => acc + chart.files.length, 0),
-    filesWithPatches: workspace.files.filter(f => f.pendingPatch).length,
-    chartFilesWithPatches: workspace.charts?.reduce((acc, chart) => 
-      acc + chart.files.filter(f => f.pendingPatch).length, 0
-    )
-  });
-
   return <WorkspaceContent initialWorkspace={workspace} workspaceId={id} />;
 }

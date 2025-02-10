@@ -1,7 +1,7 @@
 import { getDB } from "../data/db";
 import { getParam } from "../data/param";
 
-import { Chart, WorkspaceFile, Workspace, Plan, ActionFile, RenderedChart, ChatMessage } from "../types/workspace";
+import { Chart, WorkspaceFile, Workspace, Plan, ActionFile, RenderedChart, ChatMessage, FollowupAction } from "../types/workspace";
 import * as srs from "secure-random-string";
 import { logger } from "../utils/logger";
 import { listMessagesForWorkspace } from "./chat";
@@ -140,6 +140,7 @@ export interface CreateChatMessageParams {
   prompt?: string;
   response?: string;
   knownIntent?: ChatMessageIntent;
+  followupActions?: FollowupAction[];
 }
 
 export async function createChatMessage(userId: string, workspaceId: string, params: CreateChatMessageParams): Promise<ChatMessage> {
@@ -147,11 +148,43 @@ export async function createChatMessage(userId: string, workspaceId: string, par
   try {
     const client = getDB(await getParam("DB_URI"));
     const chatMessageId = srs.default({ length: 12, alphanumeric: true });
-    await client.query(
-      `INSERT INTO workspace_chat (id, workspace_id, created_at, sent_by, prompt, response, revision_number, is_canceled)
-      VALUES ($1, $2, now(), $3, $4, $5, 0, false)`,
-      [chatMessageId, workspaceId, userId, params.prompt, params.response],
-    );
+
+    const query = `
+      INSERT INTO workspace_chat (
+        id,
+        workspace_id,
+        created_at,
+        sent_by,
+        prompt,
+        response,
+        revision_number,
+        is_canceled,
+        is_intent_complete,
+        is_intent_conversational,
+        is_intent_plan,
+        is_intent_off_topic,
+        is_intent_chart_developer,
+        is_intent_chart_operator,
+        followup_actions
+      )
+      VALUES (
+        $1, $2, now(), $3, $4, $5, 0, false,
+        $6, $7, $8, false, false, false, $9
+      )`;
+
+    const values = [
+      chatMessageId,
+      workspaceId,
+      userId,
+      params.prompt,
+      params.response,
+      params.knownIntent ? true : false,
+      params.knownIntent === ChatMessageIntent.NON_PLAN,
+      params.knownIntent === ChatMessageIntent.PLAN,
+      params.followupActions ? JSON.stringify(params.followupActions) : null,
+    ];
+
+    await client.query(query, values);
 
     if (!params.knownIntent) {
       await enqueueWork("new_intent", {
@@ -227,9 +260,25 @@ export async function createPlan(userId: string, workspaceId: string, chatMessag
 export async function getChatMessage(chatMessageId: string): Promise<ChatMessage> {
   try {
     const db = getDB(await getParam("DB_URI"));
-    const result = await db.query(`SELECT
-id, prompt, response, created_at, is_canceled
-FROM workspace_chat WHERE id = $1`, [chatMessageId]);
+
+    const query = `
+      SELECT
+        id,
+        prompt,
+        response,
+        created_at,
+        is_canceled,
+        is_intent_complete,
+        is_intent_conversational,
+        is_intent_plan,
+        is_intent_off_topic,
+        is_intent_chart_developer,
+        is_intent_chart_operator,
+        followup_actions
+      FROM workspace_chat
+      WHERE id = $1`;
+
+    const result = await db.query(query, [chatMessageId]);
 
     const chatMessage: ChatMessage = {
       id: result.rows[0].id,
@@ -246,6 +295,7 @@ FROM workspace_chat WHERE id = $1`, [chatMessageId]);
         isProceed: result.rows[0].is_intent_proceed,
       },
       isCanceled: result.rows[0].is_canceled,
+      followupActions: result.rows[0].followup_actions,
     };
 
     return chatMessage;
@@ -415,6 +465,22 @@ export async function listWorkspaces(userId: string): Promise<Workspace[]> {
     return workspaces;
   } catch (err) {
     logger.error("Failed to list workspaces", { err });
+    throw err;
+  }
+}
+
+export async function renderWorkspace(workspaceId: string, revisionNumber: number, chartId: string) {
+  try {
+    const db = getDB(await getParam("DB_URI"));
+
+    const id = srs.default({ length: 12, alphanumeric: true });
+
+    await db.query(`INSERT INTO workspace_rendered_chart (id, workspace_id, revision_number, chart_id, is_success, created_at)
+      VALUES ($1, $2, $3, $4, $5, now())`, [id, workspaceId, revisionNumber, chartId, false]);
+
+    await enqueueWork("render_workspace", { id });
+  } catch (err) {
+    logger.error("Failed to render workspace", { err });
     throw err;
   }
 }

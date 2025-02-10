@@ -2,9 +2,11 @@ package llm
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
+	"github.com/replicatedhq/chartsmith/pkg/recommendations"
 	"github.com/replicatedhq/chartsmith/pkg/workspace"
 	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 )
@@ -86,27 +88,133 @@ func ConversationalChatMessage(ctx context.Context, streamCh chan string, doneCh
 	}
 
 	messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(chatMessage.Prompt)))
-	stream := client.Messages.NewStreaming(context.TODO(), anthropic.MessageNewParams{
-		Model:     anthropic.F(anthropic.ModelClaude3_5Sonnet20241022),
-		MaxTokens: anthropic.F(int64(8192)),
-		Messages:  anthropic.F(messages),
-	})
 
-	message := anthropic.Message{}
-	for stream.Next() {
-		event := stream.Current()
-		message.Accumulate(event)
-
-		switch delta := event.Delta.(type) {
-		case anthropic.ContentBlockDeltaEventDelta:
-			if delta.Text != "" {
-				streamCh <- delta.Text
-			}
-		}
+	tools := []anthropic.ToolParam{
+		{
+			Name:        anthropic.F("latest_subchart_version"),
+			Description: anthropic.F("Return the latest version of a subchart from name"),
+			InputSchema: anthropic.F(interface{}(map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"chart_name": map[string]interface{}{
+						"type":        "string",
+						"description": "The subchart name to get the latest version of",
+					},
+				},
+				"required": []string{"chart_name"},
+			})),
+		},
+		{
+			Name:        anthropic.F("latest_kubernetes_version"),
+			Description: anthropic.F("Return the latest version of Kubernetes"),
+			InputSchema: anthropic.F(interface{}(map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"semver_field": map[string]interface{}{
+						"type":        "string",
+						"description": "One of 'major', 'minor', or 'patch'",
+					},
+				},
+				"required": []string{"semver_description"},
+			})),
+		},
 	}
 
-	if stream.Err() != nil {
-		doneCh <- stream.Err()
+	for {
+		stream := client.Messages.NewStreaming(ctx, anthropic.MessageNewParams{
+			Model:     anthropic.F(anthropic.ModelClaude3_5Sonnet20241022),
+			MaxTokens: anthropic.F(int64(8192)),
+			Messages:  anthropic.F(messages),
+			Tools:     anthropic.F(tools),
+		})
+
+		message := anthropic.Message{}
+		for stream.Next() {
+			event := stream.Current()
+			err := message.Accumulate(event)
+			if err != nil {
+				doneCh <- fmt.Errorf("failed to accumulate message: %w", err)
+				return err
+			}
+
+			switch event := event.AsUnion().(type) {
+			case anthropic.ContentBlockDeltaEvent:
+				if event.Delta.Text != "" {
+					streamCh <- event.Delta.Text
+				}
+			}
+		}
+
+		if stream.Err() != nil {
+			doneCh <- stream.Err()
+			return stream.Err()
+		}
+
+		messages = append(messages, message.ToParam())
+
+		hasToolCalls := false
+		toolResults := []anthropic.ContentBlockParamUnion{}
+
+		for _, block := range message.Content {
+			if block.Type == anthropic.ContentBlockTypeToolUse {
+				hasToolCalls = true
+				var response interface{}
+				switch block.Name {
+				case "latest_kubernetes_version":
+					var input struct {
+						SemverField string `json:"semver_field"`
+					}
+					if err := json.Unmarshal(block.Input, &input); err != nil {
+						doneCh <- fmt.Errorf("failed to unmarshal tool input: %w", err)
+						return err
+					}
+
+					switch input.SemverField {
+					case "major":
+						response = "1"
+					case "minor":
+						response = "1.32"
+					case "patch":
+						response = "1.32.1"
+					}
+				case "latest_subchart_version":
+					var input struct {
+						ChartName string `json:"chart_name"`
+					}
+					if err := json.Unmarshal(block.Input, &input); err != nil {
+						doneCh <- fmt.Errorf("failed to unmarshal tool input: %w", err)
+						return err
+					}
+
+					version, err := recommendations.GetLatestSubchartVersion(input.ChartName)
+					if err != nil && err != recommendations.ErrNoArtifactHubPackage {
+						doneCh <- fmt.Errorf("failed to get latest subchart version: %w", err)
+						return err
+					} else if err == recommendations.ErrNoArtifactHubPackage {
+						response = "?"
+					} else {
+						response = version
+					}
+				}
+
+				b, err := json.Marshal(response)
+				if err != nil {
+					doneCh <- fmt.Errorf("failed to marshal tool response: %w", err)
+					return err
+				}
+
+				toolResults = append(toolResults, anthropic.NewToolResultBlock(block.ID, string(b), false))
+			}
+		}
+
+		if !hasToolCalls {
+			break
+		}
+
+		messages = append(messages, anthropic.MessageParam{
+			Role:    anthropic.F(anthropic.MessageParamRoleUser),
+			Content: anthropic.F(toolResults),
+		})
 	}
 
 	doneCh <- nil

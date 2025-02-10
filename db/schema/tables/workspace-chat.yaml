@@ -53,3 +53,5 @@ schema:
       constraints:
         notNull: true
       default: "false"
+    - name: followup_actions
+      type: jsonb

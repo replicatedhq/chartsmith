@@ -14,6 +14,7 @@ type PlanUpdatedEvent struct {
 func (e PlanUpdatedEvent) GetMessageData() (map[string]interface{}, error) {
 	return map[string]interface{}{
 		"workspaceId": e.WorkspaceID,
+		"eventType":   "plan-updated",
 		"plan":        e.Plan,
 	}, nil
 }

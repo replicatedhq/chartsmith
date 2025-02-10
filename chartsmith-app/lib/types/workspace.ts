@@ -31,7 +31,11 @@ export interface Chart {
 export interface RenderedChart {
   id: string;
   name: string;
-  scenarios: RenderedChartScenario[];
+  stdout: string;
+  stderr: string;
+  manifests: string;
+  createdAt: Date;
+  completedAt: Date;
 }
 
 export interface RenderedChartScenario {
@@ -66,6 +70,12 @@ export interface ChatMessage {
   isIntentComplete: boolean;
   intent?: Intent;
   isCanceled: boolean;
+  followupActions?: FollowupAction[];
+}
+
+export interface FollowupAction {
+  action: string;
+  label: string;
 }
 
 export interface Intent {
@@ -87,3 +97,13 @@ export interface Scenario {
   workspaceId?: string;
 }
 
+export interface RenderUpdate {
+  workspaceId: string;
+  revisionNumber: number;
+  valuesContent: string;
+  valuesHash: string;
+  chartName: string;
+  stdout: string;
+  stderr: string;
+  result: string;
+}

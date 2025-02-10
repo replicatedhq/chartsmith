@@ -11,7 +11,7 @@ interface ChatPanelProps {
   onApplyChanges?: (message: Message) => void;
   session: Session;
   workspaceId: string;
-  setMessages: (messages: Message[]) => void;
+  setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
 }
 
 export function ChatPanel({ messages, onSendMessage, onApplyChanges, session, workspaceId, setMessages }: ChatPanelProps) {

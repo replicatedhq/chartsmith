@@ -1,3 +1,5 @@
+import { Plan, Workspace, WorkspaceFile, RenderedChart } from "@/lib/types/workspace";
+
 export interface FileNode {
   name: string;
   type: "file" | "folder";
@@ -35,6 +37,10 @@ export interface Message {
   isOptimistic?: boolean;
   isIntentComplete?: boolean;
   intent?: Intent;
+  followupActions?: Array<{
+    action: string;
+    label: string;
+  }>;
 }
 
 // Interface for raw message from server before normalization
@@ -44,6 +50,12 @@ export interface RawMessage {
   response?: string;
   isIntentComplete: boolean;
   intent?: RawIntent;
+  followupActions?: RawFollowupAction[];
+}
+
+export interface RawFollowupAction {
+  action: string;
+  label: string;
 }
 
 export interface RawIntent {
@@ -87,6 +99,8 @@ export interface CentrifugoMessageData {
   revision?: RawRevision;
   artifact?: RawArtifact;
   workspaceId: string;
+  eventType?: string;
+  renderedChart?: RenderedChart;
 }
 
 export interface RawRevision {

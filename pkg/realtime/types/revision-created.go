@@ -17,6 +17,7 @@ func (e RevisionCreatedEvent) GetChannelName() string {
 func (e RevisionCreatedEvent) GetMessageData() (map[string]interface{}, error) {
 	return map[string]interface{}{
 		"workspace": e.Workspace,
+		"eventType": "revision-created",
 		"revision":  e.Revision,
 	}, nil
 }

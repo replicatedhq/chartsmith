@@ -14,6 +14,7 @@ type ChatMessageUpdatedEvent struct {
 func (e ChatMessageUpdatedEvent) GetMessageData() (map[string]interface{}, error) {
 	return map[string]interface{}{
 		"workspaceId": e.WorkspaceID,
+		"eventType":   "chatmessage-updated",
 		"chatMessage": e.ChatMessage,
 	}, nil
 }

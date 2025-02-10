@@ -9,22 +9,23 @@ import { usePathname } from "next/navigation";
 import { useSession } from "@/app/hooks/useSession";
 import { getWorkspaceMessagesAction } from "@/lib/workspace/actions/get-workspace-messages";
 import { Message, CentrifugoMessageData, RawPlan, RawWorkspace, RawChatMessage, RawRevision } from "@/components/editor/types";
-import { Plan, Workspace, WorkspaceFile } from "@/lib/types/workspace";
+import { Plan, Workspace, WorkspaceFile, RenderedChart } from "@/lib/types/workspace";
 import { getCentrifugoTokenAction } from "@/lib/centrifugo/actions/get-centrifugo-token-action";
-import { Centrifuge, Options } from "centrifuge";
+import { Centrifuge } from "centrifuge";
 import { createRevisionAction } from "@/lib/workspace/actions/create-revision";
 import { logger } from "@/lib/utils/logger";
 import { getWorkspaceAction } from "@/lib/workspace/actions/get-workspace";
-import { PlanOnlyLayout } from "../layout/PlanOnlyLayout";
 import { PlanContent } from "./PlanContent";
 import { createChatMessageAction } from "@/lib/workspace/actions/create-chat-message";
 import { useCommandMenu } from '@/contexts/CommandMenuContext';
 import { CommandMenuWrapper } from "@/components/CommandMenuWrapper";
-import { Send } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { ChatContainer } from "../chat/ChatContainer";
 import { acceptPatchAction } from "@/lib/workspace/actions/accept-patch";
 import { rejectPatchAction } from "@/lib/workspace/actions/reject-patch";
+import { getWorkspaceRenderedChartsAction } from "@/lib/workspace/actions/get-workspace-rendered-charts";
+import { RenderUpdate } from "@/lib/types/workspace";
+import type { editor } from "monaco-editor";
 
 interface WorkspaceContentProps {
   initialWorkspace: Workspace;
@@ -35,33 +36,60 @@ interface WorkspaceContentProps {
 export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceContentProps) {
   const { theme } = useTheme();
   const { session } = useSession();
-  const [workspace, setWorkspace] = useState<Workspace>(initialWorkspace);
   const { isFileTreeVisible, setIsFileTreeVisible } = useWorkspaceUI();
+  const { openCommandMenu } = useCommandMenu();
+  const { view, toggleView, updateFileSelection } = useEditorView(
+    usePathname()?.endsWith('/rendered') ? 'rendered' : 'source'
+  );
+
+  const [workspace, setWorkspace] = useState<Workspace>(initialWorkspace);
   const [messages, setMessages] = useState<Message[]>([]);
   const [selectedFile, setSelectedFile] = useState<WorkspaceFile | undefined>();
   const [editorContent, setEditorContent] = useState<string>("");
   const [centrifugoToken, setCentrifugoToken] = useState<string | null>(null);
-  const { openCommandMenu } = useCommandMenu();
   const [chatInput, setChatInput] = useState("");
-  const { view, toggleView, updateFileSelection } = useEditorView(
-    usePathname()?.endsWith('/rendered') ? 'rendered' : 'source'
-  );
+  const [renderUpdates, setRenderUpdates] = useState<RenderUpdate[]>([]);
+  const [selectedRenderUpdate, setSelectedRenderUpdate] = useState<RenderUpdate | null>(null);
+  const [renderedCharts, setRenderedCharts] = useState<RenderedChart[]>([]);
+  const [selectedChartType, setSelectedChartType] = useState<{
+    chartId: string;
+    type: 'stdout' | 'stderr' | 'manifests';
+  } | null>(null);
+
   const centrifugeRef = useRef<Centrifuge | null>(null);
   const handlersRef = useRef<{
     onMessage: ((message: { data: CentrifugoMessageData }) => void) | null;
   }>({ onMessage: null });
+  const handleArtifactReceivedRef = useRef<((artifact: { path: string, content: string, pendingPatch?: string }) => void) | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const prevWorkspaceRef = useRef<Workspace | null>(null);
+  const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
+
+  const handleRenderSelect = useCallback((chart: RenderedChart, type: 'stdout' | 'stderr' | 'manifests') => {
+    setSelectedRenderUpdate(null);
+    setEditorContent(type === 'stdout' ? chart.stdout :
+                    type === 'stderr' ? chart.stderr :
+                    chart.manifests || '');
+  }, []);
 
   useEffect(() => {
-    console.log('Initial workspace loaded:', {
-      id: initialWorkspace.id,
-      fileCount: initialWorkspace.files.length,
-      chartFileCount: initialWorkspace.charts?.reduce((acc, chart) => acc + chart.files.length, 0),
-      filesWithPatches: initialWorkspace.files.filter(f => f.pendingPatch).length,
-      chartFilesWithPatches: initialWorkspace.charts?.reduce((acc, chart) =>
-        acc + chart.files.filter(f => f.pendingPatch).length, 0
-      )
-    });
-  }, [initialWorkspace]);
+    if (!selectedChartType) return;
+
+    const chart = renderedCharts.find(c => c.id === selectedChartType.chartId);
+    if (!chart) return;
+
+    const content = selectedChartType.type === 'stdout' ? chart.stdout :
+                   selectedChartType.type === 'stderr' ? chart.stderr :
+                   chart.manifests || '';
+
+    setEditorContent(content);
+
+    if (editorRef.current) {
+      const editor = editorRef.current;
+      const lineCount = editor.getModel()?.getLineCount() || 0;
+      editor.revealLine(lineCount, 1);
+    }
+  }, [renderedCharts, selectedChartType]);
 
   const handleFileSelect = useCallback((file: WorkspaceFile) => {
     setSelectedFile({
@@ -75,7 +103,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
       content: file.content || "",
       type: 'file' as const
     });
-  }, [setSelectedFile, setEditorContent, updateFileSelection]);
+  }, [updateFileSelection]);
 
   const handleFileDelete = useCallback(() => {
     return;
@@ -96,6 +124,31 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
       setMessages(messages);
     });
   }, [session, workspaceId]);
+
+  useEffect(() => {
+    if (!session || !workspace) return;
+    
+    getWorkspaceRenderedChartsAction(session, workspace.id)
+      .then(charts => {
+        logger.debug("Loaded initial rendered charts", { 
+          count: charts.length,
+          chartIds: charts.map(c => c.id),
+          charts 
+        });
+        setRenderedCharts(charts);
+      })
+      .catch(err => {
+        logger.error("Failed to load rendered charts", { err });
+      });
+  }, [session, workspace?.id, workspace]);
+
+  useEffect(() => {
+    logger.debug("Rendered charts state changed", { 
+      count: renderedCharts.length,
+      chartIds: renderedCharts.map(c => c.id),
+      charts: renderedCharts 
+    });
+  }, [renderedCharts]);
 
   const handlePlanUpdated = React.useCallback((plan: RawPlan | Plan) => {
     const p: Plan = 'createdAt' in plan && typeof plan.createdAt === 'string' ? {
@@ -197,26 +250,12 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
   const handleWorkspaceUpdated = useCallback((workspace: RawWorkspace) => {
   }, []);
 
-  const handleArtifactReceivedRef = useRef<((artifact: { path: string, content: string, pendingPatch?: string }) => void) | null>(null);
-
   const handleArtifactReceived = useCallback((artifact: { path: string, content: string, pendingPatch?: string }) => {
-    console.log('Received artifact:', {
-      path: artifact.path,
-      contentLength: artifact.content.length,
-      hasPatch: !!artifact.pendingPatch,
-      patchLength: artifact.pendingPatch?.length
-    });
-
     setWorkspace(currentWorkspace => {
       const existingWorkspaceFile = currentWorkspace.files?.find(f => f.filePath === artifact.path);
       const chartWithFile = currentWorkspace.charts?.find(chart =>
         chart.files.some(f => f.filePath === artifact.path)
       );
-
-      console.log('Existing file check:', {
-        hasExistingFile: !!existingWorkspaceFile,
-        hasChartWithFile: !!chartWithFile
-      });
 
       if (!existingWorkspaceFile && !chartWithFile) {
         const newFile = {
@@ -225,13 +264,6 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
           content: artifact.content,
           pendingPatch: artifact.pendingPatch
         };
-
-        console.log('Creating new file:', {
-          id: newFile.id,
-          filePath: newFile.filePath,
-          contentLength: newFile.content.length,
-          hasPendingPatch: !!newFile.pendingPatch
-        });
 
         return {
           ...currentWorkspace,
@@ -263,12 +295,6 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
         )
       })) || [];
 
-      console.log('Updated existing file:', {
-        path: artifact.path,
-        filesUpdated: updatedFiles.some(f => f.filePath === artifact.path),
-        chartsUpdated: updatedCharts.some(c => c.files.some(f => f.filePath === artifact.path))
-      });
-
       return {
         ...currentWorkspace,
         files: updatedFiles,
@@ -282,13 +308,6 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
       content: artifact.content,
       pendingPatch: artifact.pendingPatch
     };
-
-    console.log('Selecting file:', {
-      id: file.id,
-      filePath: file.filePath,
-      contentLength: file.content.length,
-      hasPendingPatch: !!file.pendingPatch
-    });
 
     handleFileSelect(file);
     setEditorContent(artifact.content);
@@ -304,10 +323,49 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     handleArtifactReceivedRef.current = handleArtifactReceived;
   }, [handleArtifactReceived]);
 
+  const handleRenderUpdated = useCallback((data: CentrifugoMessageData) => {
+    if (!data.renderedChart) {
+      logger.debug("Received render-updated event without renderedChart", { data });
+      return;
+    }
+
+    if (!data.renderedChart.id) {
+      logger.warn("Received renderedChart without ID", { renderedChart: data.renderedChart });
+      return;
+    }
+
+    setRenderedCharts(prev => {
+      logger.debug("Updating rendered charts", {
+        existing: prev,
+        newChart: data.renderedChart,
+        matchingId: prev.find(c => c.id === data.renderedChart?.id)?.id
+      });
+
+      const existingIndex = prev.findIndex(chart => chart.id === data.renderedChart!.id);
+
+      if (existingIndex >= 0) {
+        const newCharts = [...prev];
+        newCharts[existingIndex] = data.renderedChart!;
+        return newCharts;
+      }
+
+      return [...prev, data.renderedChart!];
+    });
+    
+    console.log('Render updated:', data.renderedChart);
+  }, []);
+
   const handleCentrifugoMessage = useCallback((message: { data: CentrifugoMessageData }) => {
-    const isPlanUpdatedEvent = message.data.plan;
-    if (isPlanUpdatedEvent) {
+    const eventType = message.data.eventType;
+
+    if (eventType === 'plan-updated') {
       handlePlanUpdated(message.data.plan!);
+    } else if (eventType === 'chatmessage-updated') {
+      handleChatMessageUpdated(message.data.chatMessage!);
+    } else if (eventType === 'revision-created') {
+      handleRevisionCreated(message.data.revision!);
+    } else if (eventType === 'render-updated') {
+      handleRenderUpdated(message.data);
     }
 
     const isWorkspaceUpdatedEvent = message.data.workspace;
@@ -315,28 +373,11 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
       handleWorkspaceUpdated(message.data.workspace!);
     }
 
-    const isChatMessageUpdatedEvent = message.data.chatMessage;
-    if (isChatMessageUpdatedEvent) {
-      handleChatMessageUpdated(message.data.chatMessage!);
-    }
-
-    const isRevisionCreatedEvent = message.data.revision;
-    if (isRevisionCreatedEvent) {
-      handleRevisionCreated(message.data.revision!);
-    }
-
     const artifact = message.data.artifact;
     if (artifact && artifact.path && artifact.content) {
-      console.log('Centrifugo artifact message:', {
-        path: artifact.path,
-        contentLength: artifact.content.length,
-        hasPatch: !!artifact.pendingPatch,
-        patchLength: artifact.pendingPatch?.length,
-        rawMessage: message.data
-      });
       handleArtifactReceivedRef.current?.(artifact);
     }
-  }, [handlePlanUpdated, handleWorkspaceUpdated, handleChatMessageUpdated, handleRevisionCreated]);
+  }, [handlePlanUpdated, handleWorkspaceUpdated, handleChatMessageUpdated, handleRevisionCreated, handleRenderUpdated]);
 
   useEffect(() => {
     handlersRef.current.onMessage = handleCentrifugoMessage;
@@ -425,8 +466,6 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     };
   }, [centrifugoToken, session, workspace?.id, handlersRef]);
 
-  const prevWorkspaceRef = React.useRef<Workspace | null>(null);
-
   useEffect(() => {
     if (!followMode || !workspace) {
       return;
@@ -468,13 +507,13 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     }
   }, [workspace?.files, selectedFile, editorContent]);
 
-  const handleSendMessage = async (message: string) => {
+  const handleSendMessage = useCallback(async (message: string) => {
     if (!session || !workspace) return;
 
     const chatMessage = await createChatMessageAction(session, workspace.id, message);
 
     setMessages(prev => [...prev, chatMessage]);
-  }
+  }, [session, workspace]);
 
   const handleApplyChanges = async (message: Message) => {
     if (!session || !workspace) return;
@@ -500,8 +539,6 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     }
     return;
   };
-
-  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -684,7 +721,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
                 files={allFiles}
                 charts={workspace.charts || []}
                 revision={workspace.currentRevisionNumber}
-                renderedCharts={workspace.renderedCharts || []}
+                renderedCharts={renderedCharts}
                 selectedFile={selectedFile}
                 onFileSelect={handleFileSelect}
                 onFileDelete={handleFileDelete}
@@ -693,6 +730,8 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
                 isFileTreeVisible={isFileTreeVisible}
                 onCommandK={openCommandMenu}
                 onFileUpdate={handleFileUpdate}
+                onRenderSelect={handleRenderSelect}
+                editorRef={editorRef}
               />
             </div>
           );

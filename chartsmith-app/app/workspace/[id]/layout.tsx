@@ -2,7 +2,6 @@
 
 import { SideNavWrapper } from "@/components/SideNavWrapper";
 import { WorkspaceUIProvider } from "@/contexts/WorkspaceUIContext";
-import { ValuesScenariosProvider } from "@/app/contexts/ValuesScenariosContext";
 import { getWorkspace } from "@/lib/workspace/workspace";
 import { validateSession } from "@/lib/auth/actions/validate-session";
 import { cookies } from "next/headers";
@@ -41,15 +40,13 @@ export default async function WorkspaceLayout({
   const hasRevision = Boolean(workspace?.currentRevisionNumber > 0 || workspace?.incompleteRevisionNumber);
 
   return (
-    <ValuesScenariosProvider>
-      <WorkspaceUIProvider initialChatVisible={true} initialFileTreeVisible={hasRevision}>
-        <div className="min-h-screen bg-[var(--background)] flex w-full" suppressHydrationWarning>
-          <SideNavWrapper workspaceID={id} />
-          <div className="flex-1">
-            {children}
-          </div>
+    <WorkspaceUIProvider initialChatVisible={true} initialFileTreeVisible={hasRevision}>
+      <div className="min-h-screen bg-[var(--background)] flex w-full" suppressHydrationWarning>
+        <SideNavWrapper workspaceID={id} />
+        <div className="flex-1">
+          {children}
         </div>
-      </WorkspaceUIProvider>
-    </ValuesScenariosProvider>
+      </div>
+    </WorkspaceUIProvider>
   );
 }
