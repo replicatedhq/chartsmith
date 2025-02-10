@@ -2,6 +2,7 @@ package listener
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -15,34 +16,23 @@ import (
 	"go.uber.org/zap"
 )
 
-func handleNewPlanNotification(ctx context.Context, planID string) error {
+type newPlanPayload struct {
+	PlanID string `json:"planId"`
+}
+
+func handleNewPlanNotification(ctx context.Context, payload string) error {
 	logger.Info("New plan notification received",
-		zap.String("plan_id", planID))
+		zap.String("payload", payload))
+
+	var p newPlanPayload
+	if err := json.Unmarshal([]byte(payload), &p); err != nil {
+		return fmt.Errorf("failed to unmarshal payload: %w", err)
+	}
 
 	conn := persistence.MustGeUunpooledPostgresSession()
 	defer conn.Close(ctx)
 
-	var processingErr error
-	defer func() {
-		var errorMsg *string
-		if processingErr != nil {
-			errStr := processingErr.Error()
-			errorMsg = &errStr
-		}
-
-		_, updateErr := conn.Exec(ctx, `
-            UPDATE notification_processing
-            SET processed_at = NOW(),
-                error = $1
-            WHERE notification_channel = $2 and notification_id = $3
-        `, errorMsg, "new_plan", planID)
-
-		if updateErr != nil {
-			fmt.Printf("Failed to update notification status: %v\n", updateErr)
-		}
-	}()
-
-	plan, err := workspace.GetPlan(ctx, nil, planID)
+	plan, err := workspace.GetPlan(ctx, nil, p.PlanID)
 	if err != nil {
 		return fmt.Errorf("error getting plan: %w", err)
 	}
@@ -73,12 +63,12 @@ func handleNewPlanNotification(ctx context.Context, planID string) error {
 		if w.CurrentRevision == 0 {
 			if err := createInitialPlan(ctx, streamCh, doneCh, w, plan); err != nil {
 				fmt.Printf("Failed to create initial plan: %v\n", err)
-				processingErr = fmt.Errorf("error creating initial plan: %w", err)
+				doneCh <- fmt.Errorf("error creating initial plan: %w", err)
 			}
 		} else {
 			if err := createUpdatePlan(ctx, streamCh, doneCh, w, plan); err != nil {
 				fmt.Printf("Failed to create update plan: %v\n", err)
-				processingErr = fmt.Errorf("error creating update plan: %w", err)
+				doneCh <- fmt.Errorf("error creating update plan: %w", err)
 			}
 		}
 	}()

@@ -67,8 +67,8 @@ func runWorker(ctx context.Context, pgURI string) error {
 		return fmt.Errorf("failed to initialize postgres connection: %w", err)
 	}
 
-	if err := listener.Listen(ctx); err != nil {
-		return fmt.Errorf("failed to start listener: %w", err)
+	if err := listener.StartListeners(ctx); err != nil {
+		return fmt.Errorf("failed to start listeners: %w", err)
 	}
 
 	return nil

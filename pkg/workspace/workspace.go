@@ -395,13 +395,14 @@ func NotifyWorkerToCaptureEmbeddings(ctx context.Context, workspaceID string, re
 
 	// the payload is file_id/revision_number
 	for _, file := range filesNeedingEmbeddings {
-		payload := fmt.Sprintf("%s/%d", file.ID, file.RevisionNumber)
+		p := map[string]interface{}{
+			"fileId":   file.ID,
+			"revision": file.RevisionNumber,
+		}
 
-		// write to the summarize_queue table
-		conn.Exec(ctx, `INSERT INTO summarize_queue (file_id, revision, created_at) VALUES ($1, $2, now())`, file.ID, file.RevisionNumber)
-
-		// pg_notify this with the payload
-		conn.Exec(ctx, `SELECT pg_notify('new_summarize', $1)`, payload)
+		if err := persistence.EnqueueWork(ctx, "new_summarize", p); err != nil {
+			return fmt.Errorf("error enqueuing work: %w", err)
+		}
 	}
 
 	return nil

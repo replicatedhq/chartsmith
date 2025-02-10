@@ -2,67 +2,37 @@ package listener
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/replicatedhq/chartsmith/pkg/llm"
 	llmtypes "github.com/replicatedhq/chartsmith/pkg/llm/types"
+	"github.com/replicatedhq/chartsmith/pkg/logger"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 	"github.com/replicatedhq/chartsmith/pkg/realtime"
 	realtimetypes "github.com/replicatedhq/chartsmith/pkg/realtime/types"
 	"github.com/replicatedhq/chartsmith/pkg/workspace"
 	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
+	"go.uber.org/zap"
 )
 
-func sendExecuteActionNotification(ctx context.Context, planID string, path string) error {
-	notifyConn := persistence.MustGeUunpooledPostgresSession()
-	defer notifyConn.Close(ctx)
-
-	// Insert into queue with just the required fields
-	if _, err := notifyConn.Exec(ctx, `
-		INSERT INTO action_queue (plan_id, path, created_at)
-		VALUES ($1, $2, NOW())
-		ON CONFLICT (plan_id, path) DO NOTHING
-	`, planID, path); err != nil {
-		return fmt.Errorf("failed to queue action: %w", err)
-	}
-
-	// Notify to wake up any sleeping workers
-	if _, err := notifyConn.Exec(ctx, `
-		SELECT pg_notify('execute_action', 'new')
-	`); err != nil {
-		return fmt.Errorf("failed to send execute action notification: %w", err)
-	}
-	return nil
+type executePlanPayload struct {
+	PlanID string `json:"planId"`
 }
 
-func handleExecutePlanNotification(ctx context.Context, planID string) error {
+func handleExecutePlanNotification(ctx context.Context, payload string) error {
+	logger.Info("Handling execute plan notification", zap.String("payload", payload))
+
 	conn := persistence.MustGeUunpooledPostgresSession()
 	defer conn.Close(ctx)
 
-	var processingErr error
-	defer func() {
-		var errorMsg *string
-		if processingErr != nil {
-			errStr := processingErr.Error()
-			errorMsg = &errStr
-		}
+	var p executePlanPayload
+	if err := json.Unmarshal([]byte(payload), &p); err != nil {
+		return fmt.Errorf("failed to unmarshal payload: %w", err)
+	}
 
-		_, updateErr := conn.Exec(ctx, `
-            UPDATE notification_processing
-            SET processed_at = NOW(),
-                error = $1
-            WHERE notification_channel = $2 and notification_id = $3
-        `, errorMsg, "execute_plan", planID)
-
-		if updateErr != nil {
-			fmt.Printf("Failed to update notification status: %v\n", updateErr)
-		}
-	}()
-
-	fmt.Printf("Handling execute plan notification: %s\n", planID)
-
-	plan, err := workspace.GetPlan(ctx, nil, planID)
+	plan, err := workspace.GetPlan(ctx, nil, p.PlanID)
 	if err != nil {
 		return fmt.Errorf("error getting plan: %w", err)
 	}
@@ -174,9 +144,11 @@ func handleExecutePlanNotification(ctx context.Context, planID string) error {
 				return fmt.Errorf("failed to send plan update: %w", err)
 			}
 
-			// Send notification with a separate connection
-			if err := sendExecuteActionNotification(ctx, currentPlan.ID, actionPlanWithPath.Path); err != nil {
-				return err
+			if err := persistence.EnqueueWork(ctx, "execute_action", map[string]interface{}{
+				"planId": currentPlan.ID,
+				"path":   actionPlanWithPath.Path,
+			}); err != nil {
+				return fmt.Errorf("failed to enqueue execute action: %w", err)
 			}
 
 		case err := <-detailedPlanDoneCh:

@@ -7,7 +7,6 @@ import (
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
 	llmtypes "github.com/replicatedhq/chartsmith/pkg/llm/types"
-	"github.com/replicatedhq/chartsmith/pkg/logger"
 	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 )
 
@@ -80,7 +79,6 @@ Follow the instructions to provide the patch in proper <chartsmithArtifact> tags
 		doneCh <- stream.Err()
 	}
 
-	logger.Debugf("Full response with tags: %s", fullResponseWithTags)
 	doneCh <- nil
 	return nil
 }

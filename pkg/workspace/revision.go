@@ -2,7 +2,6 @@ package workspace
 
 import (
 	"context"
-	"errors"
 
 	"github.com/replicatedhq/chartsmith/pkg/logger"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
@@ -141,11 +140,11 @@ func CreateRevision(ctx context.Context, workspaceID string, planID string, user
 		return types.Revision{}, err
 	}
 
-	// Notify about new revision after commit
-	_, err = conn.Exec(ctx, `SELECT pg_notify('execute_plan', $1)`, planID)
-	if err != nil {
-		logger.Error(errors.New("failed to send execute_plan notification"))
-		// Don't return error here since the revision was created successfully
+	if err := persistence.EnqueueWork(ctx, "execute_plan", map[string]interface{}{
+		"planId": planID,
+	}); err != nil {
+		logger.Warn("failed to enqueue execute_plan notification", zap.Error(err))
+		// but do not exit
 	}
 
 	// Get and return the newly created revision

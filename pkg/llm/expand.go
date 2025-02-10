@@ -38,6 +38,5 @@ Here is the prompt:
 	expandedPrompt := resp.Content[0].Text
 
 	// we can inject some keywords into the prompt to help the match in the vector search
-	fmt.Printf("Expanded prompt: %s\n", expandedPrompt)
 	return expandedPrompt, nil
 }

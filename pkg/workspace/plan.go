@@ -297,6 +297,11 @@ VALUES
 		return fmt.Errorf("error creating plan: %w", err)
 	}
 
-	conn.Exec(ctx, `SELECT pg_notify('new_plan', $1)`, id)
+	if err := persistence.EnqueueWork(ctx, "new_plan", map[string]interface{}{
+		"planId": id,
+	}); err != nil {
+		return fmt.Errorf("error enqueuing new plan: %w", err)
+	}
+
 	return nil
 }

@@ -2,6 +2,7 @@ package listener
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -14,10 +15,20 @@ import (
 	"go.uber.org/zap"
 )
 
+type newIntentPayload struct {
+	ChatMessageID string `json:"chatMessageId"`
+	WorkspaceID   string `json:"workspaceId"`
+}
+
 func handleNewIntentNotification(ctx context.Context, payload string) error {
 	logger.Info("New intent notification received", zap.String("payload", payload))
 
-	chatMessage, err := workspace.GetChatMessage(ctx, payload)
+	var p newIntentPayload
+	if err := json.Unmarshal([]byte(payload), &p); err != nil {
+		return fmt.Errorf("failed to unmarshal payload: %w", err)
+	}
+
+	chatMessage, err := workspace.GetChatMessage(ctx, p.ChatMessageID)
 	if err != nil {
 		return fmt.Errorf("failed to get chat message: %w", err)
 	}
@@ -194,20 +205,17 @@ func handleNewIntentNotification(ctx context.Context, payload string) error {
 
 		return nil
 	} else if intent.IsConversational && !intent.IsOffTopic {
-		// the message is already in the database, we just need to notify the worker
-		conn := persistence.MustGetPooledPostgresSession()
-		defer conn.Release()
-		conn.Exec(ctx, `SELECT pg_notify('new_converational', $1)`, chatMessage.ID)
-		conn.Release()
-	}
-
-	// if the message suggests a conversational response, send a message to the conversational llm
-	if intent.IsConversational {
-		conn := persistence.MustGetPooledPostgresSession()
-		defer conn.Release()
-		conn.Exec(ctx, `SELECT pg_notify('new_converational', $1)`, chatMessage.ID)
-		conn.Release()
-		return nil
+		if err := persistence.EnqueueWork(ctx, "new_converational", map[string]interface{}{
+			"chatMessageId": chatMessage.ID,
+		}); err != nil {
+			return fmt.Errorf("failed to enqueue new conversational chat message: %w", err)
+		}
+	} else if intent.IsConversational {
+		if err := persistence.EnqueueWork(ctx, "new_converational", map[string]interface{}{
+			"chatMessageId": chatMessage.ID,
+		}); err != nil {
+			return fmt.Errorf("failed to enqueue new conversational chat message: %w", err)
+		}
 	}
 
 	return nil

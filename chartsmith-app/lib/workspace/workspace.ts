@@ -5,6 +5,7 @@ import { Chart, WorkspaceFile, Workspace, Plan, ActionFile, RenderedChart, ChatM
 import * as srs from "secure-random-string";
 import { logger } from "../utils/logger";
 import { listMessagesForWorkspace } from "./chat";
+import { enqueueWork } from "../utils/queue";
 
 /**
  * Creates a new workspace with initialized files, charts, and content
@@ -104,8 +105,10 @@ export async function createWorkspace(createdType: string, userId: string, baseC
       // now that that's commited, let's get all of the file ids, and notify the worker so that we capture embeddings
       const files = await listFilesForWorkspace(id, initialRevisionNumber);
       for (const file of files) {
-        await client.query(`INSERT INTO summarize_queue (file_id, revision, created_at) VALUES ($1, $2, now())`, [file.id, initialRevisionNumber]);
-        await client.query(`SELECT pg_notify('new_summarize', $1)`, [file.id + "/" + initialRevisionNumber]);
+        await enqueueWork("new_summarize", {
+          fileId: file.id,
+          revision: initialRevisionNumber,
+        });
       }
     } catch (err) {
       // Rollback transaction on error
@@ -151,16 +154,16 @@ export async function createChatMessage(userId: string, workspaceId: string, par
     );
 
     if (!params.knownIntent) {
-      // Insert into intent_queue before sending notification
-      await client.query(
-        `INSERT INTO intent_queue (chat_message_id, created_at)
-        VALUES ($1, NOW())`,
-        [chatMessageId]
-      );
-      await client.query(`SELECT pg_notify('new_intent', $1)`, [chatMessageId]);
+      await enqueueWork("new_intent", {
+        chatMessageId,
+        workspaceId,
+      });
     } else if (params.knownIntent === ChatMessageIntent.PLAN) {
-      const p = await createPlan(userId, workspaceId, chatMessageId);
-      await client.query(`SELECT pg_notify('new_plan', $1)`, [p.id]);
+      // we need to create the plan record and then notify the worker so that it can start processing the plan
+      const plan = await createPlan(userId, workspaceId, chatMessageId);
+      await enqueueWork("new_plan", {
+        planId: plan.id,
+      });
     } else if (params.knownIntent === ChatMessageIntent.NON_PLAN) {
       await client.query(`SELECT pg_notify('new_nonplan_chat_message', $1)`, [chatMessageId]);
     }
@@ -668,11 +671,7 @@ export async function createRevision(plan: Plan, userID: string): Promise<number
     // Commit transaction
     await db.query('COMMIT');
 
-    // Notify about new revision, after the commit
-    await db.query(
-      `SELECT pg_notify('execute_plan', $1)`,
-      [plan.id]
-    );
+    await enqueueWork("execute_plan", { planId: plan.id });
 
     return newRevisionNumber;
 
