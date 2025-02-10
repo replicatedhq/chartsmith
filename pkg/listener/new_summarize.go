@@ -27,42 +27,19 @@ func handleNewSummarizeNotification(ctx context.Context, payload string) error {
 		return fmt.Errorf("failed to unmarshal payload: %w", err)
 	}
 
-	var processingErr error
-	defer func() {
-		var errorMsg *string
-		if processingErr != nil {
-			errStr := processingErr.Error()
-			errorMsg = &errStr
-		}
-
-		_, updateErr := conn.Exec(ctx, `
-            UPDATE notification_processing
-            SET processed_at = NOW(),
-                error = $1
-            WHERE notification_channel = $2 and notification_id = $3
-        `, errorMsg, "new_summarize", p.FileID)
-
-		if updateErr != nil {
-			logger.Error(fmt.Errorf("failed to update notification status: %w", updateErr))
-		}
-	}()
-
 	fileRevision, err := workspace.GetFile(ctx, p.FileID, p.Revision)
 	if err != nil {
-		processingErr = fmt.Errorf("failed to get file: %w", err)
-		return processingErr
+		return fmt.Errorf("failed to get file: %w", err)
 	}
 
 	embeddings, err := embedding.Embeddings(fileRevision.Content)
 	if err != nil {
-		processingErr = fmt.Errorf("failed to get embeddings: %w", err)
-		return processingErr
+		return fmt.Errorf("failed to get embeddings: %w", err)
 	}
 
 	err = workspace.SetFileEmbeddings(ctx, p.FileID, p.Revision, embeddings)
 	if err != nil {
-		processingErr = fmt.Errorf("failed to set summary and embeddings: %w", err)
-		return processingErr
+		return fmt.Errorf("failed to set summary and embeddings: %w", err)
 	}
 	return nil
 }
