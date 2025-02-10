@@ -2,6 +2,7 @@ package listener
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -14,34 +15,23 @@ import (
 	"go.uber.org/zap"
 )
 
-func handleConverationalNotification(ctx context.Context, chatMessageId string) error {
+type newConverationalPayload struct {
+	ChatMessageID string `json:"chatMessageId"`
+}
+
+func handleConverationalNotification(ctx context.Context, payload string) error {
 	logger.Info("Handling new conversational chat message notification",
-		zap.String("chatMessageId", chatMessageId))
+		zap.String("payload", payload))
+
+	var p newConverationalPayload
+	if err := json.Unmarshal([]byte(payload), &p); err != nil {
+		return fmt.Errorf("failed to unmarshal payload: %w", err)
+	}
 
 	conn := persistence.MustGeUunpooledPostgresSession()
 	defer conn.Close(ctx)
 
-	var processingErr error
-	defer func() {
-		var errorMsg *string
-		if processingErr != nil {
-			errStr := processingErr.Error()
-			errorMsg = &errStr
-		}
-
-		_, updateErr := conn.Exec(ctx, `
-            UPDATE notification_processing
-            SET processed_at = NOW(),
-                error = $1
-            WHERE notification_channel = $2 and notification_id = $3
-        `, errorMsg, "new_nonplan_chat_message", chatMessageId)
-
-		if updateErr != nil {
-			fmt.Printf("Failed to update notification status: %v\n", updateErr)
-		}
-	}()
-
-	chatMessage, err := workspace.GetChatMessage(ctx, chatMessageId)
+	chatMessage, err := workspace.GetChatMessage(ctx, p.ChatMessageID)
 	if err != nil {
 		return fmt.Errorf("error getting chat message: %w", err)
 	}
@@ -65,7 +55,7 @@ func handleConverationalNotification(ctx context.Context, chatMessageId string) 
 	go func() {
 		if err := llm.ConversationalChatMessage(ctx, streamCh, doneCh, w, chatMessage); err != nil {
 			fmt.Printf("Failed to create conversational chat message: %v\n", err)
-			processingErr = fmt.Errorf("error creating conversational chat message: %w", err)
+			doneCh <- fmt.Errorf("error creating conversational chat message: %w", err)
 		}
 	}()
 

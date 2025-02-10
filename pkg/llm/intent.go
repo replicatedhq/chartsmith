@@ -89,7 +89,7 @@ Important: Do not respond with anything other than the JSON object.`,
 		intent.IsProceed = false
 	}
 
-	logger.Debug("GetChatMessageIntent",
+	logger.Debug("GetChatMessageIntent result",
 		zap.Any("intent", intent),
 	)
 	return intent, nil
