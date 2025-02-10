@@ -3,12 +3,32 @@ import { getDB } from "../data/db";
 import { getParam } from "../data/param";
 import * as srs from "secure-random-string";
 import { logger } from "../utils/logger";
+import { ChatMessage } from "../types/workspace";
+import { getChatMessage } from "./workspace";
 
 export async function setMessageIgnored(_workspaceID: string, _chatMessageID: string): Promise<void> {
   // TODO
 }
 
-export async function listMessagesForWorkspace(workspaceID: string): Promise<Message[]> {
+export async function cancelChatMessage(chatMessageId: string): Promise<ChatMessage> {
+  try {
+    const chatMessage = await getChatMessage(chatMessageId);
+
+    if (chatMessage.response !== null) {
+      throw new Error("Chat message has already been applied");
+    }
+
+    const db = getDB(await getParam("DB_URI"));
+    await db.query(`UPDATE workspace_chat SET is_canceled = true WHERE id = $1`, [chatMessageId]);
+
+    return getChatMessage(chatMessageId);
+  } catch (err) {
+    logger.error("Failed to cancel chat message", { err });
+    throw err;
+  }
+}
+
+export async function listMessagesForWorkspace(workspaceID: string): Promise<ChatMessage[]> {
   try {
     const db = getDB(await getParam("DB_URI"));
     const queryResult = await db.query(
@@ -25,7 +45,8 @@ export async function listMessagesForWorkspace(workspaceID: string): Promise<Mes
                 workspace_chat.is_intent_off_topic,
                 workspace_chat.is_intent_chart_developer,
                 workspace_chat.is_intent_chart_operator,
-                workspace_chat.is_intent_proceed
+                workspace_chat.is_intent_proceed,
+                workspace_chat.is_canceled
             FROM
                 workspace_chat
             WHERE
@@ -41,17 +62,17 @@ export async function listMessagesForWorkspace(workspaceID: string): Promise<Mes
     }
 
     // each chat is a user message, and if there is a response that is the assistant message
-    const messages: Message[] = [];
+    const messages: ChatMessage[] = [];
 
     for (let i = 0; i < queryResult.rows.length; i++) {
       const row = queryResult.rows[i];
 
-      const message: Message = {
+      const message: ChatMessage = {
         id: row.id,
         prompt: row.prompt,
         response: row.response,
         createdAt: row.created_at,
-        isComplete: row.response !== null,  // If there's a response, it's complete
+        isCanceled: row.is_canceled,
         isIntentComplete: row.is_intent_complete,
         intent: {
           isConversational: row.is_intent_conversational,
@@ -95,60 +116,6 @@ export async function addChatMessage(workspaceID: string, userID: string, messag
     };
   } catch (err) {
     logger.error("Failed to add chat message", { err });
-    throw err;
-  }
-}
-
-export async function getChatMessage(workspaceID: string, chatID: string): Promise<Message> {
-  try {
-    const db = getDB(await getParam("DB_URI"));
-    const result = await db.query(
-      `
-        SELECT
-          workspace_chat.id,
-          workspace_chat.workspace_id,
-          workspace_chat.created_at,
-          workspace_chat.sent_by,
-          workspace_chat.prompt,
-          workspace_chat.response,
-          workspace_chat.is_intent_complete,
-          workspace_chat.is_intent_conversational,
-          workspace_chat.is_intent_plan,
-          workspace_chat.is_intent_off_topic,
-          workspace_chat.is_intent_chart_developer,
-          workspace_chat.is_intent_chart_operator,
-          workspace_chat.is_intent_proceed
-        FROM
-          workspace_chat
-        WHERE
-          workspace_chat.id = $1
-      `,
-      [chatID],
-    );
-
-    if (result.rows.length === 0) {
-      throw new Error("no chat message found");
-    }
-
-    const row = result.rows[0];
-    const message: Message = {
-      id: row.id,
-      prompt: row.prompt,
-      response: row.response,
-      isIntentComplete: row.is_intent_complete,
-      intent: {
-        isConversational: row.is_intent_conversational,
-        isPlan: row.is_intent_plan,
-        isOffTopic: row.is_intent_off_topic,
-        isChartDeveloper: row.is_intent_chart_developer,
-        isChartOperator: row.is_intent_chart_operator,
-        isProceed: row.is_intent_proceed,
-      },
-    };
-
-    return message;
-  } catch (err) {
-    logger.error("Failed to get chat message", { err });
     throw err;
   }
 }

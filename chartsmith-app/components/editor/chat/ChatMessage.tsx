@@ -5,11 +5,12 @@ import { Session } from "@/lib/types/session";
 import { Workspace } from "@/lib/types/workspace";
 import { useTheme } from "../../../contexts/ThemeContext";
 import { Button } from "@/components/ui/Button";
-import { FeedbackModal } from "@/components/FeedbackModal";
 import { ignorePlanAction } from "@/lib/workspace/actions/ignore-plan";
 import { createRevisionAction } from "@/lib/workspace/actions/create-revision";
 import { Send, ThumbsUp, ThumbsDown } from "lucide-react";
 import ReactMarkdown from 'react-markdown';
+import { cancelMessageAction } from "@/lib/workspace/actions/cancel-message";
+import { FeedbackModal } from "@/components/FeedbackModal";
 
 export interface ChatMessageProps {
   message: Message;
@@ -17,7 +18,7 @@ export interface ChatMessageProps {
   session: Session;
   workspaceId: string;
   showActions?: boolean;
-  setMessages?: (messages: Message[]) => void;
+  setMessages?: React.Dispatch<React.SetStateAction<Message[]>>;
   setWorkspace?: React.Dispatch<React.SetStateAction<Workspace>>;
   showChatInput?: boolean;
   onSendMessage?: (message: string) => void;
@@ -86,11 +87,29 @@ export function ChatMessage({
             />
             <div className="flex-1">
               <div className="flex-1">
-              <div className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} text-[12px] pt-0.5`}>{message.prompt}</div>
-              {!message.isIntentComplete && (
+              <div className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} text-[12px] pt-0.5 ${message.isCanceled ? "opacity-50" : ""}`}>{message.prompt}</div>
+              {!message.isIntentComplete && !message.isCanceled && (
                 <div className="flex items-center gap-2 mt-2 border-t border-primary/20 pt-2">
                   <div className="flex-shrink-0 animate-spin rounded-full h-3 w-3 border border-t-transparent border-primary"></div>
                   <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>thinking...</div>
+                  <button
+                    className={`ml-auto text-xs px-1.5 py-0.5 rounded border ${theme === "dark" ? "border-dark-border text-gray-400 hover:text-gray-200" : "border-gray-300 text-gray-500 hover:text-gray-700"} hover:bg-dark-border/40`}
+                    onClick={async (e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const chatMessage = await cancelMessageAction(session, message.id);
+                      if (chatMessage && setMessages) {
+                        setMessages((messages: Message[]) => messages.map((m: Message) => m.id === message.id ? (chatMessage as Message) : m));
+                      }
+                    }}
+                  >
+                    cancel
+                  </button>
+                </div>
+              )}
+              {message.isCanceled && (
+                <div className="flex items-center gap-2 mt-2 border-t border-primary/20 pt-2">
+                  <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>Message generation canceled</div>
                 </div>
               )}
             </div>

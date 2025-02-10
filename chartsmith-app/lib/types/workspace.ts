@@ -65,6 +65,7 @@ export interface ChatMessage {
   createdAt: Date;
   isIntentComplete: boolean;
   intent?: Intent;
+  isCanceled: boolean;
 }
 
 export interface Intent {

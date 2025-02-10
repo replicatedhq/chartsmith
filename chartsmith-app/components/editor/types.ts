@@ -26,6 +26,7 @@ export interface Message {
   isApplied?: boolean;
   isApplying?: boolean;
   isIgnored?: boolean;
+  isCanceled?: boolean;
   role?: string;
   createdAt?: Date;
   workspaceId?: string;
@@ -100,6 +101,7 @@ export interface RawChatMessage {
   prompt: string;
   response?: string;
   createdAt: string;  // ISO date string from server
+  isCanceled: boolean;
 }
 
 export interface RawArtifact {

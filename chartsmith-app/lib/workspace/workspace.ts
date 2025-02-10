@@ -148,8 +148,8 @@ export async function createChatMessage(userId: string, workspaceId: string, par
     const client = getDB(await getParam("DB_URI"));
     const chatMessageId = srs.default({ length: 12, alphanumeric: true });
     await client.query(
-      `INSERT INTO workspace_chat (id, workspace_id, created_at, sent_by, prompt, response, revision_number)
-      VALUES ($1, $2, now(), $3, $4, $5, 0)`,
+      `INSERT INTO workspace_chat (id, workspace_id, created_at, sent_by, prompt, response, revision_number, is_canceled)
+      VALUES ($1, $2, now(), $3, $4, $5, 0, false)`,
       [chatMessageId, workspaceId, userId, params.prompt, params.response],
     );
 
@@ -228,7 +228,7 @@ export async function getChatMessage(chatMessageId: string): Promise<ChatMessage
   try {
     const db = getDB(await getParam("DB_URI"));
     const result = await db.query(`SELECT
-id, prompt, response, created_at
+id, prompt, response, created_at, is_canceled
 FROM workspace_chat WHERE id = $1`, [chatMessageId]);
 
     const chatMessage: ChatMessage = {
@@ -244,7 +244,8 @@ FROM workspace_chat WHERE id = $1`, [chatMessageId]);
         isChartDeveloper: result.rows[0].is_intent_chart_developer,
         isChartOperator: result.rows[0].is_intent_chart_operator,
         isProceed: result.rows[0].is_intent_proceed,
-      }
+      },
+      isCanceled: result.rows[0].is_canceled,
     };
 
     return chatMessage;
