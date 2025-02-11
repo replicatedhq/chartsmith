@@ -3,11 +3,12 @@ name: workspace_rendered_chart
 schema:
   postgres:
     primaryKey:
-    - workspace_id
-    - revision_number
-    - chart_id
-    - scenario_id
+    - id
     columns:
+    - name: id
+      type: text
+      constraints:
+        notNull: true
     - name: workspace_id
       type: text
       constraints:
@@ -20,14 +21,19 @@ schema:
       type: text
       constraints:
         notNull: true
-    - name: scenario_id
-      type: text
-      constraints:
-        notNull: true
     - name: is_success
       type: boolean
       constraints:
         notNull: true
-      default: "false"
-    - name: error_message
+    - name: stdout
       type: text
+    - name: stderr
+      type: text
+    - name: manifests
+      type: text
+    - name: created_at
+      type: timestamp
+      constraints:
+        notNull: true
+    - name: completed_at
+      type: timestamp

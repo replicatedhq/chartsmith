@@ -93,6 +93,12 @@ export function ChatContainer({ messages, onSendMessage, onApplyChanges, session
   }, [messages]);
 
   let content;
+  const renderItems: Array<{
+    type: 'plan' | 'message';
+    messages: Message[];
+    plan?: Plan;
+  }> = [];
+
   if (workspace?.currentPlans) {
     const userMessagePlanMap = createMessagePlanMap(workspace.currentPlans, messages);
     // Sort messages chronologically first
@@ -102,18 +108,8 @@ export function ChatContainer({ messages, onSendMessage, onApplyChanges, session
       return aDate.getTime() - bDate.getTime(); // Oldest at top
     });
 
-    // Create map from sorted messages using sorted messages
-    const messagePlanMap = createMessagePlanMap(workspace.currentPlans, sortedMessages);
-
-    // Create an array of all items in chronological order
-    const renderItems: Array<{
-      type: 'plan' | 'message';
-      messages: Message[];
-      plan?: Plan;
-    }> = [];
-
     // Process plans and their messages
-    Array.from(messagePlanMap).forEach(([planMessages, plan]) => {
+    Array.from(userMessagePlanMap).forEach(([planMessages, plan]) => {
       renderItems.push({
         type: 'plan',
         messages: planMessages,
@@ -137,65 +133,49 @@ export function ChatContainer({ messages, onSendMessage, onApplyChanges, session
       const bTime = b.messages[0].createdAt ? new Date(b.messages[0].createdAt).getTime() : 0;
       return aTime - bTime;
     });
-
-    content = (
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0 scroll-smooth">
-        {renderItems.map((item, index) => (
-          <div key={item.type === 'plan' ? item.plan!.id : item.messages[0].id}>
-            {item.type === 'plan' ? (
-              <>
-                {item.messages.map(message => (
-                  <ChatMessage
-                    key={message.id}
-                    message={message}
-                    session={session}
-                    workspaceId={workspaceId}
-                    setWorkspace={setWorkspace}
-                  />
-                ))}
-                <PlanChatMessage
-                  plan={item.plan!}
-                  session={session}
-                  workspaceId={workspaceId}
-                  messageId={item.messages[0]?.id}
-                  showActions={index === renderItems.length - 1}
-                  handlePlanUpdated={handlePlanUpdated}
-                  setMessages={setMessages}
-                  setWorkspace={setWorkspace}
-                  onSendMessage={onSendMessage}
-                />
-              </>
-            ) : (
-              <ChatMessage
-                key={item.messages[0].id}
-                message={item.messages[0]}
-                session={session}
-                workspaceId={workspaceId}
-              />
-            )}
-          </div>
-        ))}
-        <div ref={messagesEndRef} />
-      </div>
-    );
-  } else {
-    content = (
-      <ChatPanel
-        messages={messages}
-        onSendMessage={onSendMessage}
-        onApplyChanges={onApplyChanges}
-        session={session}
-        workspaceId={workspaceId}
-        setMessages={setMessages}
-      />
-    );
   }
 
   return (
     <div className={`h-[calc(100vh-3.5rem)] border-r flex flex-col min-h-0 overflow-hidden transition-all duration-300 ease-in-out w-full relative ${theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"}`}>
       <div className="flex-1 overflow-y-auto">
         <div className="pb-16">
-          {content}
+          {renderItems.map((item, index) => (
+            <div key={item.type === 'plan' ? item.plan!.id : item.messages[0].id}>
+              {item.type === 'plan' ? (
+                <>
+                  {item.messages.map(message => (
+                    <ChatMessage
+                      key={message.id}
+                      message={message}
+                      session={session}
+                      workspaceId={workspaceId}
+                      setWorkspace={setWorkspace}
+                      setMessages={setMessages}
+                    />
+                  ))}
+                  <PlanChatMessage
+                    plan={item.plan!}
+                    session={session}
+                    workspaceId={workspaceId}
+                    messageId={item.messages[0]?.id}
+                    showActions={index === renderItems.length - 1}
+                    handlePlanUpdated={handlePlanUpdated}
+                    setMessages={setMessages}
+                    setWorkspace={setWorkspace}
+                    onSendMessage={onSendMessage}
+                  />
+                </>
+              ) : (
+                <ChatMessage
+                  key={item.messages[0].id}
+                  message={item.messages[0]}
+                  session={session}
+                  workspaceId={workspaceId}
+                  setMessages={setMessages}
+                />
+              )}
+            </div>
+          ))}
           {workspace?.currentRevisionNumber && workspace?.currentRevisionNumber > 0 && workspace?.currentPlans?.some(plan =>
             ['planning', 'applying'].includes(plan.status)
           ) && (

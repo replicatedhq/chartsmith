@@ -12,7 +12,7 @@ interface PlanContentProps {
   workspace: Workspace;
   messages: Message[];
   handlePlanUpdated: (plan: Plan) => void;
-  setMessages?: React.Dispatch<React.SetStateAction<Message[]>>;
+  setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   setWorkspace?: React.Dispatch<React.SetStateAction<Workspace>>;
   onSendMessage: (message: string) => void;
 }
@@ -124,6 +124,7 @@ export function PlanContent({ session, workspace, messages, handlePlanUpdated, s
                         session={session}
                         workspaceId={workspace.id}
                         setWorkspace={setWorkspace}
+                        setMessages={setMessages}
                       />
                     ))}
                     <PlanChatMessage
@@ -150,6 +151,7 @@ export function PlanContent({ session, workspace, messages, handlePlanUpdated, s
                     onSendMessage={onSendMessage}
                     workspace={workspace}
                     setWorkspace={setWorkspace}
+                    setMessages={setMessages}
                   />
                 )}
               </div>

@@ -89,7 +89,61 @@ body {
   @apply text-sm;
 }
 
-/* Rest of the file stays the same */
+.prose {
+  @apply text-[11px];
+}
+
+.dark .prose {
+  @apply prose-invert;
+}
+
+.prose p {
+  @apply mb-4 leading-relaxed;
+}
+
+.prose ul {
+  @apply list-disc list-inside my-4 space-y-2;
+}
+
+.prose ol {
+  @apply list-decimal my-4 pl-8 space-y-2;
+}
+
+.prose code {
+  @apply font-mono text-[11px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-dark-border/40;
+}
+
+.prose pre {
+  @apply bg-dark-surface/40 p-4 rounded-md my-4 overflow-x-auto;
+}
+
+.prose pre code {
+  @apply p-0 bg-transparent;
+}
+
+.prose h1 {
+  @apply text-2xl font-bold mb-6 pb-2 border-b border-gray-200 dark:border-dark-border;
+}
+
+.prose h2 {
+  @apply text-xl font-semibold mt-8 mb-4;
+}
+
+.prose h3 {
+  @apply text-lg font-medium mt-6 mb-3 text-primary;
+}
+
+.prose h4 {
+  @apply text-base font-medium mt-4 mb-2;
+}
+
+.prose li {
+  @apply text-[11px] leading-relaxed;
+}
+
+.prose li::marker {
+  @apply text-primary/60;
+}
 
 @keyframes progress-color {
   0% { 
@@ -104,4 +158,14 @@ body {
     background-color: rgba(99, 102, 241, 0.3);
     transform: scale(1);
   }
+}
+
+/* Add these styles for the Monaco editor */
+.monaco-editor {
+  white-space: pre !important;
+  font-family: "Monaco", "Menlo", "Ubuntu Mono", "Consolas", "source-code-pro", monospace !important;
+}
+
+.monaco-editor .view-line {
+  white-space: pre !important;
 }

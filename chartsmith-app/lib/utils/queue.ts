@@ -2,7 +2,11 @@ import { getDB } from "../data/db";
 import { getParam } from "../data/param";
 import * as srs from "secure-random-string";
 
-export async function enqueueWork(channel: string, payload: any): Promise<void> {
+interface QueuePayload {
+  [key: string]: string | number | boolean | null | undefined;
+}
+
+export async function enqueueWork(channel: string, payload: QueuePayload): Promise<void> {
   const client = getDB(await getParam("DB_URI"));
 
   const id = srs.default({ length: 12, alphanumeric: true });

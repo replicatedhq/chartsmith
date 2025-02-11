@@ -7,6 +7,7 @@ import { Workspace } from "@/lib/types/workspace";
 import { useSession } from "@/app/hooks/useSession";
 import { createWorkspaceFromUrlAction } from "@/lib/workspace/actions/create-workspace-from-url";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 
 export interface ImportChartProps {
   url: string;
@@ -36,10 +37,20 @@ export function ImportChart({ url }: ImportChartProps) {
         <div className="px-2 py-1">
           <div className="p-3 rounded-2xl bg-primary/20 rounded-tr-sm w-full">
             <div className="flex items-start gap-2">
-              <div className="w-6 h-6 rounded-full bg-primary/20 flex-shrink-0" />
+              {session?.user?.imageUrl ? (
+                <Image
+                  src={session.user.imageUrl}
+                  alt={session.user.name || 'User'}
+                  width={24}
+                  height={24}
+                  className="w-6 h-6 rounded-full flex-shrink-0"
+                />
+              ) : (
+                <div className="w-6 h-6 rounded-full bg-primary/20 flex-shrink-0" />
+              )}
               <div className="flex-1">
                 <div className="text-[12px] pt-0.5 text-gray-200">
-                  Import chart from {url}
+                  Import the Helm chart from Artifact Hub: {url}
                 </div>
               </div>
             </div>

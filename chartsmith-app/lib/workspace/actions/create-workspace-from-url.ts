@@ -1,6 +1,6 @@
 "use server"
 
-import { Workspace } from "@/lib/types/workspace";
+import { FollowupAction, Workspace } from "@/lib/types/workspace";
 import {ChatMessageIntent, createChatMessage, createWorkspace } from "../workspace";
 import { Session } from "@/lib/types/session";
 import { logger } from "@/lib/utils/logger";
@@ -11,10 +11,23 @@ export async function createWorkspaceFromUrlAction(session: Session, url: string
 
   const baseChart = await getArchiveFromUrl(url);
   const w: Workspace = await createWorkspace("chart", session.user.id, baseChart);
+
+  const followupActions: FollowupAction[] = [
+    {
+      action: "render",
+      label: "Render the chart",
+    },
+    {
+      action: "add_scenario",
+      label: "Create some test cases",
+    },
+  ];
+
   await createChatMessage(session.user.id, w.id, {
-    prompt: `Importing chart from ${url}`,
+    prompt: `Import the Helm chart from Artifact Hub: ${url}`,
     response: `Got it. I found a ${baseChart.name} chart in the ${url} repository and finished importing it. What's next?`,
     knownIntent: ChatMessageIntent.NON_PLAN,
+    followupActions: followupActions,
   });
 
   return w;

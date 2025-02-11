@@ -1,14 +1,14 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { EditorNav } from "../EditorNav";
 import { FileBrowser } from "../FileBrowser";
 import { RenderedFileBrowser } from "../RenderedFileBrowser";
 import { CodeEditor } from "../CodeEditor";
 import { useTheme } from "../../../contexts/ThemeContext";
 import { EditorView } from "../../../hooks/useEditorView";
-import { useEffect } from "react";
-
-import { WorkspaceFile, Chart, RenderedChart } from "@/lib/types/workspace";
+import { logger } from "@/lib/utils/logger";
+import { WorkspaceFile, Chart, RenderedChart, RenderUpdate } from "@/lib/types/workspace";
 import { Session } from "@/lib/types/session";
+import type { editor } from "monaco-editor";
 
 interface WorkspaceContainerProps {
   session: Session;
@@ -26,6 +26,9 @@ interface WorkspaceContainerProps {
   isFileTreeVisible: boolean;
   onCommandK?: () => void;
   onFileUpdate?: (file: WorkspaceFile) => void;
+  renderUpdates?: RenderUpdate[];
+  onRenderSelect?: (chart: RenderedChart, type: 'stdout' | 'stderr' | 'manifests') => void;
+  editorRef?: React.MutableRefObject<editor.IStandaloneCodeEditor | null>;
 }
 
 export function WorkspaceContainer({
@@ -43,7 +46,10 @@ export function WorkspaceContainer({
   onEditorChange,
   isFileTreeVisible,
   onCommandK,
-  onFileUpdate
+  onFileUpdate,
+  renderUpdates = [],
+  onRenderSelect,
+  editorRef,
 }: WorkspaceContainerProps) {
   const { resolvedTheme } = useTheme();
 
@@ -56,46 +62,51 @@ export function WorkspaceContainer({
       <EditorNav view={view} onViewChange={handleViewChange} />
       <div className="flex-1 flex min-h-0">
         <div className="w-[260px] flex-shrink-0">
-          {isFileTreeVisible && (view === "source" ?
-            (() => {
-              return (
-                <FileBrowser
-                  nodes={files}
-                  onFileSelect={onFileSelect}
-                  onFileDelete={onFileDelete}
-                  selectedFile={selectedFile}
-                  charts={charts}
-                />
-              );
-            })() :
+          {isFileTreeVisible && (view === "source" ? (
+            <FileBrowser
+              nodes={files}
+              onFileSelect={onFileSelect}
+              onFileDelete={onFileDelete}
+              selectedFile={selectedFile}
+              charts={charts}
+            />
+          ) : (
             <RenderedFileBrowser
               charts={renderedCharts}
               onFileSelect={onFileSelect}
               selectedFile={selectedFile}
+              renderUpdates={renderUpdates}
+              onRenderSelect={onRenderSelect}
             />
-          )}
+          ))}
         </div>
         <div className={`w-px ${resolvedTheme === "dark" ? "bg-dark-border" : "bg-gray-200"} flex-shrink-0`} />
         <div className="flex-1 min-w-0 overflow-auto">
-          {view === "source" && selectedFile && (
-            <>
-              <CodeEditor
-                session={session}
-                file={selectedFile}
-                revision={revision}
-                theme={resolvedTheme}
-                value={editorContent}
-                onChange={onEditorChange}
-                onCommandK={() => {
-                  console.log("WorkspaceContainer onCommandK handler called");
-                  onCommandK?.();
-                  console.log("WorkspaceContainer onCommandK handler finished");
-                }}
-                onFileUpdate={onFileUpdate}
-                files={files}
-              />
-            </>
-          )}
+          {view === "source" && selectedFile ? (
+            <CodeEditor
+              session={session}
+              file={selectedFile}
+              revision={revision}
+              theme={resolvedTheme}
+              value={editorContent}
+              onChange={onEditorChange}
+              onCommandK={onCommandK}
+              onFileUpdate={onFileUpdate}
+              files={files}
+              editorRef={editorRef}
+            />
+          ) : view === "rendered" && editorContent ? (
+            <CodeEditor
+              session={session}
+              revision={revision}
+              theme={resolvedTheme}
+              value={editorContent}
+              onChange={onEditorChange}
+              onCommandK={onCommandK}
+              files={files}
+              editorRef={editorRef}
+            />
+          ) : null}
         </div>
       </div>
     </div>

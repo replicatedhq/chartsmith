@@ -1,7 +1,7 @@
 "use client"
 
 import React from "react";
-import { Home, Code, Lightbulb, FileJson } from "lucide-react";
+import { Home, Code, Lightbulb, FileJson, History } from "lucide-react";
 import { UserMenu } from "./UserMenu";
 import { useTheme } from "@/contexts/ThemeContext";
 import { usePathname } from "next/navigation";
@@ -42,17 +42,6 @@ export function SideNav({ workspaceID }: SideNavProps) {
         </div>
 
         <div className="mt-2">
-          <Tooltip content="Values Scenarios">
-            <Link
-              href={`/workspace/${workspaceID}/values`}
-              className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${usePathname() === `/workspace/${workspaceID}/values` ? `${theme === "dark" ? "bg-dark-border/60" : "bg-light-border/60"} text-primary` : `text-neutral hover:${theme === "dark" ? "bg-dark-border/40" : "bg-light-border/40"}`}`}
-            >
-              <FileJson className="w-5 h-5" />
-            </Link>
-          </Tooltip>
-        </div>
-
-        <div className="mt-2">
           <Tooltip content="Recommendations">
             <Link
               href={`/workspace/${workspaceID}/recommendations`}
@@ -63,6 +52,7 @@ export function SideNav({ workspaceID }: SideNavProps) {
             </Link>
           </Tooltip>
         </div>
+
       </div>
 
       <div className="py-4 flex justify-center">

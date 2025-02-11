@@ -59,6 +59,14 @@ func StartListeners(ctx context.Context) error {
 		return nil
 	})
 
+	l.AddHandler(ctx, "render_workspace", 5, time.Second*10, func(notification *pgconn.Notification) error {
+		if err := handleRenderWorkspaceNotification(ctx, notification.Payload); err != nil {
+			logger.Error(fmt.Errorf("failed to handle render workspace notification: %w", err))
+			return fmt.Errorf("failed to handle render workspace notification: %w", err)
+		}
+		return nil
+	})
+
 	l.Start(ctx)
 	defer l.Stop(ctx)
 

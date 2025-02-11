@@ -11,6 +11,7 @@ import { Send, ThumbsUp, ThumbsDown } from "lucide-react";
 import ReactMarkdown from 'react-markdown';
 import { cancelMessageAction } from "@/lib/workspace/actions/cancel-message";
 import { FeedbackModal } from "@/components/FeedbackModal";
+import { performFollowupAction } from "@/lib/workspace/actions/perform-followup-action";
 
 export interface ChatMessageProps {
   message: Message;
@@ -18,7 +19,7 @@ export interface ChatMessageProps {
   session: Session;
   workspaceId: string;
   showActions?: boolean;
-  setMessages?: React.Dispatch<React.SetStateAction<Message[]>>;
+  setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   setWorkspace?: React.Dispatch<React.SetStateAction<Workspace>>;
   showChatInput?: boolean;
   onSendMessage?: (message: string) => void;
@@ -133,6 +134,25 @@ export function ChatMessage({
                 </div>
               ))}
             </div>
+            {message.followupActions && message.followupActions.length > 0 && (
+              <div className="mt-4 flex gap-2 justify-end">
+                {message.followupActions.map((action, index) => (
+                  <button
+                    key={index}
+                    className={`text-xs px-2 py-1 rounded ${
+                      theme === "dark"
+                        ? "bg-dark border-dark-border/60 text-gray-300 hover:text-white hover:bg-dark-border/40"
+                        : "bg-white border border-gray-300 text-gray-600 hover:text-gray-800 hover:bg-gray-50"
+                    }`}
+                    onClick={async () => {
+                      await performFollowupAction(session, workspaceId, message.id, action.action);
+                    }}
+                  >
+                    {action.label}
+                  </button>
+                ))}
+              </div>
+            )}
             {message.isComplete && !message.isApplied && showActions && onApplyChanges && (
               <div className="mt-4 space-y-4 border-t border-gray-700/10 pt-4">
                 {message.isApplying ? (

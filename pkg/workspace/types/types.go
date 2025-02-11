@@ -85,13 +85,19 @@ type ActionFile struct {
 }
 
 type Chat struct {
-	ID               string    `json:"id"`
-	WorkspaceID      string    `json:"-"`
-	Prompt           string    `json:"prompt"`
-	Response         string    `json:"response"`
-	CreatedAt        time.Time `json:"createdAt"`
-	IsIntentComplete bool      `json:"isIntentComplete"`
-	Intent           *Intent   `json:"intent"`
+	ID               string           `json:"id"`
+	WorkspaceID      string           `json:"-"`
+	Prompt           string           `json:"prompt"`
+	Response         string           `json:"response"`
+	CreatedAt        time.Time        `json:"createdAt"`
+	IsIntentComplete bool             `json:"isIntentComplete"`
+	Intent           *Intent          `json:"intent"`
+	FollowupActions  []FollowupAction `json:"followupActions"`
+}
+
+type FollowupAction struct {
+	Action string `json:"action"`
+	Label  string `json:"label"`
 }
 
 type Intent struct {
@@ -101,4 +107,20 @@ type Intent struct {
 	IsChartDeveloper bool `json:"isChartDeveloper"`
 	IsChartOperator  bool `json:"isChartOperator"`
 	IsProceed        bool `json:"isProceed"`
+}
+
+type RenderedChart struct {
+	ID             string `json:"id"`
+	WorkspaceID    string `json:"-"`
+	RevisionNumber int    `json:"-"`
+	ChartID        string `json:"-"`
+	Name           string `json:"name"`
+
+	IsSuccess bool   `json:"isSuccess"`
+	Stdout    string `json:"stdout"`
+	Stderr    string `json:"stderr"`
+	Manifests string `json:"manifests"`
+
+	CreatedAt   time.Time  `json:"createdAt"`
+	CompletedAt *time.Time `json:"completedAt"`
 }

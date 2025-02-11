@@ -23,7 +23,7 @@ export function CommandMenuProvider({ children }: { children: React.ReactNode })
       e.preventDefault();
       setIsCommandMenuOpen(true);
     },
-    { 
+    {
       preventDefault: true,
       enableOnFormTags: true,
       enableOnContentEditable: true
@@ -32,7 +32,6 @@ export function CommandMenuProvider({ children }: { children: React.ReactNode })
 
   const value = {
     openCommandMenu: () => {
-      console.log("CommandMenuProvider openCommandMenu called");
       setIsCommandMenuOpen(true);
     },
     isCommandMenuOpen,
