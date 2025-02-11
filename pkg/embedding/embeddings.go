@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -28,8 +29,14 @@ type embeddingResponse struct {
 	} `json:"data"`
 }
 
+var ErrEmptyContent = errors.New("content is empty")
+
 // Embeddings generates embeddings and returns them in PostgreSQL vector format
 func Embeddings(content string) (string, error) {
+	if content == "" {
+		return "", ErrEmptyContent
+	}
+
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
 
