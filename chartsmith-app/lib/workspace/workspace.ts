@@ -61,14 +61,6 @@ export async function createWorkspace(createdType: string, userId: string, baseC
           );
         }
 
-        // create the default scenario for this chart
-        const scenarioId = srs.default({ length: 12, alphanumeric: true });
-        await client.query(
-          `INSERT INTO workspace_scenario (id, workspace_id, chart_id, name, description, is_read_only)
-          VALUES ($1, $2, $3, 'Default', 'Apply the default values.yaml', true)`,
-          [scenarioId, id, chartId],
-        );
-
       } else {
         // Fallback to bootstrap charts if baseChart is not provided
         const bootstrapCharts = await client.query(`SELECT id, name FROM bootstrap_chart`);
@@ -89,14 +81,6 @@ export async function createWorkspace(createdType: string, userId: string, baseC
               [fileId, initialRevisionNumber, chartId, id, file.file_path, file.content, file.embeddings],
             );
           }
-
-          // create the default scenario for each bootstrap chart
-          const scenarioId = srs.default({ length: 12, alphanumeric: true });
-          await client.query(
-            `INSERT INTO workspace_scenario (id, workspace_id, chart_id, name, description, is_read_only)
-            VALUES ($1, $2, $3, 'Default', 'Apply the default values.yaml', true)`,
-            [scenarioId, id, chartId],
-          );
         }
       }
 

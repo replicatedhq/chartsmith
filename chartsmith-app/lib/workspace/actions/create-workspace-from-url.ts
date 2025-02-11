@@ -17,10 +17,6 @@ export async function createWorkspaceFromUrlAction(session: Session, url: string
       action: "render",
       label: "Render the chart",
     },
-    {
-      action: "add_scenario",
-      label: "Create some test cases",
-    },
   ];
 
   await createChatMessage(session.user.id, w.id, {
