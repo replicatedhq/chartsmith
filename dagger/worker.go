@@ -59,6 +59,14 @@ func buildEnvWorker(source *dagger.Directory) *dagger.Container {
 		Platform: dagger.Platform("linux/amd64"),
 	}).From("golang:1.23")
 
+	// Install and symlink Helm
+	buildContainer = buildContainer.
+		WithExec([]string{"curl", "-LO", "https://get.helm.sh/helm-v3.17.0-linux-amd64.tar.gz"}).
+		WithExec([]string{"tar", "-xzf", "helm-v3.17.0-linux-amd64.tar.gz"}).
+		WithExec([]string{"mv", "linux-amd64/helm", "/usr/local/bin/helm-v3.17.0"}).
+		WithExec([]string{"rm", "-rf", "linux-amd64", "helm-v3.17.0-linux-amd64.tar.gz"}).
+		WithExec([]string{"ln", "-s", "/usr/local/bin/helm-v3.17.0", "/usr/local/bin/helm"})
+
 	return buildContainer.
 		WithDirectory("/go/src/github.com/replicatedhq/chartsmith", source).
 		WithWorkdir("/go/src/github.com/replicatedhq/chartsmith").
