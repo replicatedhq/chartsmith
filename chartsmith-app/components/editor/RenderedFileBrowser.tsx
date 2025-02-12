@@ -3,15 +3,15 @@
 import React, { useState } from "react";
 import { FileText, ChevronRight, ChevronDown } from "lucide-react";
 import { useTheme } from "../../contexts/ThemeContext";
-import { WorkspaceFile, RenderedChart, RenderUpdate } from "@/lib/types/workspace";
+import { WorkspaceFile, Chart, RenderUpdate } from "@/lib/types/workspace";
 import { logger } from "@/lib/utils/logger";
 
 interface RenderedFileBrowserProps {
-  charts: RenderedChart[];
+  charts: Chart[];
   onFileSelect: (file: WorkspaceFile) => void;
   selectedFile?: WorkspaceFile;
   renderUpdates?: RenderUpdate[];
-  onRenderSelect?: (chart: RenderedChart, type: 'stdout' | 'stderr' | 'manifests') => void;
+  onRenderSelect?: (chart: Chart, type: 'stdout' | 'stderr' | 'manifests') => void;
 }
 
 export function RenderedFileBrowser({ charts, onFileSelect, selectedFile, renderUpdates, onRenderSelect }: RenderedFileBrowserProps) {
@@ -39,7 +39,7 @@ export function RenderedFileBrowser({ charts, onFileSelect, selectedFile, render
     setExpandedItems(newExpanded);
   };
 
-  const handleSelect = (chart: RenderedChart, type: 'stdout' | 'stderr' | 'manifests') => {
+  const handleSelect = (chart: Chart, type: 'stdout' | 'stderr' | 'manifests') => {
     if (onRenderSelect) {
       onRenderSelect(chart, type);
     }

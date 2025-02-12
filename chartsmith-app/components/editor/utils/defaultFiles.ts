@@ -69,21 +69,25 @@ const files: FileNode[] = [
   {
     name: "example-chart",
     type: "folder",
+    filePath: "example-chart",
+    content: "",
     children: [
-      { name: "Chart.yaml", type: "file", content: defaultContent["Chart.yaml"] },
-      { name: "values.yaml", type: "file", content: defaultContent["values.yaml"] },
+      { name: "Chart.yaml", type: "file", content: defaultContent["Chart.yaml"], filePath: "example-chart/Chart.yaml" },
+      { name: "values.yaml", type: "file", content: defaultContent["values.yaml"], filePath: "example-chart/values.yaml" },
       {
         name: "templates",
         type: "folder",
+        filePath: "example-chart/templates",
+        content: "",
         children: [
-          { name: "deployment.yaml", type: "file", content: defaultContent["deployment.yaml"] },
-          { name: "service.yaml", type: "file", content: defaultContent["service.yaml"] },
-          { name: "ingress.yaml", type: "file", content: defaultContent["ingress.yaml"] },
-          { name: "NOTES.txt", type: "file", content: defaultContent["NOTES.txt"] },
+          { name: "deployment.yaml", type: "file", content: defaultContent["deployment.yaml"], filePath: "example-chart/templates/deployment.yaml" },
+          { name: "service.yaml", type: "file", content: defaultContent["service.yaml"], filePath: "example-chart/templates/service.yaml" },
+          { name: "ingress.yaml", type: "file", content: defaultContent["ingress.yaml"], filePath: "example-chart/templates/ingress.yaml" },
+          { name: "NOTES.txt", type: "file", content: defaultContent["NOTES.txt"], filePath: "example-chart/templates/NOTES.txt" },
         ],
       },
-      { name: "charts", type: "folder", children: [] },
-      { name: ".helmignore", type: "file", content: defaultContent[".helmignore"] },
+      { name: "charts", type: "folder", filePath: "example-chart/charts", content: "", children: [] },
+      { name: ".helmignore", type: "file", content: defaultContent[".helmignore"], filePath: "example-chart/.helmignore" },
     ],
   },
 ];

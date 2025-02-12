@@ -78,6 +78,7 @@ export function CodeEditor({
   }, [file?.pendingPatch, file?.filePath, value]);
 
   const handleEditorMount = (editor: editor.IStandaloneCodeEditor, monaco: typeof import("monaco-editor")) => {
+    console.log('Editor mounted with content length:', value?.length);
     internalEditorRef.current = editor;
     if (externalEditorRef) {
       externalEditorRef.current = editor;
@@ -303,17 +304,22 @@ export function CodeEditor({
           </div>
         );
       })() : (
-        <Editor
-          height="100%"
-          defaultLanguage="yaml"
-          language="yaml"
-          value={value ?? ""}
-          onChange={onChange}
-          theme={theme === "light" ? "vs" : "vs-dark"}
-          options={editorOptions}
-          onMount={handleEditorMount}
-          key={`${file?.filePath}-${theme}`}
-        />
+        <div className="flex-1 h-full">
+          <Editor
+            height="100%"
+            defaultLanguage="yaml"
+            language="yaml"
+            value={value ?? ""}
+            onChange={onChange}
+            theme={theme === "light" ? "vs" : "vs-dark"}
+            options={{
+              ...editorOptions,
+              readOnly: !onChange,
+            }}
+            onMount={handleEditorMount}
+            key={`${file?.filePath}-${theme}-${value}`}
+          />
+        </div>
       )}
     </div>
   );

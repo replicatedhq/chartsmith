@@ -116,11 +116,25 @@ type RenderedChart struct {
 	ChartID        string `json:"-"`
 	Name           string `json:"name"`
 
-	IsSuccess bool   `json:"isSuccess"`
-	Stdout    string `json:"stdout"`
-	Stderr    string `json:"stderr"`
-	Manifests string `json:"manifests"`
+	IsSuccess bool `json:"isSuccess"`
+
+	DepupdateCommand string `json:"depupdateCommand,omitempty"`
+	DepupdateStdout  string `json:"depupdateStdout,omitempty"`
+	DepupdateStderr  string `json:"depupdateStderr,omitempty"`
+
+	HelmTemplateCommand string `json:"helmTemplateCommand,omitempty"`
+	HelmTemplateStdout  string `json:"helmTemplateStdout,omitempty"`
+	HelmTemplateStderr  string `json:"helmTemplateStderr,omitempty"`
 
 	CreatedAt   time.Time  `json:"createdAt"`
 	CompletedAt *time.Time `json:"completedAt"`
+}
+
+type RenderedFile struct {
+	ID              string `json:"id"`
+	RevisionNumber  int    `json:"revision_number"`
+	ChartID         string `json:"chart_id,omitempty"`
+	WorkspaceID     string `json:"workspace_id"`
+	FilePath        string `json:"filePath"`
+	RenderedContent string `json:"renderedContent"`
 }

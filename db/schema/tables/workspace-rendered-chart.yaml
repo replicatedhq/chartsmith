@@ -25,11 +25,17 @@ schema:
       type: boolean
       constraints:
         notNull: true
-    - name: stdout
+    - name: dep_update_command
       type: text
-    - name: stderr
+    - name: dep_update_stdout
       type: text
-    - name: manifests
+    - name: dep_update_stderr
+      type: text
+    - name: helm_template_command
+      type: text
+    - name: helm_template_stdout
+      type: text
+    - name: helm_template_stderr
       type: text
     - name: created_at
       type: timestamp

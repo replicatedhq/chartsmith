@@ -1,19 +1,23 @@
 import { getDB } from "../data/db";
 import { getParam } from "../data/param";
-import { RenderedChart } from "../types/workspace";
+import { RenderedFile } from "../types/workspace";
 import { logger } from "../utils/logger";
 import { getWorkspace } from "./workspace";
 
 
-export async function listRenderedChartsForWorkspace(
+export async function listRenderedFilesForWorkspace(
   workspaceId: string,
-  revisionNumber: number
-): Promise<RenderedChart[]> {
+  revisionNumber?: number
+): Promise<RenderedFile[]> {
   try {
     const workspace = await getWorkspace(workspaceId);
 
-    if (!workspace) {
-      throw new Error("Workspace not found");
+    if (!revisionNumber) {
+      if (!workspace) {
+        throw new Error("Workspace not found");
+      }
+
+      revisionNumber = workspace.currentRevisionNumber;
     }
 
     const db = getDB(await getParam("DB_URI"));
@@ -21,36 +25,39 @@ export async function listRenderedChartsForWorkspace(
     const rows = await db.query(
       `
         SELECT
-          id,
+          file_id,
           workspace_id,
           revision_number,
-          chart_id,
-          is_success,
-          stdout,
-          stderr,
-          manifests,
-          created_at,
-          completed_at
-        FROM workspace_rendered_chart
+          file_path,
+          content
+        FROM workspace_rendered_file
         WHERE workspace_id = $1
           AND revision_number = $2
       `,
       [workspaceId, revisionNumber]
     );
 
-    const renderedCharts: RenderedChart[] = rows.rows.map((row) => ({
-      id: row.id,
-      name: workspace.charts.find((c) => c.id === row.chart_id)?.name ?? 'unknown chart',
-      stdout: row.stdout,
-      stderr: row.stderr,
-      manifests: row.manifests,
-      createdAt: row.created_at,
-      completedAt: row.completed_at,
-    }));
+    const renderedFiles: RenderedFile[] = [];
+    for (const row of rows.rows) {
+      const renderedFile: RenderedFile = {
+        id: row.file_id,
+        filePath: row.file_path,
+        renderedContent: row.content,
+      };
 
-    return renderedCharts;
+      renderedFiles.push(renderedFile);
+    }
+
+    logger.debug("Retrieved rendered files", { 
+      workspaceId, 
+      revisionNumber,
+      fileCount: renderedFiles.length,
+      filePaths: renderedFiles.map(f => f.filePath)
+    });
+
+    return renderedFiles;
   } catch (err) {
-    logger.error("Failed to list rendered charts for workspace", { err });
+    logger.error("Failed to list rendered files for workspace", { err });
     throw err;
   }
 }

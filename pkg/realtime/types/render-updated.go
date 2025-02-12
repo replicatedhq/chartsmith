@@ -5,15 +5,15 @@ import (
 )
 
 type RenderUpdatedEvent struct {
-	WorkspaceID   string                       `json:"workspaceId"`
-	RenderedChart workspacetypes.RenderedChart `json:"renderedChart"`
+	WorkspaceID  string                      `json:"workspaceId"`
+	RenderedFile workspacetypes.RenderedFile `json:"renderedFile"`
 }
 
 func (e RenderUpdatedEvent) GetMessageData() (map[string]interface{}, error) {
 	return map[string]interface{}{
-		"workspaceId":   e.WorkspaceID,
-		"eventType":     "render-updated",
-		"renderedChart": e.RenderedChart,
+		"workspaceId":  e.WorkspaceID,
+		"eventType":    "render-updated",
+		"renderedFile": e.RenderedFile,
 	}, nil
 }
 
