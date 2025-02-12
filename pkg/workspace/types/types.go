@@ -107,6 +107,7 @@ type Intent struct {
 	IsChartDeveloper bool `json:"isChartDeveloper"`
 	IsChartOperator  bool `json:"isChartOperator"`
 	IsProceed        bool `json:"isProceed"`
+	IsRender         bool `json:"isRender"`
 }
 
 type RenderedChart struct {

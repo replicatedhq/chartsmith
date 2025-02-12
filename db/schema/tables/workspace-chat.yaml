@@ -48,6 +48,8 @@ schema:
       type: boolean
     - name: is_intent_proceed
       type: boolean
+    - name: is_intent_render
+      type: boolean
     - name: is_canceled
       type: boolean
       constraints:

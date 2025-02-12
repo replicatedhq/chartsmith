@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 	"github.com/replicatedhq/chartsmith/pkg/workspace/types"
+	"github.com/tuvistavie/securerandom"
 )
 
 func GetRenderedChart(ctx context.Context, id string) (*types.RenderedChart, error) {
@@ -175,6 +176,24 @@ func SetRenderedChartHelmTemplateStderr(ctx context.Context, id string, helmTemp
 	_, err := conn.Exec(ctx, query, id, helmTemplateStderr)
 	if err != nil {
 		return fmt.Errorf("failed to update rendered chart helmTemplateStderr: %w", err)
+	}
+
+	return nil
+}
+
+func EnqueueRenderWorkspace(ctx context.Context, workspaceID string) error {
+	conn := persistence.MustGetPooledPostgresSession()
+	defer conn.Release()
+
+	id, err := securerandom.Hex(6)
+	if err != nil {
+		return fmt.Errorf("failed to generate id: %w", err)
+	}
+
+	query := `INSERT INTO workspace_rendered_chart (id, workspace_id, revision_number, chart_id, is_success, created_at) VALUES ($1, $2, $3, $4, $5, now())`
+	_, err = conn.Exec(ctx, query, id, workspaceID, 0, "", false)
+	if err != nil {
+		return fmt.Errorf("failed to enqueue render workspace: %w", err)
 	}
 
 	return nil

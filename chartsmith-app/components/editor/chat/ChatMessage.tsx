@@ -145,7 +145,10 @@ export function ChatMessage({
                         : "bg-white border border-gray-300 text-gray-600 hover:text-gray-800 hover:bg-gray-50"
                     }`}
                     onClick={async () => {
-                      await performFollowupAction(session, workspaceId, message.id, action.action);
+                      const chatMessage = await performFollowupAction(session, workspaceId, message.id, action.action);
+                      if (chatMessage && setMessages) {
+                        setMessages((messages: Message[]) => [...messages, chatMessage]);
+                      }
                     }}
                   >
                     {action.label}

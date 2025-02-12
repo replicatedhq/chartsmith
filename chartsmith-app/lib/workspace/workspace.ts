@@ -118,6 +118,7 @@ export async function createWorkspace(createdType: string, userId: string, baseC
 export enum ChatMessageIntent {
   PLAN = "plan",
   NON_PLAN = "non-plan",
+  RENDER = "render",
 }
 
 export interface CreateChatMessageParams {
@@ -149,11 +150,12 @@ export async function createChatMessage(userId: string, workspaceId: string, par
         is_intent_off_topic,
         is_intent_chart_developer,
         is_intent_chart_operator,
+        is_intent_render,
         followup_actions
       )
       VALUES (
         $1, $2, now(), $3, $4, $5, 0, false,
-        $6, $7, $8, false, false, false, $9
+        $6, $7, $8, false, false, false, $9, $10
       )`;
 
     const values = [
@@ -165,6 +167,7 @@ export async function createChatMessage(userId: string, workspaceId: string, par
       params.knownIntent ? true : false,
       params.knownIntent === ChatMessageIntent.NON_PLAN,
       params.knownIntent === ChatMessageIntent.PLAN,
+      params.knownIntent === ChatMessageIntent.RENDER,
       params.followupActions ? JSON.stringify(params.followupActions) : null,
     ];
 
@@ -183,6 +186,8 @@ export async function createChatMessage(userId: string, workspaceId: string, par
       });
     } else if (params.knownIntent === ChatMessageIntent.NON_PLAN) {
       await client.query(`SELECT pg_notify('new_nonplan_chat_message', $1)`, [chatMessageId]);
+    } else if (params.knownIntent === ChatMessageIntent.RENDER) {
+      await renderWorkspace(workspaceId);
     }
 
     return getChatMessage(chatMessageId);
@@ -448,9 +453,24 @@ export async function listWorkspaces(userId: string): Promise<Workspace[]> {
   }
 }
 
-export async function renderWorkspace(workspaceId: string, revisionNumber: number, chartId: string) {
+export async function renderWorkspace(workspaceId: string, revisionNumber?: number, chartId?: string) {
   try {
     const db = getDB(await getParam("DB_URI"));
+
+    if (!revisionNumber || !chartId) {
+      const workspace = await getWorkspace(workspaceId);
+      if (!workspace) {
+        throw new Error("Workspace not found");
+      }
+
+      if (!revisionNumber) {
+        revisionNumber = workspace.currentRevisionNumber;
+      }
+
+      if (!chartId) {
+        chartId = workspace.charts[0].id;
+      }
+    }
 
     const id = srs.default({ length: 12, alphanumeric: true });
 

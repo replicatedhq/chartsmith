@@ -35,6 +35,7 @@ You will respond with a JSON object containing the following fields:
 - isChartDeveloper: true if the question is related to planning a change to the chart, false otherwise
 - isChartOperator: true if the question is about how to use the Helm chart in a Kubernetes cluster, false otherwise
 - isProceed: true if the prompt is a clear request to execute previous instructions with no requsted changes, false otherwise
+- isRender: true if the prompt is a request to render or test or validate the chart, false otherwise
 
 Important: Do not respond with anything other than the JSON object.`,
 		commonSystemPrompt, prompt)
@@ -80,6 +81,9 @@ Important: Do not respond with anything other than the JSON object.`,
 	}
 	if value, ok := parsedResponse["isProceed"].(bool); ok {
 		intent.IsProceed = value
+	}
+	if value, ok := parsedResponse["isRender"].(bool); ok {
+		intent.IsRender = value
 	}
 
 	// for initial prompts, we always assume it's a plan, but we still hit this because

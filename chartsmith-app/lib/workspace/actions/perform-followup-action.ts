@@ -1,10 +1,10 @@
 "use server"
 
 import { Session } from "@/lib/types/session";
-import { FollowupAction } from "@/lib/types/workspace";
-import { getChatMessage, getWorkspace, renderWorkspace } from "../workspace";
+import { ChatMessage, FollowupAction } from "@/lib/types/workspace";
+import { ChatMessageIntent, createChatMessage, getChatMessage, getWorkspace, renderWorkspace } from "../workspace";
 
-export async function performFollowupAction(session:Session, workspaceId:string, chatMessageId:string, action: string) {
+export async function performFollowupAction(session:Session, workspaceId:string, chatMessageId:string, action: string): Promise<ChatMessage|undefined> {
   const workspace = await getWorkspace(workspaceId);
   if (!workspace) {
       throw new Error("Workspace not found");
@@ -15,5 +15,13 @@ export async function performFollowupAction(session:Session, workspaceId:string,
     throw new Error("Chat message not found");
   }
 
-  await renderWorkspace(workspaceId, workspace.currentRevisionNumber, workspace.charts[0].id);
+  if (action === "render") {
+    const chatMessage = await createChatMessage(session.user.id, workspaceId, {
+      prompt: "Render the chart",
+      response: "Rendering the chart...",
+      knownIntent: ChatMessageIntent.RENDER,
+    });
+
+    return chatMessage;
+  }
 }

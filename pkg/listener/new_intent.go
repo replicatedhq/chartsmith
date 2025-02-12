@@ -90,7 +90,7 @@ func handleNewIntentNotification(ctx context.Context, payload string) error {
 	)
 
 	// sometimes we see messages that return false to everything
-	if !intent.IsConversational && !intent.IsPlan && !intent.IsOffTopic && !intent.IsChartDeveloper && !intent.IsChartOperator && !intent.IsProceed {
+	if !intent.IsConversational && !intent.IsPlan && !intent.IsOffTopic && !intent.IsChartDeveloper && !intent.IsChartOperator && !intent.IsProceed && !intent.IsRender {
 		streamCh := make(chan string)
 		doneCh := make(chan error)
 		go func() {
@@ -195,6 +195,14 @@ func handleNewIntentNotification(ctx context.Context, payload string) error {
 				}
 			}
 		}
+	}
+
+	if intent.IsRender {
+		if err := workspace.EnqueueRenderWorkspace(ctx, w.ID); err != nil {
+			return fmt.Errorf("failed to enqueue render workspace: %w", err)
+		}
+
+		return nil
 	}
 
 	// if the message suggests a plan, send a message to the planner
