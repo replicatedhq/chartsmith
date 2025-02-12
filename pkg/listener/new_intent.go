@@ -87,6 +87,7 @@ func handleNewIntentNotification(ctx context.Context, payload string) error {
 		zap.Bool("is_chart_developer", intent.IsChartDeveloper),
 		zap.Bool("is_chart_operator", intent.IsChartOperator),
 		zap.Bool("is_proceed", intent.IsProceed),
+		zap.Bool("is_render", intent.IsRender),
 	)
 
 	// sometimes we see messages that return false to everything

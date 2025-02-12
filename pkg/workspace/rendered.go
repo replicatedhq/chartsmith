@@ -182,6 +182,11 @@ func SetRenderedChartHelmTemplateStderr(ctx context.Context, id string, helmTemp
 }
 
 func EnqueueRenderWorkspace(ctx context.Context, workspaceID string) error {
+	w, err := GetWorkspace(ctx, workspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to get workspace: %w", err)
+	}
+
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
 
@@ -191,8 +196,14 @@ func EnqueueRenderWorkspace(ctx context.Context, workspaceID string) error {
 	}
 
 	query := `INSERT INTO workspace_rendered_chart (id, workspace_id, revision_number, chart_id, is_success, created_at) VALUES ($1, $2, $3, $4, $5, now())`
-	_, err = conn.Exec(ctx, query, id, workspaceID, 0, "", false)
+	_, err = conn.Exec(ctx, query, id, workspaceID, w.CurrentRevision, w.Charts[0].ID, false)
 	if err != nil {
+		return fmt.Errorf("failed to enqueue render workspace: %w", err)
+	}
+
+	if err := persistence.EnqueueWork(ctx, "render_workspace", map[string]interface{}{
+		"id": id,
+	}); err != nil {
 		return fmt.Errorf("failed to enqueue render workspace: %w", err)
 	}
 
