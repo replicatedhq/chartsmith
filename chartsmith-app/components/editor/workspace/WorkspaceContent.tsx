@@ -177,33 +177,41 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     }
   }, [session, setMessages, setWorkspace]);
 
-  const handleChatMessageUpdated = useCallback((chatMessage: RawChatMessage) => {
-    setMessages?.(prev => {
-      const tempMessageIndex = prev.findIndex(m =>
-        m.id.startsWith('msg-temp-') && m.prompt === chatMessage.prompt
-      );
+  const handleChatMessageUpdated = useCallback((data: CentrifugoMessageData) => {
+    if (!data.chatMessage) {
+      return;
+    }
 
-      if (tempMessageIndex !== -1) {
-        const newMessages = [...prev];
-        newMessages[tempMessageIndex] = {
-          ...chatMessage,
-          isComplete: chatMessage.response !== null,
-          createdAt: chatMessage.createdAt ? new Date(chatMessage.createdAt) : new Date()
-        };
-        return newMessages;
+    const chatMessage = data.chatMessage;
+    setMessages(prev => {
+      const newMessages = [...prev];
+      const index = newMessages.findIndex(m => m.id === chatMessage.id);
+
+      // Convert the raw message to our Message type
+      const message: Message = {
+        id: chatMessage.id,
+        prompt: chatMessage.prompt,
+        response: chatMessage.responseRenderId ? "doing the render now..." : chatMessage.response,
+        isComplete: chatMessage.isComplete,
+        isApplied: chatMessage.isApplied,
+        isApplying: chatMessage.isApplying,
+        isIgnored: chatMessage.isIgnored,
+        isCanceled: chatMessage.isCanceled,
+        createdAt: new Date(chatMessage.createdAt),
+        workspaceId: chatMessage.workspaceId,
+        planId: chatMessage.planId,
+        userId: chatMessage.userId,
+        isIntentComplete: chatMessage.isIntentComplete,
+        intent: chatMessage.intent,
+        followupActions: chatMessage.followupActions,
+      };
+
+      if (index >= 0) {
+        newMessages[index] = message;
+      } else {
+        newMessages.push(message);
       }
-
-      return prev.map((m) => {
-        if (m.id === chatMessage.id) {
-          return {
-            ...m,
-            ...chatMessage,
-            isComplete: chatMessage.response !== null,
-            createdAt: chatMessage.createdAt ? new Date(chatMessage.createdAt) : new Date()
-          };
-        }
-        return m;
-      });
+      return newMessages;
     });
   }, []);
 
@@ -297,7 +305,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     setRenderedFiles(prev => {
       // Try to find existing file with same ID
       const existingIndex = prev.findIndex(f => f.id === data.renderedFile!.id);
-      
+
       if (existingIndex >= 0) {
         // Update existing file
         const updated = [...prev];
@@ -315,17 +323,46 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     }
   }, [view, selectedFile]);
 
+  const handleRenderStreamEvent = useCallback((data: CentrifugoMessageData) => {
+    if (data.eventType !== 'render-stream' || !data.renderChartId || !data.renderWorkspaceId) {
+      return;
+    }
+
+    // Update any message that has this renderWorkspaceId as its responseRenderId
+    setMessages(prev => {
+      return prev.map(message => {
+        if (message.responseRenderId === data.renderWorkspaceId) {
+          return {
+            ...message,
+            renderStreamData: {
+              renderChartId: data.renderChartId || '',
+              depUpdateCommand: data.depUpdateCommand || '',
+              depUpdateStdout: data.depUpdateStdout || '',
+              depUpdateStderr: data.depUpdateStderr || '',
+              helmTemplateCommand: data.helmTemplateCommand || '',
+              helmTemplateStdout: data.helmTemplateStdout || '',
+              helmTemplateStderr: data.helmTemplateStderr || '',
+            }
+          };
+        }
+        return message;
+      });
+    });
+  }, []);
+
   const handleCentrifugoMessage = useCallback((message: { data: CentrifugoMessageData }) => {
     const eventType = message.data.eventType;
 
     if (eventType === 'plan-updated') {
       handlePlanUpdated(message.data.plan!);
     } else if (eventType === 'chatmessage-updated') {
-      handleChatMessageUpdated(message.data.chatMessage!);
+      handleChatMessageUpdated(message.data);
     } else if (eventType === 'revision-created') {
       handleRevisionCreated(message.data.revision!);
     } else if (eventType === 'render-updated') {
       handleRenderUpdated(message.data);
+    } else if (eventType === 'render-stream') {
+      handleRenderStreamEvent(message.data);
     }
 
     const isWorkspaceUpdatedEvent = message.data.workspace;
@@ -337,7 +374,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     if (artifact && artifact.path && artifact.content) {
       handleArtifactReceivedRef.current?.(artifact);
     }
-  }, [handlePlanUpdated, handleWorkspaceUpdated, handleChatMessageUpdated, handleRevisionCreated, handleRenderUpdated]);
+  }, [handlePlanUpdated, handleWorkspaceUpdated, handleChatMessageUpdated, handleRevisionCreated, handleRenderUpdated, handleRenderStreamEvent]);
 
   useEffect(() => {
     handlersRef.current.onMessage = handleCentrifugoMessage;
@@ -349,10 +386,12 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     }
 
     if (centrifugeRef.current) {
+      console.log('Centrifugo already connected');
       return;
     }
 
     const channel = `${workspace.id}#${session.user.id}`;
+
     const centrifuge = new Centrifuge(process.env.NEXT_PUBLIC_CENTRIFUGO_ADDRESS!, {
       timeout: 5000,
       token: centrifugoToken
@@ -361,11 +400,11 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     centrifugeRef.current = centrifuge;
 
     centrifuge.on("connected", () => {
-      logger.info("Centrifugo connected");
+      console.log("Centrifugo connected");
     });
 
     centrifuge.on("disconnected", (ctx) => {
-      logger.warn("Centrifugo disconnected", { ctx });
+      console.log("Centrifugo disconnected", { ctx });
       if (session) {
         getCentrifugoTokenAction(session).then(newToken => {
           if (centrifugeRef.current && newToken) {
@@ -376,11 +415,6 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
       }
     });
 
-    centrifuge.on("error", (ctx) => {
-      logger.error("Centrifugo error", { ctx });
-    });
-    centrifuge.on("connecting", () => {});
-
     const sub = centrifuge.newSubscription(channel, {
       data: {}
     });
@@ -389,28 +423,12 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
       handlersRef.current.onMessage?.(message);
     });
 
-    sub.on("subscribing", (ctx) => {
-      logger.info("Subscribing to channel", { channel });
-    });
-
-    sub.on("subscribed", (ctx) => {
-      logger.info("Subscribed to channel", { channel });
-    });
-
-    sub.on("unsubscribed", (ctx) => {
-      logger.info("Unsubscribed from channel", { channel });
-    });
-
-    sub.on("error", (ctx) => {
-      logger.error("Centrifugo subscription error", { ctx });
-    });
-
     sub.subscribe();
 
     try {
       centrifuge.connect();
     } catch (err) {
-      logger.error("Error connecting to Centrifugo:", err);
+      console.error("Error connecting to Centrifugo:", err);
     }
 
     return () => {
@@ -421,7 +439,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
           centrifugeRef.current = null;
         }
       } catch (err) {
-        logger.error("Error during Centrifugo cleanup:", err);
+        console.error("Error during Centrifugo cleanup:", err);
       }
     };
   }, [centrifugoToken, session, workspace?.id, handlersRef]);

@@ -12,6 +12,8 @@ import ReactMarkdown from 'react-markdown';
 import { cancelMessageAction } from "@/lib/workspace/actions/cancel-message";
 import { FeedbackModal } from "@/components/FeedbackModal";
 import { performFollowupAction } from "@/lib/workspace/actions/perform-followup-action";
+import { getWorkspaceRenderAction } from "@/lib/workspace/actions/get-workspace-render";
+import { RenderedWorkspace } from "@/lib/types/workspace";
 
 export interface ChatMessageProps {
   message: Message;
@@ -42,8 +44,26 @@ export function ChatMessage({
   const [showReportModal, setShowReportModal] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [chatInput, setChatInput] = useState("");
+  const [renderedWorkspace, setRenderedWorkspace] = useState<RenderedWorkspace | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (message.responseRenderId && !renderedWorkspace) {
+      console.log("Attempting to fetch render workspace:", {
+        renderId: message.responseRenderId,
+        message
+      });
+
+      getWorkspaceRenderAction(session, message.responseRenderId)
+        .then(render => {
+          setRenderedWorkspace(render);
+        })
+        .catch(err => {
+          console.error("Failed to get rendered workspace", { err });
+        });
+    }
+  }, [message.responseRenderId, session, renderedWorkspace]);
 
   const handleSubmitChat = (e: FormEvent) => {
     e.preventDefault();
@@ -73,6 +93,34 @@ export function ChatMessage({
     };
   }, []);
 
+  let depUpdateCommand = renderedWorkspace?.charts?.[0]?.depUpdateCommand;
+  let depUpdateStderr = renderedWorkspace?.charts?.[0]?.depUpdateStderr;
+  let depUpdateStdout = renderedWorkspace?.charts?.[0]?.depUpdateStdout;
+  let helmTemplateCommand = renderedWorkspace?.charts?.[0]?.helmTemplateCommand;
+  let helmTemplateStdout = renderedWorkspace?.charts?.[0]?.helmTemplateStdout;
+  let helmTemplateStderr = renderedWorkspace?.charts?.[0]?.helmTemplateStderr;
+
+  if (message.renderStreamData) {
+    if (message.renderStreamData.depUpdateCommand) {
+      depUpdateCommand = message.renderStreamData.depUpdateCommand;
+    }
+    if (message.renderStreamData.depUpdateStderr) {
+      depUpdateStderr = message.renderStreamData.depUpdateStderr;
+    }
+    if (message.renderStreamData.depUpdateStdout) {
+      depUpdateStdout = message.renderStreamData.depUpdateStdout;
+    }
+    if (message.renderStreamData.helmTemplateCommand) {
+      helmTemplateCommand = message.renderStreamData.helmTemplateCommand;
+    }
+    if (message.renderStreamData.helmTemplateStdout) {
+      helmTemplateStdout = message.renderStreamData.helmTemplateStdout;
+    }
+    if (message.renderStreamData.helmTemplateStderr) {
+      helmTemplateStderr = message.renderStreamData.helmTemplateStderr;
+    }
+  }
+
   return (
     <div className="space-y-2">
       {/* User Message */}
@@ -87,7 +135,6 @@ export function ChatMessage({
               className="w-6 h-6 rounded-full flex-shrink-0"
             />
             <div className="flex-1">
-              <div className="flex-1">
               <div className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} text-[12px] pt-0.5 ${message.isCanceled ? "opacity-50" : ""}`}>{message.prompt}</div>
               {!message.isIntentComplete && !message.isCanceled && (
                 <div className="flex items-center gap-2 mt-2 border-t border-primary/20 pt-2">
@@ -114,18 +161,54 @@ export function ChatMessage({
                 </div>
               )}
             </div>
-            </div>
           </div>
         </div>
       </div>
 
-      {/* Assistant Message - show if there's a response, or if intent is complete for non-plan messages */}
+      {/* Assistant Message */}
       {(message.response || (message.isIntentComplete && !message.intent?.isPlan)) && (
         <div className="px-2 py-1">
           <div className={`p-3 rounded-2xl ${theme === "dark" ? "bg-dark-border/40" : "bg-gray-100"} rounded-tl-sm w-full`}>
             <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"} mb-1`}>ChartSmith</div>
             <div className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} ${message.isIgnored ? "opacity-50 line-through" : ""} text-[12px] markdown-content`}>
-              {message.response ? (
+              {message.responseRenderId ? (
+                <div className={`mt-2 rounded-md overflow-hidden font-mono ${theme === "dark" ? "bg-[#1e1e1e]" : "bg-[#282a36]"}`}>
+                  <div className={`flex items-center px-3 py-1.5 ${theme === "dark" ? "bg-[#323232]" : "bg-[#44475a]"}`}>
+                    <div className="flex gap-1.5">
+                      <div className="w-2.5 h-2.5 rounded-full bg-[#ff5f56]"></div>
+                      <div className="w-2.5 h-2.5 rounded-full bg-[#ffbd2e]"></div>
+                      <div className="w-2.5 h-2.5 rounded-full bg-[#27c93f]"></div>
+                    </div>
+                    <div className={`flex-1 text-center text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-300"}`}>
+                      terminal
+                    </div>
+                  </div>
+                  <div className={`p-3 text-xs ${theme === "dark" ? "text-gray-300" : "text-gray-100"}`}>
+                    {depUpdateCommand && (
+                      <div className="flex items-center gap-2">
+                        <span>% </span>
+                        <span>{depUpdateCommand}</span>
+                      </div>
+                    )}
+                    {depUpdateStderr ? (
+                      <div className="mt-2 text-red-400 whitespace-pre-wrap">
+                        {depUpdateStderr}
+                      </div>
+                    ) : depUpdateStdout ? (
+                      <div className="mt-2 whitespace-pre-wrap">
+                        {depUpdateStdout}
+                        <div className="mt-1 flex items-center">
+                          <span className="w-2 h-4 bg-gray-300 animate-pulse"></span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mt-1 flex items-center">
+                        <span className="w-2 h-4 bg-gray-300 animate-pulse"></span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : message.response ? (
                 <ReactMarkdown>{message.response}</ReactMarkdown>
               ) : (!message.intent?.isPlan && (
                 <div className="flex items-center gap-2">
@@ -191,7 +274,6 @@ export function ChatMessage({
                           <button
                             onClick={async () => {
                               setShowDropdown(false);
-                              // Make server call in background
                               await ignorePlanAction(session, workspaceId, message.id);
                             }}
                             className={`w-full px-4 py-2 text-sm text-left ${theme === "dark" ? "text-gray-200 hover:bg-dark-border/40" : "text-gray-700 hover:bg-gray-100"}`}

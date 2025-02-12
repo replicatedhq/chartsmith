@@ -31,6 +31,10 @@ schema:
         notNull: true
     - name: response
       type: text
+    - name: response_plan_id
+      type: text
+    - name: response_render_id
+      type: text
     - name: is_intent_complete
       type: boolean
       constraints:

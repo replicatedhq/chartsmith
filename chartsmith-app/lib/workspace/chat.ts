@@ -47,7 +47,9 @@ export async function listMessagesForWorkspace(workspaceID: string): Promise<Cha
                 workspace_chat.is_intent_chart_operator,
                 workspace_chat.is_intent_proceed,
                 workspace_chat.is_canceled,
-                workspace_chat.followup_actions
+                workspace_chat.followup_actions,
+                workspace_chat.response_render_id,
+                workspace_chat.response_plan_id
             FROM
                 workspace_chat
             WHERE
@@ -84,6 +86,8 @@ export async function listMessagesForWorkspace(workspaceID: string): Promise<Cha
           isProceed: row.is_intent_proceed,
         },
         followupActions: row.followup_actions,
+        responseRenderId: row.response_render_id,
+        responsePlanId: row.response_plan_id,
       };
       messages.push(message);
     }

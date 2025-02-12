@@ -9,12 +9,8 @@ schema:
       type: text
       constraints:
         notNull: true
-    - name: workspace_id
+    - name: workspace_render_id
       type: text
-      constraints:
-        notNull: true
-    - name: revision_number
-      type: int
       constraints:
         notNull: true
     - name: chart_id

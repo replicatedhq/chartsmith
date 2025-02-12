@@ -21,17 +21,17 @@ interface CodeEditorProps {
   editorRef?: React.MutableRefObject<editor.IStandaloneCodeEditor | null>;
 }
 
-export function CodeEditor({ 
-  session, 
-  file, 
-  revision, 
-  theme = "light", 
-  value, 
-  onChange, 
-  onCommandK, 
-  onFileUpdate, 
-  files = [], 
-  editorRef: externalEditorRef 
+export function CodeEditor({
+  session,
+  file,
+  revision,
+  theme = "light",
+  value,
+  onChange,
+  onCommandK,
+  onFileUpdate,
+  files = [],
+  editorRef: externalEditorRef
 }: CodeEditorProps) {
   const internalEditorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const diffEditorRef = useRef<editor.IStandaloneDiffEditor | null>(null);
@@ -78,7 +78,6 @@ export function CodeEditor({
   }, [file?.pendingPatch, file?.filePath, value]);
 
   const handleEditorMount = (editor: editor.IStandaloneCodeEditor, monaco: typeof import("monaco-editor")) => {
-    console.log('Editor mounted with content length:', value?.length);
     internalEditorRef.current = editor;
     if (externalEditorRef) {
       externalEditorRef.current = editor;
