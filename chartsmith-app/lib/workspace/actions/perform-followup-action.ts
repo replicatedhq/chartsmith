@@ -18,7 +18,6 @@ export async function performFollowupAction(session:Session, workspaceId:string,
   if (action === "render") {
     const chatMessage = await createChatMessage(session.user.id, workspaceId, {
       prompt: "Render the chart",
-      response: "Rendering the chart...",
       knownIntent: ChatMessageIntent.RENDER,
     });
 

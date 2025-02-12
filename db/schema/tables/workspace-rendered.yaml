@@ -1,0 +1,25 @@
+database: chartsmith
+name: workspace_rendered
+schema:
+  postgres:
+    primaryKey:
+      - id
+    columns:
+      - name: id
+        type: text
+        constraints:
+          notNull: true
+      - name: workspace_id
+        type: text
+        constraints:
+          notNull: true
+      - name: revision_number
+        type: integer
+        constraints:
+          notNull: true
+      - name: created_at
+        type: timestamp
+        constraints:
+          notNull: true
+      - name: completed_at
+        type: timestamp

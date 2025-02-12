@@ -110,6 +110,16 @@ type Intent struct {
 	IsRender         bool `json:"isRender"`
 }
 
+type Rendered struct {
+	ID             string     `json:"id"`
+	WorkspaceID    string     `json:"-"`
+	RevisionNumber int        `json:"-"`
+	CreatedAt      time.Time  `json:"createdAt"`
+	CompletedAt    *time.Time `json:"completedAt"`
+
+	Charts []RenderedChart `json:"charts"`
+}
+
 type RenderedChart struct {
 	ID             string `json:"id"`
 	WorkspaceID    string `json:"-"`

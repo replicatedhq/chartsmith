@@ -282,6 +282,12 @@ func CreatePlan(ctx context.Context, chatMessageID string, workspaceID string) e
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
 
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("error beginning transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
 	id, err := securerandom.Hex(6)
 	if err != nil {
 		return fmt.Errorf("error generating plan ID: %w", err)
@@ -292,9 +298,19 @@ func CreatePlan(ctx context.Context, chatMessageID string, workspaceID string) e
 (id, workspace_id, chat_message_ids, created_at, updated_at, version, status, description, is_complete)
 VALUES
 ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
-	_, err = conn.Exec(ctx, query, id, workspaceID, chatMessageIDs, time.Now(), time.Now(), 1, types.PlanStatusPending, "", false)
+	_, err = tx.Exec(ctx, query, id, workspaceID, chatMessageIDs, time.Now(), time.Now(), 1, types.PlanStatusPending, "", false)
 	if err != nil {
 		return fmt.Errorf("error creating plan: %w", err)
+	}
+
+	query = `UPDATE workspace_chat SET response_plan_id = $1 WHERE id = $2`
+	_, err = tx.Exec(ctx, query, id, chatMessageID)
+	if err != nil {
+		return fmt.Errorf("error updating chat message response plan ID: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("error committing transaction: %w", err)
 	}
 
 	if err := persistence.EnqueueWork(ctx, "new_plan", map[string]interface{}{

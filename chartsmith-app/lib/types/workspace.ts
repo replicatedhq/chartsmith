@@ -27,6 +27,30 @@ export interface Chart {
   files: WorkspaceFile[];
 }
 
+export interface RenderedWorkspace {
+  id: string;
+  workspaceId: string;
+  revisionNumber: number;
+  createdAt: Date;
+  completedAt?: Date;
+  charts: RenderedChart[];
+}
+
+export interface RenderedChart {
+  id: string;
+  chartId: string;
+  chartName: string;
+  isSuccess: boolean;
+  depUpdateCommand?: string;
+  depUpdateStdout?: string;
+  depUpdateStderr?: string;
+  helmTemplateCommand?: string;
+  helmTemplateStdout?: string;
+  helmTemplateStderr?: string;
+  createdAt: Date;
+  completedAt?: Date;
+}
+
 export interface RenderedFile {
   id: string;
   filePath: string;
@@ -59,6 +83,8 @@ export interface ChatMessage {
   intent?: Intent;
   isCanceled: boolean;
   followupActions?: FollowupAction[];
+  responseRenderId?: string;
+  responsePlanId?: string;
 }
 
 export interface FollowupAction {

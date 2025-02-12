@@ -199,7 +199,7 @@ func handleNewIntentNotification(ctx context.Context, payload string) error {
 	}
 
 	if intent.IsRender {
-		if err := workspace.EnqueueRenderWorkspace(ctx, w.ID); err != nil {
+		if err := workspace.EnqueueRenderWorkspace(ctx, w.ID, p.ChatMessageID); err != nil {
 			return fmt.Errorf("failed to enqueue render workspace: %w", err)
 		}
 

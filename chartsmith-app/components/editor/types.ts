@@ -45,6 +45,16 @@ export interface Message {
     action: string;
     label: string;
   }>;
+  responseRenderId?: string;
+  renderStreamData?: {
+    renderChartId: string;
+    depUpdateCommand?: string;
+    depUpdateStdout?: string;
+    depUpdateStderr?: string;
+    helmTemplateCommand?: string;
+    helmTemplateStdout?: string;
+    helmTemplateStderr?: string;
+  };
 }
 
 // Interface for raw message from server before normalization
@@ -105,6 +115,14 @@ export interface CentrifugoMessageData {
   workspaceId: string;
   eventType?: string;
   renderedFile?: RenderedFile;
+  renderChartId?: string;
+  renderWorkspaceId?: string;  // Add this field
+  depUpdateCommand?: string;
+  depUpdateStdout?: string;
+  depUpdateStderr?: string;
+  helmTemplateCommand?: string;
+  helmTemplateStdout?: string;
+  helmTemplateStderr?: string;
 }
 
 export interface RawRevision {
@@ -120,6 +138,18 @@ export interface RawChatMessage {
   response?: string;
   createdAt: string;  // ISO date string from server
   isCanceled: boolean;
+  responseRenderId?: string;
+  responsePlanId?: string;
+  isComplete?: boolean;
+  isApplied?: boolean;
+  isApplying?: boolean;
+  isIgnored?: boolean;
+  isIntentComplete?: boolean;
+  intent?: Intent;
+  workspaceId: string;
+  planId: string;
+  userId: string;
+  followupActions: RawFollowupAction[];
 }
 
 export interface RawArtifact {
@@ -151,4 +181,15 @@ export interface RawPlan {
     path: string;
     status: string;
   }[];
+}
+
+export interface RenderStreamEvent {
+  workspaceId: string;
+  renderChartId: string;
+  depUpdateCommand?: string;
+  depUpdateStdout?: string;
+  depUpdateStderr?: string;
+  helmTemplateCommand?: string;
+  helmTemplateStdout?: string;
+  helmTemplateStderr?: string;
 }

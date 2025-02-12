@@ -151,11 +151,13 @@ export async function createChatMessage(userId: string, workspaceId: string, par
         is_intent_chart_developer,
         is_intent_chart_operator,
         is_intent_render,
-        followup_actions
+        followup_actions,
+        response_render_id,
+        response_plan_id
       )
       VALUES (
         $1, $2, now(), $3, $4, $5, 0, false,
-        $6, $7, $8, false, false, false, $9, $10
+        $6, $7, $8, false, false, false, $9, $10, null, null
       )`;
 
     const values = [
@@ -187,7 +189,7 @@ export async function createChatMessage(userId: string, workspaceId: string, par
     } else if (params.knownIntent === ChatMessageIntent.NON_PLAN) {
       await client.query(`SELECT pg_notify('new_nonplan_chat_message', $1)`, [chatMessageId]);
     } else if (params.knownIntent === ChatMessageIntent.RENDER) {
-      await renderWorkspace(workspaceId);
+      await renderWorkspace(workspaceId, chatMessageId);
     }
 
     return getChatMessage(chatMessageId);
@@ -209,9 +211,6 @@ export async function createPlan(userId: string, workspaceId: string, chatMessag
         await client.query(`UPDATE workspace_plan SET status = 'ignored' WHERE id = $1`, [superceedingPlanId]);
       }
 
-      const workspaceRow = await client.query(`SELECT current_revision_number FROM workspace WHERE id = $1`, [workspaceId]);
-
-      const currentRevisionNumber = workspaceRow.rows[0].current_revision_number;
       const planId: string = srs.default({ length: 12, alphanumeric: true });
 
       const newPlanChatIds = [];
@@ -232,6 +231,9 @@ export async function createPlan(userId: string, workspaceId: string, chatMessag
         VALUES ($1, $2, $3, now(), now(), 0, 'pending', false)`,
         [planId, workspaceId, newPlanChatIds],
       );
+
+      // set the response_plan_id in the chat message
+      await client.query("UPDATE workspace_chat SET response_plan_id = $1 WHERE id = $2", [planId, chatMessageId]);
 
       await client.query("COMMIT");
 
@@ -263,7 +265,9 @@ export async function getChatMessage(chatMessageId: string): Promise<ChatMessage
         is_intent_off_topic,
         is_intent_chart_developer,
         is_intent_chart_operator,
-        followup_actions
+        followup_actions,
+        response_render_id,
+        response_plan_id
       FROM workspace_chat
       WHERE id = $1`;
 
@@ -285,6 +289,8 @@ export async function getChatMessage(chatMessageId: string): Promise<ChatMessage
       },
       isCanceled: result.rows[0].is_canceled,
       followupActions: result.rows[0].followup_actions,
+      responseRenderId: result.rows[0].response_render_id,
+      responsePlanId: result.rows[0].response_plan_id,
     };
 
     return chatMessage;
@@ -453,7 +459,7 @@ export async function listWorkspaces(userId: string): Promise<Workspace[]> {
   }
 }
 
-export async function renderWorkspace(workspaceId: string, revisionNumber?: number, chartId?: string) {
+export async function renderWorkspace(workspaceId: string, chatMessageId: string, revisionNumber?: number, chartId?: string) {
   try {
     const db = getDB(await getParam("DB_URI"));
 
@@ -472,10 +478,37 @@ export async function renderWorkspace(workspaceId: string, revisionNumber?: numb
       }
     }
 
+    const workspace = await getWorkspace(workspaceId);
+    if (!workspace) {
+      throw new Error("Workspace not found");
+    }
+
     const id = srs.default({ length: 12, alphanumeric: true });
 
-    await db.query(`INSERT INTO workspace_rendered_chart (id, workspace_id, revision_number, chart_id, is_success, created_at)
-      VALUES ($1, $2, $3, $4, $5, now())`, [id, workspaceId, revisionNumber, chartId, false]);
+    const client = await db.connect()
+    try {
+      await client.query("BEGIN");
+
+      await client.query(`INSERT INTO workspace_rendered (id, workspace_id, revision_number, created_at)
+        VALUES ($1, $2, $3, now())`, [id, workspaceId, revisionNumber]);
+
+      for (const chart of workspace.charts) {
+        const chartRenderId = srs.default({ length: 12, alphanumeric: true });
+        await client.query(`INSERT INTO workspace_rendered_chart (id, workspace_render_id, chart_id, is_success, created_at)
+          VALUES ($1, $2, $3, $4, now())`, [chartRenderId, id, chart.id, false]);
+      }
+
+      await client.query("COMMIT");
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
+
+
+    const query = `UPDATE workspace_chat SET response_render_id = $1 WHERE id = $2`;
+    await db.query(query, [id, chatMessageId]);
 
     await enqueueWork("render_workspace", { id });
   } catch (err) {

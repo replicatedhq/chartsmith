@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/replicatedhq/chartsmith/helm-utils"
 	"github.com/replicatedhq/chartsmith/pkg/logger"
@@ -29,16 +30,31 @@ func handleRenderWorkspaceNotification(ctx context.Context, payload string) erro
 		return fmt.Errorf("failed to unmarshal render workspace notification: %w", err)
 	}
 
-	renderedChart, err := workspace.GetRenderedChart(ctx, p.ID)
+	renderedWorkspace, err := workspace.GetRendered(ctx, p.ID)
 	if err != nil {
-		return fmt.Errorf("failed to get rendered chart: %w", err)
+		return fmt.Errorf("failed to get rendered: %w", err)
 	}
 
-	w, err := workspace.GetWorkspace(ctx, renderedChart.WorkspaceID)
+	w, err := workspace.GetWorkspace(ctx, renderedWorkspace.WorkspaceID)
 	if err != nil {
 		return fmt.Errorf("failed to get workspace: %w", err)
 	}
 
+	// we need to render each chart in separate goroutines
+	// and create a sync group to wait for them all to complete
+
+	wg := sync.WaitGroup{}
+	for _, chart := range renderedWorkspace.Charts {
+		wg.Add(1)
+		go renderChart(ctx, &chart, renderedWorkspace, w)
+	}
+
+	wg.Wait()
+
+	return nil
+}
+
+func renderChart(ctx context.Context, renderedChart *workspacetypes.RenderedChart, renderedWorkspace *workspacetypes.Rendered, w *workspacetypes.Workspace) error {
 	var chart *workspacetypes.Chart
 	for _, c := range w.Charts {
 		if c.ID == renderedChart.ChartID {
@@ -90,7 +106,7 @@ func handleRenderWorkspaceNotification(ctx context.Context, payload string) erro
 		done <- nil
 	}()
 
-	workspaceFiles, err := workspace.ListFiles(ctx, w.ID, renderedChart.RevisionNumber, chart.ID)
+	workspaceFiles, err := workspace.ListFiles(ctx, w.ID, renderedWorkspace.RevisionNumber, chart.ID)
 	if err != nil {
 		return fmt.Errorf("failed to list files: %w", err)
 	}
@@ -104,7 +120,7 @@ func handleRenderWorkspaceNotification(ctx context.Context, payload string) erro
 				return fmt.Errorf("failed to render chart: %w", err)
 			}
 
-			if err := workspace.FinishRenderedChart(ctx, p.ID, renderedChart.DepupdateCommand, renderedChart.DepupdateStdout, renderedChart.DepupdateStderr, renderedChart.HelmTemplateCommand, renderedChart.HelmTemplateStdout, renderedChart.HelmTemplateStderr); err != nil {
+			if err := workspace.FinishRenderedChart(ctx, renderedChart.ID, renderedChart.DepupdateCommand, renderedChart.DepupdateStdout, renderedChart.DepupdateStderr, renderedChart.HelmTemplateCommand, renderedChart.HelmTemplateStdout, renderedChart.HelmTemplateStderr); err != nil {
 				return fmt.Errorf("failed to finish rendered chart: %w", err)
 			}
 
@@ -134,25 +150,95 @@ func handleRenderWorkspaceNotification(ctx context.Context, payload string) erro
 
 		case depUpdateCommand := <-renderChannels.DepUpdateCmd:
 			renderedChart.DepupdateCommand += depUpdateCommand
-			if err := workspace.SetRenderedChartDepUpdateCommand(ctx, p.ID, renderedChart.DepupdateCommand); err != nil {
+
+			e := realtimetypes.RenderStreamEvent{
+				WorkspaceID:         w.ID,
+				RenderWorkspaceID:   renderedWorkspace.ID,
+				RenderChartID:       renderedChart.ID,
+				DepUpdateCommand:    renderedChart.DepupdateCommand,
+				DepUpdateStdout:     renderedChart.DepupdateStdout,
+				DepUpdateStderr:     renderedChart.DepupdateStderr,
+				HelmTemplateCommand: renderedChart.HelmTemplateCommand,
+				HelmTemplateStdout:  renderedChart.HelmTemplateStdout,
+				HelmTemplateStderr:  renderedChart.HelmTemplateStderr,
+			}
+
+			if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
+				return fmt.Errorf("failed to send render stream event: %w", err)
+			}
+
+			if err := workspace.SetRenderedChartDepUpdateCommand(ctx, renderedChart.ID, renderedChart.DepupdateCommand); err != nil {
 				return fmt.Errorf("failed to set rendered chart depUpdateCommand: %w", err)
 			}
 
 		case depUpdateStdout := <-renderChannels.DepUpdateStdout:
 			renderedChart.DepupdateStdout += depUpdateStdout
-			if err := workspace.SetRenderedChartDepUpdateStdout(ctx, p.ID, renderedChart.DepupdateStdout); err != nil {
+
+			fmt.Printf("depUpdateStdout: %s\n", renderedChart.DepupdateStdout)
+
+			e := realtimetypes.RenderStreamEvent{
+				WorkspaceID:         w.ID,
+				RenderWorkspaceID:   renderedWorkspace.ID,
+				RenderChartID:       renderedChart.ID,
+				DepUpdateCommand:    renderedChart.DepupdateCommand,
+				DepUpdateStdout:     renderedChart.DepupdateStdout,
+				DepUpdateStderr:     renderedChart.DepupdateStderr,
+				HelmTemplateCommand: renderedChart.HelmTemplateCommand,
+				HelmTemplateStdout:  renderedChart.HelmTemplateStdout,
+				HelmTemplateStderr:  renderedChart.HelmTemplateStderr,
+			}
+
+			if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
+				return fmt.Errorf("failed to send render stream event: %w", err)
+			}
+
+			if err := workspace.SetRenderedChartDepUpdateStdout(ctx, renderedChart.ID, renderedChart.DepupdateStdout); err != nil {
 				return fmt.Errorf("failed to set rendered chart depUpdateStdout: %w", err)
 			}
 
 		case depUpdateStderr := <-renderChannels.DepUpdateStderr:
 			renderedChart.DepupdateStderr += depUpdateStderr
-			if err := workspace.SetRenderedChartDepUpdateStderr(ctx, p.ID, renderedChart.DepupdateStderr); err != nil {
+
+			e := realtimetypes.RenderStreamEvent{
+				WorkspaceID:         w.ID,
+				RenderChartID:       renderedChart.ID,
+				RenderWorkspaceID:   renderedWorkspace.ID,
+				DepUpdateCommand:    renderedChart.DepupdateCommand,
+				DepUpdateStdout:     renderedChart.DepupdateStdout,
+				DepUpdateStderr:     renderedChart.DepupdateStderr,
+				HelmTemplateCommand: renderedChart.HelmTemplateCommand,
+				HelmTemplateStdout:  renderedChart.HelmTemplateStdout,
+				HelmTemplateStderr:  renderedChart.HelmTemplateStderr,
+			}
+
+			if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
+				return fmt.Errorf("failed to send render stream event: %w", err)
+			}
+
+			if err := workspace.SetRenderedChartDepUpdateStderr(ctx, renderedChart.ID, renderedChart.DepupdateStderr); err != nil {
 				return fmt.Errorf("failed to set rendered chart depUpdateStderr: %w", err)
 			}
 
 		case helmTemplateCommand := <-renderChannels.HelmTemplateCmd:
 			renderedChart.HelmTemplateCommand += helmTemplateCommand
-			if err := workspace.SetRenderedChartHelmTemplateCommand(ctx, p.ID, renderedChart.HelmTemplateCommand); err != nil {
+
+			e := realtimetypes.RenderStreamEvent{
+				WorkspaceID:         w.ID,
+				RenderWorkspaceID:   renderedWorkspace.ID,
+				RenderChartID:       renderedChart.ID,
+				DepUpdateCommand:    renderedChart.DepupdateCommand,
+				DepUpdateStdout:     renderedChart.DepupdateStdout,
+				DepUpdateStderr:     renderedChart.DepupdateStderr,
+				HelmTemplateCommand: renderedChart.HelmTemplateCommand,
+				HelmTemplateStdout:  renderedChart.HelmTemplateStdout,
+				HelmTemplateStderr:  renderedChart.HelmTemplateStderr,
+			}
+
+			if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
+				return fmt.Errorf("failed to send render stream event: %w", err)
+			}
+
+			if err := workspace.SetRenderedChartHelmTemplateCommand(ctx, renderedChart.ID, renderedChart.HelmTemplateCommand); err != nil {
 				return fmt.Errorf("failed to set rendered chart helmTemplateCommand: %w", err)
 			}
 
@@ -162,7 +248,7 @@ func handleRenderWorkspaceNotification(ctx context.Context, payload string) erro
 			// we can't keep up with the cli if we parse every line...  we will catch the tail here
 			// in the done handler
 			lineCount := strings.Count(renderedChart.HelmTemplateStdout, "\n")
-			if lineCount%15 != 0 {
+			if lineCount%15 != 0 && lineCount > 10 {
 				continue
 			}
 
@@ -190,13 +276,13 @@ func handleRenderWorkspaceNotification(ctx context.Context, payload string) erro
 				}
 			}
 
-			if err := workspace.SetRenderedChartHelmTemplateStdout(ctx, p.ID, renderedChart.HelmTemplateStdout); err != nil {
+			if err := workspace.SetRenderedChartHelmTemplateStdout(ctx, renderedChart.ID, renderedChart.HelmTemplateStdout); err != nil {
 				return fmt.Errorf("failed to set rendered chart helmTemplateStdout: %w", err)
 			}
 
 		case helmTemplateStderr := <-renderChannels.HelmTemplateStderr:
 			renderedChart.HelmTemplateStderr += helmTemplateStderr
-			if err := workspace.SetRenderedChartHelmTemplateStderr(ctx, p.ID, renderedChart.HelmTemplateStderr); err != nil {
+			if err := workspace.SetRenderedChartHelmTemplateStderr(ctx, renderedChart.ID, renderedChart.HelmTemplateStderr); err != nil {
 				return fmt.Errorf("failed to set rendered chart helmTemplateStderr: %w", err)
 			}
 		}
