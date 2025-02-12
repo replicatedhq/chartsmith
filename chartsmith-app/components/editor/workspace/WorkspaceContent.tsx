@@ -294,7 +294,26 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
       return;
     }
 
-  }, []);
+    setRenderedFiles(prev => {
+      // Try to find existing file with same ID
+      const existingIndex = prev.findIndex(f => f.id === data.renderedFile!.id);
+      
+      if (existingIndex >= 0) {
+        // Update existing file
+        const updated = [...prev];
+        updated[existingIndex] = data.renderedFile!;
+        return updated;
+      } else {
+        // Insert new file
+        return [...prev, data.renderedFile!];
+      }
+    });
+
+    // If this is the currently selected file in rendered view, update editor content
+    if (view === 'rendered' && selectedFile && selectedFile.filePath === data.renderedFile.filePath) {
+      setEditorContent(data.renderedFile.renderedContent);
+    }
+  }, [view, selectedFile]);
 
   const handleCentrifugoMessage = useCallback((message: { data: CentrifugoMessageData }) => {
     const eventType = message.data.eventType;

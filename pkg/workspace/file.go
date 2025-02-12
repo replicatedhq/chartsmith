@@ -100,3 +100,32 @@ func CreateOrPatchFile(ctx context.Context, workspaceID string, revisionNumber i
 
 	return nil
 }
+
+func ListFiles(ctx context.Context, workspaceID string, revisionNumber int, chartID string) ([]types.File, error) {
+	conn := persistence.MustGetPooledPostgresSession()
+	defer conn.Release()
+
+	query := `SELECT id, revision_number, chart_id, workspace_id, file_path, content, pending_patch FROM workspace_file WHERE chart_id = $1 AND workspace_id = $2 AND revision_number = $3`
+	rows, err := conn.Query(ctx, query, chartID, workspaceID, revisionNumber)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	files := []types.File{}
+	for rows.Next() {
+		var file types.File
+		var pendingPatch sql.NullString
+		var chartID sql.NullString
+		if err := rows.Scan(&file.ID, &file.RevisionNumber, &chartID, &file.WorkspaceID, &file.FilePath, &file.Content, &pendingPatch); err != nil {
+			return nil, err
+		}
+
+		file.PendingPatch = pendingPatch.String
+		file.ChartID = chartID.String
+
+		files = append(files, file)
+	}
+
+	return files, nil
+}
