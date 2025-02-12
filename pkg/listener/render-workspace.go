@@ -90,6 +90,11 @@ func handleRenderWorkspaceNotification(ctx context.Context, payload string) erro
 		done <- nil
 	}()
 
+	workspaceFiles, err := workspace.ListFiles(ctx, w.ID, renderedChart.RevisionNumber, chart.ID)
+	if err != nil {
+		return fmt.Errorf("failed to list files: %w", err)
+	}
+
 	renderedFiles := []workspacetypes.RenderedFile{}
 
 	for {
@@ -103,19 +108,21 @@ func handleRenderWorkspaceNotification(ctx context.Context, payload string) erro
 				return fmt.Errorf("failed to finish rendered chart: %w", err)
 			}
 
-			updatedRenderedFiles, err := parseRenderedFiles(renderedChart.HelmTemplateStdout, chart.Name, &renderedFiles)
+			updatedRenderedFiles, err := parseRenderedFiles(ctx, renderedChart.HelmTemplateStdout, chart.Name, &renderedFiles, workspaceFiles)
 			if err != nil {
 				return fmt.Errorf("failed to parse rendered files: %w", err)
 			}
 
 			for _, file := range updatedRenderedFiles {
-				e := realtimetypes.RenderUpdatedEvent{
-					WorkspaceID:  w.ID,
-					RenderedFile: file,
-				}
+				if file.ID != "" {
+					e := realtimetypes.RenderUpdatedEvent{
+						WorkspaceID:  w.ID,
+						RenderedFile: file,
+					}
 
-				if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
-					return fmt.Errorf("failed to send render updated event: %w", err)
+					if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
+						return fmt.Errorf("failed to send render updated event: %w", err)
+					}
 				}
 
 				if err := workspace.SetRenderedFileContents(ctx, w.ID, renderedChart.RevisionNumber, file.FilePath, file.RenderedContent); err != nil {
@@ -161,19 +168,21 @@ func handleRenderWorkspaceNotification(ctx context.Context, payload string) erro
 
 			// updatedRenderedFiles is the list of files that have changes in this call
 			// not the entire list again.  this is the list we need to send to a client who might be watching
-			updatedRenderedFiles, err := parseRenderedFiles(renderedChart.HelmTemplateStdout, chart.Name, &renderedFiles)
+			updatedRenderedFiles, err := parseRenderedFiles(ctx, renderedChart.HelmTemplateStdout, chart.Name, &renderedFiles, workspaceFiles)
 			if err != nil {
 				return fmt.Errorf("failed to parse rendered files: %w", err)
 			}
 
 			for _, file := range updatedRenderedFiles {
-				e := realtimetypes.RenderUpdatedEvent{
-					WorkspaceID:  w.ID,
-					RenderedFile: file,
-				}
+				if file.ID != "" {
+					e := realtimetypes.RenderUpdatedEvent{
+						WorkspaceID:  w.ID,
+						RenderedFile: file,
+					}
 
-				if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
-					return fmt.Errorf("failed to send render updated event: %w", err)
+					if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
+						return fmt.Errorf("failed to send render updated event: %w", err)
+					}
 				}
 
 				if err := workspace.SetRenderedFileContents(ctx, w.ID, renderedChart.RevisionNumber, file.FilePath, file.RenderedContent); err != nil {
@@ -194,7 +203,7 @@ func handleRenderWorkspaceNotification(ctx context.Context, payload string) erro
 	}
 }
 
-func parseRenderedFiles(stdout string, chartName string, renderedFiles *[]workspacetypes.RenderedFile) ([]workspacetypes.RenderedFile, error) {
+func parseRenderedFiles(ctx context.Context, stdout string, chartName string, renderedFiles *[]workspacetypes.RenderedFile, workspaceFiles []workspacetypes.File) ([]workspacetypes.RenderedFile, error) {
 	if stdout == "" {
 		return []workspacetypes.RenderedFile{}, nil
 	}
@@ -247,7 +256,7 @@ func parseRenderedFiles(stdout string, chartName string, renderedFiles *[]worksp
 				found = true
 				if existing.RenderedContent != content {
 					// Content has changed, update it and add to updatedFiles
-					(*renderedFiles)[i] = renderedFile
+					(*renderedFiles)[i].RenderedContent = content
 					updatedFiles = append(updatedFiles, renderedFile)
 				}
 				break
@@ -256,6 +265,16 @@ func parseRenderedFiles(stdout string, chartName string, renderedFiles *[]worksp
 
 		if !found {
 			// New file, add it to both lists
+			// here we need to get the ID
+			for _, workspaceFile := range workspaceFiles {
+				if workspaceFile.FilePath == path {
+					renderedFile.ID = workspaceFile.ID
+					break
+				}
+			}
+
+			logger.Debug("new rendered filefile", zap.String("path", path), zap.String("id", renderedFile.ID))
+
 			*renderedFiles = append(*renderedFiles, renderedFile)
 			updatedFiles = append(updatedFiles, renderedFile)
 		}

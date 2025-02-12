@@ -6,10 +6,8 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/replicatedhq/chartsmith/pkg/logger"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 	"github.com/replicatedhq/chartsmith/pkg/workspace/types"
-	"go.uber.org/zap"
 )
 
 func GetRenderedChart(ctx context.Context, id string) (*types.RenderedChart, error) {
@@ -146,12 +144,6 @@ func SetRenderedChartHelmTemplateStdout(ctx context.Context, id string, helmTemp
 }
 
 func SetRenderedFileContents(ctx context.Context, workspaceID string, revisionNumber int, filePath string, renderedContent string) error {
-	logger.Debug("SetRenderedFileContents",
-		zap.String("workspaceID", workspaceID),
-		zap.Int("revisionNumber", revisionNumber),
-		zap.String("filePath", filePath),
-		zap.Int("renderedContent length", len(renderedContent)),
-	)
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
 
