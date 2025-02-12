@@ -169,3 +169,12 @@ body {
 .monaco-editor .view-line {
   white-space: pre !important;
 }
+
+/* Add tab styles */
+.tab-active {
+  @apply border-b-2 border-primary text-primary;
+}
+
+.tab-inactive {
+  @apply text-gray-500 hover:text-gray-300;
+}

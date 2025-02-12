@@ -7,7 +7,6 @@ export interface Workspace {
   name: string;
   charts: Chart[];
   files: WorkspaceFile[];
-  renderedCharts: RenderedChart[];
   currentRevisionNumber: number;
   incompleteRevisionNumber?: number;
   currentPlans: Plan[];
@@ -28,21 +27,10 @@ export interface Chart {
   files: WorkspaceFile[];
 }
 
-export interface RenderedChart {
+export interface RenderedFile {
   id: string;
-  name: string;
-  stdout: string;
-  stderr: string;
-  manifests: string;
-  createdAt: Date;
-  completedAt: Date;
-}
-
-export interface RenderedChartScenario {
-  id: string;
-  name: string;
-  values: string;
-  files: WorkspaceFile[];
+  filePath: string;
+  renderedContent: string;
 }
 
 export interface Plan {

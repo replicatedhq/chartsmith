@@ -1,11 +1,15 @@
-import { Plan, Workspace, WorkspaceFile, RenderedChart } from "@/lib/types/workspace";
+import { Plan, Workspace, WorkspaceFile, RenderedFile } from "@/lib/types/workspace";
 
 export interface FileNode {
   name: string;
   type: "file" | "folder";
   children?: FileNode[];
-  content?: string;
-  path?: string;
+  content: string;
+  filePath: string;
+  id?: string;
+  revisionNumber?: number;
+  chartId?: string;
+  workspaceId?: string;
   hasError?: boolean;
   errorCount?: number;
   errorLine?: number;
@@ -100,7 +104,7 @@ export interface CentrifugoMessageData {
   artifact?: RawArtifact;
   workspaceId: string;
   eventType?: string;
-  renderedChart?: RenderedChart;
+  renderedFile?: RenderedFile;
 }
 
 export interface RawRevision {

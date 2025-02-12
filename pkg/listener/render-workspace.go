@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/replicatedhq/chartsmith/helm-utils"
 	"github.com/replicatedhq/chartsmith/pkg/logger"
@@ -70,18 +69,20 @@ func handleRenderWorkspaceNotification(ctx context.Context, payload string) erro
 		UserIDs: userIDs,
 	}
 
-	e := realtimetypes.RenderUpdatedEvent{
-		WorkspaceID:   w.ID,
-		RenderedChart: *renderedChart,
-	}
+	renderChannels := helmutils.RenderChannels{
+		DepUpdateCmd:       make(chan string, 1),
+		DepUpdateStderr:    make(chan string, 1),
+		DepUpdateStdout:    make(chan string, 1),
+		HelmTemplateCmd:    make(chan string, 1),
+		HelmTemplateStderr: make(chan string, 1),
+		HelmTemplateStdout: make(chan string, 1),
 
-	stdoutCh := make(chan string, 1)
-	stderrCh := make(chan string, 1)
-	resultCh := make(chan string, 1)
+		Done: make(chan error),
+	}
 
 	done := make(chan error)
 	go func() {
-		err := helmutils.RenderChartExec(chart.Files, valuesYAML, "", stdoutCh, stderrCh, resultCh)
+		err := helmutils.RenderChartExec(chart.Files, valuesYAML, "", renderChannels)
 		if err != nil {
 			logger.Error(fmt.Errorf("failed to render chart: %w", err))
 		}
@@ -89,60 +90,176 @@ func handleRenderWorkspaceNotification(ctx context.Context, payload string) erro
 		done <- nil
 	}()
 
+	renderedFiles := []workspacetypes.RenderedFile{}
+
 	for {
 		select {
-		case err := <-done:
+		case err := <-renderChannels.Done:
 			if err != nil {
 				return fmt.Errorf("failed to render chart: %w", err)
 			}
 
-			now := time.Now()
-			e.RenderedChart.CompletedAt = &now
-			if err := workspace.FinishRenderedChart(ctx, p.ID, e.RenderedChart.Stdout, e.RenderedChart.Stderr, e.RenderedChart.Manifests); err != nil {
+			if err := workspace.FinishRenderedChart(ctx, p.ID, renderedChart.DepupdateCommand, renderedChart.DepupdateStdout, renderedChart.DepupdateStderr, renderedChart.HelmTemplateCommand, renderedChart.HelmTemplateStdout, renderedChart.HelmTemplateStderr); err != nil {
 				return fmt.Errorf("failed to finish rendered chart: %w", err)
 			}
 
-			if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
-				return fmt.Errorf("failed to send render updated event: %w", err)
+			updatedRenderedFiles, err := parseRenderedFiles(renderedChart.HelmTemplateStdout, chart.Name, &renderedFiles)
+			if err != nil {
+				return fmt.Errorf("failed to parse rendered files: %w", err)
 			}
 
-			return nil
-		case stdout := <-stdoutCh:
-			e.RenderedChart.Stdout += stdout
-			if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
-				return fmt.Errorf("failed to send render updated event: %w", err)
-			}
-
-			if err := workspace.SetRenderedChartStdout(ctx, p.ID, e.RenderedChart.Stdout); err != nil {
-				return fmt.Errorf("failed to set rendered chart stdout: %w", err)
-			}
-		case stderr := <-stderrCh:
-			e.RenderedChart.Stderr += stderr
-			if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
-				return fmt.Errorf("failed to send render updated event: %w", err)
-			}
-
-			if err := workspace.SetRenderedChartStderr(ctx, p.ID, e.RenderedChart.Stderr); err != nil {
-				return fmt.Errorf("failed to set rendered chart stderr: %w", err)
-			}
-		case result := <-resultCh:
-			// we get these line by line, and we catch the final result
-			// in the done handler
-			// so here, we want to rate limit ourselves and only hit the database and socket
-			// for every n lines
-
-			e.RenderedChart.Manifests += result
-
-			lineCount := strings.Count(e.RenderedChart.Manifests, "\n")
-			if lineCount%12 == 0 {
-				if err := workspace.SetRenderedChartManifests(ctx, p.ID, e.RenderedChart.Manifests); err != nil {
-					return fmt.Errorf("failed to set rendered chart manifests: %w", err)
+			for _, file := range updatedRenderedFiles {
+				e := realtimetypes.RenderUpdatedEvent{
+					WorkspaceID:  w.ID,
+					RenderedFile: file,
 				}
 
 				if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
 					return fmt.Errorf("failed to send render updated event: %w", err)
 				}
+
+				if err := workspace.SetRenderedFileContents(ctx, w.ID, renderedChart.RevisionNumber, file.FilePath, file.RenderedContent); err != nil {
+					return fmt.Errorf("failed to set rendered file contents: %w", err)
+				}
+			}
+
+			return nil
+
+		case depUpdateCommand := <-renderChannels.DepUpdateCmd:
+			renderedChart.DepupdateCommand += depUpdateCommand
+			if err := workspace.SetRenderedChartDepUpdateCommand(ctx, p.ID, renderedChart.DepupdateCommand); err != nil {
+				return fmt.Errorf("failed to set rendered chart depUpdateCommand: %w", err)
+			}
+
+		case depUpdateStdout := <-renderChannels.DepUpdateStdout:
+			renderedChart.DepupdateStdout += depUpdateStdout
+			if err := workspace.SetRenderedChartDepUpdateStdout(ctx, p.ID, renderedChart.DepupdateStdout); err != nil {
+				return fmt.Errorf("failed to set rendered chart depUpdateStdout: %w", err)
+			}
+
+		case depUpdateStderr := <-renderChannels.DepUpdateStderr:
+			renderedChart.DepupdateStderr += depUpdateStderr
+			if err := workspace.SetRenderedChartDepUpdateStderr(ctx, p.ID, renderedChart.DepupdateStderr); err != nil {
+				return fmt.Errorf("failed to set rendered chart depUpdateStderr: %w", err)
+			}
+
+		case helmTemplateCommand := <-renderChannels.HelmTemplateCmd:
+			renderedChart.HelmTemplateCommand += helmTemplateCommand
+			if err := workspace.SetRenderedChartHelmTemplateCommand(ctx, p.ID, renderedChart.HelmTemplateCommand); err != nil {
+				return fmt.Errorf("failed to set rendered chart helmTemplateCommand: %w", err)
+			}
+
+		case helmTemplateStdout := <-renderChannels.HelmTemplateStdout:
+			renderedChart.HelmTemplateStdout += helmTemplateStdout
+
+			// we can't keep up with the cli if we parse every line...  we will catch the tail here
+			// in the done handler
+			lineCount := strings.Count(renderedChart.HelmTemplateStdout, "\n")
+			if lineCount%15 != 0 {
+				continue
+			}
+
+			// updatedRenderedFiles is the list of files that have changes in this call
+			// not the entire list again.  this is the list we need to send to a client who might be watching
+			updatedRenderedFiles, err := parseRenderedFiles(renderedChart.HelmTemplateStdout, chart.Name, &renderedFiles)
+			if err != nil {
+				return fmt.Errorf("failed to parse rendered files: %w", err)
+			}
+
+			for _, file := range updatedRenderedFiles {
+				e := realtimetypes.RenderUpdatedEvent{
+					WorkspaceID:  w.ID,
+					RenderedFile: file,
+				}
+
+				if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
+					return fmt.Errorf("failed to send render updated event: %w", err)
+				}
+
+				if err := workspace.SetRenderedFileContents(ctx, w.ID, renderedChart.RevisionNumber, file.FilePath, file.RenderedContent); err != nil {
+					return fmt.Errorf("failed to set rendered file contents: %w", err)
+				}
+			}
+
+			if err := workspace.SetRenderedChartHelmTemplateStdout(ctx, p.ID, renderedChart.HelmTemplateStdout); err != nil {
+				return fmt.Errorf("failed to set rendered chart helmTemplateStdout: %w", err)
+			}
+
+		case helmTemplateStderr := <-renderChannels.HelmTemplateStderr:
+			renderedChart.HelmTemplateStderr += helmTemplateStderr
+			if err := workspace.SetRenderedChartHelmTemplateStderr(ctx, p.ID, renderedChart.HelmTemplateStderr); err != nil {
+				return fmt.Errorf("failed to set rendered chart helmTemplateStderr: %w", err)
 			}
 		}
 	}
+}
+
+func parseRenderedFiles(stdout string, chartName string, renderedFiles *[]workspacetypes.RenderedFile) ([]workspacetypes.RenderedFile, error) {
+	if stdout == "" {
+		return []workspacetypes.RenderedFile{}, nil
+	}
+
+	// Normalize the input by trimming any leading/trailing whitespace
+	stdout = strings.TrimSpace(stdout)
+
+	// If the file starts with ---, remove it to avoid an empty first document
+	if strings.HasPrefix(stdout, "---") {
+		stdout = strings.TrimPrefix(stdout, "---")
+	}
+
+	// Split the stdout into individual YAML documents
+	documents := strings.Split(stdout, "\n---\n")
+	updatedFiles := []workspacetypes.RenderedFile{}
+
+	for _, doc := range documents {
+		if strings.TrimSpace(doc) == "" {
+			continue
+		}
+
+		lines := strings.Split(doc, "\n")
+		if len(lines) == 0 {
+			continue
+		}
+
+		pathLine := strings.TrimSpace(lines[0])
+		if !strings.HasPrefix(pathLine, "# Source:") {
+			continue
+		}
+
+		path := strings.TrimSpace(strings.TrimPrefix(pathLine, "# Source:"))
+
+		// remove the chartName/ prefix from the path if it exists
+		if strings.HasPrefix(path, chartName+"/") {
+			path = strings.TrimPrefix(path, chartName+"/")
+		}
+
+		content := strings.Join(lines[1:], "\n")
+
+		renderedFile := workspacetypes.RenderedFile{
+			FilePath:        path,
+			RenderedContent: content,
+		}
+
+		// Check if this file exists and has different content
+		found := false
+		for i, existing := range *renderedFiles {
+			if existing.FilePath == path {
+				found = true
+				if existing.RenderedContent != content {
+					// Content has changed, update it and add to updatedFiles
+					(*renderedFiles)[i] = renderedFile
+					updatedFiles = append(updatedFiles, renderedFile)
+				}
+				break
+			}
+		}
+
+		if !found {
+			// New file, add it to both lists
+			*renderedFiles = append(*renderedFiles, renderedFile)
+			updatedFiles = append(updatedFiles, renderedFile)
+		}
+	}
+
+	return updatedFiles, nil
 }

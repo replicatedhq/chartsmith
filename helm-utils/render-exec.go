@@ -10,7 +10,18 @@ import (
 	"github.com/replicatedhq/chartsmith/pkg/workspace/types"
 )
 
-func RenderChartExec(files []types.File, valuesYAML string, helmVersion string, stdoutCh chan string, stderrCh chan string, resultCh chan string) error {
+type RenderChannels struct {
+	DepUpdateCmd       chan string
+	DepUpdateStderr    chan string
+	DepUpdateStdout    chan string
+	HelmTemplateCmd    chan string
+	HelmTemplateStderr chan string
+	HelmTemplateStdout chan string
+
+	Done chan error
+}
+
+func RenderChartExec(files []types.File, valuesYAML string, helmVersion string, renderChannels RenderChannels) error {
 	// in order to avoid the special feature of helm where it detects the kubeconfig and uses that
 	// when templating the chart, we put a completely fake kubeconfig in the env for this command
 	fakeKubeconfig := `apiVersion: v1
@@ -40,12 +51,12 @@ clusters:
 		}
 	}
 
-	err = runHelmDepUpdate(tempDir, fakeKubeconfig, stdoutCh, stderrCh)
+	err = runHelmDepUpdate(tempDir, fakeKubeconfig, renderChannels.DepUpdateCmd, renderChannels.DepUpdateStdout, renderChannels.DepUpdateStderr)
 	if err != nil {
 		return fmt.Errorf("failed to run helm dep update: %w", err)
 	}
 
-	err = runHelmTemplate(tempDir, valuesYAML, fakeKubeconfig, resultCh, stderrCh)
+	err = runHelmTemplate(tempDir, valuesYAML, fakeKubeconfig, renderChannels.HelmTemplateCmd, renderChannels.HelmTemplateStdout, renderChannels.HelmTemplateStderr)
 	if err != nil {
 		return fmt.Errorf("failed to run helm template: %w", err)
 	}
@@ -67,13 +78,14 @@ func findExecutableForHelmVersion(helmVersion string) (string, error) {
 	return "", fmt.Errorf("unsupported helm version: %s", helmVersion)
 }
 
-func runHelmDepUpdate(dir string, kubeconfig string, stdoutCh chan string, stderrCh chan string) error {
+func runHelmDepUpdate(dir string, kubeconfig string, cmdCh chan string, stdoutCh chan string, stderrCh chan string) error {
 	fmt.Printf("Running helm dep update in %s\n", dir)
 
 	depUpdateCmd := exec.Command("helm", "dep", "update")
 	depUpdateCmd.Env = []string{"KUBECONFIG=" + kubeconfig}
 	depUpdateCmd.Dir = dir
 
+	cmdCh <- depUpdateCmd.String()
 	stdout, err := depUpdateCmd.StdoutPipe()
 	if err != nil {
 		return fmt.Errorf("failed to create stdout pipe: %w", err)
@@ -110,7 +122,7 @@ func runHelmDepUpdate(dir string, kubeconfig string, stdoutCh chan string, stder
 	return nil
 }
 
-func runHelmTemplate(dir string, valuesYAML string, kubeconfig string, stdoutCh chan string, stderrCh chan string) error {
+func runHelmTemplate(dir string, valuesYAML string, kubeconfig string, cmdCh chan string, stdoutCh chan string, stderrCh chan string) error {
 	fmt.Printf("Running helm template in %s\n", dir)
 
 	args := []string{"template", "chartsmith", "."}
@@ -125,6 +137,8 @@ func runHelmTemplate(dir string, valuesYAML string, kubeconfig string, stdoutCh 
 	cmd := exec.Command("helm", args...)
 	cmd.Env = []string{"KUBECONFIG=" + kubeconfig}
 	cmd.Dir = dir
+
+	cmdCh <- cmd.String()
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

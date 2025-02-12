@@ -5,48 +5,74 @@ import (
 	"database/sql"
 	"fmt"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/replicatedhq/chartsmith/pkg/logger"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 	"github.com/replicatedhq/chartsmith/pkg/workspace/types"
+	"go.uber.org/zap"
 )
 
 func GetRenderedChart(ctx context.Context, id string) (*types.RenderedChart, error) {
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
 
-	query := `SELECT wrc.id, wrc.workspace_id, wrc.revision_number, wrc.chart_id, wrc.stdout, wrc.stderr, wrc.manifests, wrc.created_at, wrc.completed_at, c.name
-	FROM workspace_rendered_chart wrc LEFT JOIN workspace_chart c ON wrc.chart_id = c.id WHERE wrc.id = $1`
+	query := `
+		SELECT
+			wrc.id,
+			wrc.workspace_id,
+			wrc.revision_number,
+			wrc.chart_id,
+			wrc.is_success,
+			wrc.dep_update_command,
+			wrc.dep_update_stdout,
+			wrc.dep_update_stderr,
+			wrc.helm_template_command,
+			wrc.helm_template_stdout,
+			wrc.helm_template_stderr,
+			wrc.created_at,
+			wrc.completed_at,
+			c.name
+		FROM workspace_rendered_chart wrc
+		LEFT JOIN workspace_chart c ON wrc.chart_id = c.id
+		WHERE wrc.id = $1`
 
 	var renderedChart types.RenderedChart
 	row := conn.QueryRow(ctx, query, id)
 
-	var stdout sql.NullString
-	var stderr sql.NullString
-	var manifests sql.NullString
+	var depUpdateCommand sql.NullString
+	var depUpdateStdout sql.NullString
+	var depUpdateStderr sql.NullString
+	var helmTemplateCommand sql.NullString
+	var helmTemplateStdout sql.NullString
+	var helmTemplateStderr sql.NullString
 
 	var completedAt sql.NullTime
 
-	if err := row.Scan(&renderedChart.ID, &renderedChart.WorkspaceID, &renderedChart.RevisionNumber, &renderedChart.ChartID, &stdout, &stderr, &manifests, &renderedChart.CreatedAt, &completedAt, &renderedChart.Name); err != nil {
+	if err := row.Scan(&renderedChart.ID, &renderedChart.WorkspaceID, &renderedChart.RevisionNumber, &renderedChart.ChartID, &renderedChart.IsSuccess, &depUpdateCommand, &depUpdateStdout, &depUpdateStderr, &helmTemplateCommand, &helmTemplateStdout, &helmTemplateStderr, &renderedChart.CreatedAt, &completedAt, &renderedChart.Name); err != nil {
 		return nil, fmt.Errorf("failed to get rendered chart: %w", err)
 	}
 
-	renderedChart.Stdout = stdout.String
-	renderedChart.Stderr = stderr.String
-	renderedChart.Manifests = manifests.String
+	renderedChart.DepupdateCommand = depUpdateCommand.String
+	renderedChart.DepupdateStdout = depUpdateStdout.String
+	renderedChart.DepupdateStderr = depUpdateStderr.String
+	renderedChart.HelmTemplateCommand = helmTemplateCommand.String
+	renderedChart.HelmTemplateStdout = helmTemplateStdout.String
+	renderedChart.HelmTemplateStderr = helmTemplateStderr.String
 	renderedChart.CompletedAt = &completedAt.Time
 
 	return &renderedChart, nil
 }
 
-func FinishRenderedChart(ctx context.Context, id string, stdout string, stderr string, manifests string) error {
+func FinishRenderedChart(ctx context.Context, id string, depupdateCommand string, depupdateStdout string, depupdateStderr string, helmTemplateCommand string, helmTemplateStdout string, helmTemplateStderr string) error {
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
 
 	query := `
 		UPDATE workspace_rendered_chart
-		SET stdout = $2, stderr = $3, manifests = $4, completed_at = now()
+		SET dep_update_command = $2, dep_update_stdout = $3, dep_update_stderr = $4, helm_template_command = $5, helm_template_stdout = $6, helm_template_stderr = $7, completed_at = now()
 		WHERE id = $1`
 
-	_, err := conn.Exec(ctx, query, id, stdout, stderr, manifests)
+	_, err := conn.Exec(ctx, query, id, depupdateCommand, depupdateStdout, depupdateStderr, helmTemplateCommand, helmTemplateStdout, helmTemplateStderr)
 	if err != nil {
 		return fmt.Errorf("failed to update rendered chart: %w", err)
 	}
@@ -54,40 +80,109 @@ func FinishRenderedChart(ctx context.Context, id string, stdout string, stderr s
 	return nil
 }
 
-func SetRenderedChartStdout(ctx context.Context, id string, stdout string) error {
+func SetRenderedChartDepUpdateCommand(ctx context.Context, id string, depUpdateCommand string) error {
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
 
-	query := `UPDATE workspace_rendered_chart SET stdout = $2 WHERE id = $1`
-	_, err := conn.Exec(ctx, query, id, stdout)
+	query := `UPDATE workspace_rendered_chart SET dep_update_command = $2 WHERE id = $1`
+	_, err := conn.Exec(ctx, query, id, depUpdateCommand)
 	if err != nil {
-		return fmt.Errorf("failed to update rendered chart stdout: %w", err)
+		return fmt.Errorf("failed to update rendered chart depUpdateCommand: %w", err)
 	}
 
 	return nil
 }
 
-func SetRenderedChartStderr(ctx context.Context, id string, stderr string) error {
+func SetRenderedChartDepUpdateStdout(ctx context.Context, id string, depUpdateStdout string) error {
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
 
-	query := `UPDATE workspace_rendered_chart SET stderr = $2 WHERE id = $1`
-	_, err := conn.Exec(ctx, query, id, stderr)
+	query := `UPDATE workspace_rendered_chart SET dep_update_stdout = $2 WHERE id = $1`
+	_, err := conn.Exec(ctx, query, id, depUpdateStdout)
 	if err != nil {
-		return fmt.Errorf("failed to update rendered chart stderr: %w", err)
+		return fmt.Errorf("failed to update rendered chart depUpdateStdout: %w", err)
 	}
 
 	return nil
 }
 
-func SetRenderedChartManifests(ctx context.Context, id string, manifests string) error {
+func SetRenderedChartDepUpdateStderr(ctx context.Context, id string, depUpdateStderr string) error {
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
 
-	query := `UPDATE workspace_rendered_chart SET manifests = $2 WHERE id = $1`
-	_, err := conn.Exec(ctx, query, id, manifests)
+	query := `UPDATE workspace_rendered_chart SET dep_update_stderr = $2 WHERE id = $1`
+	_, err := conn.Exec(ctx, query, id, depUpdateStderr)
 	if err != nil {
-		return fmt.Errorf("failed to update rendered chart manifests: %w", err)
+		return fmt.Errorf("failed to update rendered chart depUpdateStderr: %w", err)
+	}
+
+	return nil
+}
+
+func SetRenderedChartHelmTemplateCommand(ctx context.Context, id string, helmTemplateCommand string) error {
+	conn := persistence.MustGetPooledPostgresSession()
+	defer conn.Release()
+
+	query := `UPDATE workspace_rendered_chart SET helm_template_command = $2 WHERE id = $1`
+	_, err := conn.Exec(ctx, query, id, helmTemplateCommand)
+	if err != nil {
+		return fmt.Errorf("failed to update rendered chart helmTemplateCommand: %w", err)
+	}
+
+	return nil
+}
+
+func SetRenderedChartHelmTemplateStdout(ctx context.Context, id string, helmTemplateStdout string) error {
+	conn := persistence.MustGetPooledPostgresSession()
+	defer conn.Release()
+
+	query := `UPDATE workspace_rendered_chart SET helm_template_stdout = $2 WHERE id = $1`
+	_, err := conn.Exec(ctx, query, id, helmTemplateStdout)
+	if err != nil {
+		return fmt.Errorf("failed to update rendered chart helmTemplateStdout: %w", err)
+	}
+
+	return nil
+}
+
+func SetRenderedFileContents(ctx context.Context, workspaceID string, revisionNumber int, filePath string, renderedContent string) error {
+	logger.Debug("SetRenderedFileContents",
+		zap.String("workspaceID", workspaceID),
+		zap.Int("revisionNumber", revisionNumber),
+		zap.String("filePath", filePath),
+		zap.Int("renderedContent length", len(renderedContent)),
+	)
+	conn := persistence.MustGetPooledPostgresSession()
+	defer conn.Release()
+
+	// get the file id from the workspace_file table
+	query := `SELECT id FROM workspace_file WHERE workspace_id = $1 AND revision_number = $2 AND file_path = $3`
+	var fileID string
+	err := conn.QueryRow(ctx, query, workspaceID, revisionNumber, filePath).Scan(&fileID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil // this happend if we have a rendered file that doesn't exist in the workspace (deps)_
+		}
+		return fmt.Errorf("failed to get file id: %w", err)
+	}
+
+	query = `INSERT INTO workspace_rendered_file (file_id, workspace_id, revision_number, file_path, content) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (file_id, workspace_id, revision_number) DO UPDATE SET content = $5`
+	_, err = conn.Exec(ctx, query, fileID, workspaceID, revisionNumber, filePath, renderedContent)
+	if err != nil {
+		return fmt.Errorf("failed to insert rendered file: %w", err)
+	}
+
+	return nil
+}
+
+func SetRenderedChartHelmTemplateStderr(ctx context.Context, id string, helmTemplateStderr string) error {
+	conn := persistence.MustGetPooledPostgresSession()
+	defer conn.Release()
+
+	query := `UPDATE workspace_rendered_chart SET helm_template_stderr = $2 WHERE id = $1`
+	_, err := conn.Exec(ctx, query, id, helmTemplateStderr)
+	if err != nil {
+		return fmt.Errorf("failed to update rendered chart helmTemplateStderr: %w", err)
 	}
 
 	return nil

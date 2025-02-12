@@ -1,0 +1,29 @@
+database: chartsmith
+name: workspace_rendered_file
+schema:
+  postgres:
+    primaryKey:
+    - file_id
+    - workspace_id
+    - revision_number
+    columns:
+    - name: file_id
+      type: text
+      constraints:
+        notNull: true
+    - name: workspace_id
+      type: text
+      constraints:
+        notNull: true
+    - name: revision_number
+      type: integer
+      constraints:
+        notNull: true
+    - name: file_path
+      type: text
+      constraints:
+        notNull: true
+    - name: content
+      type: text
+      constraints:
+        notNull: true

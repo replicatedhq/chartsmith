@@ -1,23 +1,21 @@
-import React, { useEffect } from "react";
-import { EditorNav } from "../EditorNav";
+import React from "react";
 import { FileBrowser } from "../FileBrowser";
 import { RenderedFileBrowser } from "../RenderedFileBrowser";
 import { CodeEditor } from "../CodeEditor";
 import { useTheme } from "../../../contexts/ThemeContext";
 import { EditorView } from "../../../hooks/useEditorView";
-import { logger } from "@/lib/utils/logger";
-import { WorkspaceFile, Chart, RenderedChart, RenderUpdate } from "@/lib/types/workspace";
+import { WorkspaceFile, Chart, RenderedFile, RenderUpdate } from "@/lib/types/workspace";
 import { Session } from "@/lib/types/session";
 import type { editor } from "monaco-editor";
 
 interface WorkspaceContainerProps {
   session: Session;
   view: EditorView;
-  onViewChange: (newView: EditorView) => void;
+  onViewChange: (view: EditorView) => void;
   files: WorkspaceFile[];
   charts: Chart[];
   revision: number;
-  renderedCharts: RenderedChart[];
+  renderedFiles: RenderedFile[];
   selectedFile?: WorkspaceFile;
   onFileSelect: (file: WorkspaceFile) => void;
   onFileDelete: (path: string) => void;
@@ -27,7 +25,6 @@ interface WorkspaceContainerProps {
   onCommandK?: () => void;
   onFileUpdate?: (file: WorkspaceFile) => void;
   renderUpdates?: RenderUpdate[];
-  onRenderSelect?: (chart: RenderedChart, type: 'stdout' | 'stderr' | 'manifests') => void;
   editorRef?: React.MutableRefObject<editor.IStandaloneCodeEditor | null>;
 }
 
@@ -37,7 +34,7 @@ export function WorkspaceContainer({
   onViewChange,
   files,
   charts,
-  renderedCharts,
+  renderedFiles,
   revision,
   selectedFile,
   onFileSelect,
@@ -48,21 +45,15 @@ export function WorkspaceContainer({
   onCommandK,
   onFileUpdate,
   renderUpdates = [],
-  onRenderSelect,
   editorRef,
 }: WorkspaceContainerProps) {
   const { resolvedTheme } = useTheme();
 
-  const handleViewChange = (newView: EditorView) => {
-    onViewChange(newView);
-  };
-
   return (
     <div className="flex-1 flex flex-col h-[calc(100vh-3.5rem)] min-h-0 max-w-[calc(100vw-545px)] overflow-hidden">
-      <EditorNav view={view} onViewChange={handleViewChange} />
       <div className="flex-1 flex min-h-0">
         <div className="w-[260px] flex-shrink-0">
-          {isFileTreeVisible && (view === "source" ? (
+          {isFileTreeVisible && (
             <FileBrowser
               nodes={files}
               onFileSelect={onFileSelect}
@@ -70,43 +61,60 @@ export function WorkspaceContainer({
               selectedFile={selectedFile}
               charts={charts}
             />
-          ) : (
-            <RenderedFileBrowser
-              charts={renderedCharts}
-              onFileSelect={onFileSelect}
-              selectedFile={selectedFile}
-              renderUpdates={renderUpdates}
-              onRenderSelect={onRenderSelect}
-            />
-          ))}
+          )}
         </div>
         <div className={`w-px ${resolvedTheme === "dark" ? "bg-dark-border" : "bg-gray-200"} flex-shrink-0`} />
-        <div className="flex-1 min-w-0 overflow-auto">
-          {view === "source" && selectedFile ? (
-            <CodeEditor
-              session={session}
-              file={selectedFile}
-              revision={revision}
-              theme={resolvedTheme}
-              value={editorContent}
-              onChange={onEditorChange}
-              onCommandK={onCommandK}
-              onFileUpdate={onFileUpdate}
-              files={files}
-              editorRef={editorRef}
-            />
-          ) : view === "rendered" && editorContent ? (
-            <CodeEditor
-              session={session}
-              revision={revision}
-              theme={resolvedTheme}
-              value={editorContent}
-              onChange={onEditorChange}
-              onCommandK={onCommandK}
-              files={files}
-              editorRef={editorRef}
-            />
-          ) : null}
+        <div className="flex-1 min-w-0 flex flex-col">
+          <div className="flex items-center px-2 border-b border-dark-border/40 bg-dark-surface/40">
+            <div
+              onClick={() => onViewChange("source")}
+              className={`px-3 py-2.5 text-xs font-medium cursor-pointer transition-colors relative group ${
+                view === "source"
+                  ? "text-primary"
+                  : "text-gray-500 hover:text-gray-300"
+              }`}
+            >
+              {view === "source" && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
+              )}
+              Source
+            </div>
+            <div
+              onClick={() => onViewChange("rendered")}
+              className={`px-3 py-2.5 text-xs font-medium cursor-pointer transition-colors relative group ${
+                view === "rendered"
+                  ? "text-primary"
+                  : "text-gray-500 hover:text-gray-300"
+              }`}
+            >
+              {view === "rendered" && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
+              )}
+              Rendered
+            </div>
+          </div>
+          <div className="flex-1 overflow-auto">
+            {view === "rendered" && selectedFile && !renderedFiles.find(rf => rf.filePath === selectedFile.filePath) ? (
+              <div className="flex items-center justify-center h-full text-sm text-gray-500">
+                This file was not included in the rendered output
+              </div>
+            ) : (
+              selectedFile && (
+                <CodeEditor
+                  session={session}
+                  file={selectedFile}
+                  revision={revision}
+                  theme={resolvedTheme}
+                  value={editorContent}
+                  onChange={onEditorChange}
+                  onCommandK={onCommandK}
+                  onFileUpdate={onFileUpdate}
+                  files={files}
+                  editorRef={editorRef}
+                />
+              )
+            )}
+          </div>
         </div>
       </div>
     </div>
