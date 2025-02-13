@@ -724,6 +724,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
                 onCommandK={openCommandMenu}
                 onFileUpdate={handleFileUpdate}
                 editorRef={editorRef}
+                workspaceId={workspaceId}
               />
             </div>
           );

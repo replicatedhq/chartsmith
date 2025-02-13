@@ -7,6 +7,8 @@ import { EditorView } from "../../../hooks/useEditorView";
 import { WorkspaceFile, Chart, RenderedFile, RenderUpdate } from "@/lib/types/workspace";
 import { Session } from "@/lib/types/session";
 import type { editor } from "monaco-editor";
+import { Button } from "@/components/ui/Button";
+import { createChatMessageAction } from "@/lib/workspace/actions/create-chat-message";
 
 interface WorkspaceContainerProps {
   session: Session;
@@ -26,6 +28,7 @@ interface WorkspaceContainerProps {
   onFileUpdate?: (file: WorkspaceFile) => void;
   renderUpdates?: RenderUpdate[];
   editorRef?: React.MutableRefObject<editor.IStandaloneCodeEditor | null>;
+  workspaceId: string;
 }
 
 export function WorkspaceContainer({
@@ -46,6 +49,7 @@ export function WorkspaceContainer({
   onFileUpdate,
   renderUpdates = [],
   editorRef,
+  workspaceId
 }: WorkspaceContainerProps) {
   const { resolvedTheme } = useTheme();
 
@@ -95,8 +99,21 @@ export function WorkspaceContainer({
           </div>
           <div className="flex-1 overflow-auto">
             {view === "rendered" && selectedFile && !renderedFiles.find(rf => rf.filePath === selectedFile.filePath) ? (
-              <div className="flex items-center justify-center h-full text-sm text-gray-500">
-                This file was not included in the rendered output
+              <div className="flex flex-col items-center justify-center h-full text-sm text-gray-500 space-y-2">
+                <div>This file was not included in the rendered output</div>
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={async () => {
+                    const message = await createChatMessageAction(session, workspaceId, `Why was the file ${selectedFile.filePath} not included in the rendered output?`);
+                    if (message && onFileUpdate) {
+                      onFileUpdate(selectedFile);
+                    }
+                  }}
+                  className="bg-primary hover:bg-primary/90 text-white"
+                >
+                  Why was this file not included?
+                </Button>
               </div>
             ) : (
               selectedFile && (
