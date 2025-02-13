@@ -442,17 +442,15 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     });
 
     const sub = centrifuge.newSubscription(channel, {
-      data: {},
-      // Add subscription error handling
-      status: {
-        error: (ctx) => {
-          console.error("Subscription error:", ctx);
-        }
-      }
+      data: {}
     });
 
     sub.on("publication", (message) => {
       handlersRef.current.onMessage?.(message);
+    });
+
+    sub.on("error", (ctx) => {
+      console.error("Subscription error:", ctx);
     });
 
     sub.subscribe();
