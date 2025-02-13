@@ -60,9 +60,15 @@ func handleRenderWorkspaceNotification(ctx context.Context, payload string) erro
 
 	wg.Wait()
 
+	// now we mark the top render as completed
 	logger.Info("Completed render workspace",
 		zap.String("workspaceID", renderedWorkspace.WorkspaceID),
 	)
+
+	if err := workspace.FinishRendered(ctx, renderedWorkspace.ID); err != nil {
+		return fmt.Errorf("failed to finish rendered workspace: %w", err)
+	}
+
 	return nil
 }
 
@@ -103,7 +109,8 @@ func renderChart(ctx context.Context, renderedChart *workspacetypes.RenderedChar
 	go func() {
 		err := helmutils.RenderChartExec(chart.Files, "", renderChannels)
 		if err != nil {
-			logger.Error(fmt.Errorf("failed to render chart: %w", err))
+			done <- err
+			return
 		}
 
 		done <- nil
@@ -122,11 +129,13 @@ func renderChart(ctx context.Context, renderedChart *workspacetypes.RenderedChar
 			logger.Debug("Received render done",
 				zap.String("chartID", renderedChart.ChartID),
 			)
+
+			isSuccess := true
 			if err != nil {
-				return fmt.Errorf("failed to render chart: %w", err)
+				isSuccess = false
 			}
 
-			if err := workspace.FinishRenderedChart(ctx, renderedChart.ID, renderedChart.DepupdateCommand, renderedChart.DepupdateStdout, renderedChart.DepupdateStderr, renderedChart.HelmTemplateCommand, renderedChart.HelmTemplateStdout, renderedChart.HelmTemplateStderr); err != nil {
+			if err := workspace.FinishRenderedChart(ctx, renderedChart.ID, renderedChart.DepupdateCommand, renderedChart.DepupdateStdout, renderedChart.DepupdateStderr, renderedChart.HelmTemplateCommand, renderedChart.HelmTemplateStdout, renderedChart.HelmTemplateStderr, isSuccess); err != nil {
 				return fmt.Errorf("failed to finish rendered chart: %w", err)
 			}
 
@@ -179,8 +188,6 @@ func renderChart(ctx context.Context, renderedChart *workspacetypes.RenderedChar
 
 		case depUpdateStdout := <-renderChannels.DepUpdateStdout:
 			renderedChart.DepupdateStdout += depUpdateStdout
-
-			fmt.Printf("depUpdateStdout: %s\n", renderedChart.DepupdateStdout)
 
 			e := realtimetypes.RenderStreamEvent{
 				WorkspaceID:         w.ID,

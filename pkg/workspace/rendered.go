@@ -11,6 +11,19 @@ import (
 	"github.com/tuvistavie/securerandom"
 )
 
+func FinishRendered(ctx context.Context, id string) error {
+	conn := persistence.MustGetPooledPostgresSession()
+	defer conn.Release()
+
+	query := `UPDATE workspace_rendered SET completed_at = NOW() WHERE id = $1`
+	_, err := conn.Exec(ctx, query, id)
+	if err != nil {
+		return fmt.Errorf("failed to finish rendered: %w", err)
+	}
+
+	return nil
+}
+
 func GetRendered(ctx context.Context, id string) (*types.Rendered, error) {
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
@@ -63,16 +76,16 @@ func GetRendered(ctx context.Context, id string) (*types.Rendered, error) {
 	return &rendered, nil
 }
 
-func FinishRenderedChart(ctx context.Context, renderedChartID string, depupdateCommand string, depupdateStdout string, depupdateStderr string, helmTemplateCommand string, helmTemplateStdout string, helmTemplateStderr string) error {
+func FinishRenderedChart(ctx context.Context, renderedChartID string, depupdateCommand string, depupdateStdout string, depupdateStderr string, helmTemplateCommand string, helmTemplateStdout string, helmTemplateStderr string, isSuccess bool) error {
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
 
 	query := `
 		UPDATE workspace_rendered_chart
-		SET dep_update_command = $2, dep_update_stdout = $3, dep_update_stderr = $4, helm_template_command = $5, helm_template_stdout = $6, helm_template_stderr = $7, completed_at = now()
+		SET dep_update_command = $2, dep_update_stdout = $3, dep_update_stderr = $4, helm_template_command = $5, helm_template_stdout = $6, helm_template_stderr = $7, completed_at = now(), is_success = $8
 		WHERE id = $1`
 
-	_, err := conn.Exec(ctx, query, renderedChartID, depupdateCommand, depupdateStdout, depupdateStderr, helmTemplateCommand, helmTemplateStdout, helmTemplateStderr)
+	_, err := conn.Exec(ctx, query, renderedChartID, depupdateCommand, depupdateStdout, depupdateStderr, helmTemplateCommand, helmTemplateStdout, helmTemplateStderr, isSuccess)
 	if err != nil {
 		return fmt.Errorf("failed to update rendered chart: %w", err)
 	}

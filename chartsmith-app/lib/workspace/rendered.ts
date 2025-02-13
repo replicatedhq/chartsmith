@@ -1,8 +1,49 @@
 import { getDB } from "../data/db";
 import { getParam } from "../data/param";
+import { Session } from "../types/session";
 import { RenderedChart, RenderedFile, RenderedWorkspace } from "../types/workspace";
 import { logger } from "../utils/logger";
 import { getWorkspace } from "./workspace";
+
+export async function listWorkspaceRenders(session: Session, workspaceId: string): Promise<RenderedWorkspace[]> {
+  try {
+    const db = getDB(await getParam("DB_URI"));
+    const query = `
+      SELECT
+        id,
+        workspace_id,
+        revision_number,
+        created_at,
+        completed_at
+      FROM workspace_rendered
+      WHERE workspace_id = $1
+    `;
+
+    const result = await db.query(query, [workspaceId]);
+    const renderedWorkspaces: RenderedWorkspace[] = [];
+
+    for (const row of result.rows) {
+      const renderedWorkspace: RenderedWorkspace = {
+        id: row.id,
+        workspaceId: row.workspace_id,
+        revisionNumber: row.revision_number,
+        createdAt: row.created_at,
+        completedAt: row.completed_at,
+        charts: [],
+      };
+
+      const renderedCharts = await listRenderedChartsForWorkspaceRender(row.id, row.workspace_id, row.revision_number);
+      renderedWorkspace.charts = renderedCharts;
+
+      renderedWorkspaces.push(renderedWorkspace);
+    }
+
+    return renderedWorkspaces;
+  } catch (err) {
+    logger.error("Failed to list workspace renders", { err });
+    throw err;
+  }
+}
 
 export async function getRenderedWorkspace(renderId: string): Promise<RenderedWorkspace> {
   try {
@@ -28,7 +69,7 @@ export async function getRenderedWorkspace(renderId: string): Promise<RenderedWo
       charts: [],
     };
 
-    const renderedCharts = await listRenderedChartsForWorkspaceRender(renderId);
+    const renderedCharts = await listRenderedChartsForWorkspaceRender(renderId, renderedWorkspace.workspaceId, renderedWorkspace.revisionNumber);
     renderedWorkspace.charts = renderedCharts;
 
     return renderedWorkspace;
@@ -38,7 +79,7 @@ export async function getRenderedWorkspace(renderId: string): Promise<RenderedWo
   }
 }
 
-export async function listRenderedChartsForWorkspaceRender(renderId: string): Promise<RenderedChart[]> {
+export async function listRenderedChartsForWorkspaceRender(renderId: string, workspaceId: string, revisionNumber: number): Promise<RenderedChart[]> {
   try {
     const db = getDB(await getParam("DB_URI"));
     const query = `
@@ -76,7 +117,11 @@ export async function listRenderedChartsForWorkspaceRender(renderId: string): Pr
         helmTemplateStderr: row.helm_template_stderr,
         createdAt: row.created_at,
         completedAt: row.completed_at,
+        renderedFiles: [],
       };
+
+      const renderedFiles = await listRenderedFilesForChartRender(renderedChart.chartId, workspaceId, revisionNumber);
+      renderedChart.renderedFiles = renderedFiles;
 
       renderedCharts.push(renderedChart);
     }
@@ -84,6 +129,45 @@ export async function listRenderedChartsForWorkspaceRender(renderId: string): Pr
     return renderedCharts;
   } catch (err) {
     logger.error("Failed to list rendered charts for workspace render", { err });
+    throw err;
+  }
+}
+
+export async function listRenderedFilesForChartRender(chartId: string, workspaceId: string, revisionNumber: number): Promise<RenderedFile[]> {
+  try {
+    logger.debug("Listing rendered files for chart render", { chartId, workspaceId, revisionNumber });
+    const db = getDB(await getParam("DB_URI"));
+
+    const query = `
+      SELECT
+        workspace_rendered_file.file_id,
+        workspace_rendered_file.workspace_id,
+        workspace_rendered_file.revision_number,
+        workspace_file.file_path,
+        workspace_rendered_file.content
+      FROM workspace_rendered_file
+      INNER JOIN workspace_file ON workspace_rendered_file.file_id = workspace_file.id
+      INNER JOIN workspace_chart ON workspace_file.chart_id = workspace_chart.id
+      WHERE workspace_chart.id = $1
+        AND workspace_rendered_file.workspace_id = $2
+        AND workspace_rendered_file.revision_number = $3
+    `;
+
+    const result = await db.query(query, [chartId, workspaceId, revisionNumber]);
+    const renderedFiles: RenderedFile[] = [];
+    for (const row of result.rows) {
+      const renderedFile: RenderedFile = {
+        id: row.id,
+        filePath: row.file_path,
+        renderedContent: row.content,
+      };
+
+      renderedFiles.push(renderedFile);
+    }
+
+    return renderedFiles;
+  } catch (err) {
+    logger.error("Failed to list rendered files for chart render", { err });
     throw err;
   }
 }

@@ -4,7 +4,7 @@ import { ChatPanel } from "./ChatPanel";
 import { useTheme } from "../../../contexts/ThemeContext";
 import { Message } from "../types";
 import { Session } from "@/lib/types/session";
-import { Plan, Workspace } from "@/lib/types/workspace";
+import { Plan, RenderedWorkspace, Workspace } from "@/lib/types/workspace";
 import { PlanChatMessage } from "./PlanChatMessage";
 import { ChatMessage } from "./ChatMessage";
 import { Card } from "@/components/ui/Card";
@@ -18,6 +18,7 @@ interface ChatContainerProps {
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   workspace?: Workspace;
   setWorkspace?: React.Dispatch<React.SetStateAction<Workspace>>;
+  workspaceRenders: RenderedWorkspace[];
 }
 
 function createMessagePlanMap(currentPlans: Plan[], messages: Message[]): Map<Message[], Plan> {
@@ -54,7 +55,7 @@ function createMessagePlanMap(currentPlans: Plan[], messages: Message[]): Map<Me
   return userMessagePlanMap;
 }
 
-export function ChatContainer({ messages, onSendMessage, onApplyChanges, session, workspaceId, setMessages, workspace, setWorkspace }: ChatContainerProps) {
+export function ChatContainer({ messages, onSendMessage, onApplyChanges, session, workspaceId, setMessages, workspace, setWorkspace, workspaceRenders }: ChatContainerProps) {
   const { theme } = useTheme();
   const [chatInput, setChatInput] = useState("");
 
@@ -172,6 +173,7 @@ export function ChatContainer({ messages, onSendMessage, onApplyChanges, session
                   session={session}
                   workspaceId={workspaceId}
                   setMessages={setMessages}
+                  workspaceRender={workspaceRenders.find(render => render.id === item.messages[0].responseRenderId)}
                 />
               )}
             </div>

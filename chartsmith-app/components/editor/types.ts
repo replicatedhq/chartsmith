@@ -46,15 +46,6 @@ export interface Message {
     label: string;
   }>;
   responseRenderId?: string;
-  renderStreamData?: {
-    renderChartId: string;
-    depUpdateCommand?: string;
-    depUpdateStdout?: string;
-    depUpdateStderr?: string;
-    helmTemplateCommand?: string;
-    helmTemplateStdout?: string;
-    helmTemplateStderr?: string;
-  };
 }
 
 // Interface for raw message from server before normalization
@@ -116,7 +107,7 @@ export interface CentrifugoMessageData {
   eventType?: string;
   renderedFile?: RenderedFile;
   renderChartId?: string;
-  renderWorkspaceId?: string;  // Add this field
+  renderWorkspaceId?: string;
   depUpdateCommand?: string;
   depUpdateStdout?: string;
   depUpdateStderr?: string;
@@ -193,3 +184,4 @@ export interface RenderStreamEvent {
   helmTemplateStdout?: string;
   helmTemplateStderr?: string;
 }
+

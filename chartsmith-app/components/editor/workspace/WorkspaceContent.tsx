@@ -9,7 +9,7 @@ import { usePathname } from "next/navigation";
 import { useSession } from "@/app/hooks/useSession";
 import { getWorkspaceMessagesAction } from "@/lib/workspace/actions/get-workspace-messages";
 import { Message, CentrifugoMessageData, RawPlan, RawWorkspace, RawChatMessage, RawRevision } from "@/components/editor/types";
-import { Plan, Workspace, WorkspaceFile, RenderedFile } from "@/lib/types/workspace";
+import { Plan, Workspace, WorkspaceFile, RenderedFile, RenderedWorkspace, RenderedChart } from "@/lib/types/workspace";
 import { getCentrifugoTokenAction } from "@/lib/centrifugo/actions/get-centrifugo-token-action";
 import { Centrifuge } from "centrifuge";
 import { createRevisionAction } from "@/lib/workspace/actions/create-revision";
@@ -24,6 +24,8 @@ import { ChatContainer } from "../chat/ChatContainer";
 import { RenderUpdate } from "@/lib/types/workspace";
 import type { editor } from "monaco-editor";
 import { getWorkspaceRenderedFilesAction } from "@/lib/workspace/get-workspace-rendered-files";
+import { listWorkspaceRendersAction } from "@/lib/workspace/actions/list-workspace-renders";
+import { getWorkspaceRenderAction } from "@/lib/workspace/actions/get-workspace-render";
 
 interface WorkspaceContentProps {
   initialWorkspace: Workspace;
@@ -47,7 +49,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
   const [selectedFile, setSelectedFile] = useState<WorkspaceFile | undefined>();
   const [editorContent, setEditorContent] = useState<string>("");
   const [centrifugoToken, setCentrifugoToken] = useState<string | null>(null);
-  const [renderUpdates, setRenderUpdates] = useState<RenderUpdate[]>([]);
+  const [workspaceRenders, setWorkspaceRenders] = useState<RenderedWorkspace[]>([]);
   const [renderedFiles, setRenderedFiles] = useState<RenderedFile[]>([]);
 
   const centrifugeRef = useRef<Centrifuge | null>(null);
@@ -101,11 +103,22 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
 
     getWorkspaceRenderedFilesAction(session, workspace.id)
       .then(files => {
-        console.log("Rendered files", { files });
         setRenderedFiles(files);
       })
       .catch(err => {
         logger.error("Failed to load rendered charts", { err });
+      });
+  }, [session, workspace?.id, workspace]);
+
+  useEffect(() => {
+    if (!session || !workspace) return;
+
+    listWorkspaceRendersAction(session, workspace.id)
+      .then(renders => {
+        setWorkspaceRenders(renders);
+      })
+      .catch(err => {
+        logger.error("Failed to load rendered workspaces", { err });
       });
   }, [session, workspace?.id, workspace]);
 
@@ -182,6 +195,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     }
 
     const chatMessage = data.chatMessage;
+
     setMessages(prev => {
       const newMessages = [...prev];
       const index = newMessages.findIndex(m => m.id === chatMessage.id);
@@ -203,6 +217,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
         isIntentComplete: chatMessage.isIntentComplete,
         intent: chatMessage.intent,
         followupActions: chatMessage.followupActions,
+        responseRenderId: chatMessage.responseRenderId,
       };
 
       if (index >= 0) {
@@ -292,62 +307,58 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
 
   const handleRenderUpdated = useCallback((data: CentrifugoMessageData) => {
     if (!data.renderedFile) {
-      logger.debug("Received render-updated event without renderedFile", { data });
       return;
     }
 
     if (!data.renderedFile.id) {
-      logger.warn("Received renderedFile without ID", { renderedFile: data.renderedFile });
       return;
     }
 
-    setRenderedFiles(prev => {
-      // Try to find existing file with same ID
-      const existingIndex = prev.findIndex(f => f.id === data.renderedFile!.id);
+    // update the workspaceRender with the new file
 
-      if (existingIndex >= 0) {
-        // Update existing file
-        const updated = [...prev];
-        updated[existingIndex] = data.renderedFile!;
-        return updated;
-      } else {
-        // Insert new file
-        return [...prev, data.renderedFile!];
-      }
-    });
 
     // If this is the currently selected file in rendered view, update editor content
-    if (view === 'rendered' && selectedFile && selectedFile.filePath === data.renderedFile.filePath) {
-      setEditorContent(data.renderedFile.renderedContent);
-    }
+    // if (view === 'rendered' && selectedFile && selectedFile.filePath === data.renderedFile.filePath) {
+    //   setEditorContent(data.renderedFile.renderedContent);
+    // }
   }, [view, selectedFile]);
 
-  const handleRenderStreamEvent = useCallback((data: CentrifugoMessageData) => {
+  const handleRenderStreamEvent = useCallback(async (data: CentrifugoMessageData) => {
+    if (!session) return;
     if (data.eventType !== 'render-stream' || !data.renderChartId || !data.renderWorkspaceId) {
       return;
     }
 
-    // Update any message that has this renderWorkspaceId as its responseRenderId
-    setMessages(prev => {
-      return prev.map(message => {
-        if (message.responseRenderId === data.renderWorkspaceId) {
+    let renders = [...workspaceRenders];
+
+    // if the message has a renderWorkspaceId that we don't know, fetch and add it
+    if (!renders.find(render => render.id === data.renderWorkspaceId)) {
+      const newWorkspaceRender = await getWorkspaceRenderAction(session, data.renderWorkspaceId);
+      renders = [...renders, newWorkspaceRender];
+    }
+
+    // Now update the renders with the new stream data
+    setWorkspaceRenders(renders.map(render => {
+      if (render.id !== data.renderWorkspaceId) return render;
+
+      return {
+        ...render,
+        charts: render.charts.map(chart => {
+          if (chart.id !== data.renderChartId) return chart;
+
           return {
-            ...message,
-            renderStreamData: {
-              renderChartId: data.renderChartId || '',
-              depUpdateCommand: data.depUpdateCommand || '',
-              depUpdateStdout: data.depUpdateStdout || '',
-              depUpdateStderr: data.depUpdateStderr || '',
-              helmTemplateCommand: data.helmTemplateCommand || '',
-              helmTemplateStdout: data.helmTemplateStdout || '',
-              helmTemplateStderr: data.helmTemplateStderr || '',
-            }
+            ...chart,
+            helmTemplateCommand: data.helmTemplateCommand,
+            helmTemplateStderr: data.helmTemplateStderr,
+            helmTemplateStdout: data.helmTemplateStdout,
+            depUpdateCommand: data.depUpdateCommand,
+            depUpdateStderr: data.depUpdateStderr,
+            depUpdateStdout: data.depUpdateStdout,
           };
-        }
-        return message;
-      });
-    });
-  }, []);
+        })
+      };
+    }));
+  }, [session, workspaceRenders]);
 
   const handleCentrifugoMessage = useCallback((message: { data: CentrifugoMessageData }) => {
     const eventType = message.data.eventType;
@@ -652,7 +663,6 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
   if (!session) return null;
 
   const isPlanOnlyView = !workspace?.currentRevisionNumber && !workspace?.incompleteRevisionNumber;
-
   return (
     <EditorLayout>
       <div className="flex w-full overflow-hidden relative">
@@ -674,6 +684,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
               ) : (
                 <ChatContainer
                   messages={messages}
+                  workspaceRenders={workspaceRenders}
                   onSendMessage={handleSendMessage}
                   onApplyChanges={handleApplyChanges}
                   session={session}
@@ -712,7 +723,6 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
                 isFileTreeVisible={isFileTreeVisible}
                 onCommandK={openCommandMenu}
                 onFileUpdate={handleFileUpdate}
-                renderUpdates={renderUpdates}
                 editorRef={editorRef}
               />
             </div>
