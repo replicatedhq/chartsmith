@@ -93,6 +93,7 @@ export async function listRenderedFilesForWorkspace(
   revisionNumber?: number
 ): Promise<RenderedFile[]> {
   try {
+    logger.debug("Listing rendered files for workspace", { workspaceId, revisionNumber });
     const workspace = await getWorkspace(workspaceId);
 
     if (!revisionNumber) {

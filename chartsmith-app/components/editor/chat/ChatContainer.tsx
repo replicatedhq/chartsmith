@@ -138,7 +138,7 @@ export function ChatContainer({ messages, onSendMessage, onApplyChanges, session
   return (
     <div className={`h-[calc(100vh-3.5rem)] border-r flex flex-col min-h-0 overflow-hidden transition-all duration-300 ease-in-out w-full relative ${theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"}`}>
       <div className="flex-1 overflow-y-auto">
-        <div className="pb-16">
+        <div className="pb-32">
           {renderItems.map((item, index) => (
             <div key={item.type === 'plan' ? item.plan!.id : item.messages[0].id}>
               {item.type === 'plan' ? (

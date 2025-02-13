@@ -21,7 +21,7 @@ type RenderChannels struct {
 	Done chan error
 }
 
-func RenderChartExec(files []types.File, valuesYAML string, helmVersion string, renderChannels RenderChannels) error {
+func RenderChartExec(files []types.File, valuesYAML string, renderChannels RenderChannels) error {
 	// in order to avoid the special feature of helm where it detects the kubeconfig and uses that
 	// when templating the chart, we put a completely fake kubeconfig in the env for this command
 	fakeKubeconfig := `apiVersion: v1
@@ -60,6 +60,8 @@ clusters:
 	if err != nil {
 		return fmt.Errorf("failed to run helm template: %w", err)
 	}
+
+	renderChannels.Done <- nil
 
 	return nil
 }

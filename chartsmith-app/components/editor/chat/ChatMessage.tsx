@@ -171,7 +171,7 @@ export function ChatMessage({
           <div className={`p-3 rounded-2xl ${theme === "dark" ? "bg-dark-border/40" : "bg-gray-100"} rounded-tl-sm w-full`}>
             <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"} mb-1`}>ChartSmith</div>
             <div className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} ${message.isIgnored ? "opacity-50 line-through" : ""} text-[12px] markdown-content`}>
-              {message.responseRenderId ? (
+              {message.responseRenderId || message.renderStreamData ? (
                 <div className={`mt-2 rounded-md overflow-hidden font-mono ${theme === "dark" ? "bg-[#1e1e1e]" : "bg-[#282a36]"}`}>
                   <div className={`flex items-center px-3 py-1.5 ${theme === "dark" ? "bg-[#323232]" : "bg-[#44475a]"}`}>
                     <div className="flex gap-1.5">
@@ -184,27 +184,41 @@ export function ChatMessage({
                     </div>
                   </div>
                   <div className={`p-3 text-xs ${theme === "dark" ? "text-gray-300" : "text-gray-100"}`}>
-                    {depUpdateCommand && (
-                      <div className="flex items-center gap-2">
-                        <span>% </span>
-                        <span>{depUpdateCommand}</span>
-                      </div>
-                    )}
-                    {depUpdateStderr ? (
-                      <div className="mt-2 text-red-400 whitespace-pre-wrap">
-                        {depUpdateStderr}
-                      </div>
-                    ) : depUpdateStdout ? (
-                      <div className="mt-2 whitespace-pre-wrap">
-                        {depUpdateStdout}
-                        <div className="mt-1 flex items-center">
-                          <span className="w-2 h-4 bg-gray-300 animate-pulse"></span>
-                        </div>
-                      </div>
-                    ) : (
+                    {!depUpdateCommand && !helmTemplateCommand ? (
                       <div className="mt-1 flex items-center">
                         <span className="w-2 h-4 bg-gray-300 animate-pulse"></span>
                       </div>
+                    ) : (
+                      <>
+                        {depUpdateCommand && (
+                          <div className="flex gap-2">
+                            <span className="flex-shrink-0 text-primary/70">% </span>
+                            <span className="text-primary/70">{depUpdateCommand}</span>
+                          </div>
+                        )}
+                        {depUpdateStderr ? (
+                          <div className="mt-2 text-red-400 whitespace-pre-wrap">
+                            {depUpdateStderr}
+                          </div>
+                        ) : depUpdateStdout ? (
+                          <div className="mt-2 whitespace-pre-wrap">
+                            {depUpdateStdout}
+                            <div className="mt-1 flex items-center">
+                              <span className="w-2 h-4 bg-gray-300 animate-pulse"></span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="mt-1 flex items-center">
+                            <span className="w-2 h-4 bg-gray-300 animate-pulse"></span>
+                          </div>
+                        )}
+                        {helmTemplateCommand && (
+                          <div className="flex gap-2 mt-4">
+                            <span className="flex-shrink-0 text-primary/70">% </span>
+                            <span className="text-primary/70 whitespace-pre-wrap">{helmTemplateCommand}</span>
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>

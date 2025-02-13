@@ -46,11 +46,23 @@ func handleRenderWorkspaceNotification(ctx context.Context, payload string) erro
 	wg := sync.WaitGroup{}
 	for _, chart := range renderedWorkspace.Charts {
 		wg.Add(1)
-		go renderChart(ctx, &chart, renderedWorkspace, w)
+		go func(chart workspacetypes.RenderedChart) {
+			defer wg.Done()
+			if err := renderChart(ctx, &chart, renderedWorkspace, w); err != nil {
+				logger.Error(err)
+			} else {
+				logger.Info("Completed render chart",
+					zap.String("chartID", chart.ChartID),
+				)
+			}
+		}(chart)
 	}
 
 	wg.Wait()
 
+	logger.Info("Completed render workspace",
+		zap.String("workspaceID", renderedWorkspace.WorkspaceID),
+	)
 	return nil
 }
 
@@ -65,15 +77,6 @@ func renderChart(ctx context.Context, renderedChart *workspacetypes.RenderedChar
 
 	if chart == nil {
 		return fmt.Errorf("chart not found")
-	}
-
-	// Get values.yaml content if it exists
-	var valuesYAML string
-	for _, file := range chart.Files {
-		if file.FilePath == "values.yaml" {
-			valuesYAML = file.Content
-			break
-		}
 	}
 
 	userIDs, err := workspace.ListUserIDsForWorkspace(ctx, w.ID)
@@ -98,7 +101,7 @@ func renderChart(ctx context.Context, renderedChart *workspacetypes.RenderedChar
 
 	done := make(chan error)
 	go func() {
-		err := helmutils.RenderChartExec(chart.Files, valuesYAML, "", renderChannels)
+		err := helmutils.RenderChartExec(chart.Files, "", renderChannels)
 		if err != nil {
 			logger.Error(fmt.Errorf("failed to render chart: %w", err))
 		}
@@ -116,6 +119,9 @@ func renderChart(ctx context.Context, renderedChart *workspacetypes.RenderedChar
 	for {
 		select {
 		case err := <-renderChannels.Done:
+			logger.Debug("Received render done",
+				zap.String("chartID", renderedChart.ChartID),
+			)
 			if err != nil {
 				return fmt.Errorf("failed to render chart: %w", err)
 			}
@@ -141,7 +147,7 @@ func renderChart(ctx context.Context, renderedChart *workspacetypes.RenderedChar
 					}
 				}
 
-				if err := workspace.SetRenderedFileContents(ctx, w.ID, renderedChart.RevisionNumber, file.FilePath, file.RenderedContent); err != nil {
+				if err := workspace.SetRenderedFileContents(ctx, w.ID, renderedWorkspace.RevisionNumber, file.FilePath, file.RenderedContent); err != nil {
 					return fmt.Errorf("failed to set rendered file contents: %w", err)
 				}
 			}
@@ -248,7 +254,7 @@ func renderChart(ctx context.Context, renderedChart *workspacetypes.RenderedChar
 			// we can't keep up with the cli if we parse every line...  we will catch the tail here
 			// in the done handler
 			lineCount := strings.Count(renderedChart.HelmTemplateStdout, "\n")
-			if lineCount%15 != 0 && lineCount > 10 {
+			if lineCount%30 != 0 {
 				continue
 			}
 
@@ -271,7 +277,7 @@ func renderChart(ctx context.Context, renderedChart *workspacetypes.RenderedChar
 					}
 				}
 
-				if err := workspace.SetRenderedFileContents(ctx, w.ID, renderedChart.RevisionNumber, file.FilePath, file.RenderedContent); err != nil {
+				if err := workspace.SetRenderedFileContents(ctx, w.ID, renderedWorkspace.RevisionNumber, file.FilePath, file.RenderedContent); err != nil {
 					return fmt.Errorf("failed to set rendered file contents: %w", err)
 				}
 			}
@@ -359,7 +365,7 @@ func parseRenderedFiles(ctx context.Context, stdout string, chartName string, re
 				}
 			}
 
-			logger.Debug("new rendered filefile", zap.String("path", path), zap.String("id", renderedFile.ID))
+			// logger.Debug("new rendered filefile", zap.String("path", path), zap.String("id", renderedFile.ID))
 
 			*renderedFiles = append(*renderedFiles, renderedFile)
 			updatedFiles = append(updatedFiles, renderedFile)

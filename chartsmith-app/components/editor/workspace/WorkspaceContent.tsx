@@ -31,6 +31,8 @@ interface WorkspaceContentProps {
   onOpenCommandMenu?: () => void;
 }
 
+const RECONNECT_DELAY_MS = 1000;
+
 export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceContentProps) {
   const { theme } = useTheme();
   const { session } = useSession();
@@ -45,14 +47,8 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
   const [selectedFile, setSelectedFile] = useState<WorkspaceFile | undefined>();
   const [editorContent, setEditorContent] = useState<string>("");
   const [centrifugoToken, setCentrifugoToken] = useState<string | null>(null);
-  const [chatInput, setChatInput] = useState("");
   const [renderUpdates, setRenderUpdates] = useState<RenderUpdate[]>([]);
-  const [selectedRenderUpdate, setSelectedRenderUpdate] = useState<RenderUpdate | null>(null);
   const [renderedFiles, setRenderedFiles] = useState<RenderedFile[]>([]);
-  const [selectedChartType, setSelectedChartType] = useState<{
-    chartId: string;
-    type: 'stdout' | 'stderr' | 'manifests';
-  } | null>(null);
 
   const centrifugeRef = useRef<Centrifuge | null>(null);
   const handlersRef = useRef<{
@@ -62,6 +58,8 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const prevWorkspaceRef = useRef<Workspace | null>(null);
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
+
+  const [isReconnecting, setIsReconnecting] = useState(false);
 
   const handleFileSelect = useCallback((file: WorkspaceFile) => {
     setSelectedFile({
@@ -103,6 +101,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
 
     getWorkspaceRenderedFilesAction(session, workspace.id)
       .then(files => {
+        console.log("Rendered files", { files });
         setRenderedFiles(files);
       })
       .catch(err => {
@@ -385,11 +384,6 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
       return;
     }
 
-    if (centrifugeRef.current) {
-      console.log('Centrifugo already connected');
-      return;
-    }
-
     const channel = `${workspace.id}#${session.user.id}`;
 
     const centrifuge = new Centrifuge(process.env.NEXT_PUBLIC_CENTRIFUGO_ADDRESS!, {
@@ -401,22 +395,60 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
 
     centrifuge.on("connected", () => {
       console.log("Centrifugo connected");
+      setIsReconnecting(false);
     });
 
-    centrifuge.on("disconnected", (ctx) => {
+    centrifuge.on("disconnected", async (ctx) => {
       console.log("Centrifugo disconnected", { ctx });
+      setIsReconnecting(true);
+
       if (session) {
-        getCentrifugoTokenAction(session).then(newToken => {
+        try {
+          const newToken = await getCentrifugoTokenAction(session);
           if (centrifugeRef.current && newToken) {
             centrifugeRef.current.setToken(newToken);
-            centrifugeRef.current.connect();
+            setTimeout(() => {
+              centrifugeRef.current?.connect();
+            }, RECONNECT_DELAY_MS);
           }
-        });
+        } catch (err) {
+          console.error("Failed to refresh Centrifugo token:", err);
+          // Optionally show a user-friendly error message
+        }
+      }
+    });
+
+    centrifuge.on("error", (ctx) => {
+      console.error("Centrifugo error:", ctx);
+
+      if (ctx.error.code === 109) { // Unauthorized error code
+        setIsReconnecting(true);
+
+        if (session) {
+          getCentrifugoTokenAction(session)
+            .then(newToken => {
+              if (centrifugeRef.current && newToken) {
+                centrifugeRef.current.setToken(newToken);
+                setTimeout(() => {
+                  centrifugeRef.current?.connect();
+                }, RECONNECT_DELAY_MS);
+              }
+            })
+            .catch(err => {
+              console.error("Failed to refresh Centrifugo token after error:", err);
+            });
+        }
       }
     });
 
     const sub = centrifuge.newSubscription(channel, {
-      data: {}
+      data: {},
+      // Add subscription error handling
+      status: {
+        error: (ctx) => {
+          console.error("Subscription error:", ctx);
+        }
+      }
     });
 
     sub.on("publication", (message) => {
@@ -429,6 +461,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
       centrifuge.connect();
     } catch (err) {
       console.error("Error connecting to Centrifugo:", err);
+      setIsReconnecting(true);
     }
 
     return () => {
@@ -437,12 +470,13 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
           sub.unsubscribe();
           centrifugeRef.current.disconnect();
           centrifugeRef.current = null;
+          setIsReconnecting(false);
         }
       } catch (err) {
         console.error("Error during Centrifugo cleanup:", err);
       }
     };
-  }, [centrifugoToken, session, workspace?.id, handlersRef]);
+  }, [centrifugoToken, session, workspace?.id]);
 
   useEffect(() => {
     if (!followMode || !workspace) {

@@ -121,11 +121,10 @@ type Rendered struct {
 }
 
 type RenderedChart struct {
-	ID             string `json:"id"`
-	WorkspaceID    string `json:"-"`
-	RevisionNumber int    `json:"-"`
-	ChartID        string `json:"-"`
-	Name           string `json:"name"`
+	ID          string `json:"id"`
+	WorkspaceID string `json:"-"`
+	ChartID     string `json:"-"`
+	Name        string `json:"name"`
 
 	IsSuccess bool `json:"isSuccess"`
 
