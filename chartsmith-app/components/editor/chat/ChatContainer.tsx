@@ -25,7 +25,7 @@ function createMessagePlanMap(currentPlans: Plan[], messages: Message[]): Map<Me
   const userMessagePlanMap = new Map<Message[], Plan>();
   const messageMap = new Map(messages.map(message => [message.id, message]));
 
-  // Sort plans by their first message's createdAt time
+  // Process plans in chronological order
   const sortedPlans = [...currentPlans].sort((a, b) => {
     const aMessage = messages.find(m => m.id === a.chatMessageIds[0]);
     const bMessage = messages.find(m => m.id === b.chatMessageIds[0]);
@@ -34,9 +34,7 @@ function createMessagePlanMap(currentPlans: Plan[], messages: Message[]): Map<Me
     return aTime - bTime;
   });
 
-  // Process plans in chronological order
   for (const plan of sortedPlans) {
-    // Get all messages for this plan
     const planMessages = plan.chatMessageIds
       .map(id => messageMap.get(id))
       .filter((message): message is Message => message !== undefined)
@@ -46,7 +44,6 @@ function createMessagePlanMap(currentPlans: Plan[], messages: Message[]): Map<Me
         return aTime - bTime;
       });
 
-    // Only add to map if we found messages
     if (planMessages.length > 0) {
       userMessagePlanMap.set(planMessages, plan);
     }
@@ -120,7 +117,26 @@ export function ChatContainer({ messages, onSendMessage, onApplyChanges, session
 
     // Add non-plan messages
     sortedMessages.forEach(message => {
-      if (!workspace.currentPlans.some(plan => plan.chatMessageIds.includes(message.id))) {
+      // If message has responsePlanId, treat it as a plan even if we don't have the plan yet
+      if (message.responsePlanId) {
+        if (!workspace.currentPlans.some(plan => plan.id === message.responsePlanId)) {
+          renderItems.push({
+            type: 'plan',
+            messages: [message],
+            plan: {
+              id: message.responsePlanId,
+              status: 'getting ready',
+              chatMessageIds: [message.id],
+              workspaceId: message.workspaceId,
+              changes: [],
+              createdAt: message.createdAt,
+              description: "",
+              isInitialPlanning: true,
+              showLoadingAnimation: true
+            }
+          });
+        }
+      } else if (!workspace.currentPlans.some(plan => plan.chatMessageIds.includes(message.id))) {
         renderItems.push({
           type: 'message',
           messages: [message]
@@ -164,6 +180,7 @@ export function ChatContainer({ messages, onSendMessage, onApplyChanges, session
                     setMessages={setMessages}
                     setWorkspace={setWorkspace}
                     onSendMessage={onSendMessage}
+                    showChatInput={false}
                   />
                 </>
               ) : (

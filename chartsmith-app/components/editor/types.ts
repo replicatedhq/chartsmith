@@ -36,16 +36,15 @@ export interface Message {
   role?: string;
   createdAt?: Date;
   workspaceId?: string;
-  planId?: string;
   userId?: string;
   isOptimistic?: boolean;
   isIntentComplete?: boolean;
-  intent?: Intent;
   followupActions?: Array<{
     action: string;
     label: string;
   }>;
   responseRenderId?: string;
+  responsePlanId?: string;
 }
 
 // Interface for raw message from server before normalization
@@ -54,7 +53,6 @@ export interface RawMessage {
   prompt: string;
   response?: string;
   isIntentComplete: boolean;
-  intent?: RawIntent;
   followupActions?: RawFollowupAction[];
 }
 
@@ -62,17 +60,6 @@ export interface RawFollowupAction {
   action: string;
   label: string;
 }
-
-export interface RawIntent {
-  isConversational: boolean;
-  isPlan: boolean;
-  isOffTopic: boolean;
-  isChartDeveloper: boolean;
-  isChartOperator: boolean;
-  isProceed: boolean;
-}
-
-// Interface for Centrifugo message data
 
 // Raw workspace data from server before normalization
 export interface RawFile {
@@ -136,7 +123,6 @@ export interface RawChatMessage {
   isApplying?: boolean;
   isIgnored?: boolean;
   isIntentComplete?: boolean;
-  intent?: Intent;
   workspaceId: string;
   planId: string;
   userId: string;
@@ -156,8 +142,6 @@ export interface RawMessage {
   prompt: string;
   response?: string;
 }
-
-import { Intent, Scenario } from '@/lib/types/workspace';
 
 export interface RawPlan {
   id: string;

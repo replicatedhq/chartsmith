@@ -90,9 +90,9 @@ export function ChatMessage({
   }, []);
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2" data-testid="chat-message">
       {/* User Message */}
-      <div className="px-2 py-1">
+      <div className="px-2 py-1" data-testid="user-message">
         <div className={`p-3 rounded-2xl ${theme === "dark" ? "bg-primary/20" : "bg-primary/10"} rounded-tr-sm w-full`}>
           <div className="flex items-start gap-2">
             <Image
@@ -134,8 +134,8 @@ export function ChatMessage({
       </div>
 
       {/* Assistant Message */}
-      {(message.response || (message.isIntentComplete && !message.intent?.isPlan)) && (
-        <div className="px-2 py-1">
+      {(message.response || (message.isIntentComplete && !message.responsePlanId)) && (
+        <div className="px-2 py-1" data-testid="assistant-message">
           <div className={`p-3 rounded-2xl ${theme === "dark" ? "bg-dark-border/40" : "bg-gray-100"} rounded-tl-sm w-full`}>
             <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"} mb-1`}>ChartSmith</div>
             <div className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} ${message.isIgnored ? "opacity-50 line-through" : ""} text-[12px] markdown-content`}>
@@ -144,6 +144,7 @@ export function ChatMessage({
                   {workspaceRender?.charts.map((chart) => (
                     <Terminal
                       key={chart.id}
+                      data-testid="chart-terminal"
                       chart={chart}
                       depUpdateCommandStreamed={chart.depUpdateCommand}
                       depUpdateStderrStreamed={chart.depUpdateStderr}
@@ -158,7 +159,7 @@ export function ChatMessage({
                 </div>
               ) : message.response ? (
                 <ReactMarkdown>{message.response}</ReactMarkdown>
-              ) : (!message.intent?.isPlan && (
+              ) : (!message.responsePlanId && (
                 <div className="flex items-center gap-2">
                   <div className="flex-shrink-0 animate-spin rounded-full h-3 w-3 border border-t-transparent border-primary"></div>
                   <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>generating response...</div>
@@ -244,48 +245,7 @@ export function ChatMessage({
             )}
             {showChatInput && (
               <div className="mt-6 border-t border-dark-border/20">
-                {message.intent?.isPlan && (
-                  <div className="flex items-center justify-between pt-4 pb-3">
-                    <div className="flex gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setShowReportModal(true)}
-                        className={`p-2 ${theme === "dark" ? "hover:bg-dark-border/40 text-gray-400 hover:text-gray-200" : "hover:bg-gray-100 text-gray-500 hover:text-gray-700"}`}
-                      >
-                        <ThumbsUp className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={async () => {
-                          if (session && workspace?.currentPlans[0]) {
-                            await ignorePlanAction(session, workspaceId, "");
-                          }
-                        }}
-                        className={`p-2 ${theme === "dark" ? "hover:bg-dark-border/40 text-gray-400 hover:text-gray-200" : "hover:bg-gray-100 text-gray-500 hover:text-gray-700"}`}
-                      >
-                        <ThumbsDown className="h-4 w-4" />
-                      </Button>
-                    </div>
-                    <Button
-                      variant="default"
-                      size="sm"
-                      onClick={async () => {
-                        if (session && workspace?.currentPlans[0]) {
-                          const updatedWorkspace = await createRevisionAction(session, workspace.currentPlans[0].id);
-                          if (updatedWorkspace && setWorkspace) {
-                            setWorkspace(updatedWorkspace);
-                          }
-                        }
-                      }}
-                      className="min-w-[100px] bg-primary hover:bg-primary/80 text-white"
-                    >
-                      Proceed
-                    </Button>
-                  </div>
-                )}
-                <div className={`pt-4 ${message.intent?.isPlan ? "border-t border-dark-border/10" : ""}`}>
+                <div className={`pt-4 ${message.responsePlanId ? "border-t border-dark-border/10" : ""}`}>
                   <form onSubmit={handleSubmitChat} className="relative">
                     <textarea
                       ref={textareaRef}

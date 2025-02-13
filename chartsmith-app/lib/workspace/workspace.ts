@@ -227,8 +227,8 @@ export async function createPlan(userId: string, workspaceId: string, chatMessag
       newPlanChatIds.push(chatMessageId);
 
       await client.query(
-        `INSERT INTO workspace_plan (id, workspace_id, chat_message_ids, created_at, updated_at, version, status, is_complete)
-        VALUES ($1, $2, $3, now(), now(), 0, 'pending', false)`,
+        `INSERT INTO workspace_plan (id, workspace_id, chat_message_ids, created_at, updated_at, version, status, is_complete, proceed_at)
+        VALUES ($1, $2, $3, now(), now(), 0, 'pending', false, null)`,
         [planId, workspaceId, newPlanChatIds],
       );
 
@@ -260,11 +260,6 @@ export async function getChatMessage(chatMessageId: string): Promise<ChatMessage
         created_at,
         is_canceled,
         is_intent_complete,
-        is_intent_conversational,
-        is_intent_plan,
-        is_intent_off_topic,
-        is_intent_chart_developer,
-        is_intent_chart_operator,
         followup_actions,
         response_render_id,
         response_plan_id
@@ -279,14 +274,6 @@ export async function getChatMessage(chatMessageId: string): Promise<ChatMessage
       response: result.rows[0].response,
       createdAt: result.rows[0].created_at,
       isIntentComplete: result.rows[0].is_intent_complete,
-      intent: {
-        isConversational: result.rows[0].is_intent_conversational,
-        isPlan: result.rows[0].is_intent_plan,
-        isOffTopic: result.rows[0].is_intent_off_topic,
-        isChartDeveloper: result.rows[0].is_intent_chart_developer,
-        isChartOperator: result.rows[0].is_intent_chart_operator,
-        isProceed: result.rows[0].is_intent_proceed,
-      },
       isCanceled: result.rows[0].is_canceled,
       followupActions: result.rows[0].followup_actions,
       responseRenderId: result.rows[0].response_render_id,
@@ -303,7 +290,7 @@ export async function getChatMessage(chatMessageId: string): Promise<ChatMessage
 export async function getPlan(planId: string): Promise<Plan> {
   try {
     const db = getDB(await getParam("DB_URI"));
-    const result = await db.query(`SELECT id, description, status, workspace_id, chat_message_ids, created_at, is_complete FROM workspace_plan WHERE id = $1`, [planId]);
+    const result = await db.query(`SELECT id, description, status, workspace_id, chat_message_ids, created_at, is_complete, proceed_at FROM workspace_plan WHERE id = $1`, [planId]);
 
     const plan: Plan = {
       id: result.rows[0].id,
@@ -314,6 +301,7 @@ export async function getPlan(planId: string): Promise<Plan> {
       createdAt: result.rows[0].created_at,
       actionFiles: [],
       isComplete: result.rows[0].is_complete,
+      proceedAt: result.rows[0].proceed_at,
     };
 
     const actionFiles = await listActionFiles(planId);
@@ -621,7 +609,7 @@ async function listPlans(workspaceId: string): Promise<Plan[]> {
   try {
     const db = getDB(await getParam("DB_URI"));
     const result = await db.query(`SELECT
-      id, created_at, description, status, workspace_id, chat_message_ids, is_complete
+      id, created_at, description, status, workspace_id, chat_message_ids, is_complete, proceed_at
       FROM workspace_plan WHERE workspace_id = $1 ORDER BY created_at DESC`, [workspaceId]);
 
     const plans: Plan[] = [];
@@ -636,6 +624,7 @@ async function listPlans(workspaceId: string): Promise<Plan[]> {
         chatMessageIds: row.chat_message_ids,
         actionFiles: [],
         isComplete: row.is_complete,
+        proceedAt: row.proceed_at,
       });
     }
 
@@ -659,6 +648,8 @@ export async function createRevision(plan: Plan, userID: string): Promise<number
     // Start transaction
     await db.query('BEGIN');
 
+    // set the plan as proceed_at now
+    await db.query(`UPDATE workspace_plan SET proceed_at = now() WHERE id = $1`, [plan.id]);
 
     // Create new revision and get its number
     const revisionResult = await db.query(

@@ -76,6 +76,7 @@ type Plan struct {
 	Status         PlanStatus   `json:"status"`
 	ActionFiles    []ActionFile `json:"actionFiles"`
 	IsComplete     bool         `json:"-"`
+	ProceedAt      *time.Time   `json:"proceedAt"`
 }
 
 type ActionFile struct {
@@ -91,9 +92,10 @@ type Chat struct {
 	Response         string           `json:"response"`
 	CreatedAt        time.Time        `json:"createdAt"`
 	IsIntentComplete bool             `json:"isIntentComplete"`
-	Intent           *Intent          `json:"intent"`
+	Intent           *Intent          `json:"0"`
 	FollowupActions  []FollowupAction `json:"followupActions"`
 	ResponseRenderID string           `json:"responseRenderId"`
+	ResponsePlanID   string           `json:"responsePlanId"`
 }
 
 type FollowupAction struct {

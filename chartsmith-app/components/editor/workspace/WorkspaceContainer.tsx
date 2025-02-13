@@ -54,7 +54,10 @@ export function WorkspaceContainer({
   const { resolvedTheme } = useTheme();
 
   return (
-    <div className="flex-1 flex flex-col h-[calc(100vh-3.5rem)] min-h-0 max-w-[calc(100vw-545px)] overflow-hidden">
+    <div
+      data-testid="workspace-container"
+      className="flex-1 flex flex-col h-[calc(100vh-3.5rem)] min-h-0 max-w-[calc(100vw-545px)] overflow-hidden"
+    >
       <div className="flex-1 flex min-h-0">
         <div className="w-[260px] flex-shrink-0">
           {isFileTreeVisible && (

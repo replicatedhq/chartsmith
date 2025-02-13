@@ -1,12 +1,48 @@
 import * as srs from "secure-random-string";
 import { Chart, WorkspaceFile } from "../types/workspace";
 import * as fs from "node:fs/promises";
+import * as fsSync from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
 import * as tar from 'tar';
 import gunzip from 'gunzip-maybe';
 import fetch from 'node-fetch';
 import yaml from 'yaml';
+
+export async function getArchiveFromBytes(bytes: ArrayBuffer, fileName: string): Promise<Chart> {
+  const id = srs.default({ length: 12, alphanumeric: true });
+
+  // save the bytes to a tmp file
+  const tmpDir = path.join(os.tmpdir(), 'chartsmith-chart-archive-' + Date.now());
+  await fs.mkdir(tmpDir);
+
+  // write the bytes to a file
+  const filePath = path.join(tmpDir, fileName);
+  await fs.writeFile(filePath, Buffer.from(bytes));
+
+  // Create extraction directory with base name (without .tgz extension)
+  const extractPath = path.join(tmpDir, 'extracted');
+  await fs.mkdir(extractPath);
+
+  // Extract the tar.gz file
+  await new Promise<void>((resolve, reject) => {
+    fsSync.createReadStream(filePath)
+      .pipe(gunzip())
+      .pipe(tar.extract({ cwd: extractPath }))
+      .on('finish', () => resolve())
+      .on('error', reject);
+  });
+
+  const files: WorkspaceFile[] = await filesInArchive(extractPath);
+
+  const c: Chart = {
+    id: id,
+    name: await chartNameFromFiles(files),
+    files: files,
+  }
+
+  return c;
+}
 
 export async function getArchiveFromUrl(url: string): Promise<Chart> {
   // generate a random ID for the chart
@@ -49,6 +85,11 @@ async function downloadChartFilesFromArtifactHub(url: string): Promise<Workspace
   // download it to a tmp directory
   const extractPath = await downloadChartArchiveFromURL(contentURL);
 
+
+  return filesInArchive(extractPath);
+}
+
+async function filesInArchive(extractPath: string): Promise<WorkspaceFile[]> {
   const files = await parseFilesInDirectory(extractPath);
   const commonPrefix = await findCommonPrefix(files);
   const filesWithoutCommonPrefix = files.map(file => ({
