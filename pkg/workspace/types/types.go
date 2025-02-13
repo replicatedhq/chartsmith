@@ -93,6 +93,7 @@ type Chat struct {
 	IsIntentComplete bool             `json:"isIntentComplete"`
 	Intent           *Intent          `json:"intent"`
 	FollowupActions  []FollowupAction `json:"followupActions"`
+	ResponseRenderID string           `json:"responseRenderId"`
 }
 
 type FollowupAction struct {

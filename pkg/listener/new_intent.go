@@ -203,6 +203,19 @@ func handleNewIntentNotification(ctx context.Context, payload string) error {
 			return fmt.Errorf("failed to enqueue render workspace: %w", err)
 		}
 
+		chatMesageWithRenderID, err := workspace.GetChatMessage(ctx, chatMessage.ID)
+		if err != nil {
+			return fmt.Errorf("failed to get chat message: %w", err)
+		}
+
+		e := realtimetypes.ChatMessageUpdatedEvent{
+			WorkspaceID: w.ID,
+			ChatMessage: chatMesageWithRenderID,
+		}
+		if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
+			return fmt.Errorf("failed to send chat message update: %w", err)
+		}
+
 		return nil
 	}
 

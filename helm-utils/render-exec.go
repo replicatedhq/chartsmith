@@ -53,12 +53,14 @@ clusters:
 
 	err = runHelmDepUpdate(tempDir, fakeKubeconfig, renderChannels.DepUpdateCmd, renderChannels.DepUpdateStdout, renderChannels.DepUpdateStderr)
 	if err != nil {
-		return fmt.Errorf("failed to run helm dep update: %w", err)
+		renderChannels.Done <- err
+		return err
 	}
 
 	err = runHelmTemplate(tempDir, valuesYAML, fakeKubeconfig, renderChannels.HelmTemplateCmd, renderChannels.HelmTemplateStdout, renderChannels.HelmTemplateStderr)
 	if err != nil {
-		return fmt.Errorf("failed to run helm template: %w", err)
+		renderChannels.Done <- err
+		return err
 	}
 
 	renderChannels.Done <- nil
@@ -118,7 +120,7 @@ func runHelmDepUpdate(dir string, kubeconfig string, cmdCh chan string, stdoutCh
 
 	// Wait for command to complete
 	if err := depUpdateCmd.Wait(); err != nil {
-		return fmt.Errorf("failed to run helm dep update: %w", err)
+		return err
 	}
 
 	return nil
@@ -172,7 +174,7 @@ func runHelmTemplate(dir string, valuesYAML string, kubeconfig string, cmdCh cha
 
 	// Wait for command to complete
 	if err := cmd.Wait(); err != nil {
-		return fmt.Errorf("failed to run helm template: %w", err)
+		return err
 	}
 
 	return nil

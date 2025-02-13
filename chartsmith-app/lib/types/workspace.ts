@@ -49,6 +49,7 @@ export interface RenderedChart {
   helmTemplateStderr?: string;
   createdAt: Date;
   completedAt?: Date;
+  renderedFiles: RenderedFile[];
 }
 
 export interface RenderedFile {
