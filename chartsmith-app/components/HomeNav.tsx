@@ -7,8 +7,10 @@ export function HomeNav() {
   const { resolvedTheme } = useTheme();
 
   return (
-    <div className="flex justify-end px-4">
-      <AuthButtons />
+    <div className="p-8 md:p-12">
+      <div className="flex justify-end">
+        <AuthButtons />
+      </div>
     </div>
   );
 }
