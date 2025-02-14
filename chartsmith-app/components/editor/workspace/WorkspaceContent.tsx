@@ -8,12 +8,9 @@ import { useWorkspaceUI } from "@/contexts/WorkspaceUIContext";
 import { usePathname } from "next/navigation";
 import { useSession } from "@/app/hooks/useSession";
 import { getWorkspaceMessagesAction } from "@/lib/workspace/actions/get-workspace-messages";
-import { Message, CentrifugoMessageData, RawPlan, RawWorkspace, RawChatMessage, RawRevision } from "@/components/editor/types";
-import { Plan, Workspace, WorkspaceFile, RenderedFile, RenderedWorkspace, RenderedChart } from "@/lib/types/workspace";
-import { getCentrifugoTokenAction } from "@/lib/centrifugo/actions/get-centrifugo-token-action";
-import { Centrifuge } from "centrifuge";
+import { Message } from "@/components/editor/types";
+import { Plan, Workspace, WorkspaceFile, RenderedFile } from "@/lib/types/workspace";
 import { createRevisionAction } from "@/lib/workspace/actions/create-revision";
-import { logger } from "@/lib/utils/logger";
 import { getWorkspaceAction } from "@/lib/workspace/actions/get-workspace";
 import { PlanContent } from "./PlanContent";
 import { createChatMessageAction } from "@/lib/workspace/actions/create-chat-message";
@@ -21,19 +18,16 @@ import { useCommandMenu } from '@/contexts/CommandMenuContext';
 import { CommandMenuWrapper } from "@/components/CommandMenuWrapper";
 import { useTheme } from "@/contexts/ThemeContext";
 import { ChatContainer } from "../chat/ChatContainer";
-import { RenderUpdate } from "@/lib/types/workspace";
 import type { editor } from "monaco-editor";
 import { getWorkspaceRenderedFilesAction } from "@/lib/workspace/get-workspace-rendered-files";
-import { listWorkspaceRendersAction } from "@/lib/workspace/actions/list-workspace-renders";
-import { getWorkspaceRenderAction } from "@/lib/workspace/actions/get-workspace-render";
+import { useCentrifugo } from "@/hooks/useCentrifugo";
+import { logger } from "@/lib/utils/logger";
 
 interface WorkspaceContentProps {
   initialWorkspace: Workspace;
   workspaceId: string;
   onOpenCommandMenu?: () => void;
 }
-
-const RECONNECT_DELAY_MS = 1000;
 
 export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceContentProps) {
   const { theme } = useTheme();
@@ -48,20 +42,12 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
   const [messages, setMessages] = useState<Message[]>([]);
   const [selectedFile, setSelectedFile] = useState<WorkspaceFile | undefined>();
   const [editorContent, setEditorContent] = useState<string>("");
-  const [centrifugoToken, setCentrifugoToken] = useState<string | null>(null);
-  const [workspaceRenders, setWorkspaceRenders] = useState<RenderedWorkspace[]>([]);
+  const [workspaceRenders, setWorkspaceRenders] = useState<any[]>([]);
   const [renderedFiles, setRenderedFiles] = useState<RenderedFile[]>([]);
 
-  const centrifugeRef = useRef<Centrifuge | null>(null);
-  const handlersRef = useRef<{
-    onMessage: ((message: { data: CentrifugoMessageData }) => void) | null;
-  }>({ onMessage: null });
-  const handleArtifactReceivedRef = useRef<((artifact: { path: string, content: string, pendingPatch?: string }) => void) | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const prevWorkspaceRef = useRef<Workspace | null>(null);
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
-
-  const [isReconnecting, setIsReconnecting] = useState(false);
 
   const handleFileSelect = useCallback((file: WorkspaceFile) => {
     setSelectedFile({
@@ -80,16 +66,21 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     }
   }, [updateFileSelection, view, setView]);
 
+  // Initialize Centrifugo connection and message handling
+  useCentrifugo({
+    session,
+    workspace,
+    setWorkspace,
+    setMessages,
+    setWorkspaceRenders,
+    handleFileSelect
+  });
+
   const handleFileDelete = useCallback(() => {
     return;
   }, []);
 
   const followMode = true;
-
-  useEffect(() => {
-    if (!session) return;
-    getCentrifugoTokenAction(session).then(setCentrifugoToken);
-  }, [session]);
 
   useEffect(() => {
     if (!session) return;
@@ -109,383 +100,6 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
         logger.error("Failed to load rendered charts", { err });
       });
   }, [session, workspace?.id, workspace]);
-
-  useEffect(() => {
-    if (!session || !workspace) return;
-
-    listWorkspaceRendersAction(session, workspace.id)
-      .then(renders => {
-        setWorkspaceRenders(renders);
-      })
-      .catch(err => {
-        logger.error("Failed to load rendered workspaces", { err });
-      });
-  }, [session, workspace?.id, workspace]);
-
-  const handlePlanUpdated = React.useCallback((plan: RawPlan | Plan) => {
-    const p: Plan = 'createdAt' in plan && typeof plan.createdAt === 'string' ? {
-      id: plan.id,
-      description: plan.description,
-      status: plan.status,
-      workspaceId: plan.workspaceId,
-      chatMessageIds: plan.chatMessageIds,
-      createdAt: new Date(plan.createdAt),
-      actionFiles: plan.actionFiles,
-      isComplete: plan.isComplete || false
-    } : plan as Plan;
-
-    setWorkspace(currentWorkspace => {
-      if (p.status === 'pending') {
-        const updatedCurrentPlans = currentWorkspace.currentPlans.map(existingPlan => {
-          if (existingPlan.id === p.id) {
-            return p;
-          }
-          return { ...existingPlan, status: 'ignored' };
-        });
-
-        if (!updatedCurrentPlans.some(plan => plan.id === p.id)) {
-          updatedCurrentPlans.unshift(p);
-        }
-
-        return {
-          ...currentWorkspace,
-          currentPlans: updatedCurrentPlans,
-          previousPlans: currentWorkspace.previousPlans.map(p => ({ ...p, status: 'ignored' }))
-        };
-      }
-
-      const existingPlanIndex = currentWorkspace.currentPlans.findIndex(plan => plan.id === p.id);
-      const updatedCurrentPlans = [...currentWorkspace.currentPlans];
-
-      if (existingPlanIndex !== -1) {
-        updatedCurrentPlans[existingPlanIndex] = p;
-      } else {
-        updatedCurrentPlans.unshift(p);
-      }
-
-      return {
-        ...currentWorkspace,
-        currentPlans: updatedCurrentPlans,
-        previousPlans: currentWorkspace.previousPlans
-      };
-    });
-
-    if (session && (p.status === 'review' || p.status === 'pending')) {
-      getWorkspaceMessagesAction(session, workspaceId).then(updatedMessages => {
-        setMessages(updatedMessages);
-      });
-    }
-  }, [session, workspaceId, setMessages]);
-
-  const handleRevisionCreated = useCallback(async (revision: RawRevision) => {
-    if (!session || !revision.workspaceId) return;
-
-    const freshWorkspace = await getWorkspaceAction(session, revision.workspaceId);
-    if (freshWorkspace) {
-      setWorkspace(freshWorkspace);
-
-      const updatedMessages = await getWorkspaceMessagesAction(session, revision.workspaceId);
-      setMessages(updatedMessages);
-    }
-  }, [session, setMessages, setWorkspace]);
-
-  const handleChatMessageUpdated = useCallback((data: CentrifugoMessageData) => {
-    if (!data.chatMessage) {
-      return;
-    }
-
-    const chatMessage = data.chatMessage;
-
-    setMessages(prev => {
-      const newMessages = [...prev];
-      const index = newMessages.findIndex(m => m.id === chatMessage.id);
-
-      // Convert the raw message to our Message type
-      const message: Message = {
-        id: chatMessage.id,
-        prompt: chatMessage.prompt,
-        response: chatMessage.responseRenderId ? "doing the render now..." : chatMessage.response,
-        isComplete: chatMessage.isComplete,
-        isApplied: chatMessage.isApplied,
-        isApplying: chatMessage.isApplying,
-        isIgnored: chatMessage.isIgnored,
-        isCanceled: chatMessage.isCanceled,
-        createdAt: new Date(chatMessage.createdAt),
-        workspaceId: chatMessage.workspaceId,
-        planId: chatMessage.planId,
-        userId: chatMessage.userId,
-        isIntentComplete: chatMessage.isIntentComplete,
-        intent: chatMessage.intent,
-        followupActions: chatMessage.followupActions,
-        responseRenderId: chatMessage.responseRenderId,
-      };
-
-      if (index >= 0) {
-        newMessages[index] = message;
-      } else {
-        newMessages.push(message);
-      }
-      return newMessages;
-    });
-  }, []);
-
-  const handleWorkspaceUpdated = useCallback((workspace: RawWorkspace) => {
-  }, []);
-
-  const handleArtifactReceived = useCallback((artifact: { path: string, content: string, pendingPatch?: string }) => {
-    setWorkspace(currentWorkspace => {
-      const existingWorkspaceFile = currentWorkspace.files?.find(f => f.filePath === artifact.path);
-      const chartWithFile = currentWorkspace.charts?.find(chart =>
-        chart.files.some(f => f.filePath === artifact.path)
-      );
-
-      if (!existingWorkspaceFile && !chartWithFile) {
-        const newFile = {
-          id: `file-${Date.now()}`,
-          filePath: artifact.path,
-          content: artifact.content,
-          pendingPatch: artifact.pendingPatch
-        };
-
-        return {
-          ...currentWorkspace,
-          charts: currentWorkspace.charts.map((chart, index) =>
-            index === 0 ? {
-              ...chart,
-              files: [...chart.files, newFile]
-            } : chart
-          )
-        };
-      }
-
-      const updatedFiles = currentWorkspace.files?.map(file =>
-        file.filePath === artifact.path ? {
-          ...file,
-          content: artifact.content,
-          pendingPatch: artifact.pendingPatch
-        } : file
-      ) || [];
-
-      const updatedCharts = currentWorkspace.charts?.map(chart => ({
-        ...chart,
-        files: chart.files.map(file =>
-          file.filePath === artifact.path ? {
-            ...file,
-            content: artifact.content,
-            pendingPatch: artifact.pendingPatch
-          } : file
-        )
-      })) || [];
-
-      return {
-        ...currentWorkspace,
-        files: updatedFiles,
-        charts: updatedCharts
-      };
-    });
-
-    const file = {
-      id: `file-${Date.now()}`,
-      filePath: artifact.path,
-      content: artifact.content,
-      pendingPatch: artifact.pendingPatch
-    };
-
-    handleFileSelect(file);
-    setEditorContent(artifact.content);
-    updateFileSelection({
-      name: artifact.path.split('/').pop() || artifact.path,
-      filePath: artifact.path,
-      content: artifact.content,
-      type: 'file' as const
-    });
-  }, [handleFileSelect, setEditorContent, updateFileSelection]);
-
-  useEffect(() => {
-    handleArtifactReceivedRef.current = handleArtifactReceived;
-  }, [handleArtifactReceived]);
-
-  const handleRenderUpdated = useCallback((data: CentrifugoMessageData) => {
-    if (!data.renderedFile) {
-      return;
-    }
-
-    if (!data.renderedFile.id) {
-      return;
-    }
-
-    // update the workspaceRender with the new file
-
-
-    // If this is the currently selected file in rendered view, update editor content
-    // if (view === 'rendered' && selectedFile && selectedFile.filePath === data.renderedFile.filePath) {
-    //   setEditorContent(data.renderedFile.renderedContent);
-    // }
-  }, [view, selectedFile]);
-
-  const handleRenderStreamEvent = useCallback(async (data: CentrifugoMessageData) => {
-    if (!session) return;
-    if (data.eventType !== 'render-stream' || !data.renderChartId || !data.renderWorkspaceId) {
-      return;
-    }
-
-    let renders = [...workspaceRenders];
-
-    // if the message has a renderWorkspaceId that we don't know, fetch and add it
-    if (!renders.find(render => render.id === data.renderWorkspaceId)) {
-      const newWorkspaceRender = await getWorkspaceRenderAction(session, data.renderWorkspaceId);
-      renders = [...renders, newWorkspaceRender];
-    }
-
-    // Now update the renders with the new stream data
-    setWorkspaceRenders(renders.map(render => {
-      if (render.id !== data.renderWorkspaceId) return render;
-
-      return {
-        ...render,
-        charts: render.charts.map(chart => {
-          if (chart.id !== data.renderChartId) return chart;
-
-          return {
-            ...chart,
-            helmTemplateCommand: data.helmTemplateCommand,
-            helmTemplateStderr: data.helmTemplateStderr,
-            helmTemplateStdout: data.helmTemplateStdout,
-            depUpdateCommand: data.depUpdateCommand,
-            depUpdateStderr: data.depUpdateStderr,
-            depUpdateStdout: data.depUpdateStdout,
-          };
-        })
-      };
-    }));
-  }, [session, workspaceRenders]);
-
-  const handleCentrifugoMessage = useCallback((message: { data: CentrifugoMessageData }) => {
-    const eventType = message.data.eventType;
-
-    if (eventType === 'plan-updated') {
-      handlePlanUpdated(message.data.plan!);
-    } else if (eventType === 'chatmessage-updated') {
-      handleChatMessageUpdated(message.data);
-    } else if (eventType === 'revision-created') {
-      handleRevisionCreated(message.data.revision!);
-    } else if (eventType === 'render-updated') {
-      handleRenderUpdated(message.data);
-    } else if (eventType === 'render-stream') {
-      handleRenderStreamEvent(message.data);
-    }
-
-    const isWorkspaceUpdatedEvent = message.data.workspace;
-    if (isWorkspaceUpdatedEvent) {
-      handleWorkspaceUpdated(message.data.workspace!);
-    }
-
-    const artifact = message.data.artifact;
-    if (artifact && artifact.path && artifact.content) {
-      handleArtifactReceivedRef.current?.(artifact);
-    }
-  }, [handlePlanUpdated, handleWorkspaceUpdated, handleChatMessageUpdated, handleRevisionCreated, handleRenderUpdated, handleRenderStreamEvent]);
-
-  useEffect(() => {
-    handlersRef.current.onMessage = handleCentrifugoMessage;
-  }, [handleCentrifugoMessage]);
-
-  useEffect(() => {
-    if (!centrifugoToken || !session || !workspace?.id) {
-      return;
-    }
-
-    const channel = `${workspace.id}#${session.user.id}`;
-
-    const centrifuge = new Centrifuge(process.env.NEXT_PUBLIC_CENTRIFUGO_ADDRESS!, {
-      timeout: 5000,
-      token: centrifugoToken
-    });
-
-    centrifugeRef.current = centrifuge;
-
-    centrifuge.on("connected", () => {
-      console.log("Centrifugo connected");
-      setIsReconnecting(false);
-    });
-
-    centrifuge.on("disconnected", async (ctx) => {
-      console.log("Centrifugo disconnected", { ctx });
-      setIsReconnecting(true);
-
-      if (session) {
-        try {
-          const newToken = await getCentrifugoTokenAction(session);
-          if (centrifugeRef.current && newToken) {
-            centrifugeRef.current.setToken(newToken);
-            setTimeout(() => {
-              centrifugeRef.current?.connect();
-            }, RECONNECT_DELAY_MS);
-          }
-        } catch (err) {
-          console.error("Failed to refresh Centrifugo token:", err);
-          // Optionally show a user-friendly error message
-        }
-      }
-    });
-
-    centrifuge.on("error", (ctx) => {
-      console.error("Centrifugo error:", ctx);
-
-      if (ctx.error.code === 109) { // Unauthorized error code
-        setIsReconnecting(true);
-
-        if (session) {
-          getCentrifugoTokenAction(session)
-            .then(newToken => {
-              if (centrifugeRef.current && newToken) {
-                centrifugeRef.current.setToken(newToken);
-                setTimeout(() => {
-                  centrifugeRef.current?.connect();
-                }, RECONNECT_DELAY_MS);
-              }
-            })
-            .catch(err => {
-              console.error("Failed to refresh Centrifugo token after error:", err);
-            });
-        }
-      }
-    });
-
-    const sub = centrifuge.newSubscription(channel, {
-      data: {}
-    });
-
-    sub.on("publication", (message) => {
-      handlersRef.current.onMessage?.(message);
-    });
-
-    sub.on("error", (ctx) => {
-      console.error("Subscription error:", ctx);
-    });
-
-    sub.subscribe();
-
-    try {
-      centrifuge.connect();
-    } catch (err) {
-      console.error("Error connecting to Centrifugo:", err);
-      setIsReconnecting(true);
-    }
-
-    return () => {
-      try {
-        if (centrifugeRef.current) {
-          sub.unsubscribe();
-          centrifugeRef.current.disconnect();
-          centrifugeRef.current = null;
-          setIsReconnecting(false);
-        }
-      } catch (err) {
-        console.error("Error during Centrifugo cleanup:", err);
-      }
-    };
-  }, [centrifugoToken, session, workspace?.id]);
 
   useEffect(() => {
     if (!followMode || !workspace) {
@@ -648,18 +262,6 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     }
   }, [setView, selectedFile, renderedFiles]);
 
-  useEffect(() => {
-    if (!session || !workspace) return;
-
-    getWorkspaceRenderedFilesAction(session, workspace.id)
-      .then(files => {
-        setRenderedFiles(files);
-      })
-      .catch(err => {
-        logger.error("Failed to load rendered charts", { err });
-      });
-  }, [session, workspace?.id, workspace]);
-
   if (!session) return null;
 
   const isPlanOnlyView = !workspace?.currentRevisionNumber && !workspace?.incompleteRevisionNumber;
@@ -679,7 +281,6 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
                   setMessages={setMessages}
                   workspace={workspace}
                   setWorkspace={setWorkspace}
-                  handlePlanUpdated={handlePlanUpdated}
                 />
               ) : (
                 <ChatContainer

@@ -11,6 +11,7 @@ interface TerminalProps {
   isCollapsed: boolean;
   onCollapse: () => void;
   onExpand: () => void;
+  'data-testid'?: string;
 }
 
 export function Terminal({
@@ -22,7 +23,8 @@ export function Terminal({
   helmTemplateStderrStreamed,
   isCollapsed,
   onCollapse,
-  onExpand
+  onExpand,
+  'data-testid': testId
 }: TerminalProps) {
   const { theme } = useTheme();
 
@@ -33,7 +35,10 @@ export function Terminal({
   const helmTemplateStderrToShow = helmTemplateStderrStreamed || chart.helmTemplateStderr;
 
   return (
-    <div className={`mt-2 rounded-md overflow-hidden font-mono ${theme === "dark" ? "bg-[#1e1e1e]" : "bg-[#282a36]"}`}>
+    <div
+      data-testid={testId}
+      className={`mt-2 rounded-md overflow-hidden font-mono ${theme === "dark" ? "bg-[#1e1e1e]" : "bg-[#282a36]"}`}
+    >
       <div className={`flex items-center px-3 py-1.5 ${theme === "dark" ? "bg-[#323232]" : "bg-[#44475a]"}`}>
         <div className="flex gap-1.5">
           <div className="w-2.5 h-2.5 rounded-full bg-[#ff5f56]"></div>

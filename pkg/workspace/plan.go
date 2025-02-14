@@ -76,7 +76,8 @@ func listPlans(ctx context.Context, workspaceID string) ([]types.Plan, error) {
 		version,
 		status,
 		description,
-		is_complete
+		is_complete,
+		proceed_at
 	FROM workspace_plan WHERE workspace_id = $1 ORDER BY created_at DESC`
 
 	rows, err := tx.Query(ctx, query, workspaceID)
@@ -89,6 +90,7 @@ func listPlans(ctx context.Context, workspaceID string) ([]types.Plan, error) {
 	for rows.Next() {
 		var plan types.Plan
 		var description sql.NullString
+		var proceedAt sql.NullTime
 		err := rows.Scan(
 			&plan.ID,
 			&plan.WorkspaceID,
@@ -99,12 +101,15 @@ func listPlans(ctx context.Context, workspaceID string) ([]types.Plan, error) {
 			&plan.Status,
 			&description,
 			&plan.IsComplete,
+			&proceedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("error scanning plan: %w", err)
 		}
 		plan.Description = description.String
-
+		if proceedAt.Valid {
+			plan.ProceedAt = &proceedAt.Time
+		}
 		plans = append(plans, plan)
 	}
 
@@ -147,13 +152,15 @@ func GetPlan(ctx context.Context, tx pgx.Tx, planID string) (*types.Plan, error)
 		version,
 		status,
 		description,
-		is_complete
+		is_complete,
+		proceed_at
 	FROM workspace_plan WHERE id = $1`
 
 	row := tx.QueryRow(ctx, query, planID)
 
 	var plan types.Plan
 	var description sql.NullString
+	var proceedAt sql.NullTime
 	err := row.Scan(
 		&plan.ID,
 		&plan.WorkspaceID,
@@ -164,11 +171,15 @@ func GetPlan(ctx context.Context, tx pgx.Tx, planID string) (*types.Plan, error)
 		&plan.Status,
 		&description,
 		&plan.IsComplete,
+		&proceedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("error scanning plan: %w", err)
 	}
 	plan.Description = description.String
+	if proceedAt.Valid {
+		plan.ProceedAt = &proceedAt.Time
+	}
 
 	afs, err := listActionFiles(ctx, tx, planID)
 	if err != nil {
@@ -295,9 +306,9 @@ func CreatePlan(ctx context.Context, chatMessageID string, workspaceID string) e
 
 	chatMessageIDs := []string{chatMessageID}
 	query := `INSERT INTO workspace_plan
-(id, workspace_id, chat_message_ids, created_at, updated_at, version, status, description, is_complete)
+(id, workspace_id, chat_message_ids, created_at, updated_at, version, status, description, is_complete, proceed_at)
 VALUES
-($1, $2, $3, $4, $5, $6, $7, $8, $9)`
+($1, $2, $3, $4, $5, $6, $7, $8, $9, null)`
 	_, err = tx.Exec(ctx, query, id, workspaceID, chatMessageIDs, time.Now(), time.Now(), 1, types.PlanStatusPending, "", false)
 	if err != nil {
 		return fmt.Errorf("error creating plan: %w", err)

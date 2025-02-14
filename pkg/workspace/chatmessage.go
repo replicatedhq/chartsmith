@@ -27,7 +27,8 @@ func GetChatMessage(ctx context.Context, chatMessageId string) (*types.Chat, err
 		workspace_chat.is_intent_chart_developer,
 		workspace_chat.is_intent_chart_operator,
 		workspace_chat.is_intent_proceed,
-		workspace_chat.response_render_id
+		workspace_chat.response_render_id,
+		workspace_chat.response_plan_id
 	FROM
 		workspace_chat
 	WHERE
@@ -44,6 +45,7 @@ func GetChatMessage(ctx context.Context, chatMessageId string) (*types.Chat, err
 	var isIntentChartOperator sql.NullBool
 	var isIntentProceed sql.NullBool
 	var responseRenderID sql.NullString
+	var responsePlanID sql.NullString
 	err := row.Scan(
 		&chat.ID,
 		&chat.WorkspaceID,
@@ -58,6 +60,7 @@ func GetChatMessage(ctx context.Context, chatMessageId string) (*types.Chat, err
 		&isIntentChartOperator,
 		&isIntentProceed,
 		&responseRenderID,
+		&responsePlanID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to scan chat message: %w", err)
@@ -77,7 +80,7 @@ func GetChatMessage(ctx context.Context, chatMessageId string) (*types.Chat, err
 	}
 
 	chat.ResponseRenderID = responseRenderID.String
-
+	chat.ResponsePlanID = responsePlanID.String
 	return &chat, nil
 }
 

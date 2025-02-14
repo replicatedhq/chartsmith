@@ -3,9 +3,31 @@
 import React from "react";
 import { GoogleButton } from "@/components/GoogleButton";
 import { useTheme } from "@/contexts/ThemeContext";
+import { validateTestAuth } from "@/lib/auth/actions/test-auth";
 
 export default function LoginPage() {
   const { theme } = useTheme();
+
+  React.useEffect(() => {
+    // Only run in development/test environment
+    console.log(process.env.NODE_ENV, process.env.NEXT_PUBLIC_ENABLE_TEST_AUTH);
+    if (process.env.NODE_ENV !== 'production' &&
+        process.env.NEXT_PUBLIC_ENABLE_TEST_AUTH === 'true') {
+      // Check for test auth parameter
+      const params = new URLSearchParams(window.location.search);
+      console.log(params);
+      if (params.get('test-auth') === 'true') {
+        validateTestAuth().then((jwt) => {
+          if (jwt) {
+            const expires = new Date();
+            expires.setDate(expires.getDate() + 7);
+            document.cookie = `session=${jwt}; expires=${expires.toUTCString()}; path=/; SameSite=Lax`;
+            window.location.href = '/';
+          }
+        });
+      }
+    }
+  }, []);
 
   return (
     <div className={`min-h-screen ${theme === "dark" ? "bg-dark" : "bg-gray-50"}`}>

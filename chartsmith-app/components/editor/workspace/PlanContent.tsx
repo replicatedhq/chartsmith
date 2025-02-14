@@ -128,6 +128,7 @@ export function PlanContent({ session, workspace, messages, handlePlanUpdated, s
                       />
                     ))}
                     <PlanChatMessage
+                      data-testid="plan-message"
                       plan={item.plan!}
                       session={session}
                       workspaceId={workspace.id}

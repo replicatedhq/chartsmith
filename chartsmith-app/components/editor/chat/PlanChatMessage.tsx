@@ -6,7 +6,7 @@ import { useTheme } from "../../../contexts/ThemeContext";
 import { Button } from "@/components/ui/Button";
 import { FeedbackModal } from "@/components/FeedbackModal";
 import { ignorePlanAction } from "@/lib/workspace/actions/ignore-plan";
-import { ThumbsUp, ThumbsDown, Send, ChevronDown, ChevronUp, Plus, Pencil, Trash2 } from "lucide-react"; 
+import { ThumbsUp, ThumbsDown, Send, ChevronDown, ChevronUp, Plus, Pencil, Trash2 } from "lucide-react";
 import { createPlanAction } from "@/lib/workspace/actions/create-plan";
 import { Plan, Workspace } from "@/lib/types/workspace";
 import { createRevisionAction } from "@/lib/workspace/actions/create-revision";
@@ -14,6 +14,7 @@ import { PromptType } from "@/lib/llm/prompt-type";
 
 interface PlanChatMessageProps {
   showActions?: boolean;
+  showChatInput?: boolean;
   plan: Plan;
   onProceed?: () => void;
   onIgnore?: () => void;
@@ -31,6 +32,7 @@ interface PlanChatMessageProps {
 export function PlanChatMessage({
   plan,
   showActions = true,
+  showChatInput = true,
   onProceed,
   onIgnore,
   session,
@@ -108,13 +110,23 @@ export function PlanChatMessage({
 
   const handleProceed = async () => {
     if (!session || !plan) return;
+
+    // Optimistically update plan status
+    if (setWorkspace) {
+      setWorkspace(currentWorkspace => ({
+        ...currentWorkspace,
+        currentPlans: currentWorkspace.currentPlans.map(p =>
+          p.id === plan.id ? { ...p, status: 'applying' } : p
+        )
+      }));
+    }
+
     const updatedWorkspace = await createRevisionAction(session, plan.id);
     if (updatedWorkspace && setWorkspace) {
       setWorkspace(updatedWorkspace);
     }
     onProceed?.();
   };
-
 
   const handleSubmitChat = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -130,14 +142,14 @@ export function PlanChatMessage({
   };
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2" data-testid="plan-message">
       <div className="px-2 py-1">
         <div className={`p-3 rounded-2xl ${theme === "dark" ? "bg-dark-border/40" : "bg-gray-100"} rounded-tl-sm w-full`}>
           <div className={`text-xs ${
             plan.status === 'ignored'
               ? `${theme === "dark" ? "text-gray-500" : "text-gray-400"}`
               : `${theme === "dark" ? "text-primary/70" : "text-primary/70"}`
-          } font-medium mb-1 flex items-center gap-2`}>
+          } font-medium mb-1 flex items-center gap-2`} data-testid="plan-message-top">
             <span>
               {plan.status === 'ignored' ? 'Superseded Plan' : 'Proposed Plan'}
             </span>
@@ -158,99 +170,93 @@ export function PlanChatMessage({
               ? `${theme === "dark" ? "text-gray-400" : "text-gray-500"}`
               : `${theme === "dark" ? "text-gray-200" : "text-gray-700"}`
           } text-[11px] ${plan.status === 'ignored' ? 'opacity-75' : ''}`}>
-            {plan.status === 'ignored' && !isExpanded ? (
-              <div className="flex items-center justify-between">
-                <div className="line-clamp-2 markdown-content">
-                  <ReactMarkdown>{plan.description}</ReactMarkdown>
+            {plan.showLoadingAnimation ? (
+              <div className="flex items-center justify-center py-4">
+                <div className="flex items-center gap-2">
+                  <div className="flex gap-1">
+                    {[0, 1, 2].map((i) => (
+                      <div
+                        key={i}
+                        className="w-1 h-1 rounded-full bg-primary/70"
+                        style={{
+                          animation: 'bounce 1.4s infinite ease-in-out',
+                          animationDelay: `${i * 0.16}s`
+                        }}
+                      />
+                    ))}
+                  </div>
+                  <div className="markdown-content">
+                    <ReactMarkdown>{plan.description}</ReactMarkdown>
+                  </div>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setIsExpanded(true)}
-                  className={`ml-2 p-1 ${theme === "dark" ? "hover:bg-dark-border/40 text-gray-400" : "hover:bg-gray-100 text-gray-500"}`}
-                >
-                  <ChevronDown className="h-4 w-4" />
-                </Button>
               </div>
             ) : (
-              <div className="relative markdown-content">
+              <div className="markdown-content">
                 <ReactMarkdown>{plan.description}</ReactMarkdown>
-                {plan.status === 'ignored' && (
-                  <div className="absolute top-0 right-0">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setIsExpanded(false)}
-                      className={`p-1 ${theme === "dark" ? "hover:bg-dark-border/40 text-gray-400" : "hover:bg-gray-100 text-gray-500"}`}
-                    >
-                      <ChevronUp className="h-4 w-4" />
-                    </Button>
-                  </div>
-                )}
-            <style jsx>{`
-              @keyframes spin {
-                from { transform: rotate(0deg); }
-                to { transform: rotate(360deg); }
-              }
-            `}</style>
               </div>
             )}
-            {(plan.status === 'applying' || plan.status === 'applied') && plan.actionFiles && (
+            {(plan.status === 'applying' || plan.status === 'applied') && (
               <div className="mt-4 light:border light:border-gray-200 pt-4 px-3 pb-2 rounded-lg bg-primary/5 dark:bg-dark-surface">
                 <div className="flex items-center justify-between mb-2" ref={actionsRef}>
                   <span className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
-                    {plan.actionFiles.length} file {plan.actionFiles.length === 1 ? 'change' : 'changes'}
+                    {(!plan.actionFiles || plan.actionFiles.length === 0) && plan.status === 'applying' 
+                      ? "selecting files..."
+                      : `${plan.actionFiles?.length || 0} file ${(plan.actionFiles?.length || 0) === 1 ? 'change' : 'changes'}`
+                    }
                   </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setActionFilesExpanded(!actionFilesExpanded)}
-                    className={`p-1 ${theme === "dark" ? "hover:bg-dark-border/40 text-gray-400" : "hover:bg-gray-100 text-gray-500"}`}
+                  {(plan.actionFiles?.length || 0) > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setActionFilesExpanded(!actionFilesExpanded)}
+                      className={`p-1 ${theme === "dark" ? "hover:bg-dark-border/40 text-gray-400" : "hover:bg-gray-100 text-gray-500"}`}
+                    >
+                      {actionFilesExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                    </Button>
+                  )}
+                </div>
+                {(plan.actionFiles?.length || 0) > 0 && (
+                  <div
+                    className={`flex flex-col items-center gap-2 overflow-hidden transition-all duration-300 ${
+                      actionFilesExpanded ? 'max-h-[500px]' : 'max-h-0'
+                    }`}
                   >
-                    {actionFilesExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                  </Button>
-                </div>
-                <div
-                  className={`flex flex-col items-center gap-2 overflow-hidden transition-all duration-300 ${
-                    actionFilesExpanded ? 'max-h-[500px]' : 'max-h-0'
-                  }`}
-                >
-                  {plan.actionFiles.map((action, index) => (
-                    <div key={index} className="w-full flex items-center">
-                      <div className="flex items-center gap-1.5 px-2 py-1 rounded-full text-xs bg-primary/5 w-fit">
-                        <div className="flex-shrink-0">
-                          {action.status === 'created' ? (
-                            <div className="text-green-500">
-                              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                              </svg>
-                            </div>
-                          ) : action.status === 'creating' ? (
-                            <div
-                              className="rounded-full h-3 w-3 border border-primary/70 border-t-transparent"
-                              style={{
-                                animation: 'spin 1s linear infinite',
-                                animationDelay: '0s'
-                              }}
-                            />
-                          ) : (
-                            <>
-                              {action.action === 'create' && <Plus className="h-3 w-3 text-primary/70" />}
-                              {action.action === 'update' && <Pencil className="h-3 w-3 text-primary/70" />}
-                              {action.action === 'delete' && <Trash2 className="h-3 w-3 text-primary/70" />}
-                            </>
-                          )}
+                    {plan.actionFiles?.map((action, index) => (
+                      <div key={index} className="w-full flex items-center">
+                        <div className="flex items-center gap-1.5 px-2 py-1 rounded-full text-xs bg-primary/5 w-fit">
+                          <div className="flex-shrink-0">
+                            {action.status === 'created' ? (
+                              <div className="text-green-500">
+                                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                </svg>
+                              </div>
+                            ) : action.status === 'creating' ? (
+                              <div
+                                className="rounded-full h-3 w-3 border border-primary/70 border-t-transparent"
+                                style={{
+                                  animation: 'spin 1s linear infinite',
+                                  animationDelay: '0s'
+                                }}
+                              />
+                            ) : (
+                              <>
+                                {action.action === 'create' && <Plus className="h-3 w-3 text-primary/70" />}
+                                {action.action === 'update' && <Pencil className="h-3 w-3 text-primary/70" />}
+                                {action.action === 'delete' && <Trash2 className="h-3 w-3 text-primary/70" />}
+                              </>
+                            )}
+                          </div>
+                          <span className={`${theme === "dark" ? "text-gray-300" : "text-gray-600"} truncate font-mono text-[10px]`}>
+                            {action.path}
+                          </span>
                         </div>
-                        <span className={`${theme === "dark" ? "text-gray-300" : "text-gray-600"} truncate font-mono text-[10px]`}>
-                          {action.path}
-                        </span>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
-
           </div>
           {showActions && (
             (!workspace?.currentRevisionNumber && plan.status === 'review' && (!messages || (() => {
@@ -292,12 +298,13 @@ export function PlanChatMessage({
                   variant="default"
                   size="sm"
                   onClick={handleProceed}
+                  data-testid="plan-message-proceed-button"
                   className="min-w-[100px] bg-primary hover:bg-primary/80 text-white"
                 >
                   Proceed
                 </Button>
               </div>
-              {plan.status === 'review' && !workspace?.currentRevisionNumber && (
+              {showChatInput && plan.status === 'review' && !workspace?.currentRevisionNumber && (
                 <div className="pt-2 border-t border-dark-border/10">
                   <form onSubmit={handleSubmitChat} className="relative">
                     <textarea

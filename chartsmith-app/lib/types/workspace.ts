@@ -66,6 +66,7 @@ export interface Plan {
   chatMessageIds: string[];
   createdAt: Date;
   isComplete: boolean;
+  proceedAt?: Date;
   actionFiles: ActionFile[];
 }
 
@@ -81,7 +82,6 @@ export interface ChatMessage {
   response: string;
   createdAt: Date;
   isIntentComplete: boolean;
-  intent?: Intent;
   isCanceled: boolean;
   followupActions?: FollowupAction[];
   responseRenderId?: string;
@@ -91,15 +91,6 @@ export interface ChatMessage {
 export interface FollowupAction {
   action: string;
   label: string;
-}
-
-export interface Intent {
-  isConversational: boolean;
-  isPlan: boolean;
-  isOffTopic: boolean;
-  isChartDeveloper: boolean;
-  isChartOperator: boolean;
-  isProceed: boolean;
 }
 
 export interface Scenario {

@@ -22,7 +22,10 @@ export function FileBrowser({ nodes, onFileSelect, onFileDelete, selectedFile, c
   };
 
   return (
-    <div className={`w-[260px] h-full border-r flex-shrink-0 flex flex-col ${theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"}`}>
+    <div
+      data-testid="file-browser"
+      className={`w-[260px] h-full border-r flex-shrink-0 flex flex-col ${theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"}`}
+    >
       <div className={`p-2 text-xs border-b flex items-center justify-between ${theme === "dark" ? "text-gray-400 border-dark-border" : "text-gray-500 border-gray-200"}`}>
         <span>EXPLORER</span>
         <div className="flex items-center gap-1">
