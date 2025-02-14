@@ -91,10 +91,16 @@ export function CreateChartOptions() {
     }
   };
 
+  const triggerFileUpload = () => {
+    if (!isUploading && !isPromptLoading) {
+      fileInputRef.current?.click();
+    }
+  };
+
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="w-full max-w-4xl mx-auto px-4">
       <div className="bg-gray-900/80 backdrop-blur-sm rounded-lg border border-gray-800">
-        <div className="p-6 relative">
+        <div className="p-4 sm:p-6 relative">
           <textarea
             ref={textareaRef}
             placeholder="Tell me about the application you want to create a Helm chart for"
@@ -102,56 +108,60 @@ export function CreateChartOptions() {
             onChange={(e) => setPrompt(e.target.value)}
             onKeyDown={handleKeyDown}
             disabled={isPromptLoading}
-            className="w-full min-h-[120px] bg-transparent text-white placeholder-gray-500 text-lg resize-none focus:outline-none disabled:opacity-50"
+            className="w-full min-h-[80px] sm:min-h-[120px] bg-transparent text-white placeholder-gray-500 text-base sm:text-lg resize-none focus:outline-none disabled:opacity-50"
           />
           {prompt.trim() && (
             <button
               onClick={handlePromptSubmit}
               disabled={isPromptLoading}
-              className="absolute top-4 right-4 p-2 bg-blue-500 hover:bg-blue-600 disabled:bg-blue-500/50 text-white rounded-md transition-colors"
+              className="absolute top-3 sm:top-4 right-3 sm:right-4 p-1.5 sm:p-2 bg-blue-500 hover:bg-blue-600 disabled:bg-blue-500/50 text-white rounded-md transition-colors"
             >
-              <ArrowRight className="w-5 h-5" />
+              <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
           )}
           {isPromptLoading && (
-            <div className="absolute bottom-4 right-4">
-              <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
+            <div className="absolute bottom-3 sm:bottom-4 right-3 sm:right-4">
+              <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500 animate-spin" />
             </div>
           )}
         </div>
-        <div className="border-t border-gray-800 p-4 flex items-center gap-4">
-          <button className="p-2 text-gray-400 hover:text-gray-300 transition-colors">
-            <Link className="w-5 h-5" />
+        <div className="border-t border-gray-800 p-3 sm:p-4 flex items-center gap-3 sm:gap-4">
+          <button
+            onClick={triggerFileUpload}
+            disabled={isUploading || isPromptLoading}
+            className="p-1.5 sm:p-2 text-gray-400 hover:text-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Link className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
-          <button className="p-2 text-gray-400 hover:text-gray-300 transition-colors">
-            <Sparkles className="w-5 h-5" />
+          <button className="p-1.5 sm:p-2 text-gray-400 hover:text-gray-300 transition-colors">
+            <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
         </div>
       </div>
 
-      <div className="mt-4 flex flex-wrap gap-2 justify-center">
+      <div className="mt-3 sm:mt-4 flex flex-wrap gap-1.5 sm:gap-2 justify-center">
         <button
-          onClick={() => !isUploading && !isPromptLoading && fileInputRef.current?.click()}
+          onClick={triggerFileUpload}
           disabled={isUploading || isPromptLoading}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-full bg-gray-800/60 backdrop-blur-sm border border-gray-700 hover:bg-gray-700/60 transition-colors text-gray-300 hover:text-white disabled:opacity-50 disabled:hover:bg-gray-800/60 disabled:cursor-not-allowed"
+          className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm rounded-full bg-gray-800/60 backdrop-blur-sm border border-gray-700 hover:bg-gray-700/60 transition-colors text-gray-300 hover:text-white disabled:opacity-50 disabled:hover:bg-gray-800/60 disabled:cursor-not-allowed"
         >
-          <Upload className="w-3.5 h-3.5" />
+          <Upload className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
           Upload a chart
         </button>
         <button
           onClick={() => setShowArtifactHubSearch(true)}
           disabled={isUploading || isPromptLoading}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-full bg-gray-800/60 backdrop-blur-sm border border-gray-700 hover:bg-gray-700/60 transition-colors text-gray-300 hover:text-white disabled:opacity-50 disabled:hover:bg-gray-800/60 disabled:cursor-not-allowed"
+          className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm rounded-full bg-gray-800/60 backdrop-blur-sm border border-gray-700 hover:bg-gray-700/60 transition-colors text-gray-300 hover:text-white disabled:opacity-50 disabled:hover:bg-gray-800/60 disabled:cursor-not-allowed"
         >
-          <Search className="w-3.5 h-3.5" />
+          <Search className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
           Start from a chart in Artifact Hub
         </button>
         <button
           onClick={() => setShowReplicatedModal(true)}
           disabled={isUploading || isPromptLoading}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-full bg-gray-800/60 backdrop-blur-sm border border-gray-700 hover:bg-gray-700/60 transition-colors text-gray-300 hover:text-white disabled:opacity-50 disabled:hover:bg-gray-800/60 disabled:cursor-not-allowed"
+          className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm rounded-full bg-gray-800/60 backdrop-blur-sm border border-gray-700 hover:bg-gray-700/60 transition-colors text-gray-300 hover:text-white disabled:opacity-50 disabled:hover:bg-gray-800/60 disabled:cursor-not-allowed"
         >
-          <Download className="w-3.5 h-3.5" />
+          <Download className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
           Import a chart from Replicated
         </button>
       </div>

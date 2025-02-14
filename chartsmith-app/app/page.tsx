@@ -22,7 +22,7 @@ export default function HomePage() {
 
       <div className="relative flex-1 flex flex-col">
         <HomeNav />
-        <main className="container mx-auto px-6 pt-32 flex-1">
+        <main className="container mx-auto px-6 pt-12 sm:pt-20 lg:pt-32 flex-1">
           <HomeHeader />
           <CreateChartOptions />
         </main>
