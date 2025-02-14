@@ -1,46 +1,59 @@
-import React, { useRef, useEffect, useState } from "react";
+"use client";
+
+import React, { useRef, useEffect } from "react";
+import { useAtom } from "jotai";
+import { Check, X, ChevronUp, ChevronDown, CheckCheck } from "lucide-react";
+
+// atoms
+import { selectedFileAtom } from "@/atoms/editor";
+import { workspaceAtom } from "@/atoms/workspace";
+
+// types
 import type { editor } from "monaco-editor";
 import Editor, { DiffEditor } from "@monaco-editor/react";
 import type { WorkspaceFile } from "@/lib/types/workspace";
-import { useMonacoEditor } from "../../hooks/useMonacoEditor";
-import { Check, X, ChevronUp, ChevronDown, CheckCheck, ChevronDown as CaretDown } from "lucide-react";
-import { Session } from "@/lib/types/session";
+
+// hooks
+import { useMonacoEditor } from "@/hooks/useMonacoEditor";
+
+// actions
 import { rejectPatchAction } from "@/lib/workspace/actions/reject-patch";
 import { acceptPatchAction } from "@/lib/workspace/actions/accept-patch";
 
+// types
+import type { Session } from "@/lib/types/session";
+
 interface CodeEditorProps {
   session: Session;
-  file?: WorkspaceFile;
-  revision: number;
   theme?: "light" | "dark";
   value?: string;
   onChange?: (value: string | undefined) => void;
   onCommandK?: () => void;
-  onFileUpdate?: (file: WorkspaceFile) => void;
-  files?: WorkspaceFile[];
-  editorRef?: React.MutableRefObject<editor.IStandaloneCodeEditor | null>;
 }
 
 export function CodeEditor({
   session,
-  file,
-  revision,
-  theme = "light",
+  theme = "dark",
   value,
   onChange,
   onCommandK,
-  onFileUpdate,
-  files = [],
-  editorRef: externalEditorRef
 }: CodeEditorProps) {
-  const internalEditorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
+  const [selectedFile] = useAtom(selectedFileAtom);
+  const [workspace] = useAtom(workspaceAtom);
+  const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const diffEditorRef = useRef<editor.IStandaloneDiffEditor | null>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  const { handleEditorInit } = useMonacoEditor(file);
-  const [isAcceptDropdownOpen, setIsAcceptDropdownOpen] = useState(false);
+  const { handleEditorInit } = useMonacoEditor(selectedFile);
+
+  const files: WorkspaceFile[] = [];
 
   useEffect(() => {
-    if (file?.pendingPatch && diffEditorRef.current) {
+    if (selectedFile && onChange) {
+      onChange(selectedFile.content);
+    }
+  }, [selectedFile, onChange]);
+
+  useEffect(() => {
+    if (selectedFile?.pendingPatch && diffEditorRef.current) {
       const attemptScroll = (attempt = 1, maxAttempts = 5) => {
         setTimeout(() => {
           const editor = diffEditorRef.current;
@@ -75,13 +88,14 @@ export function CodeEditor({
 
       attemptScroll();
     }
-  }, [file?.pendingPatch, file?.filePath, value]);
+  }, [selectedFile?.pendingPatch, selectedFile?.filePath, value]);
+
+  if (!workspace) {
+    return null;
+  }
 
   const handleEditorMount = (editor: editor.IStandaloneCodeEditor, monaco: typeof import("monaco-editor")) => {
-    internalEditorRef.current = editor;
-    if (externalEditorRef) {
-      externalEditorRef.current = editor;
-    }
+    editorRef.current = editor;
     handleEditorInit(editor, monaco);
 
     const commandId = 'chartsmith.openCommandPalette';
@@ -157,11 +171,15 @@ export function CodeEditor({
   };
 
   const hasPendingPatches = files.some(f => f.pendingPatch);
-  const showDiffHeader = hasPendingPatches || file?.pendingPatch;
+  const showDiffHeader = hasPendingPatches || selectedFile?.pendingPatch;
+
+  const onFileUpdate = (updatedFile: WorkspaceFile) => {
+    console.log("onFileUpdate", updatedFile);
+  };
 
   const renderDiffHeader = () => (
     <div className={`flex items-center justify-end gap-2 p-2 border-b min-h-[36px] pr-4 ${theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"}`}>
-      {file?.pendingPatch && (
+      {selectedFile?.pendingPatch && (
         <div className="flex items-center gap-2">
           <button
             className={`px-3 py-1 text-xs rounded-md flex items-center gap-1 font-mono ${
@@ -172,7 +190,7 @@ export function CodeEditor({
             onClick={async () => {
               const filesWithPatches = files.filter(f => f.pendingPatch);
               for (const patchFile of filesWithPatches) {
-                const updatedFile = await acceptPatchAction(session, patchFile.id, revision);
+                const updatedFile = await acceptPatchAction(session, patchFile.id, workspace.currentRevisionNumber);
                 onFileUpdate?.(updatedFile);
               }
             }}
@@ -187,7 +205,7 @@ export function CodeEditor({
                 : "bg-green-600 text-white hover:bg-green-700"
             }`}
             onClick={async () => {
-              const updatedFile = await acceptPatchAction(session, file.id, revision);
+              const updatedFile = await acceptPatchAction(session, selectedFile.id, workspace.currentRevisionNumber);
               onChange?.(updatedFile.content);
               onFileUpdate?.(updatedFile);
             }}
@@ -202,7 +220,7 @@ export function CodeEditor({
                 : "bg-red-600 text-white hover:bg-red-700"
             }`}
             onClick={() => {
-              rejectPatchAction(session, file.id, revision);
+              rejectPatchAction(session, selectedFile.id, workspace.currentRevisionNumber);
             }}
           >
             <X className="w-3 h-3" />
@@ -245,8 +263,8 @@ export function CodeEditor({
   return (
     <div className="flex-1 h-full flex flex-col">
       {showDiffHeader && renderDiffHeader()}
-      {file?.pendingPatch ? (() => {
-        const lines = file.pendingPatch.split('\n');
+      {selectedFile?.pendingPatch ? (() => {
+        const lines = selectedFile.pendingPatch.split('\n');
         const modified = value || "";
         let currentLine = 0;
         let contentStarted = false;
@@ -308,7 +326,7 @@ export function CodeEditor({
             height="100%"
             defaultLanguage="yaml"
             language="yaml"
-            value={value ?? ""}
+            value={selectedFile?.content ?? value ?? ""}
             onChange={onChange}
             theme={theme === "light" ? "vs" : "vs-dark"}
             options={{
@@ -316,7 +334,7 @@ export function CodeEditor({
               readOnly: !onChange,
             }}
             onMount={handleEditorMount}
-            key={`${file?.filePath}-${theme}-${value}`}
+            key={`${selectedFile?.id}-${selectedFile?.filePath}-${theme}`}
           />
         </div>
       )}

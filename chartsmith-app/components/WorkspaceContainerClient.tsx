@@ -1,57 +1,49 @@
+"use client";
+
 import React from "react";
-import { FileBrowser } from "../FileBrowser";
-import { RenderedFileBrowser } from "../RenderedFileBrowser";
-import { CodeEditor } from "../CodeEditor";
-import { useTheme } from "../../../contexts/ThemeContext";
-import { EditorView } from "../../../hooks/useEditorView";
-import { WorkspaceFile, Chart, RenderedFile, RenderUpdate } from "@/lib/types/workspace";
+import { useAtom } from "jotai";
+
+// atoms
+import { editorViewAtom, selectedFileAtom } from "@/atoms/editor";
+import { looseFilesAtom, workspaceAtom } from "@/atoms/workspace";
+
+// components
+import { FileBrowser } from "@/components/FileBrowser";
+import { CodeEditor } from "@/components/CodeEditor";
+
+// contexts
+import { useTheme } from "@/contexts/ThemeContext";
+
+// types
+import { RenderedFile } from "@/lib/types/workspace";
 import { Session } from "@/lib/types/session";
-import type { editor } from "monaco-editor";
 import { Button } from "@/components/ui/Button";
 import { createChatMessageAction } from "@/lib/workspace/actions/create-chat-message";
 
-interface WorkspaceContainerProps {
+interface WorkspaceContainerClientProps {
   session: Session;
-  view: EditorView;
-  onViewChange: (view: EditorView) => void;
-  files: WorkspaceFile[];
-  charts: Chart[];
-  revision: number;
-  renderedFiles: RenderedFile[];
-  selectedFile?: WorkspaceFile;
-  onFileSelect: (file: WorkspaceFile) => void;
-  onFileDelete: (path: string) => void;
   editorContent: string;
   onEditorChange: (value: string | undefined) => void;
-  isFileTreeVisible: boolean;
   onCommandK?: () => void;
-  onFileUpdate?: (file: WorkspaceFile) => void;
-  renderUpdates?: RenderUpdate[];
-  editorRef?: React.MutableRefObject<editor.IStandaloneCodeEditor | null>;
-  workspaceId: string;
 }
 
-export function WorkspaceContainer({
+export function WorkspaceContainerClient({
   session,
-  view,
-  onViewChange,
-  files,
-  charts,
-  renderedFiles,
-  revision,
-  selectedFile,
-  onFileSelect,
-  onFileDelete,
   editorContent,
   onEditorChange,
-  isFileTreeVisible,
   onCommandK,
-  onFileUpdate,
-  renderUpdates = [],
-  editorRef,
-  workspaceId
-}: WorkspaceContainerProps) {
+}: WorkspaceContainerClientProps) {
   const { resolvedTheme } = useTheme();
+  const [selectedFile] = useAtom(selectedFileAtom);
+  const [workspace] = useAtom(workspaceAtom);
+  const [looseFiles] = useAtom(looseFilesAtom);
+  const [view, setView] = useAtom(editorViewAtom);
+
+  if (!workspace) {
+    return null;
+  }
+
+  const renderedFiles: RenderedFile[] = [];
 
   return (
     <div
@@ -60,21 +52,13 @@ export function WorkspaceContainer({
     >
       <div className="flex-1 flex min-h-0">
         <div className="w-[260px] flex-shrink-0">
-          {isFileTreeVisible && (
-            <FileBrowser
-              nodes={files}
-              onFileSelect={onFileSelect}
-              onFileDelete={onFileDelete}
-              selectedFile={selectedFile}
-              charts={charts}
-            />
-          )}
+          <FileBrowser />
         </div>
         <div className={`w-px ${resolvedTheme === "dark" ? "bg-dark-border" : "bg-gray-200"} flex-shrink-0`} />
         <div className="flex-1 min-w-0 flex flex-col">
           <div className="flex items-center px-2 border-b border-dark-border/40 bg-dark-surface/40">
             <div
-              onClick={() => onViewChange("source")}
+              onClick={() => setView("source")}
               className={`px-3 py-2.5 text-xs font-medium cursor-pointer transition-colors relative group ${
                 view === "source"
                   ? "text-primary"
@@ -87,7 +71,7 @@ export function WorkspaceContainer({
               Source
             </div>
             <div
-              onClick={() => onViewChange("rendered")}
+              onClick={() => setView("rendered")}
               className={`px-3 py-2.5 text-xs font-medium cursor-pointer transition-colors relative group ${
                 view === "rendered"
                   ? "text-primary"
@@ -108,10 +92,7 @@ export function WorkspaceContainer({
                   variant="default"
                   size="sm"
                   onClick={async () => {
-                    const message = await createChatMessageAction(session, workspaceId, `Why was the file ${selectedFile.filePath} not included in the rendered output?`);
-                    if (message && onFileUpdate) {
-                      onFileUpdate(selectedFile);
-                    }
+                    await createChatMessageAction(session, workspace.id, `Why was the file ${selectedFile.filePath} not included in the rendered output?`);
                   }}
                   className="bg-primary hover:bg-primary/90 text-white"
                 >
@@ -122,15 +103,10 @@ export function WorkspaceContainer({
               selectedFile && (
                 <CodeEditor
                   session={session}
-                  file={selectedFile}
-                  revision={revision}
                   theme={resolvedTheme}
                   value={editorContent}
                   onChange={onEditorChange}
                   onCommandK={onCommandK}
-                  onFileUpdate={onFileUpdate}
-                  files={files}
-                  editorRef={editorRef}
                 />
               )
             )}

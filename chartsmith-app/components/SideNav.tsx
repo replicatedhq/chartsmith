@@ -41,7 +41,7 @@ export function SideNav({ workspaceID }: SideNavProps) {
           </Tooltip>
         </div>
 
-        <div className="mt-2">
+        {/* <div className="mt-2">
           <Tooltip content="Recommendations">
             <Link
               href={`/workspace/${workspaceID}/recommendations`}
@@ -51,7 +51,7 @@ export function SideNav({ workspaceID }: SideNavProps) {
               <div className="absolute -top-1 -right-1 bg-error text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">4</div>
             </Link>
           </Tooltip>
-        </div>
+        </div> */}
 
       </div>
 

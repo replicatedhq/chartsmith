@@ -30,7 +30,6 @@ export function CreateChartOptions() {
 
   const handlePromptSubmit = async () => {
     if (!session) {
-      // Store the prompt and redirect to login
       sessionStorage.setItem('pendingPrompt', prompt.trim());
       router.push('/login');
       return;
@@ -40,7 +39,7 @@ export function CreateChartOptions() {
       try {
         setIsPromptLoading(true);
         const w = await createWorkspaceFromPromptAction(session, prompt);
-        router.push(`/workspace/${w.id}`);
+        router.replace(`/workspace/${w.id}`);
       } catch (err) {
         logger.error("Failed to create workspace", { err });
         setIsPromptLoading(false);
@@ -79,7 +78,7 @@ export function CreateChartOptions() {
       formData.append('file', file);
 
       const workspace = await createWorkspaceFromArchiveAction(session, formData);
-      router.push(`/workspace/${workspace.id}`);
+      router.replace(`/workspace/${workspace.id}`);
     } catch (error) {
       console.error('Error uploading chart:', error);
       alert("Failed to upload chart");

@@ -1,4 +1,4 @@
-import { Message } from "@/components/editor/types";
+import { Message } from "@/components/types";
 import { getDB } from "../data/db";
 import { getParam } from "../data/param";
 import * as srs from "secure-random-string";

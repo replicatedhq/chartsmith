@@ -1,7 +1,12 @@
-import { WorkspaceContent } from "@/components/editor/workspace/WorkspaceContent";
+"use server"
+import { WorkspaceContent } from "@/components/WorkspaceContent";
 import { getWorkspaceAction } from "@/lib/workspace/actions/get-workspace";
 import { validateSession } from "@/lib/auth/actions/validate-session";
 import { cookies } from "next/headers";
+
+import { getWorkspaceMessagesAction } from "@/lib/workspace/actions/get-workspace-messages";
+import { getWorkspacePlansAction } from "@/lib/workspace/actions/get-workspace-plans";
+import { listWorkspaceRendersAction } from "@/lib/workspace/actions/list-workspace-renders";
 
 interface PageProps {
   params: Promise<{ id: string }>
@@ -22,8 +27,23 @@ export default async function WorkspacePage({
   }
   const workspace = await getWorkspaceAction(session, id);
   if (!workspace) {
-    return null; // This should never happen as layout redirects if no workspace
+    return null;
   }
 
-  return <WorkspaceContent initialWorkspace={workspace} workspaceId={id} />;
+  // Fetch all initial data
+  const [messages, plans, renders] = await Promise.all([
+    getWorkspaceMessagesAction(session, workspace.id),
+    getWorkspacePlansAction(session, workspace.id),
+    listWorkspaceRendersAction(session, workspace.id)
+  ])
+
+  // Pass the initial data as props
+  return (
+    <WorkspaceContent
+      initialWorkspace={workspace}
+      initialMessages={messages}
+      initialPlans={plans}
+      initialRenders={renders}
+    />
+  );
 }

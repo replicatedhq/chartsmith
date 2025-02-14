@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Search, X } from "lucide-react";
 import { searchArtifactHubAction } from "@/lib/workspace/actions/search-artifacthub";
 import debounce from "lodash/debounce";
@@ -23,26 +23,36 @@ export function ArtifactHubSearchModal({ isOpen, onClose }: ArtifactHubSearchMod
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [isImporting, setIsImporting] = useState(false);
 
-  // Debounced search function
-  const debouncedSearch = useCallback(
-    debounce(async (query: string) => {
-      if (!query.trim()) {
-        setResults([]);
-        return;
-      }
+  // Create a memoized search handler
+  const searchHandler = useCallback(async (query: string) => {
+    if (!query.trim()) {
+      setResults([]);
+      return;
+    }
 
-      setIsSearching(true);
-      try {
-        const searchResults = await searchArtifactHubAction(query);
-        setResults(searchResults);
-      } catch (error) {
-        console.error('Search failed:', error);
-      } finally {
-        setIsSearching(false);
-      }
-    }, 300),
-    []
+    setIsSearching(true);
+    try {
+      const searchResults = await searchArtifactHubAction(query);
+      setResults(searchResults);
+    } catch (error) {
+      console.error('Search failed:', error);
+    } finally {
+      setIsSearching(false);
+    }
+  }, []);
+
+  // Create memoized debounced function
+  const debouncedSearch = useMemo(
+    () => debounce(searchHandler, 300),
+    [searchHandler]
   );
+
+  // Cleanup debounced function
+  useEffect(() => {
+    return () => {
+      debouncedSearch.cancel();
+    };
+  }, [debouncedSearch]);
 
   // Handle input changes
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {

@@ -1,7 +1,7 @@
 import React from "react";
 import { Code, FileJson } from "lucide-react";
-import { useTheme } from "../../contexts/ThemeContext";
-import { EditorView } from "../../hooks/useEditorView";
+import { useTheme } from "../contexts/ThemeContext";
+import { EditorView } from "@/atoms/editorView";
 
 interface EditorNavProps {
   view: EditorView;

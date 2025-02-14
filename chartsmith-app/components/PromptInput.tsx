@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { Send, Loader2 } from "lucide-react";
+
+// contexts
 import { useTheme } from "@/contexts/ThemeContext";
 
 interface PromptInputProps {

@@ -51,7 +51,7 @@ func StartListeners(ctx context.Context) error {
 		return nil
 	})
 
-	l.AddHandler(ctx, "execute_action", 5, time.Second*10, func(notification *pgconn.Notification) error {
+	l.AddHandler(ctx, "execute_action", 1, time.Second*10, func(notification *pgconn.Notification) error {
 		if err := handleExecuteActionNotification(ctx, notification.Payload); err != nil {
 			logger.Error(fmt.Errorf("failed to handle execute action notification: %w", err))
 			return fmt.Errorf("failed to handle execute action notification: %w", err)
