@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createWorkspaceFromArchive } from '@/lib/workspace/actions/create-workspace-from-archive';
-import { getSession } from '@/lib/auth/session';
+import { createWorkspaceFromArchiveAction } from '@/lib/workspace/actions/create-workspace-from-archive';
+import { findSession } from '@/lib/auth/session';
+import { Archive } from '@/lib/types/archive';
 
 export const config = {
   api: {
@@ -10,7 +11,7 @@ export const config = {
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getSession();
+    const session = await findSession(req.cookies.get('token')?.value || '');
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -22,12 +23,12 @@ export async function POST(req: NextRequest) {
     }
 
     const bytes = await file.arrayBuffer();
-    const archive = {
+    const archive: Archive = {
       name: file.name,
       content: new Uint8Array(bytes),
     };
 
-    const workspace = await createWorkspaceFromArchive(session, archive);
+    const workspace = await createWorkspaceFromArchiveAction(session, formData);
 
     return NextResponse.json({ workspaceId: workspace.id });
   } catch (error) {

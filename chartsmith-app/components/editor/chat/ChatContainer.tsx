@@ -120,21 +120,23 @@ export function ChatContainer({ messages, onSendMessage, onApplyChanges, session
       // If message has responsePlanId, treat it as a plan even if we don't have the plan yet
       if (message.responsePlanId) {
         if (!workspace.currentPlans.some(plan => plan.id === message.responsePlanId)) {
-          renderItems.push({
-            type: 'plan',
-            messages: [message],
-            plan: {
-              id: message.responsePlanId,
-              status: 'getting ready',
-              chatMessageIds: [message.id],
-              workspaceId: message.workspaceId,
-              changes: [],
-              createdAt: message.createdAt,
-              description: "",
-              isInitialPlanning: true,
-              showLoadingAnimation: true
-            }
-          });
+          // Make sure workspaceId is available
+          if (message.workspaceId) {
+            renderItems.push({
+              type: 'plan',
+              messages: [message],
+              plan: {
+                id: message.responsePlanId,
+                status: 'getting ready',
+                chatMessageIds: [message.id],
+                workspaceId: message.workspaceId,
+                createdAt: message.createdAt || new Date(),
+                description: "",
+                actionFiles: [],
+                isComplete: false
+              }
+            });
+          }
         }
       } else if (!workspace.currentPlans.some(plan => plan.chatMessageIds.includes(message.id))) {
         renderItems.push({

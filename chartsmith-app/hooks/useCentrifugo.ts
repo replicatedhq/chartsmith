@@ -6,7 +6,7 @@ import { Session } from "@/lib/types/session";
 import { getCentrifugoTokenAction } from "@/lib/centrifugo/actions/get-centrifugo-token-action";
 import { logger } from "@/lib/utils/logger";
 import { Message, CentrifugoMessageData } from "@/components/editor/types";
-import { Plan, Workspace, WorkspaceFile } from "@/lib/types/workspace";
+import { Plan, Workspace, WorkspaceFile, RenderedChart } from "@/lib/types/workspace";
 import { getWorkspaceAction } from "@/lib/workspace/actions/get-workspace";
 import { getWorkspaceMessagesAction } from "@/lib/workspace/actions/get-workspace-messages";
 import { getWorkspaceRenderAction } from "@/lib/workspace/actions/get-workspace-render";
@@ -14,7 +14,7 @@ import { getWorkspaceRenderAction } from "@/lib/workspace/actions/get-workspace-
 const RECONNECT_DELAY_MS = 1000;
 
 interface UseCentrifugoProps {
-  session: Session;
+  session: Session | undefined;
   workspace?: Workspace;
   setWorkspace: React.Dispatch<React.SetStateAction<Workspace>>;
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
@@ -70,8 +70,8 @@ export function useCentrifugo({
       };
     });
 
-    if (session && (plan.status === 'review' || plan.status === 'pending')) {
-      getWorkspaceMessagesAction(session, workspace?.id).then(updatedMessages => {
+    if (session && workspace?.id && (plan.status === 'review' || plan.status === 'pending')) {
+      getWorkspaceMessagesAction(session, workspace.id).then(updatedMessages => {
         setMessages(updatedMessages);
       });
     }
@@ -101,7 +101,7 @@ export function useCentrifugo({
         id: chatMessage.id,
         prompt: chatMessage.prompt,
         response: chatMessage.responseRenderId ? "doing the render now..." : chatMessage.response,
-        isComplete: chatMessage.isComplete,
+        isComplete: chatMessage.isComplete || false,  // Provide default value
         isApplied: chatMessage.isApplied,
         isApplying: chatMessage.isApplying,
         isIgnored: chatMessage.isIgnored,
@@ -203,9 +203,11 @@ export function useCentrifugo({
 
       // if the message has a renderWorkspaceId that we don't know, fetch and add it
       if (!newRenders.find(render => render.id === data.renderWorkspaceId)) {
-        getWorkspaceRenderAction(session, data.renderWorkspaceId).then(newWorkspaceRender => {
-          setWorkspaceRenders(prev => [...prev, newWorkspaceRender]);
-        });
+        if (data.renderWorkspaceId) {
+          getWorkspaceRenderAction(session, data.renderWorkspaceId).then(newWorkspaceRender => {
+            setWorkspaceRenders(prev => [...prev, newWorkspaceRender]);
+          });
+        }
         return newRenders;
       }
 
@@ -215,7 +217,7 @@ export function useCentrifugo({
 
         return {
           ...render,
-          charts: render.charts.map(chart => {
+          charts: render.charts.map((chart: RenderedChart) => {
             if (chart.id !== data.renderChartId) return chart;
 
             return {
@@ -237,7 +239,12 @@ export function useCentrifugo({
     const eventType = message.data.eventType;
 
     if (eventType === 'plan-updated') {
-      handlePlanUpdated(message.data.plan!);
+      const plan = message.data.plan!;
+      handlePlanUpdated({
+        ...plan,
+        createdAt: new Date(plan.createdAt), // Convert string to Date
+        isComplete: plan.isComplete || false // Provide default value
+      });
     } else if (eventType === 'chatmessage-updated') {
       handleChatMessageUpdated(message.data);
     } else if (eventType === 'revision-created') {

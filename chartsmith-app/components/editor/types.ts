@@ -25,26 +25,19 @@ export interface Message {
   id: string;
   prompt: string;
   response?: string;
-  is_applied?: boolean;
-  is_applying?: boolean;
-  is_ignored?: boolean;
-  isComplete?: boolean;
+  isComplete: boolean;
   isApplied?: boolean;
   isApplying?: boolean;
   isIgnored?: boolean;
   isCanceled?: boolean;
-  role?: string;
   createdAt?: Date;
   workspaceId?: string;
   userId?: string;
-  isOptimistic?: boolean;
   isIntentComplete?: boolean;
-  followupActions?: Array<{
-    action: string;
-    label: string;
-  }>;
+  followupActions?: any[];
   responseRenderId?: string;
   responsePlanId?: string;
+  planId?: string;
 }
 
 // Interface for raw message from server before normalization
@@ -168,4 +161,3 @@ export interface RenderStreamEvent {
   helmTemplateStdout?: string;
   helmTemplateStderr?: string;
 }
-

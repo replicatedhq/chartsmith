@@ -86,6 +86,13 @@ export interface ChatMessage {
   followupActions?: FollowupAction[];
   responseRenderId?: string;
   responsePlanId?: string;
+  isComplete: boolean;  // Add required Message properties
+  workspaceId?: string;
+  userId?: string;
+  isApplied?: boolean;
+  isApplying?: boolean;
+  isIgnored?: boolean;
+  planId?: string;
 }
 
 export interface FollowupAction {

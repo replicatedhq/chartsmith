@@ -278,6 +278,7 @@ export async function getChatMessage(chatMessageId: string): Promise<ChatMessage
       followupActions: result.rows[0].followup_actions,
       responseRenderId: result.rows[0].response_render_id,
       responsePlanId: result.rows[0].response_plan_id,
+      isComplete: true  // Add required property with default value
     };
 
     return chatMessage;

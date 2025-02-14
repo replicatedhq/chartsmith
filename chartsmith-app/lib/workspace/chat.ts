@@ -74,6 +74,7 @@ export async function listMessagesForWorkspace(workspaceID: string): Promise<Cha
         followupActions: row.followup_actions,
         responseRenderId: row.response_render_id,
         responsePlanId: row.response_plan_id,
+        isComplete: true  // Add required property with default value
       };
       messages.push(message);
     }

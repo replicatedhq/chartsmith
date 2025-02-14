@@ -170,7 +170,7 @@ export function PlanChatMessage({
               ? `${theme === "dark" ? "text-gray-400" : "text-gray-500"}`
               : `${theme === "dark" ? "text-gray-200" : "text-gray-700"}`
           } text-[11px] ${plan.status === 'ignored' ? 'opacity-75' : ''}`}>
-            {plan.showLoadingAnimation ? (
+            {plan.status === 'getting ready' ? (
               <div className="flex items-center justify-center py-4">
                 <div className="flex items-center gap-2">
                   <div className="flex gap-1">

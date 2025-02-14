@@ -27,6 +27,13 @@
 - Always handle potentially undefined file paths from Centrifugo updates with default values
 - Filter out invalid files (missing paths) from Centrifugo updates before processing
 - When auto-selecting files, filter for valid files first to prevent runtime errors
+- When handling real-time updates:
+  - Always provide default values for required fields (e.g. isComplete: false)
+  - Convert date strings to Date objects before updating state
+  - Ensure all required properties are present in message and plan objects
+  - When optimistically creating messages, match the server message shape exactly (e.g. 'prompt' vs 'content')
+  - When optimistically creating related items (e.g. message and plan), use matching temp IDs
+  - Update all relevant state (messages, workspace, etc) for complete optimistic UI
 
 # React Patterns
 
@@ -303,9 +310,38 @@ State Management:
     - Update all relevant state (messages, workspace, etc) for complete optimistic UI
     - When optimistically creating related items (e.g. message and plan), use matching temp IDs
     - Show optimistic items immediately, even if relationships aren't established yet
-    - When optimistically creating related items (e.g. message and plan), use matching temp IDs
-    - Update all relevant state (messages, workspace, etc) for complete optimistic UI
-    - When optimistically creating messages, match the server message shape exactly (e.g. 'prompt' vs 'content')
+    - For optimistic plans, start with empty description and let streaming updates fill it in  - For streaming message updates, exclude messages state from effect deps to avoid feedback loops
+  - When handling real-time updates:
+    - Capture previous state before updates when needed for transition checks
+    - Check state transitions to trigger side effects (e.g. refresh data)
+    - Append unknown messages rather than ignoring them
+    - When replacing optimistic items:
+      - Match by workspace ID and temp ID prefix
+      - Remove optimistic items when real ones arrive
+      - Keep non-optimistic items during updates
+      - Replace entire optimistic item rather than merging
+    - For streaming responses:
+      - Validate isComplete as boolean type rather than checking for undefined
+      - Backend sends snake_case (is_complete), normalize to camelCase (isComplete) before updating state
+      - For streaming UI transitions, check isComplete on last message before showing next step
+  - For multiple spinners in a list:
+    - Use min-width to maintain circular shape
+    - Set fixed animationDuration for synchronization
+    - Keep spinners small (h-4 w-4) for list items
+    - For subtle spinners in lists:
+      - Use single border instead of double
+      - Match opacity with surrounding icons
+      - Keep size consistent with other list icons
+      - When replacing optimistic items:
+        - Match by workspace ID and temp ID prefix
+        - Remove optimistic items when real ones arrive
+        - Keep non-optimistic items during updates
+        - Replace entire optimistic item rather than merging
+        - During streaming, update optimistic item content while preserving temp ID
+        - Only replace optimistic item with real one when stream completes
+        - When optimistically creating related items (e.g. message and plan), use matching temp IDs
+        - Update all relevant state (messages, workspace, etc) for complete optimistic UI
+        - When optimistically creating messages, match the server message shape exactly (e.g. 'prompt' vs 'content')
 - When comparing message/plan timestamps:
   - Optimistic messages (temp ID) are always newer than non-optimistic plans
   - Handle invalid dates gracefully with null checks

@@ -66,6 +66,20 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
     }
   }, [updateFileSelection, view, setView]);
 
+  const handlePlanUpdated = useCallback((plan: Plan) => {
+    if (!workspace || !setWorkspace) return;
+
+    setWorkspace(currentWorkspace => {
+      const updatedCurrentPlans = currentWorkspace.currentPlans.map(existingPlan =>
+        existingPlan.id === plan.id ? plan : existingPlan
+      );
+      return {
+        ...currentWorkspace,
+        currentPlans: updatedCurrentPlans
+      };
+    });
+  }, [setWorkspace, workspace]);
+
   // Initialize Centrifugo connection and message handling
   useCentrifugo({
     session,
@@ -281,6 +295,7 @@ export function WorkspaceContent({ initialWorkspace, workspaceId }: WorkspaceCon
                   setMessages={setMessages}
                   workspace={workspace}
                   setWorkspace={setWorkspace}
+                  handlePlanUpdated={handlePlanUpdated}
                 />
               ) : (
                 <ChatContainer
