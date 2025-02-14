@@ -9,6 +9,7 @@ import { createWorkspaceFromArchiveAction } from "@/lib/workspace/actions/create
 import { useSession } from "@/app/hooks/useSession";
 import { createWorkspaceFromPromptAction } from "@/lib/workspace/actions/create-workspace-from-prompt";
 import { logger } from "@/lib/utils/logger";
+import { ArtifactHubSearchModal } from "./ArtifactHubSearchModal";
 
 export function CreateChartOptions() {
   const [prompt, setPrompt] = useState('');
@@ -20,6 +21,7 @@ export function CreateChartOptions() {
   const [isUploading, setIsUploading] = useState(false);
   const [isPromptLoading, setIsPromptLoading] = useState(false);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+  const [showArtifactHubSearch, setShowArtifactHubSearch] = useState(false);
 
   useEffect(() => {
     // Focus the textarea on mount
@@ -129,6 +131,7 @@ export function CreateChartOptions() {
           Upload a chart
         </button>
         <button
+          onClick={() => setShowArtifactHubSearch(true)}
           disabled={isUploading || isPromptLoading}
           className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-full bg-gray-800/60 backdrop-blur-sm border border-gray-700 hover:bg-gray-700/60 transition-colors text-gray-300 hover:text-white disabled:opacity-50 disabled:hover:bg-gray-800/60 disabled:cursor-not-allowed"
         >
@@ -147,6 +150,10 @@ export function CreateChartOptions() {
 
       <input ref={fileInputRef} type="file" accept=".tgz,.tar.gz" className="hidden" onChange={handleFileUpload} />
       <PromptModal isOpen={showPromptModal} onClose={() => setShowPromptModal(false)} />
+      <ArtifactHubSearchModal
+        isOpen={showArtifactHubSearch}
+        onClose={() => setShowArtifactHubSearch(false)}
+      />
     </div>
   );
 }
