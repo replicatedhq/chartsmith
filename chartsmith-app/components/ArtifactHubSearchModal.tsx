@@ -58,7 +58,12 @@ export function ArtifactHubSearchModal({ isOpen, onClose }: ArtifactHubSearchMod
   };
 
   const handleChartSelect = async (url: string) => {
-    if (!session) return;
+    if (!session) {
+      // Store the URL and redirect to login
+      sessionStorage.setItem('pendingArtifactHubUrl', url);
+      router.push('/login');
+      return;
+    }
 
     try {
       setIsImporting(true);

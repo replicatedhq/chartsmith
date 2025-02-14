@@ -29,16 +29,21 @@ export function CreateChartOptions() {
   }, []);
 
   const handlePromptSubmit = async () => {
-    if (!session) return;
+    if (!session) {
+      // Store the prompt and redirect to login
+      sessionStorage.setItem('pendingPrompt', prompt.trim());
+      router.push('/login');
+      return;
+    }
 
     if (prompt.trim()) {
-      setIsPromptLoading(true);
       try {
+        setIsPromptLoading(true);
         const w = await createWorkspaceFromPromptAction(session, prompt);
         router.push(`/workspace/${w.id}`);
       } catch (err) {
         logger.error("Failed to create workspace", { err });
-        setIsPromptLoading(false); // Reset on error
+        setIsPromptLoading(false);
       }
     }
   };
@@ -51,7 +56,6 @@ export function CreateChartOptions() {
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!session) return;
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -62,20 +66,24 @@ export function CreateChartOptions() {
       return;
     }
 
+    if (!session) {
+      // Can't store the file in sessionStorage, so we'll need to show an error
+      alert("Please log in to upload a chart");
+      router.push('/login');
+      return;
+    }
+
     setIsUploading(true);
     try {
       const formData = new FormData();
       formData.append('file', file);
 
       const workspace = await createWorkspaceFromArchiveAction(session, formData);
-
-      // Redirect to the new workspace
       router.push(`/workspace/${workspace.id}`);
-
     } catch (error) {
       console.error('Error uploading chart:', error);
       alert("Failed to upload chart");
-      setIsUploading(false); // Only reset on error
+      setIsUploading(false);
     } finally {
       if (fileInputRef.current) {
         fileInputRef.current.value = '';

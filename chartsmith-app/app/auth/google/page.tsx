@@ -9,6 +9,7 @@ import { exchangeGoogleCodeForSession } from "@/lib/auth/actions/exchange-google
 import { createWorkspaceFromPromptAction } from "@/lib/workspace/actions/create-workspace-from-prompt";
 import { findSession } from "@/lib/auth/session";
 import { logger } from "@/lib/utils/logger";
+import { createWorkspaceFromUrlAction } from "@/lib/workspace/actions/create-workspace-from-url";
 
 function GoogleCallback() {
   const searchParams = useSearchParams();
@@ -33,21 +34,38 @@ function GoogleCallback() {
           expires.setDate(expires.getDate() + 7);
           document.cookie = `session=${jwt}; expires=${expires.toUTCString()}; path=/; SameSite=Lax`;
 
-          // Check for a stored prompt
-          const pendingPrompt = localStorage.getItem('pendingPrompt');
+          // Check for stored ArtifactHub URL first
+          const pendingArtifactHubUrl = sessionStorage.getItem('pendingArtifactHubUrl');
+          if (pendingArtifactHubUrl) {
+            try {
+              sessionStorage.removeItem('pendingArtifactHubUrl');
+              const session = await findSession(jwt);
+              if (!session) {
+                throw new Error("Failed to get session");
+              }
+              const w = await createWorkspaceFromUrlAction(session, pendingArtifactHubUrl);
+              window.location.href = `/workspace/${w.id}`;
+              return;
+            } catch (error) {
+              logger.error("Failed to create workspace from ArtifactHub URL:", error);
+              window.location.href = "/";
+              return;
+            }
+          }
+
+          // Check for stored prompt if no ArtifactHub URL
+          const pendingPrompt = sessionStorage.getItem('pendingPrompt');
           if (pendingPrompt) {
             try {
-              localStorage.removeItem('pendingPrompt'); // Clear the stored prompt
-              // Get session from JWT and create workspace with the stored prompt
+              sessionStorage.removeItem('pendingPrompt');
               const session = await findSession(jwt);
               if (!session) {
                 throw new Error("Failed to get session");
               }
               const w = await createWorkspaceFromPromptAction(session, pendingPrompt);
-
               window.location.href = `/workspace/${w.id}`;
             } catch (error) {
-              logger.error("Failed to create workspace:", error);
+              logger.error("Failed to create workspace from prompt:", error);
               window.location.href = "/";
             }
           } else {
