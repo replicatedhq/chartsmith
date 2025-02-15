@@ -2,7 +2,7 @@ import React from "react";
 import { useAtom } from "jotai";
 
 // atoms
-import { messagesAtom, workspaceAtom, handlePlanUpdatedAtom } from "@/atoms/workspace";
+import { messagesAtom, workspaceAtom } from "@/atoms/workspace";
 
 // types
 import { Session } from "@/lib/types/session";

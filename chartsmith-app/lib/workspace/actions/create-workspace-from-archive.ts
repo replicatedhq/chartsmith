@@ -1,7 +1,6 @@
 "use server"
 
 import { Session } from "@/lib/types/session";
-import { Archive } from "@/lib/types/archive";
 import { Workspace } from "@/lib/types/workspace";
 import { logger } from "@/lib/utils/logger";
 import { ChatMessageIntent, createChatMessage, createWorkspace } from "../workspace";

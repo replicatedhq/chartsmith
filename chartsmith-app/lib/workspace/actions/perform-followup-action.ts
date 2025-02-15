@@ -1,7 +1,7 @@
 "use server"
 
 import { Session } from "@/lib/types/session";
-import { ChatMessage, FollowupAction } from "@/lib/types/workspace";
+import { ChatMessage } from "@/lib/types/workspace";
 import { ChatMessageIntent, createChatMessage, getChatMessage, getWorkspace, renderWorkspace } from "../workspace";
 
 export async function performFollowupAction(session:Session, workspaceId:string, chatMessageId:string, action: string): Promise<ChatMessage|undefined> {

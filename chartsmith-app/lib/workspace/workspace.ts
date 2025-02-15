@@ -4,7 +4,6 @@ import { getParam } from "../data/param";
 import { Chart, WorkspaceFile, Workspace, Plan, ActionFile, ChatMessage, FollowupAction } from "../types/workspace";
 import * as srs from "secure-random-string";
 import { logger } from "../utils/logger";
-import { listMessagesForWorkspace } from "./chat";
 import { enqueueWork } from "../utils/queue";
 
 /**

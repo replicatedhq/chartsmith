@@ -2,6 +2,8 @@
 
 import { useRef, useEffect, useCallback } from "react";
 import type { editor } from "monaco-editor";
+
+// types
 import type { WorkspaceFile } from "@/lib/types/workspace";
 
 export function useMonacoEditor(file?: WorkspaceFile) {

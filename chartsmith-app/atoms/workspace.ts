@@ -1,5 +1,5 @@
 import { atom } from 'jotai'
-import type { Workspace, WorkspaceFile, RenderedFile, Plan, RenderedWorkspace } from '@/lib/types/workspace'
+import type { Workspace, Plan, RenderedWorkspace } from '@/lib/types/workspace'
 import { Message } from '@/components/types'
 
 // Base atoms

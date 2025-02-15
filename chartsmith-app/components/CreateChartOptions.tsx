@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from "react";
 import { Sparkles, Upload, Search, Download, Link, ArrowRight, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useTheme } from "@/contexts/ThemeContext";
 import { PromptModal } from "./PromptModal";
 import { createWorkspaceFromArchiveAction } from "@/lib/workspace/actions/create-workspace-from-archive";
 import { useSession } from "@/app/hooks/useSession";

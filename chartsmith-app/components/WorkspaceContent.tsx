@@ -2,7 +2,6 @@
 
 import React, { useEffect } from "react";
 import { useAtom } from 'jotai'
-import { RESET } from 'jotai/utils'
 
 // hooks
 import { useSession } from "@/app/hooks/useSession";

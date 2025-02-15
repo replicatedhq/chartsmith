@@ -2,17 +2,28 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Centrifuge } from "centrifuge";
+import { useAtom } from "jotai";
+
+// types
 import { Session } from "@/lib/types/session";
-import { getCentrifugoTokenAction } from "@/lib/centrifugo/actions/get-centrifugo-token-action";
-import { logger } from "@/lib/utils/logger";
 import { Message, CentrifugoMessageData } from "@/components/types";
-import { Plan, Workspace, WorkspaceFile, RenderedChart } from "@/lib/types/workspace";
+
+// actions
+import { getCentrifugoTokenAction } from "@/lib/centrifugo/actions/get-centrifugo-token-action";
 import { getWorkspaceAction } from "@/lib/workspace/actions/get-workspace";
 import { getWorkspaceMessagesAction } from "@/lib/workspace/actions/get-workspace-messages";
 import { getWorkspaceRenderAction } from "@/lib/workspace/actions/get-workspace-render";
-import { useAtom } from "jotai";
+
+
+// atoms
 import { messagesAtom, rendersAtom, workspaceAtom, handlePlanUpdatedAtom } from "@/atoms/workspace";
 import { selectedFileAtom } from "@/atoms/editor";
+
+// utils
+import { logger } from "@/lib/utils/logger";
+
+// types
+import { RenderedChart } from "@/lib/types/workspace";
 
 const RECONNECT_DELAY_MS = 1000;
 

@@ -1,8 +1,8 @@
 "use server";
 
 import { Session } from "@/lib/types/session";
-import { ChatMessageIntent, createChatMessage, createWorkspace } from "../workspace";
-import { Plan, Workspace } from "@/lib/types/workspace";
+import { createChatMessage, createWorkspace } from "../workspace";
+import { Workspace } from "@/lib/types/workspace";
 import { logger } from "@/lib/utils/logger";
 
 export async function createWorkspaceFromPromptAction(session: Session, prompt: string): Promise<Workspace> {

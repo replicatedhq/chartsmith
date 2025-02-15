@@ -4,7 +4,7 @@ import { Send } from "lucide-react";
 import { useTheme } from "../contexts/ThemeContext";
 import { Message } from "./types";
 import { Session } from "@/lib/types/session";
-import { Plan, RenderedWorkspace, Workspace } from "@/lib/types/workspace";
+import { Plan } from "@/lib/types/workspace";
 import { PlanChatMessage } from "./PlanChatMessage";
 import { ChatMessage } from "./ChatMessage";
 import { messagesAtom, plansAtom, rendersAtom, workspaceAtom } from "@/atoms/workspace";
