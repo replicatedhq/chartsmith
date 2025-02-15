@@ -405,9 +405,6 @@ export async function listWorkspaces(userId: string): Promise<Workspace[]> {
         currentRevisionNumber: row.current_revision_number,
         files: [],
         charts: [],
-        currentPlans: [],
-        previousPlans: [],
-        messages: [],
       };
 
       // get the files, only if revision number is > 0
@@ -541,9 +538,6 @@ export async function getWorkspace(id: string): Promise<Workspace | undefined> {
       currentRevisionNumber: row.current_revision_number,
       files: [],
       charts: [],
-      currentPlans: [],
-      previousPlans: [],
-      messages: [],  // Initialize empty messages array
     };
 
     // get the charts and their files, only if revision number is > 0
@@ -578,27 +572,6 @@ export async function getWorkspace(id: string): Promise<Workspace | undefined> {
       w.incompleteRevisionNumber = result2.rows[0].revision_number;
     }
 
-    // get the current plan id
-    const result3 = await db.query(
-      `SELECT plan_id FROM workspace_revision WHERE workspace_id = $1 AND revision_number = $2`,
-      [id, w.currentRevisionNumber]
-    );
-    const currentPlanId: string | undefined = result3.rows[0].plan_id;
-
-    // list all plans
-    const plans = await listPlans(id);
-
-    const currentPlanCreatedAt: Date | undefined = currentPlanId ? plans.find(plan => plan.id === currentPlanId)?.createdAt : undefined;
-
-    // iterate through them, if the plan is created before the current plan, add it to the previous plans
-    for (const plan of plans) {
-      if (!currentPlanCreatedAt || plan.createdAt > currentPlanCreatedAt) {
-        w.currentPlans.push(plan);
-      } else {
-        w.previousPlans.push(plan);
-      }
-    }
-
     return w;
   } catch (err) {
     logger.error("Failed to get workspace", { err });
@@ -606,7 +579,7 @@ export async function getWorkspace(id: string): Promise<Workspace | undefined> {
   }
 }
 
-async function listPlans(workspaceId: string): Promise<Plan[]> {
+export async function listPlans(workspaceId: string): Promise<Plan[]> {
   try {
     const db = getDB(await getParam("DB_URI"));
     const result = await db.query(`SELECT

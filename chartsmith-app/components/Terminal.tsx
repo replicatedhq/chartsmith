@@ -8,10 +8,10 @@ interface TerminalProps {
   depUpdateStdoutStreamed?: string;
   helmTemplateCommandStreamed?: string;
   helmTemplateStderrStreamed?: string;
-  isCollapsed: boolean;
-  onCollapse: () => void;
-  onExpand: () => void;
   'data-testid'?: string;
+  isCollapsed?: boolean;
+  onCollapse?: () => void;
+  onExpand?: () => void;
 }
 
 export function Terminal({
@@ -102,8 +102,11 @@ export function Terminal({
               ) : null}
               {chart.renderedFiles?.length > 0 && (
                 <div className="mt-4 space-y-1">
-                  {chart.renderedFiles.map((file) => (
-                    <div key={`${file.id}-${file.filePath}`} className="flex items-center gap-2 pl-2">
+                  {chart.renderedFiles.map((file, index) => (
+                    <div
+                      key={`${chart.id}-${file.id}-${file.filePath}-${index}`}
+                      className="flex items-center gap-2 pl-2"
+                    >
                       <span className="text-green-500">✓</span>
                       <span>{file.filePath}</span>
                     </div>

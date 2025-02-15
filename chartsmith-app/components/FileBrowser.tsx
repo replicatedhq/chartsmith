@@ -1,19 +1,22 @@
 import React from "react";
-import { FileTree } from "./FileTree";
-import { useTheme } from "../../contexts/ThemeContext";
 import { FolderPlus, FilePlus } from "lucide-react";
-import { WorkspaceFile, Chart } from "@/lib/types/workspace";
+import { useAtom } from "jotai";
 
-interface FileBrowserProps {
-  nodes: WorkspaceFile[];
-  onFileSelect: (file: WorkspaceFile) => void;
-  onFileDelete: (path: string) => void;
-  selectedFile?: WorkspaceFile;
-  charts: Chart[];  // Add charts prop
-}
+// atoms
+import { chartsAtom, looseFilesAtom } from "@/atoms/workspace";
 
-export function FileBrowser({ nodes, onFileSelect, onFileDelete, selectedFile, charts }: FileBrowserProps) {
+// components
+import { FileTree } from "@/components/FileTree";
+
+// contexts
+import { useTheme } from "@/contexts/ThemeContext";
+
+
+export function FileBrowser() {
   const { theme } = useTheme();
+
+  const [looseFiles] = useAtom(looseFilesAtom);
+  const [charts] = useAtom(chartsAtom);
 
   const handleNewFile = () => {
   };
@@ -39,11 +42,8 @@ export function FileBrowser({ nodes, onFileSelect, onFileDelete, selectedFile, c
       </div>
       <div className="flex-1 overflow-auto p-2">
         <FileTree
-          files={nodes}
-          onFileSelect={onFileSelect}
-          onFileDelete={onFileDelete}
-          selectedFile={selectedFile}
-          charts={charts}  // Pass charts to FileTree
+          files={looseFiles}
+          charts={charts}
         />
       </div>
     </div>

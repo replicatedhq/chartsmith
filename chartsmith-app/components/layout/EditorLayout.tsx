@@ -1,8 +1,14 @@
 import React from "react";
-import { useTheme } from "../../../contexts/ThemeContext";
+
+// contexts
+import { useTheme } from "@/contexts/ThemeContext";
+
+// components
 import { TopNav } from "@/components/TopNav";
 import { DebugPanel } from "@/components/DebugPanel";
 import CommandMenu from "@/components/CommandMenu";
+
+// contexts
 import { useCommandMenu } from "@/contexts/CommandMenuContext";
 
 interface EditorLayoutProps {
@@ -11,11 +17,11 @@ interface EditorLayoutProps {
 
 export function EditorLayout({ children }: EditorLayoutProps) {
   const { theme } = useTheme();
-  const { 
-    isCommandMenuOpen, 
-    setIsCommandMenuOpen, 
-    isDebugVisible, 
-    setIsDebugVisible 
+  const {
+    isCommandMenuOpen,
+    setIsCommandMenuOpen,
+    isDebugVisible,
+    setIsDebugVisible
   } = useCommandMenu();
 
   return (
@@ -27,7 +33,7 @@ export function EditorLayout({ children }: EditorLayoutProps) {
         {children}
         <DebugPanel isVisible={isDebugVisible} />
       </div>
-      <CommandMenu 
+      <CommandMenu
         isOpen={isCommandMenuOpen}
         onClose={() => setIsCommandMenuOpen(false)}
         onToggleDebug={() => {

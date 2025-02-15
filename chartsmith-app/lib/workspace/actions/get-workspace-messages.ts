@@ -1,6 +1,6 @@
 "use server";
 
-import { Message } from "@/components/editor/types";
+import { Message } from "@/components/types";
 import { Session } from "@/lib/types/session";
 import { listMessagesForWorkspace } from "../chat";
 

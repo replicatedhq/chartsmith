@@ -1,8 +1,10 @@
 import React from "react";
 import { FileText, ChevronDown, ChevronRight, Trash2 } from "lucide-react";
-import { useTheme } from "../../contexts/ThemeContext";
-import { DeleteFileModal } from "../DeleteFileModal";
+import { useTheme } from "../contexts/ThemeContext";
+import { DeleteFileModal } from "./DeleteFileModal";
 import { Chart, WorkspaceFile } from "@/lib/types/workspace";
+import { selectedFileAtom } from "@/atoms/editor";
+import { useAtom } from "jotai";
 
 interface TreeNode {
   id: string;
@@ -16,14 +18,14 @@ interface TreeNode {
 
 interface FileTreeProps {
   files: WorkspaceFile[];
-  onFileSelect: (file: WorkspaceFile) => void;
-  onFileDelete: (filePath: string) => void;
-  selectedFile?: WorkspaceFile;
   charts: Chart[];
 }
 
-export function FileTree({ files = [], charts = [], onFileSelect, onFileDelete, selectedFile }: FileTreeProps) {
+export function FileTree({ files = [], charts = [] }: FileTreeProps) {
   const { theme } = useTheme();
+
+  const [selectedFile, setSelectedFile] = useAtom(selectedFileAtom);
+
   const prevFilesRef = React.useRef<WorkspaceFile[]>([]);
   const prevChartsRef = React.useRef<Chart[]>([]);
 
@@ -208,7 +210,7 @@ export function FileTree({ files = [], charts = [], onFileSelect, onFileDelete, 
             toggleFolder(node.filePath);
           } else {
             const { type: _type, children: _children, ...rest } = node;
-            onFileSelect({
+            setSelectedFile({
               id: rest.id,
               filePath: rest.filePath,
               content: rest.content || '',
@@ -293,7 +295,7 @@ export function FileTree({ files = [], charts = [], onFileSelect, onFileDelete, 
         isRequired={deleteModal.isRequired}
         onConfirm={() => {
           if (!deleteModal.isRequired && deleteModal.filePath) {
-            onFileDelete(deleteModal.filePath);
+
           }
           setDeleteModal({ isOpen: false, filePath: "", isRequired: false });
         }}

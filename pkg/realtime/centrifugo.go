@@ -37,6 +37,11 @@ func SendEvent(ctx context.Context, r types.Recipient, e types.Event) error {
 }
 
 func sendMessage(channelName string, data map[string]interface{}) error {
+	eventType, ok := data["eventType"].(string)
+	if ok {
+		logger.Infof("Sending event to channel %s: %s", channelName, eventType)
+	}
+
 	if centrifugoConfig == nil {
 		panic("Centrifugo config not initialized")
 	}

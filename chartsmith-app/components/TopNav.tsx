@@ -3,7 +3,6 @@ import React, { useState, useRef } from "react";
 import { ChevronDown } from "lucide-react";
 import Link from "next/link";
 import { useTheme } from "@/contexts/ThemeContext";
-import { StatusDropdown } from "./StatusDropdown";
 import { CreateChartModal } from "./CreateChartModal";
 
 const evalItems = [
@@ -50,17 +49,34 @@ export function TopNav() {
         <div className="flex-1 flex justify-center">
           <div className="relative" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave} ref={dropdownRef}>
             <button className={`px-3 py-1.5 text-sm flex items-center gap-2 rounded hover:bg-opacity-40 ${resolvedTheme === "dark" ? "text-gray-300 hover:text-white hover:bg-dark-border" : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"}`}>
-              my-helm-chart
+              workspace
               <ChevronDown className="w-4 h-4" />
             </button>
 
-            {isChartDropdownOpen && <div className={`absolute top-full left-1/2 -translate-x-1/2 mt-1 w-64 rounded-lg shadow-lg border py-1 z-[60] ${resolvedTheme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"}`}>{/* ... dropdown content ... */}</div>}
+            {isChartDropdownOpen && (
+              <>
+                <div className="absolute h-2 w-full -bottom-2 left-0" />
+                <div className={`absolute top-[calc(100%+2px)] left-1/2 -translate-x-1/2 w-64 rounded-lg shadow-lg border py-1 z-[60] ${
+                  resolvedTheme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"
+                }`}>
+                  <button
+                    className={`w-full text-left px-4 py-2 text-sm ${
+                      resolvedTheme === "dark"
+                        ? "text-gray-300 hover:bg-dark-border hover:text-white"
+                        : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                    }`}
+                  >
+                    Rename Workspace
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
         <div className="flex items-center space-x-2 min-w-[200px] justify-end">
-          <StatusDropdown label="Eval" items={evalItems} showStatus={true} theme={resolvedTheme} />
-          <StatusDropdown label="Import/Export" items={importExportItems} showStatus={false} theme={resolvedTheme} />
+          {/* <StatusDropdown label="Eval" items={evalItems} showStatus={true} theme={resolvedTheme} />
+          <StatusDropdown label="Import/Export" items={importExportItems} showStatus={false} theme={resolvedTheme} /> */}
         </div>
       </nav>
 

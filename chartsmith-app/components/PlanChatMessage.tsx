@@ -1,71 +1,68 @@
+"use client";
+
 import React, { useState, useRef, useEffect, useLayoutEffect } from "react";
 import ReactMarkdown from 'react-markdown';
-import { Message } from "../types";
-import { Session } from "@/lib/types/session";
-import { useTheme } from "../../../contexts/ThemeContext";
+import { useAtom } from "jotai";
+
+// contexts
+import { useTheme } from "@/contexts/ThemeContext";
+
+// components
 import { Button } from "@/components/ui/Button";
 import { FeedbackModal } from "@/components/FeedbackModal";
+
+// actions
 import { ignorePlanAction } from "@/lib/workspace/actions/ignore-plan";
 import { ThumbsUp, ThumbsDown, Send, ChevronDown, ChevronUp, Plus, Pencil, Trash2 } from "lucide-react";
-import { createPlanAction } from "@/lib/workspace/actions/create-plan";
-import { Plan, Workspace } from "@/lib/types/workspace";
 import { createRevisionAction } from "@/lib/workspace/actions/create-revision";
-import { PromptType } from "@/lib/llm/prompt-type";
+import { messagesAtom, workspaceAtom, handlePlanUpdatedAtom, planByIdAtom } from "@/atoms/workspace";
+import { createChatMessageAction } from "@/lib/workspace/actions/create-chat-message";
+
+// types
+import { Message } from "@/components/types";
+import { Session } from "@/lib/types/session";
 
 interface PlanChatMessageProps {
   showActions?: boolean;
   showChatInput?: boolean;
-  plan: Plan;
+  planId: string;
   onProceed?: () => void;
   onIgnore?: () => void;
   session?: Session;
   workspaceId?: string;
   messageId?: string;
-  handlePlanUpdated: (plan: Plan) => void;
-  setMessages?: React.Dispatch<React.SetStateAction<Message[]>>;
-  setWorkspace?: React.Dispatch<React.SetStateAction<Workspace>>;
-  workspace?: Workspace;
-  messages?: Message[];
-  onSendMessage: (message: string) => void;
 }
 
 export function PlanChatMessage({
-  plan,
+  planId,
   showActions = true,
   showChatInput = true,
   onProceed,
   onIgnore,
   session,
   messageId,
-  handlePlanUpdated,
-  setMessages,
-  setWorkspace,
-  workspace,
-  messages,
-  onSendMessage
 }: PlanChatMessageProps) {
   const { theme } = useTheme();
+
+  const [workspace, setWorkspace] = useAtom(workspaceAtom);
+  const [messages, setMessages] = useAtom(messagesAtom);
+  const [, handlePlanUpdated] = useAtom(handlePlanUpdatedAtom);
+
+  // Fix: Use useAtom directly with planByIdAtom
+  const [planGetter] = useAtom(planByIdAtom);
+  const plan = planGetter(planId);
+
   const [showFeedback, setShowFeedback] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(!plan.status?.includes('ignored'));
-  const [actionFilesExpanded, setActionFilesExpanded] = useState(plan.status === 'applying');
+  const [isExpanded, setIsExpanded] = useState(true);
+  const [actionFilesExpanded, setActionFilesExpanded] = useState(true);
 
-  // Update expansion state when plan status changes
-  useEffect(() => {
-    setActionFilesExpanded(plan.status === 'applying');
-  }, [plan.status]);
-
-  // Automatically collapse when plan becomes superseded
-  useEffect(() => {
-    if (plan.status === 'ignored') {
-      setIsExpanded(false);
-    }
-  }, [plan.status, plan.id]);
   const [chatInput, setChatInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const actionsRef = useRef<HTMLDivElement>(null);
 
   // Scroll when new actions are added or when expanded
   useLayoutEffect(() => {
+    if (!plan) return;
     if (plan.status === 'applying' && plan.actionFiles) {
       // Immediate scroll for new actions
       actionsRef.current?.scrollIntoView({
@@ -84,9 +81,8 @@ export function PlanChatMessage({
         }, delay);
       });
     }
-  }, [plan.status, plan.actionFiles, actionFilesExpanded]);
+  }, [plan, actionFilesExpanded]);
 
-  const [showDropdown, setShowDropdown] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const adjustTextareaHeight = () => {
@@ -111,16 +107,6 @@ export function PlanChatMessage({
   const handleProceed = async () => {
     if (!session || !plan) return;
 
-    // Optimistically update plan status
-    if (setWorkspace) {
-      setWorkspace(currentWorkspace => ({
-        ...currentWorkspace,
-        currentPlans: currentWorkspace.currentPlans.map(p =>
-          p.id === plan.id ? { ...p, status: 'applying' } : p
-        )
-      }));
-    }
-
     const updatedWorkspace = await createRevisionAction(session, plan.id);
     if (updatedWorkspace && setWorkspace) {
       setWorkspace(updatedWorkspace);
@@ -134,12 +120,18 @@ export function PlanChatMessage({
 
     setIsSubmitting(true);
     try {
-      onSendMessage(chatInput);
+      if (!session || !workspace) return;
+
+      const chatMessage = await createChatMessageAction(session, workspace.id, chatInput.trim());
+
+      setMessages(prev => [...prev, chatMessage]);
       setChatInput("");
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  if (!plan) return null;
 
   return (
     <div className="space-y-2" data-testid="plan-message">
@@ -199,7 +191,7 @@ export function PlanChatMessage({
               <div className="mt-4 light:border light:border-gray-200 pt-4 px-3 pb-2 rounded-lg bg-primary/5 dark:bg-dark-surface">
                 <div className="flex items-center justify-between mb-2" ref={actionsRef}>
                   <span className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
-                    {(!plan.actionFiles || plan.actionFiles.length === 0) && plan.status === 'applying' 
+                    {(!plan.actionFiles || plan.actionFiles.length === 0) && plan.status === 'applying'
                       ? "selecting files..."
                       : `${plan.actionFiles?.length || 0} file ${(plan.actionFiles?.length || 0) === 1 ? 'change' : 'changes'}`
                     }

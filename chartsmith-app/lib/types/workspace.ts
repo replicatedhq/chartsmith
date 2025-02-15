@@ -1,4 +1,4 @@
-import { Message } from "@/components/editor/types";
+import { Message } from "@/components/types";
 
 export interface Workspace {
   id: string;
@@ -9,9 +9,6 @@ export interface Workspace {
   files: WorkspaceFile[];
   currentRevisionNumber: number;
   incompleteRevisionNumber?: number;
-  currentPlans: Plan[];
-  previousPlans: Plan[];
-  messages: Message[];
 }
 
 export interface WorkspaceFile {

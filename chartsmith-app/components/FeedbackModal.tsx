@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { X, AlertTriangle, Star } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
-import { Message, Prompt } from "./editor/types";
+import { Message, Prompt } from "./types";
 import { Session } from "@/lib/types/session";
 
 interface FeedbackModalProps {

@@ -1,70 +1,65 @@
+"use client";
+
 import React, { useState, useRef, useEffect, FormEvent } from "react";
+import { useAtom } from "jotai";
 import Image from "next/image";
-import { Message } from "../types";
-import { Session } from "@/lib/types/session";
-import { Workspace } from "@/lib/types/workspace";
-import { useTheme } from "../../../contexts/ThemeContext";
-import { Button } from "@/components/ui/Button";
-import { ignorePlanAction } from "@/lib/workspace/actions/ignore-plan";
-import { createRevisionAction } from "@/lib/workspace/actions/create-revision";
-import { Send, ThumbsUp, ThumbsDown } from "lucide-react";
+import { Send } from "lucide-react";
 import ReactMarkdown from 'react-markdown';
-import { cancelMessageAction } from "@/lib/workspace/actions/cancel-message";
+
+// Components
+import { Terminal } from "@/components/Terminal";
 import { FeedbackModal } from "@/components/FeedbackModal";
+
+// Types
+import { Message } from "@/components/types";
+import { Session } from "@/lib/types/session";
+
+// Contexts
+import { useTheme } from "../contexts/ThemeContext";
+
+// atoms
+import { messageByIdAtom, messagesAtom, renderByIdAtom, workspaceAtom } from "@/atoms/workspace";
+
+// actions
+import { cancelMessageAction } from "@/lib/workspace/actions/cancel-message";
 import { performFollowupAction } from "@/lib/workspace/actions/perform-followup-action";
-import { getWorkspaceRenderAction } from "@/lib/workspace/actions/get-workspace-render";
-import { RenderedWorkspace } from "@/lib/types/workspace";
-import { Terminal } from "./Terminal";
+import { createChatMessageAction } from "@/lib/workspace/actions/create-chat-message";
 
 export interface ChatMessageProps {
-  message: Message;
-  onApplyChanges?: () => void;
+  messageId: string;
   session: Session;
-  workspaceId: string;
-  showActions?: boolean;
-  setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
-  setWorkspace?: React.Dispatch<React.SetStateAction<Workspace>>;
   showChatInput?: boolean;
-  onSendMessage?: (message: string) => void;
-  workspace?: Workspace;
-  workspaceRender?: RenderedWorkspace | null;
 }
 
 export function ChatMessage({
-  message,
-  onApplyChanges,
+  messageId,
   session,
-  workspaceId,
-  showActions = true,
-  setMessages,
-  setWorkspace,
   showChatInput,
-  onSendMessage,
-  workspace,
-  workspaceRender
 }: ChatMessageProps) {
   const { theme } = useTheme();
   const [showReportModal, setShowReportModal] = useState(false);
-  const [showDropdown, setShowDropdown] = useState(false);
+  const [, setShowDropdown] = useState(false);
   const [chatInput, setChatInput] = useState("");
-  const [collapsedCharts, setCollapsedCharts] = useState<{[key: string]: boolean}>({});
   const dropdownRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  useEffect(() => {
-    if (workspaceRender?.charts) {
-      const newCollapsedState = workspaceRender.charts.reduce((acc, chart) => {
-        acc[chart.id] = chart.isSuccess && chart.completedAt !== undefined;
-        return acc;
-      }, {} as {[key: string]: boolean});
-      setCollapsedCharts(newCollapsedState);
-    }
-  }, [workspaceRender?.charts]);
+  const [, setMessages] = useAtom(messagesAtom);
+  const [messageGetter] = useAtom(messageByIdAtom);
+  const message = messageGetter(messageId);
 
-  const handleSubmitChat = (e: FormEvent) => {
+  const [workspace] = useAtom(workspaceAtom);
+  const [renderGetter] = useAtom(renderByIdAtom);
+  const render = renderGetter(message!.responseRenderId!);
+
+  const handleSubmitChat = async (e: FormEvent) => {
     e.preventDefault();
-    if (chatInput.trim() && onSendMessage) {
-      onSendMessage(chatInput);
+    if (chatInput.trim()) {
+      if (!session || !workspace) return;
+
+      const chatMessage = await createChatMessageAction(session, workspace.id, chatInput.trim());
+
+      setMessages(prev => [...prev, chatMessage]);
+
       setChatInput("");
     }
   };
@@ -88,6 +83,12 @@ export function ChatMessage({
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
+
+  const handleApplyChanges = async () => {
+    console.log("handleApplyChanges");
+  }
+
+  if (!message || !workspace) return null;
 
   return (
     <div className="space-y-2" data-testid="chat-message">
@@ -139,11 +140,11 @@ export function ChatMessage({
           <div className={`p-3 rounded-2xl ${theme === "dark" ? "bg-dark-border/40" : "bg-gray-100"} rounded-tl-sm w-full`}>
             <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"} mb-1`}>ChartSmith</div>
             <div className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} ${message.isIgnored ? "opacity-50 line-through" : ""} text-[12px] markdown-content`}>
-              {message.responseRenderId && workspaceRender ? (
+              {message.responseRenderId ? (
                 <div className="space-y-4">
-                  {workspaceRender?.charts.map((chart) => (
+                  {render?.charts.map((chart, index) => (
                     <Terminal
-                      key={chart.id}
+                      key={`${messageId}-${render.id}-${chart.id}-${index}`}
                       data-testid="chart-terminal"
                       chart={chart}
                       depUpdateCommandStreamed={chart.depUpdateCommand}
@@ -151,9 +152,6 @@ export function ChatMessage({
                       depUpdateStdoutStreamed={chart.depUpdateStdout}
                       helmTemplateCommandStreamed={chart.helmTemplateCommand}
                       helmTemplateStderrStreamed={chart.helmTemplateStderr}
-                      isCollapsed={collapsedCharts[chart.id] || false}
-                      onCollapse={() => setCollapsedCharts(prev => ({ ...prev, [chart.id]: true }))}
-                      onExpand={() => setCollapsedCharts(prev => ({ ...prev, [chart.id]: false }))}
                     />
                   ))}
                 </div>
@@ -177,7 +175,7 @@ export function ChatMessage({
                         : "bg-white border border-gray-300 text-gray-600 hover:text-gray-800 hover:bg-gray-50"
                     }`}
                     onClick={async () => {
-                      const chatMessage = await performFollowupAction(session, workspaceId, message.id, action.action);
+                      const chatMessage = await performFollowupAction(session, workspace.id, message.id, action.action);
                       if (chatMessage && setMessages) {
                         setMessages((messages: Message[]) => [...messages, chatMessage]);
                       }
@@ -186,61 +184,6 @@ export function ChatMessage({
                     {action.label}
                   </button>
                 ))}
-              </div>
-            )}
-            {message.isComplete && !message.isApplied && showActions && onApplyChanges && (
-              <div className="mt-4 space-y-4 border-t border-gray-700/10 pt-4">
-                {message.isApplying ? (
-                  <div className="flex justify-center mt-4">
-                    <div className="animate-spin rounded-full h-6 w-6 border-2 border-primary border-t-transparent"></div>
-                  </div>
-                ) : (
-                  <div className="flex justify-end items-center gap-3 mt-4">
-                    <div className="relative" ref={dropdownRef}>
-                      <div className="flex">
-                        <Button
-                          onClick={() => setShowReportModal(true)}
-                          variant="ghost"
-                          size="sm"
-                          className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-r-none border-r"
-                        >
-                          Feedback
-                        </Button>
-                        <Button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setShowDropdown(!showDropdown);
-                          }}
-                          variant="ghost"
-                          size="sm"
-                          className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 px-2 rounded-l-none"
-                        >
-                          ↓
-                        </Button>
-                      </div>
-                      {showDropdown && (
-                        <div className={`absolute right-0 mt-1 w-32 ${theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"} border rounded-md shadow-lg z-50`}>
-                          <button
-                            onClick={async () => {
-                              setShowDropdown(false);
-                              await ignorePlanAction(session, workspaceId, message.id);
-                            }}
-                            className={`w-full px-4 py-2 text-sm text-left ${theme === "dark" ? "text-gray-200 hover:bg-dark-border/40" : "text-gray-700 hover:bg-gray-100"}`}
-                          >
-                            Ignore
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                    <Button
-                      onClick={() => onApplyChanges()}
-                      size="sm"
-                      className="bg-primary hover:bg-primary/90 text-white"
-                    >
-                      Apply changes
-                    </Button>
-                  </div>
-                )}
               </div>
             )}
             {showChatInput && (
@@ -256,9 +199,8 @@ export function ChatMessage({
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' && !e.shiftKey) {
                           e.preventDefault();
-                          if (chatInput.trim() && onSendMessage) {
-                            onSendMessage(chatInput);
-                            setChatInput('');
+                          if (chatInput.trim() && handleSubmitChat) {
+                            handleSubmitChat(e);
                           }
                         }
                       }}
@@ -292,7 +234,7 @@ export function ChatMessage({
         onClose={() => setShowReportModal(false)}
         message={message}
         chatId={message.id}
-        workspaceId={workspaceId}
+        workspaceId={workspace.id}
         session={session}
       />
     </div>

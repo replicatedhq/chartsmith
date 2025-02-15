@@ -5,77 +5,33 @@ import { Centrifuge } from "centrifuge";
 import { Session } from "@/lib/types/session";
 import { getCentrifugoTokenAction } from "@/lib/centrifugo/actions/get-centrifugo-token-action";
 import { logger } from "@/lib/utils/logger";
-import { Message, CentrifugoMessageData } from "@/components/editor/types";
+import { Message, CentrifugoMessageData } from "@/components/types";
 import { Plan, Workspace, WorkspaceFile, RenderedChart } from "@/lib/types/workspace";
 import { getWorkspaceAction } from "@/lib/workspace/actions/get-workspace";
 import { getWorkspaceMessagesAction } from "@/lib/workspace/actions/get-workspace-messages";
 import { getWorkspaceRenderAction } from "@/lib/workspace/actions/get-workspace-render";
+import { useAtom } from "jotai";
+import { messagesAtom, rendersAtom, workspaceAtom, handlePlanUpdatedAtom } from "@/atoms/workspace";
+import { selectedFileAtom } from "@/atoms/editor";
 
 const RECONNECT_DELAY_MS = 1000;
 
 interface UseCentrifugoProps {
   session: Session | undefined;
-  workspace?: Workspace;
-  setWorkspace: React.Dispatch<React.SetStateAction<Workspace>>;
-  setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
-  setWorkspaceRenders: React.Dispatch<React.SetStateAction<any[]>>;
-  handleFileSelect?: (file: WorkspaceFile) => void;
 }
 
 export function useCentrifugo({
   session,
-  workspace,
-  setWorkspace,
-  setMessages,
-  setWorkspaceRenders,
-  handleFileSelect
 }: UseCentrifugoProps) {
   const centrifugeRef = useRef<Centrifuge | null>(null);
+
+  const [workspace, setWorkspace] = useAtom(workspaceAtom)
+  const [, setRenders] = useAtom(rendersAtom)
+  const [, setMessages] = useAtom(messagesAtom)
+  const [, setSelectedFile] = useAtom(selectedFileAtom)
+  const [, handlePlanUpdated] = useAtom(handlePlanUpdatedAtom)
+
   const [isReconnecting, setIsReconnecting] = useState(false);
-
-  const handlePlanUpdated = useCallback((plan: Plan) => {
-    setWorkspace(currentWorkspace => {
-      if (plan.status === 'pending') {
-        const updatedCurrentPlans = currentWorkspace.currentPlans.map(existingPlan => {
-          if (existingPlan.id === plan.id) {
-            return plan;
-          }
-          return { ...existingPlan, status: 'ignored' };
-        });
-
-        if (!updatedCurrentPlans.some(plan => plan.id === plan.id)) {
-          updatedCurrentPlans.unshift(plan);
-        }
-
-        return {
-          ...currentWorkspace,
-          currentPlans: updatedCurrentPlans,
-          previousPlans: currentWorkspace.previousPlans.map(p => ({ ...p, status: 'ignored' }))
-        };
-      }
-
-      const existingPlanIndex = currentWorkspace.currentPlans.findIndex(p => p.id === plan.id);
-      const updatedCurrentPlans = [...currentWorkspace.currentPlans];
-
-      if (existingPlanIndex !== -1) {
-        updatedCurrentPlans[existingPlanIndex] = plan;
-      } else {
-        updatedCurrentPlans.unshift(plan);
-      }
-
-      return {
-        ...currentWorkspace,
-        currentPlans: updatedCurrentPlans,
-        previousPlans: currentWorkspace.previousPlans
-      };
-    });
-
-    if (session && workspace?.id && (plan.status === 'review' || plan.status === 'pending')) {
-      getWorkspaceMessagesAction(session, workspace.id).then(updatedMessages => {
-        setMessages(updatedMessages);
-      });
-    }
-  }, [session, workspace?.id, setMessages, setWorkspace]);
 
   const handleRevisionCreated = useCallback(async (revision: any) => {
     if (!session || !revision.workspaceId) return;
@@ -129,11 +85,13 @@ export function useCentrifugo({
   }, []);
 
   const handleArtifactReceived = useCallback((artifact: { path: string, content: string, pendingPatch?: string }) => {
-    if (!handleFileSelect) return;
+    if (!setSelectedFile) return;
 
-    setWorkspace(currentWorkspace => {
-      const existingWorkspaceFile = currentWorkspace.files?.find(f => f.filePath === artifact.path);
-      const chartWithFile = currentWorkspace.charts?.find(chart =>
+    setWorkspace(workspace => {
+      if (!workspace) return workspace;
+
+      const existingWorkspaceFile = workspace.files?.find(f => f.filePath === artifact.path);
+      const chartWithFile = workspace.charts?.find(chart =>
         chart.files.some(f => f.filePath === artifact.path)
       );
 
@@ -146,8 +104,8 @@ export function useCentrifugo({
         };
 
         return {
-          ...currentWorkspace,
-          charts: currentWorkspace.charts.map((chart, index) =>
+          ...workspace,
+          charts: workspace.charts.map((chart, index) =>
             index === 0 ? {
               ...chart,
               files: [...chart.files, newFile]
@@ -156,7 +114,7 @@ export function useCentrifugo({
         };
       }
 
-      const updatedFiles = currentWorkspace.files?.map(file =>
+      const updatedFiles = workspace.files?.map(file =>
         file.filePath === artifact.path ? {
           ...file,
           content: artifact.content,
@@ -164,7 +122,7 @@ export function useCentrifugo({
         } : file
       ) || [];
 
-      const updatedCharts = currentWorkspace.charts?.map(chart => ({
+      const updatedCharts = workspace.charts?.map(chart => ({
         ...chart,
         files: chart.files.map(file =>
           file.filePath === artifact.path ? {
@@ -176,7 +134,7 @@ export function useCentrifugo({
       })) || [];
 
       return {
-        ...currentWorkspace,
+        ...workspace,
         files: updatedFiles,
         charts: updatedCharts
       };
@@ -189,8 +147,8 @@ export function useCentrifugo({
       pendingPatch: artifact.pendingPatch
     };
 
-    handleFileSelect(file);
-  }, [handleFileSelect, setWorkspace]);
+    setSelectedFile(file);
+  }, [setSelectedFile]);
 
   const handleRenderStreamEvent = useCallback(async (data: CentrifugoMessageData) => {
     if (!session) return;
@@ -198,14 +156,14 @@ export function useCentrifugo({
       return;
     }
 
-    let renders = await setWorkspaceRenders(prev => {
+    let renders = await setRenders(prev => {
       const newRenders = [...prev];
 
       // if the message has a renderWorkspaceId that we don't know, fetch and add it
       if (!newRenders.find(render => render.id === data.renderWorkspaceId)) {
         if (data.renderWorkspaceId) {
           getWorkspaceRenderAction(session, data.renderWorkspaceId).then(newWorkspaceRender => {
-            setWorkspaceRenders(prev => [...prev, newWorkspaceRender]);
+            setRenders(prev => [...prev, newWorkspaceRender]);
           });
         }
         return newRenders;
@@ -233,17 +191,25 @@ export function useCentrifugo({
         };
       });
     });
-  }, [session, setWorkspaceRenders]);
+  }, [session, setRenders]);
+
+  const handleRenderUpdated = useCallback((data: CentrifugoMessageData) => {
+    console.log('Render updated event received:', {
+      eventType: data.eventType,
+      renderChartId: data.renderChartId,
+      renderWorkspaceId: data.renderWorkspaceId,
+      fullData: data
+    });
+  }, []);
 
   const handleCentrifugoMessage = useCallback((message: { data: CentrifugoMessageData }) => {
     const eventType = message.data.eventType;
-
     if (eventType === 'plan-updated') {
       const plan = message.data.plan!;
       handlePlanUpdated({
         ...plan,
-        createdAt: new Date(plan.createdAt), // Convert string to Date
-        isComplete: plan.isComplete || false // Provide default value
+        createdAt: new Date(plan.createdAt),
+        isComplete: plan.isComplete || false
       });
     } else if (eventType === 'chatmessage-updated') {
       handleChatMessageUpdated(message.data);
@@ -251,6 +217,8 @@ export function useCentrifugo({
       handleRevisionCreated(message.data.revision!);
     } else if (eventType === 'render-stream') {
       handleRenderStreamEvent(message.data);
+    } else if (eventType === 'render-updated') {
+      handleRenderUpdated(message.data);
     }
 
     const isWorkspaceUpdatedEvent = message.data.workspace;
@@ -268,7 +236,8 @@ export function useCentrifugo({
     handleRevisionCreated,
     handleRenderStreamEvent,
     handleWorkspaceUpdated,
-    handleArtifactReceived
+    handleArtifactReceived,
+    handleRenderUpdated
   ]);
 
   useEffect(() => {
@@ -347,10 +316,16 @@ export function useCentrifugo({
         data: {}
       });
 
-      sub.on("publication", handleCentrifugoMessage);
+      sub.on("publication", (msg) => {
+        handleCentrifugoMessage(msg);
+      });
 
       sub.on("error", (ctx) => {
         console.log(`Subscription error`, { ctx });
+      });
+
+      sub.on("subscribed", () => {
+        console.log('Successfully subscribed to:', channel);
       });
 
       sub.subscribe();

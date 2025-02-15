@@ -1,14 +1,28 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect } from "react";
 import { Footer } from "@/components/Footer";
-import { useTheme } from "@/contexts/ThemeContext";
 import { HomeHeader } from "@/components/HomeHeader";
 import { CreateChartOptions } from "@/components/CreateChartOptions";
 import { HomeNav } from "@/components/HomeNav";
+import { useSetAtom, useAtomValue } from 'jotai';
+import { messagesAtom, plansAtom, rendersAtom, workspaceAtom } from '@/atoms/workspace';
 
 export default function HomePage() {
-  const { theme } = useTheme();
+  const workspace = useAtomValue(workspaceAtom);
+  const setWorkspace = useSetAtom(workspaceAtom);
+  const setMessages = useSetAtom(messagesAtom);
+  const setPlans = useSetAtom(plansAtom);
+  const setRenders = useSetAtom(rendersAtom);
+
+  useEffect(() => {
+    if (workspace !== null) {
+      setWorkspace(null);
+      setMessages([]);
+      setPlans([]);
+      setRenders([]);
+    }
+  }, [workspace, setWorkspace, setMessages, setPlans, setRenders]);
 
   return (
     <div
