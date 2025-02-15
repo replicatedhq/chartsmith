@@ -28,11 +28,11 @@ export default function HomePage() {
     <div
       className="min-h-screen bg-black text-white bg-cover bg-center bg-no-repeat flex flex-col"
       style={{
-        backgroundImage: 'url("https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=2072")',
+        backgroundImage: 'url("https://images.unsplash.com/photo-1667372459510-55b5e2087cd0?auto=format&fit=crop&q=80&w=2072")',
       }}
     >
       {/* Dark overlay */}
-      <div className="absolute inset-0 bg-black/70" />
+      <div className="absolute inset-0 bg-black/80" />
 
       <div className="relative flex-1 flex flex-col">
         <HomeNav />
