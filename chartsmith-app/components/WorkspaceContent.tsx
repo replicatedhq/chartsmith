@@ -21,7 +21,7 @@ import { ChatContainer } from "@/components/ChatContainer";
 import { Plan, RenderedWorkspace, Workspace } from "@/lib/types/workspace";
 
 // atoms
-import { workspaceAtom } from "@/atoms/workspace";
+import { chartsBeforeApplyingPendingPatchesAtom, looseFilesBeforeApplyingPendingPatchesAtom, workspaceAtom } from "@/atoms/workspace";
 import { editorContentAtom } from "@/atoms/editor";
 import { messagesAtom, plansAtom, rendersAtom } from "@/atoms/workspace";
 import { Message } from "./types";
@@ -42,13 +42,20 @@ export function WorkspaceContent({
 }: WorkspaceContentProps) {
   // Instead of useHydrateAtoms, use useAtom and useEffect
   const [workspace, setWorkspace] = useAtom(workspaceAtom);
-  const [messages, setMessages] = useAtom(messagesAtom);
-  const [plans, setPlans] = useAtom(plansAtom);
-  const [renders, setRenders] = useAtom(rendersAtom);
+  const [, setMessages] = useAtom(messagesAtom);
+  const [, setPlans] = useAtom(plansAtom);
+  const [, setRenders] = useAtom(rendersAtom);
+  const [, setChartsBeforeApplyingPendingPatches] = useAtom(chartsBeforeApplyingPendingPatchesAtom);
+  const [, setLooseFilesBeforeApplyingPendingPatches] = useAtom(looseFilesBeforeApplyingPendingPatchesAtom);
 
   // Hydrate atoms on mount and when initial values change
   useEffect(() => {
     setWorkspace(initialWorkspace);
+
+    // hydrate the before applying pending patches based on the current state
+    setChartsBeforeApplyingPendingPatches(initialWorkspace.charts);
+    setLooseFilesBeforeApplyingPendingPatches(initialWorkspace.files);
+
     setMessages(initialMessages);
     setPlans(initialPlans);
     setRenders(initialRenders);

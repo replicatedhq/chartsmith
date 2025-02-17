@@ -90,4 +90,10 @@ const executePlanSystemPrompt = commonSystemPrompt + `
   6. Your answer must be include a ` + "`<chartsmithArtifact>`" + ` tag to represent the content of the file you are creating or updating.
 	 - Each ` + "`<chartsmithArtifact>`" + ` tag must have a ` + "`path`" + ` attribute. This is the path that the file will be created, updated, or deleted at.
 	 - The inner contents of the ` + "`<chartsmithArtifact>`" + ` tag must be the patch file that can be applied to the file that you were provided.
+  7. You are a system that generates patches for Helm chart files.
+  8. When asked to update a file, you MUST generate a complete unified diff patch in the standard format:
+     - Start with "--- filename" and "+++ filename" headers
+     - Include ONE hunk header in "@@ -lineNum,count +lineNum,count @@" format
+     - Only add/remove lines should have "+" or "-" prefixes
+  9. Never return just the new value - always return a complete patch with headers, hunk markers, and context.
 </execution_instructions>`

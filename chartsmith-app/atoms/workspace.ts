@@ -1,5 +1,5 @@
 import { atom } from 'jotai'
-import type { Workspace, Plan, RenderedWorkspace } from '@/lib/types/workspace'
+import type { Workspace, Plan, RenderedWorkspace, Chart, WorkspaceFile } from '@/lib/types/workspace'
 import { Message } from '@/components/types'
 
 // Base atoms
@@ -34,6 +34,29 @@ export const chartsAtom = atom(get => {
   const workspace = get(workspaceAtom)
   if (!workspace) return []
   return workspace.charts
+})
+
+export const chartsBeforeApplyingPendingPatchesAtom = atom<Chart[]>([])
+export const looseFilesBeforeApplyingPendingPatchesAtom = atom<WorkspaceFile[]>([])
+
+export const allFilesBeforeApplyingPendingPatchesAtom = atom(get => {
+  const charts = get(chartsBeforeApplyingPendingPatchesAtom)
+  const chartFilesBeforeApplyingPendingPatches = charts.flatMap(c => c.files.filter(f => f.pendingPatch))
+  const looseFilesBeforeApplyingPendingPatches = get(looseFilesBeforeApplyingPendingPatchesAtom)
+  return [...chartFilesBeforeApplyingPendingPatches, ...looseFilesBeforeApplyingPendingPatches]
+})
+
+export const allFilesWithPendingPatchesAtom = atom(get => {
+  const files = get(looseFilesAtom)
+  const filesWithPendingPatches = files.filter(f => f.pendingPatch)
+
+  // find files in charts with pending patches too
+  const charts = get(chartsAtom)
+  const chartsWithPendingPatches = charts.filter(c => c.files.some(f => f.pendingPatch))
+  // get the files with pending patches from each of the charts with pending patches
+  const filesWithPendingPatchesFromCharts = chartsWithPendingPatches.flatMap(c => c.files.filter(f => f.pendingPatch))
+
+  return [...filesWithPendingPatches, ...filesWithPendingPatchesFromCharts]
 })
 
 // Handle plan updated, will update the plan if its found, otherwise it will add it to the list

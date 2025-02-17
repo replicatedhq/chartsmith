@@ -18,7 +18,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "ChartSmith by Replicated",
-  description: "An assistent for creating and validating Helm charts",
+  description: "An assistant for creating and validating Helm charts",
 };
 
 export default function RootLayout({

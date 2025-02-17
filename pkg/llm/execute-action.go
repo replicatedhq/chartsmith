@@ -36,8 +36,42 @@ Here is the current content between XML tags:
 %s
 </current_content>
 
-Generate a git .patch file to apply this update. Use correct line numbers based on the current_content provided.
-The patch should be formatted with unified diff format.
+CRITICAL INSTRUCTION: You MUST generate a complete unified diff patch in the standard format.
+NEVER return just the new value - this is incorrect and will be rejected.
+
+The patch MUST contain ALL of these elements in this EXACT order:
+
+1. File headers (both lines required):
+   --- %[1]s
+   +++ %[1]s
+
+2. Hunk header showing line numbers:
+   @@ -lineNum,lineCount +lineNum,lineCount @@
+
+3. Context and changes:
+   - Three (3) lines of unchanged context BEFORE the change (no leading spaces)
+   - The removed line with "-" prefix
+   - The added line with "+" prefix
+   - Three (3) lines of unchanged context AFTER the change (no leading spaces)
+
+Complete example of the REQUIRED format:
+--- %[1]s
++++ %[1]s
+@@ -5,7 +5,7 @@
+# First context line
+# Second context line
+# Third context line
+-replicaCount: 1
++replicaCount: 3
+# Fourth context line
+# Fifth context line
+# Sixth context line
+
+IMPORTANT:
+- Context lines must NOT have leading spaces
+- Only added lines ("+") and removed lines ("-") should have a prefix
+- The patch must exactly match this format
+
 Follow the instructions to provide the patch in proper <chartsmithArtifact> tags.`,
 			actionPlanWithPath.Path, strings.TrimSpace(currentContent))
 
@@ -61,13 +95,44 @@ Follow the instructions to provide the patch in proper <chartsmithArtifact> tags
 		case anthropic.ContentBlockDeltaEventDelta:
 			if delta.Text != "" {
 				fullResponseWithTags += delta.Text
+				fmt.Printf("Full response so far: %s\n", fullResponseWithTags)
+
 				artifacts, err := parseArtifactsInResponse(fullResponseWithTags)
 				if err != nil {
 					return fmt.Errorf("error parsing artifacts in response: %w", err)
 				}
 
 				for _, artifact := range artifacts {
+					fmt.Printf("Found artifact for path %s: %s\n", artifact.Path, artifact.Content)
 					if artifact.Path == actionPlanWithPath.Path {
+						// Validate patch format before sending
+						lines := strings.Split(artifact.Content, "\n")
+						if len(lines) < 4 {
+							fmt.Printf("Skipping: too few lines (%d)\n", len(lines))
+							continue
+						}
+
+						// Must start with proper headers
+						if !strings.HasPrefix(lines[0], "--- "+actionPlanWithPath.Path) ||
+							!strings.HasPrefix(lines[1], "+++ "+actionPlanWithPath.Path) {
+							fmt.Printf("Skipping: invalid headers\n%s\n%s\n", lines[0], lines[1])
+							continue
+						}
+
+						// Must have a hunk header
+						hasHunk := false
+						for _, line := range lines[2:] {
+							if strings.HasPrefix(line, "@@") {
+								hasHunk = true
+								break
+							}
+						}
+						if !hasHunk {
+							fmt.Printf("Skipping: no hunk header found\n")
+							continue
+						}
+
+						fmt.Printf("Sending valid patch:\n%s\n", artifact.Content)
 						contentStreamCh <- artifact.Content
 					}
 				}

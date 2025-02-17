@@ -6,7 +6,7 @@ import { Check, X, ChevronUp, ChevronDown, CheckCheck } from "lucide-react";
 
 // atoms
 import { selectedFileAtom } from "@/atoms/editor";
-import { workspaceAtom } from "@/atoms/workspace";
+import { allFilesBeforeApplyingPendingPatchesAtom, allFilesWithPendingPatchesAtom, workspaceAtom } from "@/atoms/workspace";
 
 // types
 import type { editor } from "monaco-editor";
@@ -44,7 +44,8 @@ export function CodeEditor({
   const diffEditorRef = useRef<editor.IStandaloneDiffEditor | null>(null);
   const { handleEditorInit } = useMonacoEditor(selectedFile);
 
-  const files: WorkspaceFile[] = [];
+  const [allFilesWithPendingPatches] = useAtom(allFilesWithPendingPatchesAtom);
+  const [allFilesBeforeApplyingPendingPatches] = useAtom(allFilesBeforeApplyingPendingPatchesAtom);
 
   useEffect(() => {
     if (selectedFile && onChange) {
@@ -170,8 +171,7 @@ export function CodeEditor({
     renderWhitespace: "all" as const,
   };
 
-  const hasPendingPatches = files.some(f => f.pendingPatch);
-  const showDiffHeader = hasPendingPatches || selectedFile?.pendingPatch;
+  const showDiffHeader = allFilesWithPendingPatches.length > 0;
 
   const onFileUpdate = (updatedFile: WorkspaceFile) => {
     console.log("onFileUpdate", updatedFile);
@@ -179,86 +179,92 @@ export function CodeEditor({
 
   const renderDiffHeader = () => (
     <div className={`flex items-center justify-end gap-2 p-2 border-b min-h-[36px] pr-4 ${theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"}`}>
-      {selectedFile?.pendingPatch && (
+      {allFilesWithPendingPatches.length > 0 && (
         <div className="flex items-center gap-2">
-          <button
-            className={`px-3 py-1 text-xs rounded-md flex items-center gap-1 font-mono ${
-              theme === "dark"
-                ? "bg-green-600 text-white hover:bg-green-700"
-                : "bg-green-600 text-white hover:bg-green-700"
-            }`}
-            onClick={async () => {
-              const filesWithPatches = files.filter(f => f.pendingPatch);
-              for (const patchFile of filesWithPatches) {
-                const updatedFile = await acceptPatchAction(session, patchFile.id, workspace.currentRevisionNumber);
+          {allFilesWithPendingPatches.length > 0 && (
+            <button
+              className={`px-3 py-1 text-xs rounded-md flex items-center gap-1 font-mono ${
+                theme === "dark"
+                  ? "bg-green-600 text-white hover:bg-green-700"
+                  : "bg-green-600 text-white hover:bg-green-700"
+              }`}
+              onClick={() => {
+                const filesWithPatches = allFilesWithPendingPatches.filter(f => f.pendingPatch);
+                filesWithPatches.forEach(async (patchFile) => {
+                  const updatedFile = await acceptPatchAction(session, patchFile.id, workspace.currentRevisionNumber);
+                  onFileUpdate?.(updatedFile);
+                });
+              }}
+            >
+              <CheckCheck className="w-3 h-3" />
+              Accept All
+            </button>
+          )}
+          {selectedFile?.pendingPatch && (
+            <>
+              <button
+              className={`px-3 py-1 text-xs rounded-md flex items-center gap-1 font-mono ${
+                theme === "dark"
+                  ? "bg-green-600 text-white hover:bg-green-700"
+                  : "bg-green-600 text-white hover:bg-green-700"
+              }`}
+              onClick={async () => {
+                const updatedFile = await acceptPatchAction(session, selectedFile.id, workspace.currentRevisionNumber);
+                onChange?.(updatedFile.content);
                 onFileUpdate?.(updatedFile);
-              }
-            }}
-          >
-            <CheckCheck className="w-3 h-3" />
-            Accept All
-          </button>
-          <button
-            className={`px-3 py-1 text-xs rounded-md flex items-center gap-1 font-mono ${
-              theme === "dark"
-                ? "bg-green-600 text-white hover:bg-green-700"
-                : "bg-green-600 text-white hover:bg-green-700"
-            }`}
-            onClick={async () => {
-              const updatedFile = await acceptPatchAction(session, selectedFile.id, workspace.currentRevisionNumber);
-              onChange?.(updatedFile.content);
-              onFileUpdate?.(updatedFile);
-            }}
-          >
-            <Check className="w-3 h-3" />
-            Accept
-          </button>
-          <button
-            className={`px-3 py-1 text-xs rounded-md flex items-center gap-1 font-mono ${
-              theme === "dark"
-                ? "bg-red-600 text-white hover:bg-red-700"
-                : "bg-red-600 text-white hover:bg-red-700"
-            }`}
-            onClick={() => {
-              rejectPatchAction(session, selectedFile.id, workspace.currentRevisionNumber);
-            }}
-          >
-            <X className="w-3 h-3" />
-            Reject
-          </button>
-        </div>
-      )}
-      <div className="ml-8 flex items-center gap-2">
-        <span className={`text-xs font-mono ${
-          theme === "dark" ? "text-gray-400" : "text-gray-500"
-        }`}>
-          4/5 diffs
-        </span>
-        <div className={`flex rounded overflow-hidden border ${theme === "dark" ? "border-dark-border" : "border-gray-200"}`}>
-          <button
-            className={`p-1 ${
-              theme === "dark"
-                ? "bg-dark-border/40 text-gray-300 hover:bg-dark-border/60"
-                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-            }`}
-            onClick={() => {/* TODO: Handle up */}}
-          >
-            <ChevronUp className="w-3 h-3" />
-          </button>
-          <button
-            className={`p-1 border-l ${
-              theme === "dark"
-                ? "bg-dark-border/40 text-gray-300 hover:bg-dark-border/60 border-dark-border"
-                : "bg-gray-100 text-gray-700 hover:bg-gray-200 border-gray-200"
-            }`}
-            onClick={() => {/* TODO: Handle down */}}
-          >
-            <ChevronDown className="w-3 h-3" />
-          </button>
-        </div>
+              }}
+            >
+              <Check className="w-3 h-3" />
+              Accept
+            </button>
+            <button
+              className={`px-3 py-1 text-xs rounded-md flex items-center gap-1 font-mono ${
+                theme === "dark"
+                  ? "bg-red-600 text-white hover:bg-red-700"
+                  : "bg-red-600 text-white hover:bg-red-700"
+              }`}
+              onClick={() => {
+                rejectPatchAction(session, selectedFile.id, workspace.currentRevisionNumber);
+              }}
+            >
+              <X className="w-3 h-3" />
+              Reject
+            </button>
+          </>
+        )}
+      </div>
+    )}
+    <div className="ml-8 flex items-center gap-2">
+      <span className={`text-xs font-mono ${
+        theme === "dark" ? "text-gray-400" : "text-gray-500"
+      }`}>
+        Showing {allFilesBeforeApplyingPendingPatches.length - allFilesWithPendingPatches.length + 1}/{allFilesBeforeApplyingPendingPatches.length} diffs
+      </span>
+      <div className={`flex rounded overflow-hidden border ${theme === "dark" ? "border-dark-border" : "border-gray-200"}`}>
+        <button
+          className={`p-1 ${
+            theme === "dark"
+              ? "bg-dark-border/40 text-gray-300 hover:bg-dark-border/60"
+              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+          }`}
+          onClick={() => {/* TODO: Handle up */}}
+        >
+          <ChevronUp className="w-3 h-3" />
+        </button>
+        <button
+          className={`p-1 border-l ${
+            theme === "dark"
+              ? "bg-dark-border/40 text-gray-300 hover:bg-dark-border/60 border-dark-border"
+              : "bg-gray-100 text-gray-700 hover:bg-gray-200 border-gray-200"
+          }`}
+          onClick={() => {/* TODO: Handle down */}}
+        >
+          <ChevronDown className="w-3 h-3" />
+        </button>
       </div>
     </div>
-  );
+  </div>
+);
 
   return (
     <div className="flex-1 h-full flex flex-col">
@@ -266,26 +272,34 @@ export function CodeEditor({
       {selectedFile?.pendingPatch ? (() => {
         const lines = selectedFile.pendingPatch.split('\n');
         const modified = value || "";
-        let currentLine = 0;
-        let contentStarted = false;
         const modifiedLines = modified.split('\n');
 
+        let currentLine = 0;
+        let contentStarted = false;
+        let currentHunk = null;
+
         for (const line of lines) {
+          // Skip metadata lines
           if (line.startsWith('---') || line.startsWith('+++')) {
             continue;
           }
-          if (!contentStarted && !line.startsWith('@')) {
-            continue;
-          }
-          if (line.startsWith('@')) {
+
+          // Handle hunk headers
+          if (line.startsWith('@@ ')) {
             const match = line.match(/@@ -(\d+),?(\d+)? \+(\d+),?(\d+)? @@/);
             if (match) {
-              currentLine = parseInt(match[3]) - 1;
+              currentHunk = {
+                startLine: parseInt(match[3]) - 1,
+                linesCount: match[4] ? parseInt(match[4]) : 1
+              };
+              currentLine = currentHunk.startLine;
               contentStarted = true;
             }
             continue;
           }
-          if (contentStarted) {
+
+          // Only process content if we're in a valid hunk
+          if (contentStarted && currentHunk) {
             if (line.startsWith('+')) {
               modifiedLines.splice(currentLine, 0, line.substring(1));
               currentLine++;
@@ -293,11 +307,13 @@ export function CodeEditor({
               if (currentLine < modifiedLines.length) {
                 modifiedLines.splice(currentLine, 1);
               }
-            } else if (line.trim() !== '') {
+            } else {
+              // Context lines - remove leading space if it exists
+              const contextLine = line.startsWith(' ') ? line.substring(1) : line;
               if (currentLine >= modifiedLines.length) {
-                modifiedLines.push(line);
+                modifiedLines.push(contextLine);
               } else {
-                modifiedLines[currentLine] = line;
+                modifiedLines[currentLine] = contextLine;
               }
               currentLine++;
             }
@@ -316,6 +332,17 @@ export function CodeEditor({
               options={{
                 ...editorOptions,
                 renderSideBySide: false,
+                diffWordWrap: 'off',
+                originalEditable: false,
+                renderOverviewRuler: false,
+                ignoreTrimWhitespace: false,
+                renderWhitespace: 'none',
+                renderLineHighlight: 'none',
+                quickSuggestions: false,
+                folding: false,
+                lineNumbers: 'on',
+                scrollBeyondLastLine: false,
+                minimap: { enabled: false },
               }}
             />
           </div>
