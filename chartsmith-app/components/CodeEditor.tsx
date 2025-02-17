@@ -187,7 +187,6 @@ export function CodeEditor({
                   : "bg-green-600 text-white hover:bg-green-700"
               }`}
               onClick={() => {
-                console.log("accept all");
                 const filesWithPatches = filesWithPendingPatches.filter(f => f.pendingPatch);
                 filesWithPatches.forEach(async (patchFile) => {
                   const updatedFile = await acceptPatchAction(session, patchFile.id, workspace.currentRevisionNumber);
@@ -271,26 +270,34 @@ export function CodeEditor({
       {selectedFile?.pendingPatch ? (() => {
         const lines = selectedFile.pendingPatch.split('\n');
         const modified = value || "";
-        let currentLine = 0;
-        let contentStarted = false;
         const modifiedLines = modified.split('\n');
 
+        let currentLine = 0;
+        let contentStarted = false;
+        let currentHunk = null;
+
         for (const line of lines) {
+          // Skip metadata lines
           if (line.startsWith('---') || line.startsWith('+++')) {
             continue;
           }
-          if (!contentStarted && !line.startsWith('@')) {
-            continue;
-          }
-          if (line.startsWith('@')) {
+
+          // Handle hunk headers
+          if (line.startsWith('@@ ')) {
             const match = line.match(/@@ -(\d+),?(\d+)? \+(\d+),?(\d+)? @@/);
             if (match) {
-              currentLine = parseInt(match[3]) - 1;
+              currentHunk = {
+                startLine: parseInt(match[3]) - 1,
+                linesCount: match[4] ? parseInt(match[4]) : 1
+              };
+              currentLine = currentHunk.startLine;
               contentStarted = true;
             }
             continue;
           }
-          if (contentStarted) {
+
+          // Only process content if we're in a valid hunk
+          if (contentStarted && currentHunk) {
             if (line.startsWith('+')) {
               modifiedLines.splice(currentLine, 0, line.substring(1));
               currentLine++;
@@ -298,11 +305,13 @@ export function CodeEditor({
               if (currentLine < modifiedLines.length) {
                 modifiedLines.splice(currentLine, 1);
               }
-            } else if (line.trim() !== '') {
+            } else {
+              // Context lines - remove leading space if it exists
+              const contextLine = line.startsWith(' ') ? line.substring(1) : line;
               if (currentLine >= modifiedLines.length) {
-                modifiedLines.push(line);
+                modifiedLines.push(contextLine);
               } else {
-                modifiedLines[currentLine] = line;
+                modifiedLines[currentLine] = contextLine;
               }
               currentLine++;
             }
@@ -321,6 +330,17 @@ export function CodeEditor({
               options={{
                 ...editorOptions,
                 renderSideBySide: false,
+                diffWordWrap: 'off',
+                originalEditable: false,
+                renderOverviewRuler: false,
+                ignoreTrimWhitespace: false,
+                renderWhitespace: 'none',
+                renderLineHighlight: 'none',
+                quickSuggestions: false,
+                folding: false,
+                lineNumbers: 'on',
+                scrollBeyondLastLine: false,
+                minimap: { enabled: false },
               }}
             />
           </div>
