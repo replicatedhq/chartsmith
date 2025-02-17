@@ -6,7 +6,7 @@ import { Check, X, ChevronUp, ChevronDown, CheckCheck } from "lucide-react";
 
 // atoms
 import { selectedFileAtom } from "@/atoms/editor";
-import { filesWithPendingPatchesAtom, workspaceAtom } from "@/atoms/workspace";
+import { allFilesBeforeApplyingPendingPatchesAtom, allFilesWithPendingPatchesAtom, workspaceAtom } from "@/atoms/workspace";
 
 // types
 import type { editor } from "monaco-editor";
@@ -43,7 +43,9 @@ export function CodeEditor({
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const diffEditorRef = useRef<editor.IStandaloneDiffEditor | null>(null);
   const { handleEditorInit } = useMonacoEditor(selectedFile);
-  const [filesWithPendingPatches] = useAtom(filesWithPendingPatchesAtom);
+
+  const [allFilesWithPendingPatches] = useAtom(allFilesWithPendingPatchesAtom);
+  const [allFilesBeforeApplyingPendingPatches] = useAtom(allFilesBeforeApplyingPendingPatchesAtom);
 
   useEffect(() => {
     if (selectedFile && onChange) {
@@ -169,7 +171,7 @@ export function CodeEditor({
     renderWhitespace: "all" as const,
   };
 
-  const showDiffHeader = filesWithPendingPatches.length > 0;
+  const showDiffHeader = allFilesWithPendingPatches.length > 0;
 
   const onFileUpdate = (updatedFile: WorkspaceFile) => {
     console.log("onFileUpdate", updatedFile);
@@ -177,9 +179,9 @@ export function CodeEditor({
 
   const renderDiffHeader = () => (
     <div className={`flex items-center justify-end gap-2 p-2 border-b min-h-[36px] pr-4 ${theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"}`}>
-      {filesWithPendingPatches.length > 0 && (
+      {allFilesWithPendingPatches.length > 0 && (
         <div className="flex items-center gap-2">
-          {filesWithPendingPatches.length > 0 && (
+          {allFilesWithPendingPatches.length > 0 && (
             <button
               className={`px-3 py-1 text-xs rounded-md flex items-center gap-1 font-mono ${
                 theme === "dark"
@@ -187,7 +189,7 @@ export function CodeEditor({
                   : "bg-green-600 text-white hover:bg-green-700"
               }`}
               onClick={() => {
-                const filesWithPatches = filesWithPendingPatches.filter(f => f.pendingPatch);
+                const filesWithPatches = allFilesWithPendingPatches.filter(f => f.pendingPatch);
                 filesWithPatches.forEach(async (patchFile) => {
                   const updatedFile = await acceptPatchAction(session, patchFile.id, workspace.currentRevisionNumber);
                   onFileUpdate?.(updatedFile);
@@ -236,7 +238,7 @@ export function CodeEditor({
       <span className={`text-xs font-mono ${
         theme === "dark" ? "text-gray-400" : "text-gray-500"
       }`}>
-        4/5 diffs
+        Showing {allFilesBeforeApplyingPendingPatches.length - allFilesWithPendingPatches.length + 1}/{allFilesBeforeApplyingPendingPatches.length} diffs
       </span>
       <div className={`flex rounded overflow-hidden border ${theme === "dark" ? "border-dark-border" : "border-gray-200"}`}>
         <button

@@ -16,7 +16,7 @@ import { getWorkspaceRenderAction } from "@/lib/workspace/actions/get-workspace-
 
 
 // atoms
-import { messagesAtom, rendersAtom, workspaceAtom, handlePlanUpdatedAtom } from "@/atoms/workspace";
+import { messagesAtom, rendersAtom, workspaceAtom, handlePlanUpdatedAtom, allFilesBeforeApplyingPendingPatchesAtom, looseFilesBeforeApplyingPendingPatchesAtom, chartsBeforeApplyingPendingPatchesAtom } from "@/atoms/workspace";
 import { selectedFileAtom } from "@/atoms/editor";
 
 // utils
@@ -41,6 +41,8 @@ export function useCentrifugo({
   const [, setMessages] = useAtom(messagesAtom)
   const [, setSelectedFile] = useAtom(selectedFileAtom)
   const [, handlePlanUpdated] = useAtom(handlePlanUpdatedAtom)
+  const [, setChartsBeforeApplyingPendingPatches] = useAtom(chartsBeforeApplyingPendingPatchesAtom)
+  const [, setLooseFilesBeforeApplyingPendingPatches] = useAtom(looseFilesBeforeApplyingPendingPatchesAtom)
 
   const [isReconnecting, setIsReconnecting] = useState(false);
 
@@ -53,6 +55,9 @@ export function useCentrifugo({
 
       const updatedMessages = await getWorkspaceMessagesAction(session, revision.workspaceId);
       setMessages(updatedMessages);
+
+      setChartsBeforeApplyingPendingPatches([]);
+      setLooseFilesBeforeApplyingPendingPatches([]);
     }
   }, [session, setMessages, setWorkspace]);
 
@@ -123,6 +128,10 @@ export function useCentrifugo({
             } : chart
           )
         };
+      }
+
+      if (chartWithFile && artifact.pendingPatch) {
+        setChartsBeforeApplyingPendingPatches(prev => [...prev, chartWithFile]);
       }
 
       const updatedFiles = workspace.files?.map(file =>

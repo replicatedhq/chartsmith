@@ -1,5 +1,5 @@
 import { atom } from 'jotai'
-import type { Workspace, Plan, RenderedWorkspace } from '@/lib/types/workspace'
+import type { Workspace, Plan, RenderedWorkspace, Chart, WorkspaceFile } from '@/lib/types/workspace'
 import { Message } from '@/components/types'
 
 // Base atoms
@@ -36,7 +36,17 @@ export const chartsAtom = atom(get => {
   return workspace.charts
 })
 
-export const filesWithPendingPatchesAtom = atom(get => {
+export const chartsBeforeApplyingPendingPatchesAtom = atom<Chart[]>([])
+export const looseFilesBeforeApplyingPendingPatchesAtom = atom<WorkspaceFile[]>([])
+
+export const allFilesBeforeApplyingPendingPatchesAtom = atom(get => {
+  const charts = get(chartsBeforeApplyingPendingPatchesAtom)
+  const chartFilesBeforeApplyingPendingPatches = charts.flatMap(c => c.files.filter(f => f.pendingPatch))
+  const looseFilesBeforeApplyingPendingPatches = get(looseFilesBeforeApplyingPendingPatchesAtom)
+  return [...chartFilesBeforeApplyingPendingPatches, ...looseFilesBeforeApplyingPendingPatches]
+})
+
+export const allFilesWithPendingPatchesAtom = atom(get => {
   const files = get(looseFilesAtom)
   const filesWithPendingPatches = files.filter(f => f.pendingPatch)
 
