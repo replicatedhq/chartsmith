@@ -84,8 +84,7 @@ async function downloadChartFilesFromArtifactHub(url: string): Promise<Workspace
 
   // download it to a tmp directory
   const extractPath = await downloadChartArchiveFromURL(contentURL);
-
-
+  await removeBinaryFilesInPath(extractPath);
   return filesInArchive(extractPath);
 }
 
@@ -135,9 +134,40 @@ async function downloadChartArchiveFromURL(url: string): Promise<string> {
   return new Promise((resolve, reject) => {
     response.body.pipe(gunzip())
       .pipe(tar.extract({ cwd: extractPath }))
-      .on('finish', () => resolve(extractPath))
+      .on('finish', async () => {
+        await removeBinaryFilesInPath(extractPath);
+        resolve(extractPath);
+      })
       .on('error', reject);
   });
+}
+
+async function removeBinaryFilesInPath(extractPath: string) {
+  const files = await fs.readdir(extractPath, { recursive: true });
+  for (const file of files) {
+    const filePath = path.join(extractPath, file);
+    const stats = await fs.stat(filePath);
+
+    if (stats.isFile()) {
+      try {
+        // Read first 512 bytes of the file to check encoding
+        const fd = await fs.open(filePath, 'r');
+        const buffer = Buffer.alloc(512);
+        await fd.read(buffer, 0, 512, 0);
+        await fd.close();
+
+        // Check if the buffer contains non-text characters
+        const isBinary = buffer.some(byte => (byte < 32 && ![9, 10, 13].includes(byte)) || byte === 65533);
+
+        if (isBinary) {
+          await fs.unlink(filePath);
+        }
+      } catch (error) {
+        // If we can't read the file, better safe than sorry - remove it
+        await fs.unlink(filePath);
+      }
+    }
+  }
 }
 
 // parseFilesInDirectory will walk extractPath, and create a WorkspaceFile for each file
