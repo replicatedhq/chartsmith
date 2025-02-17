@@ -36,6 +36,19 @@ export const chartsAtom = atom(get => {
   return workspace.charts
 })
 
+export const filesWithPendingPatchesAtom = atom(get => {
+  const files = get(looseFilesAtom)
+  const filesWithPendingPatches = files.filter(f => f.pendingPatch)
+
+  // find files in charts with pending patches too
+  const charts = get(chartsAtom)
+  const chartsWithPendingPatches = charts.filter(c => c.files.some(f => f.pendingPatch))
+  // get the files with pending patches from each of the charts with pending patches
+  const filesWithPendingPatchesFromCharts = chartsWithPendingPatches.flatMap(c => c.files.filter(f => f.pendingPatch))
+
+  return [...filesWithPendingPatches, ...filesWithPendingPatchesFromCharts]
+})
+
 // Handle plan updated, will update the plan if its found, otherwise it will add it to the list
 export const handlePlanUpdatedAtom = atom(
   null,

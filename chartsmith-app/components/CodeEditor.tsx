@@ -6,7 +6,7 @@ import { Check, X, ChevronUp, ChevronDown, CheckCheck } from "lucide-react";
 
 // atoms
 import { selectedFileAtom } from "@/atoms/editor";
-import { workspaceAtom } from "@/atoms/workspace";
+import { filesWithPendingPatchesAtom, workspaceAtom } from "@/atoms/workspace";
 
 // types
 import type { editor } from "monaco-editor";
@@ -43,8 +43,7 @@ export function CodeEditor({
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const diffEditorRef = useRef<editor.IStandaloneDiffEditor | null>(null);
   const { handleEditorInit } = useMonacoEditor(selectedFile);
-
-  const files: WorkspaceFile[] = [];
+  const [filesWithPendingPatches] = useAtom(filesWithPendingPatchesAtom);
 
   useEffect(() => {
     if (selectedFile && onChange) {
@@ -170,8 +169,7 @@ export function CodeEditor({
     renderWhitespace: "all" as const,
   };
 
-  const hasPendingPatches = files.some(f => f.pendingPatch);
-  const showDiffHeader = hasPendingPatches || selectedFile?.pendingPatch;
+  const showDiffHeader = filesWithPendingPatches.length > 0;
 
   const onFileUpdate = (updatedFile: WorkspaceFile) => {
     console.log("onFileUpdate", updatedFile);
@@ -179,86 +177,93 @@ export function CodeEditor({
 
   const renderDiffHeader = () => (
     <div className={`flex items-center justify-end gap-2 p-2 border-b min-h-[36px] pr-4 ${theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"}`}>
-      {selectedFile?.pendingPatch && (
+      {filesWithPendingPatches.length > 0 && (
         <div className="flex items-center gap-2">
-          <button
-            className={`px-3 py-1 text-xs rounded-md flex items-center gap-1 font-mono ${
-              theme === "dark"
-                ? "bg-green-600 text-white hover:bg-green-700"
-                : "bg-green-600 text-white hover:bg-green-700"
-            }`}
-            onClick={async () => {
-              const filesWithPatches = files.filter(f => f.pendingPatch);
-              for (const patchFile of filesWithPatches) {
-                const updatedFile = await acceptPatchAction(session, patchFile.id, workspace.currentRevisionNumber);
+          {filesWithPendingPatches.length > 0 && (
+            <button
+              className={`px-3 py-1 text-xs rounded-md flex items-center gap-1 font-mono ${
+                theme === "dark"
+                  ? "bg-green-600 text-white hover:bg-green-700"
+                  : "bg-green-600 text-white hover:bg-green-700"
+              }`}
+              onClick={() => {
+                console.log("accept all");
+                const filesWithPatches = filesWithPendingPatches.filter(f => f.pendingPatch);
+                filesWithPatches.forEach(async (patchFile) => {
+                  const updatedFile = await acceptPatchAction(session, patchFile.id, workspace.currentRevisionNumber);
+                  onFileUpdate?.(updatedFile);
+                });
+              }}
+            >
+              <CheckCheck className="w-3 h-3" />
+              Accept All
+            </button>
+          )}
+          {selectedFile?.pendingPatch && (
+            <>
+              <button
+              className={`px-3 py-1 text-xs rounded-md flex items-center gap-1 font-mono ${
+                theme === "dark"
+                  ? "bg-green-600 text-white hover:bg-green-700"
+                  : "bg-green-600 text-white hover:bg-green-700"
+              }`}
+              onClick={async () => {
+                const updatedFile = await acceptPatchAction(session, selectedFile.id, workspace.currentRevisionNumber);
+                onChange?.(updatedFile.content);
                 onFileUpdate?.(updatedFile);
-              }
-            }}
-          >
-            <CheckCheck className="w-3 h-3" />
-            Accept All
-          </button>
-          <button
-            className={`px-3 py-1 text-xs rounded-md flex items-center gap-1 font-mono ${
-              theme === "dark"
-                ? "bg-green-600 text-white hover:bg-green-700"
-                : "bg-green-600 text-white hover:bg-green-700"
-            }`}
-            onClick={async () => {
-              const updatedFile = await acceptPatchAction(session, selectedFile.id, workspace.currentRevisionNumber);
-              onChange?.(updatedFile.content);
-              onFileUpdate?.(updatedFile);
-            }}
-          >
-            <Check className="w-3 h-3" />
-            Accept
-          </button>
-          <button
-            className={`px-3 py-1 text-xs rounded-md flex items-center gap-1 font-mono ${
-              theme === "dark"
-                ? "bg-red-600 text-white hover:bg-red-700"
-                : "bg-red-600 text-white hover:bg-red-700"
-            }`}
-            onClick={() => {
-              rejectPatchAction(session, selectedFile.id, workspace.currentRevisionNumber);
-            }}
-          >
-            <X className="w-3 h-3" />
-            Reject
-          </button>
-        </div>
-      )}
-      <div className="ml-8 flex items-center gap-2">
-        <span className={`text-xs font-mono ${
-          theme === "dark" ? "text-gray-400" : "text-gray-500"
-        }`}>
-          4/5 diffs
-        </span>
-        <div className={`flex rounded overflow-hidden border ${theme === "dark" ? "border-dark-border" : "border-gray-200"}`}>
-          <button
-            className={`p-1 ${
-              theme === "dark"
-                ? "bg-dark-border/40 text-gray-300 hover:bg-dark-border/60"
-                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-            }`}
-            onClick={() => {/* TODO: Handle up */}}
-          >
-            <ChevronUp className="w-3 h-3" />
-          </button>
-          <button
-            className={`p-1 border-l ${
-              theme === "dark"
-                ? "bg-dark-border/40 text-gray-300 hover:bg-dark-border/60 border-dark-border"
-                : "bg-gray-100 text-gray-700 hover:bg-gray-200 border-gray-200"
-            }`}
-            onClick={() => {/* TODO: Handle down */}}
-          >
-            <ChevronDown className="w-3 h-3" />
-          </button>
-        </div>
+              }}
+            >
+              <Check className="w-3 h-3" />
+              Accept
+            </button>
+            <button
+              className={`px-3 py-1 text-xs rounded-md flex items-center gap-1 font-mono ${
+                theme === "dark"
+                  ? "bg-red-600 text-white hover:bg-red-700"
+                  : "bg-red-600 text-white hover:bg-red-700"
+              }`}
+              onClick={() => {
+                rejectPatchAction(session, selectedFile.id, workspace.currentRevisionNumber);
+              }}
+            >
+              <X className="w-3 h-3" />
+              Reject
+            </button>
+          </>
+        )}
+      </div>
+    )}
+    <div className="ml-8 flex items-center gap-2">
+      <span className={`text-xs font-mono ${
+        theme === "dark" ? "text-gray-400" : "text-gray-500"
+      }`}>
+        4/5 diffs
+      </span>
+      <div className={`flex rounded overflow-hidden border ${theme === "dark" ? "border-dark-border" : "border-gray-200"}`}>
+        <button
+          className={`p-1 ${
+            theme === "dark"
+              ? "bg-dark-border/40 text-gray-300 hover:bg-dark-border/60"
+              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+          }`}
+          onClick={() => {/* TODO: Handle up */}}
+        >
+          <ChevronUp className="w-3 h-3" />
+        </button>
+        <button
+          className={`p-1 border-l ${
+            theme === "dark"
+              ? "bg-dark-border/40 text-gray-300 hover:bg-dark-border/60 border-dark-border"
+              : "bg-gray-100 text-gray-700 hover:bg-gray-200 border-gray-200"
+          }`}
+          onClick={() => {/* TODO: Handle down */}}
+        >
+          <ChevronDown className="w-3 h-3" />
+        </button>
       </div>
     </div>
-  );
+  </div>
+);
 
   return (
     <div className="flex-1 h-full flex flex-col">
