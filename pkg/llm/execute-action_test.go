@@ -3,7 +3,6 @@ package llm
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -82,8 +81,6 @@ image:
 			if lastPatch == "" {
 				t.Fatal("no patch received")
 			}
-
-			fmt.Printf("\n\n\n %s \n\n\n", lastPatch)
 
 			// Validate the final patch format
 			lines := strings.Split(lastPatch, "\n")

@@ -32,13 +32,14 @@ func GetFile(ctx context.Context, fileID string, revisionNumber int) (*types.Fil
 	row := conn.QueryRow(ctx, query, fileID, revisionNumber)
 	var file types.File
 	var pendingPatch sql.NullString
-	err := row.Scan(&file.ID, &file.RevisionNumber, &file.ChartID, &file.WorkspaceID, &file.FilePath, &file.Content, &pendingPatch)
+	var chartID sql.NullString
+	err := row.Scan(&file.ID, &file.RevisionNumber, &chartID, &file.WorkspaceID, &file.FilePath, &file.Content, &pendingPatch)
 	if err != nil {
 		return nil, err
 	}
 
 	file.PendingPatch = pendingPatch.String
-
+	file.ChartID = chartID.String
 	return &file, nil
 }
 

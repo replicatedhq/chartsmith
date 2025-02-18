@@ -4,26 +4,41 @@ import { Session } from "@/lib/types/session";
 import { Workspace } from "@/lib/types/workspace";
 import { logger } from "@/lib/utils/logger";
 import { ChatMessageIntent, createChatMessage, createWorkspace } from "../workspace";
-import { getArchiveFromBytes } from "../archive";
+import { getChartFromBytes, getFilesFromBytes } from "../archive";
 
-export async function createWorkspaceFromArchiveAction(session: Session, formData: FormData): Promise<Workspace> {
+export async function createWorkspaceFromArchiveAction(session: Session, formData: FormData, archiveType: 'helm' | 'k8s'): Promise<Workspace> {
   const file = formData.get('file') as File;
   if (!file) {
     throw new Error('No file provided');
   }
 
-  logger.info("Creating workspace from archive", { fileName: file.name });
+  logger.info("Creating workspace from archive", { fileName: file.name, archiveType });
 
   const bytes = await file.arrayBuffer();
-  const baseChart = await getArchiveFromBytes(bytes, file.name);
 
-  const w: Workspace = await createWorkspace("archive", session.user.id, baseChart);
+  if (archiveType === 'helm') {
+    const baseChart = await getChartFromBytes(bytes, file.name);
 
-  await createChatMessage(session.user.id, w.id, {
-    prompt: `Import the Helm chart from the uploaded file named ${file.name}`,
-    response: `Got it. I found a ${baseChart.name} chart in the ${file.name} file. What's next?`,
-    knownIntent: ChatMessageIntent.NON_PLAN,
-  });
+    const w: Workspace = await createWorkspace("archive", session.user.id, baseChart);
 
-  return w;
+    await createChatMessage(session.user.id, w.id, {
+      prompt: `Import the Helm chart from the uploaded file named ${file.name}`,
+      response: `Got it. I found a ${baseChart.name} chart in the ${file.name} file. What's next?`,
+      knownIntent: ChatMessageIntent.NON_PLAN,
+    });
+
+    return w;
+  } else if (archiveType === 'k8s') {
+    const looseFiles = await getFilesFromBytes(bytes, file.name);
+    const w: Workspace = await createWorkspace("archive", session.user.id);
+
+    await createChatMessage(session.user.id, w.id, {
+      prompt: `Create a Helm chart from the Kubernetes manifests in the uploaded file named ${file.name}`,
+      response: `I'll create a Helm chart from the Kubernetes manifests in the uploaded file named ${file.name}`,
+      knownIntent: ChatMessageIntent.CONVERT_K8S_TO_HELM,
+      additionalFiles: looseFiles,
+    });
+
+    return w;
+  }
 }

@@ -9,7 +9,7 @@ import gunzip from 'gunzip-maybe';
 import fetch from 'node-fetch';
 import yaml from 'yaml';
 
-export async function getArchiveFromBytes(bytes: ArrayBuffer, fileName: string): Promise<Chart> {
+export async function getFilesFromBytes(bytes: ArrayBuffer, fileName: string): Promise<WorkspaceFile[]> {
   const id = srs.default({ length: 12, alphanumeric: true });
 
   // save the bytes to a tmp file
@@ -20,17 +20,74 @@ export async function getArchiveFromBytes(bytes: ArrayBuffer, fileName: string):
   const filePath = path.join(tmpDir, fileName);
   await fs.writeFile(filePath, Buffer.from(bytes));
 
-  // Create extraction directory with base name (without .tgz extension)
+  // Create extraction directory with base name (without extension)
   const extractPath = path.join(tmpDir, 'extracted');
   await fs.mkdir(extractPath);
 
-  // Extract the tar.gz file
+  // Check if the file is gzipped by looking at magic numbers
+  const fileBuffer = Buffer.from(bytes);
+  const isGzipped = fileBuffer[0] === 0x1f && fileBuffer[1] === 0x8b;
+
+  // Extract the file based on whether it's gzipped or not
   await new Promise<void>((resolve, reject) => {
-    fsSync.createReadStream(filePath)
-      .pipe(gunzip())
-      .pipe(tar.extract({ cwd: extractPath }))
-      .on('finish', () => resolve())
-      .on('error', reject);
+    const readStream = fsSync.createReadStream(filePath);
+    const extractStream = tar.extract({ cwd: extractPath });
+
+    if (isGzipped) {
+      readStream
+        .pipe(gunzip())
+        .pipe(extractStream)
+        .on('finish', () => resolve())
+        .on('error', reject);
+    } else {
+      readStream
+        .pipe(extractStream)
+        .on('finish', () => resolve())
+        .on('error', reject);
+    }
+  });
+
+  const files: WorkspaceFile[] = await filesInArchive(extractPath);
+
+  return files;
+}
+
+export async function getChartFromBytes(bytes: ArrayBuffer, fileName: string): Promise<Chart> {
+  const id = srs.default({ length: 12, alphanumeric: true });
+
+  // save the bytes to a tmp file
+  const tmpDir = path.join(os.tmpdir(), 'chartsmith-chart-archive-' + Date.now());
+  await fs.mkdir(tmpDir);
+
+  // write the bytes to a file
+  const filePath = path.join(tmpDir, fileName);
+  await fs.writeFile(filePath, Buffer.from(bytes));
+
+  // Create extraction directory with base name (without extension)
+  const extractPath = path.join(tmpDir, 'extracted');
+  await fs.mkdir(extractPath);
+
+  // Check if the file is gzipped by looking at magic numbers
+  const fileBuffer = Buffer.from(bytes);
+  const isGzipped = fileBuffer[0] === 0x1f && fileBuffer[1] === 0x8b;
+
+  // Extract the file based on whether it's gzipped or not
+  await new Promise<void>((resolve, reject) => {
+    const readStream = fsSync.createReadStream(filePath);
+    const extractStream = tar.extract({ cwd: extractPath });
+
+    if (isGzipped) {
+      readStream
+        .pipe(gunzip())
+        .pipe(extractStream)
+        .on('finish', () => resolve())
+        .on('error', reject);
+    } else {
+      readStream
+        .pipe(extractStream)
+        .on('finish', () => resolve())
+        .on('error', reject);
+    }
   });
 
   const files: WorkspaceFile[] = await filesInArchive(extractPath);

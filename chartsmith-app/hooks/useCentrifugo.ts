@@ -222,7 +222,25 @@ export function useCentrifugo({
     });
   }, []);
 
+  const handleConversionFileUpdated = useCallback((data: CentrifugoMessageData) => {
+    console.log('Conversion file updated event received:', {
+      eventType: data.eventType,
+      conversionId: data.conversionId,
+      filePath: data.filePath,
+      status: data.status
+    });
+  }, []);
+
+  const handleConversationStatusUpdated = useCallback((data: CentrifugoMessageData) => {
+    console.log('Conversation status updated event received:', {
+      eventType: data.eventType,
+      conversionId: data.conversionId,
+      status: data.status
+    });
+  }, []);
+
   const handleCentrifugoMessage = useCallback((message: { data: CentrifugoMessageData }) => {
+    console.log(`eventType: ${message.data.eventType}`);
     const eventType = message.data.eventType;
     if (eventType === 'plan-updated') {
       const plan = message.data.plan!;
@@ -239,6 +257,10 @@ export function useCentrifugo({
       handleRenderStreamEvent(message.data);
     } else if (eventType === 'render-updated') {
       handleRenderUpdated(message.data);
+    } else if (eventType === 'conversion-file') {
+      handleConversionFileUpdated(message.data);
+    } else if (eventType === 'conversation-status') {
+      handleConversationStatusUpdated(message.data);
     }
 
     const isWorkspaceUpdatedEvent = message.data.workspace;

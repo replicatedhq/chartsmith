@@ -55,6 +55,16 @@ export interface RenderedFile {
   renderedContent: string;
 }
 
+export interface Conversion {
+  id: string;
+  sourceType: string;
+  status: string;
+  workspaceId: string;
+  chatMessageIds: string[];
+  createdAt: Date;
+  sourceFiles: WorkspaceFile[];
+}
+
 export interface Plan {
   id: string;
   description: string;
@@ -83,6 +93,7 @@ export interface ChatMessage {
   followupActions?: FollowupAction[];
   responseRenderId?: string;
   responsePlanId?: string;
+  responseConversionId?: string;
   isComplete: boolean;  // Add required Message properties
   workspaceId?: string;
   userId?: string;

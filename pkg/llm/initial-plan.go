@@ -13,8 +13,9 @@ import (
 )
 
 type CreateInitialPlanOpts struct {
-	ChatMessages  []workspacetypes.Chat
-	PreviousPlans []workspacetypes.Plan
+	ChatMessages    []workspacetypes.Chat
+	PreviousPlans   []workspacetypes.Plan
+	AdditionalFiles []workspacetypes.File
 }
 
 func CreateInitialPlan(ctx context.Context, streamCh chan string, doneCh chan error, opts CreateInitialPlanOpts) error {
@@ -46,6 +47,10 @@ func CreateInitialPlan(ctx context.Context, streamCh chan string, doneCh chan er
 		if chatMessage.Response != "" {
 			messages = append(messages, anthropic.NewAssistantMessage(anthropic.NewTextBlock(chatMessage.Response)))
 		}
+	}
+
+	for _, additionalFile := range opts.AdditionalFiles {
+		messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(additionalFile.Content)))
 	}
 
 	initialUserMessage := "Describe the plan only (do not write code) to create a helm chart based on the previous discussion. "

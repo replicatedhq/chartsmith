@@ -241,10 +241,11 @@ func listFilesForChart(ctx context.Context, chartID string, revisionNumber int) 
 	var files []types.File
 	for rows.Next() {
 		var file types.File
+		var chartID sql.NullString
 		err := rows.Scan(
 			&file.ID,
 			&file.RevisionNumber,
-			&file.ChartID,
+			&chartID,
 			&file.WorkspaceID,
 			&file.FilePath,
 			&file.Content,
@@ -252,6 +253,8 @@ func listFilesForChart(ctx context.Context, chartID string, revisionNumber int) 
 		if err != nil {
 			return nil, fmt.Errorf("error scanning file: %w", err)
 		}
+
+		file.ChartID = chartID.String
 
 		files = append(files, file)
 	}
@@ -288,10 +291,11 @@ func listFilesWithoutChartsForWorkspace(ctx context.Context, workspaceID string,
 	var files []types.File
 	for rows.Next() {
 		var file types.File
+		var chartID sql.NullString
 		err := rows.Scan(
 			&file.ID,
 			&file.RevisionNumber,
-			&file.ChartID,
+			&chartID,
 			&file.WorkspaceID,
 			&file.FilePath,
 			&file.Content,
@@ -299,7 +303,7 @@ func listFilesWithoutChartsForWorkspace(ctx context.Context, workspaceID string,
 		if err != nil {
 			return nil, fmt.Errorf("error scanning file: %w", err)
 		}
-
+		file.ChartID = chartID.String
 		files = append(files, file)
 	}
 
@@ -385,10 +389,12 @@ func NotifyWorkerToCaptureEmbeddings(ctx context.Context, workspaceID string, re
 
 	for rows.Next() {
 		var file types.File
-		err := rows.Scan(&file.ID, &file.RevisionNumber, &file.ChartID, &file.WorkspaceID, &file.FilePath, &file.Content)
+		var chartID sql.NullString
+		err := rows.Scan(&file.ID, &file.RevisionNumber, &chartID, &file.WorkspaceID, &file.FilePath, &file.Content)
 		if err != nil {
 			return fmt.Errorf("error scanning file: %w", err)
 		}
+		file.ChartID = chartID.String
 		filesNeedingEmbeddings = append(filesNeedingEmbeddings, file)
 	}
 	rows.Close()

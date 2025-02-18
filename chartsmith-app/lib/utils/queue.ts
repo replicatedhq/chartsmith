@@ -3,7 +3,7 @@ import { getParam } from "../data/param";
 import * as srs from "secure-random-string";
 
 interface QueuePayload {
-  [key: string]: string | number | boolean | null | undefined;
+  [key: string]: string | number | boolean | null | undefined | any[];
 }
 
 export async function enqueueWork(channel: string, payload: QueuePayload): Promise<void> {

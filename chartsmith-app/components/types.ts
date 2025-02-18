@@ -37,6 +37,7 @@ export interface Message {
   followupActions?: any[];
   responseRenderId?: string;
   responsePlanId?: string;
+  responseConversionId?: string;
   planId?: string;
 }
 
@@ -94,6 +95,9 @@ export interface CentrifugoMessageData {
   helmTemplateCommand?: string;
   helmTemplateStdout?: string;
   helmTemplateStderr?: string;
+  conversionId?: string;
+  filePath?: string;
+  status?: string;
 }
 
 export interface RawRevision {

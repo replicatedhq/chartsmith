@@ -1,0 +1,27 @@
+database: chartsmith
+name: workspace_conversion_file
+schema:
+  postgres:
+    primaryKey:
+    - id
+    columns:
+    - name: id
+      type: text
+      constraints:
+        notNull: true
+    - name: conversion_id
+      type: text
+      constraints:
+        notNull: true
+    - name: file_path
+      type: text
+      constraints:
+        notNull: true
+    - name: file_content
+      type: text
+      constraints:
+        notNull: true
+    - name: file_status
+      type: text
+      constraints:
+        notNull: true

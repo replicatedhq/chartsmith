@@ -1,7 +1,7 @@
 import { getDB } from "../data/db";
 import { getParam } from "../data/param";
 
-import { Chart, WorkspaceFile, Workspace, Plan, ActionFile, ChatMessage, FollowupAction } from "../types/workspace";
+import { Chart, WorkspaceFile, Workspace, Plan, ActionFile, ChatMessage, FollowupAction, Conversion } from "../types/workspace";
 import * as srs from "secure-random-string";
 import { logger } from "../utils/logger";
 import { enqueueWork } from "../utils/queue";
@@ -14,7 +14,7 @@ import { enqueueWork } from "../utils/queue";
  * @returns A Workspace object containing the new workspace's basic info
  * @throws Will throw an error if database operations fail
  */
-export async function createWorkspace(createdType: string, userId: string, baseChart?: Chart): Promise<Workspace> {
+export async function createWorkspace(createdType: string, userId: string, baseChart?: Chart, looseFiles?: WorkspaceFile[]): Promise<Workspace> {
   logger.info("Creating new workspace", { createdType, userId });
   try {
     const id = srs.default({ length: 12, alphanumeric: true });
@@ -59,7 +59,6 @@ export async function createWorkspace(createdType: string, userId: string, baseC
             [fileId, initialRevisionNumber, chartId, id, file.filePath, file.content, null],
           );
         }
-
       } else {
         // Fallback to bootstrap charts if baseChart is not provided
         const bootstrapCharts = await client.query(`SELECT id, name FROM bootstrap_chart`);
@@ -79,6 +78,18 @@ export async function createWorkspace(createdType: string, userId: string, baseC
               VALUES ($1, $2, $3, $4, $5, $6, $7)`,
               [fileId, initialRevisionNumber, chartId, id, file.file_path, file.content, file.embeddings],
             );
+          }
+
+          // if we have loose files, add them to the workspace
+          if (looseFiles) {
+            for (const file of looseFiles) {
+              const fileId = srs.default({ length: 12, alphanumeric: true });
+              await client.query(
+                `INSERT INTO workspace_file (id, revision_number, chart_id, workspace_id, file_path, content, embeddings)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+                [fileId, initialRevisionNumber, null, id, file.filePath, file.content, null],
+              );
+            }
           }
         }
       }
@@ -118,6 +129,7 @@ export enum ChatMessageIntent {
   PLAN = "plan",
   NON_PLAN = "non-plan",
   RENDER = "render",
+  CONVERT_K8S_TO_HELM = "convert-k8s-to-helm",
 }
 
 export interface CreateChatMessageParams {
@@ -125,6 +137,7 @@ export interface CreateChatMessageParams {
   response?: string;
   knownIntent?: ChatMessageIntent;
   followupActions?: FollowupAction[];
+  additionalFiles?: WorkspaceFile[];
 }
 
 export async function createChatMessage(userId: string, workspaceId: string, params: CreateChatMessageParams): Promise<ChatMessage> {
@@ -152,11 +165,12 @@ export async function createChatMessage(userId: string, workspaceId: string, par
         is_intent_render,
         followup_actions,
         response_render_id,
-        response_plan_id
+        response_plan_id,
+        response_conversion_id
       )
       VALUES (
         $1, $2, now(), $3, $4, $5, 0, false,
-        $6, $7, $8, false, false, false, $9, $10, null, null
+        $6, $7, $8, false, false, false, $9, $10, null, null, null
       )`;
 
     const values = [
@@ -184,11 +198,18 @@ export async function createChatMessage(userId: string, workspaceId: string, par
       const plan = await createPlan(userId, workspaceId, chatMessageId);
       await enqueueWork("new_plan", {
         planId: plan.id,
+        additionalFiles: params.additionalFiles,
       });
     } else if (params.knownIntent === ChatMessageIntent.NON_PLAN) {
       await client.query(`SELECT pg_notify('new_nonplan_chat_message', $1)`, [chatMessageId]);
     } else if (params.knownIntent === ChatMessageIntent.RENDER) {
       await renderWorkspace(workspaceId, chatMessageId);
+    } else if (params.knownIntent === ChatMessageIntent.CONVERT_K8S_TO_HELM) {
+      // this is a special type of a plan
+      const conversion = await createConversion(userId, workspaceId, chatMessageId, params.additionalFiles || []);
+      await enqueueWork("new_conversion", {
+        conversionId: conversion.id,
+      });
     }
 
     return getChatMessage(chatMessageId);
@@ -198,6 +219,72 @@ export async function createChatMessage(userId: string, workspaceId: string, par
   }
 }
 
+export async function createConversion(userId: string, workspaceId: string, chatMessageId: string, sourceFiles: WorkspaceFile[]): Promise<Conversion> {
+  logger.info("Creating conversion", { userId, workspaceId, chatMessageId });
+  try {
+    const client = getDB(await getParam("DB_URI"));
+
+    try {
+      await client.query("BEGIN");
+
+      const conversionId: string = srs.default({ length: 12, alphanumeric: true });
+
+      await client.query(`INSERT INTO workspace_conversion (id, workspace_id, chat_message_ids, created_at, updated_at, source_type, status) VALUES ($1, $2, $3, now(), now(), $4, $5)`, [conversionId, workspaceId, [chatMessageId], "k8s", "pending"]);
+
+      for (const file of sourceFiles) {
+        const fileId: string = srs.default({ length: 12, alphanumeric: true });
+        await client.query(`INSERT INTO workspace_conversion_file (id, conversion_id, file_path, file_content, file_status) VALUES ($1, $2, $3, $4, $5)`, [fileId, conversionId, file.filePath, file.content, "pending"]);
+      }
+
+      await client.query("COMMIT");
+
+      // update the chat message with the conversion id
+      await client.query("UPDATE workspace_chat SET response_conversion_id = $1 WHERE id = $2", [conversionId, chatMessageId]);
+
+      return getConversion(conversionId);
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    }
+  } catch (err) {
+    logger.error("Failed to create conversion", { err });
+    throw err;
+  }
+}
+
+export async function getConversion(conversionId: string): Promise<Conversion> {
+  try {
+    const db = getDB(await getParam("DB_URI"));
+    const result = await db.query(`SELECT id, workspace_id, chat_message_ids, created_at, updated_at, source_type, status FROM workspace_conversion WHERE id = $1`, [conversionId]);
+
+    const conversion: Conversion = {
+      id: result.rows[0].id,
+      workspaceId: result.rows[0].workspace_id,
+      chatMessageIds: result.rows[0].chat_message_ids,
+      createdAt: result.rows[0].created_at,
+      sourceType: result.rows[0].source_type,
+      status: result.rows[0].status,
+      sourceFiles: [],
+    }
+
+    // get the source files
+    const sourceFiles = await db.query(`SELECT id, file_path, file_content, file_status FROM workspace_conversion_file WHERE conversion_id = $1`, [conversionId]);
+    for (const file of sourceFiles.rows) {
+      const workspaceFile: WorkspaceFile = {
+        id: file.id,
+        filePath: file.file_path,
+        content: file.file_content,
+      }
+
+      conversion.sourceFiles.push(workspaceFile);
+    }
+
+    return conversion;
+  } catch (err) {
+    logger.error("Failed to get conversion", { err });
+    throw err;
+  }
+}
 export async function createPlan(userId: string, workspaceId: string, chatMessageId: string, superceedingPlanId?: string): Promise<Plan> {
   logger.info("Creating plan", { userId, workspaceId, chatMessageId, superceedingPlanId });
   try {
@@ -261,7 +348,8 @@ export async function getChatMessage(chatMessageId: string): Promise<ChatMessage
         is_intent_complete,
         followup_actions,
         response_render_id,
-        response_plan_id
+        response_plan_id,
+        response_conversion_id
       FROM workspace_chat
       WHERE id = $1`;
 
@@ -277,7 +365,8 @@ export async function getChatMessage(chatMessageId: string): Promise<ChatMessage
       followupActions: result.rows[0].followup_actions,
       responseRenderId: result.rows[0].response_render_id,
       responsePlanId: result.rows[0].response_plan_id,
-      isComplete: true  // Add required property with default value
+      responseConversionId: result.rows[0].response_conversion_id,
+      isComplete: true
     };
 
     return chatMessage;
