@@ -1,11 +1,12 @@
 "use client";
 
+import { Suspense } from "react";
 import { useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { exchangeGoogleCodeForSession } from "@/lib/auth/actions/exchange-google-code";
 import { logger } from "@/lib/utils/logger";
 
-export default function GoogleCallbackPage() {
+function GoogleCallback() {
   const searchParams = useSearchParams();
 
   useEffect(() => {
@@ -28,4 +29,12 @@ export default function GoogleCallbackPage() {
   }, [searchParams]);
 
   return null;
+}
+
+export default function GoogleCallbackPage() {
+  return (
+    <Suspense>
+      <GoogleCallback />
+    </Suspense>
+  );
 }

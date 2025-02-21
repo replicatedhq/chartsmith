@@ -67,7 +67,9 @@ export function WorkspaceContent({
     setWorkspace,
     setMessages,
     setPlans,
-    setRenders
+    setRenders,
+    setChartsBeforeApplyingPendingPatches,
+    setLooseFilesBeforeApplyingPendingPatches
   ]);
 
   const { session } = useSession();

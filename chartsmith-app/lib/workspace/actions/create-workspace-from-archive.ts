@@ -41,4 +41,6 @@ export async function createWorkspaceFromArchiveAction(session: Session, formDat
 
     return w;
   }
+
+  throw new Error('Invalid archive type');
 }
