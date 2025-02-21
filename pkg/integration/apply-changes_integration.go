@@ -120,10 +120,17 @@ func chooseRelevantFilesForIngressQuery(ctx context.Context, w *workspacetypes.W
 		return nil, fmt.Errorf("failed to expand prompt: %w", err)
 	}
 
+	var chartID *string
+	if len(w.Charts) > 0 {
+		chartID = &w.Charts[0].ID
+	}
+
 	relevantFiles, err := workspace.ChooseRelevantFilesForChatMessage(
 		context.Background(),
 		w,
-		IntegrationTestOpts_ChooseRelevantFilesForChatMessage.ChartID,
+		workspace.WorkspaceFilter{
+			ChartID: chartID,
+		},
 		1,
 		expandedPrompt,
 	)
@@ -191,10 +198,18 @@ func chooseRelevantFilesForIngressQuery(ctx context.Context, w *workspacetypes.W
 
 func chooseRelevantFilesForOpenshiftQuery(ctx context.Context, w *workspacetypes.Workspace) ([]string, error) {
 	prompt := `Will this chart support deploying on OpenShift?`
+
+	var chartID *string
+	if len(w.Charts) > 0 {
+		chartID = &w.Charts[0].ID
+	}
+
 	relevantFiles, err := workspace.ChooseRelevantFilesForChatMessage(
 		context.Background(),
 		w,
-		IntegrationTestOpts_ChooseRelevantFilesForChatMessage.ChartID,
+		workspace.WorkspaceFilter{
+			ChartID: chartID,
+		},
 		1,
 		prompt,
 	)

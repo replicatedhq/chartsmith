@@ -43,7 +43,8 @@ export async function listMessagesForWorkspace(workspaceID: string): Promise<Cha
                 workspace_chat.is_canceled,
                 workspace_chat.followup_actions,
                 workspace_chat.response_render_id,
-                workspace_chat.response_plan_id
+                workspace_chat.response_plan_id,
+                workspace_chat.response_conversion_id
             FROM
                 workspace_chat
             WHERE
@@ -74,7 +75,8 @@ export async function listMessagesForWorkspace(workspaceID: string): Promise<Cha
         followupActions: row.followup_actions,
         responseRenderId: row.response_render_id,
         responsePlanId: row.response_plan_id,
-        isComplete: true  // Add required property with default value
+        responseConversionId: row.response_conversion_id,
+        isComplete: true,
       };
       messages.push(message);
     }

@@ -1,5 +1,5 @@
 import { atom } from 'jotai'
-import type { Workspace, Plan, RenderedWorkspace, Chart, WorkspaceFile } from '@/lib/types/workspace'
+import type { Workspace, Plan, RenderedWorkspace, Chart, WorkspaceFile, Conversion } from '@/lib/types/workspace'
 import { Message } from '@/components/types'
 
 // Base atoms
@@ -21,6 +21,12 @@ export const rendersAtom = atom<RenderedWorkspace[]>([])
 export const renderByIdAtom = atom(get => {
   const renders = get(rendersAtom)
   return (id: string) => renders.find(r => r.id === id)
+})
+
+export const conversionsAtom = atom<Conversion[]>([])
+export const conversionByIdAtom = atom(get => {
+  const conversions = get(conversionsAtom)
+  return (id: string) => conversions.find(c => c.id === id)
 })
 
 // Derived atoms

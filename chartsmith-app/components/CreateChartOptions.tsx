@@ -21,6 +21,7 @@ export function CreateChartOptions() {
   const [isPromptLoading, setIsPromptLoading] = useState(false);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
   const [showArtifactHubSearch, setShowArtifactHubSearch] = useState(false);
+  const [uploadType, setUploadType] = useState<'helm' | 'k8s' | null>(null);
 
   useEffect(() => {
     // Focus the textarea on mount
@@ -65,8 +66,7 @@ export function CreateChartOptions() {
     }
 
     if (!session) {
-      // Can't store the file in sessionStorage, so we'll need to show an error
-      alert("Please log in to upload a chart");
+      alert("Please log in to upload");
       router.push('/login');
       return;
     }
@@ -75,22 +75,25 @@ export function CreateChartOptions() {
     try {
       const formData = new FormData();
       formData.append('file', file);
+      formData.append('type', uploadType || 'helm'); // Send the upload type to the backend
 
-      const workspace = await createWorkspaceFromArchiveAction(session, formData);
+      const workspace = await createWorkspaceFromArchiveAction(session, formData, uploadType || 'helm');
       router.replace(`/workspace/${workspace.id}`);
     } catch (error) {
-      console.error('Error uploading chart:', error);
-      alert("Failed to upload chart");
+      console.error('Error uploading:', error);
+      alert("Failed to upload");
       setIsUploading(false);
     } finally {
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
+      setUploadType(null);
     }
   };
 
-  const triggerFileUpload = () => {
+  const triggerFileUpload = (type: 'helm' | 'k8s') => {
     if (!isUploading && !isPromptLoading) {
+      setUploadType(type);
       fileInputRef.current?.click();
     }
   };
@@ -125,7 +128,14 @@ export function CreateChartOptions() {
         </div>
         <div className="border-t border-gray-800 p-3 sm:p-4 flex items-center gap-3 sm:gap-4">
           <button
-            onClick={triggerFileUpload}
+            onClick={() => triggerFileUpload('helm')}
+            disabled={isUploading || isPromptLoading}
+            className="p-1.5 sm:p-2 text-gray-400 hover:text-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Link className="w-4 h-4 sm:w-5 sm:h-5" />
+          </button>
+          <button
+            onClick={() => triggerFileUpload('k8s')}
             disabled={isUploading || isPromptLoading}
             className="p-1.5 sm:p-2 text-gray-400 hover:text-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -139,12 +149,20 @@ export function CreateChartOptions() {
 
       <div className="mt-3 sm:mt-4 flex flex-wrap gap-1.5 sm:gap-2 justify-center">
         <button
-          onClick={triggerFileUpload}
+          onClick={() => triggerFileUpload('helm')}
           disabled={isUploading || isPromptLoading}
           className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm rounded-full bg-gray-800/60 backdrop-blur-sm border border-gray-700 hover:bg-gray-700/60 transition-colors text-gray-300 hover:text-white disabled:opacity-50 disabled:hover:bg-gray-800/60 disabled:cursor-not-allowed"
         >
           <Upload className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-          Upload a chart
+          Upload a Helm chart
+        </button>
+        <button
+          onClick={() => triggerFileUpload('k8s')}
+          disabled={isUploading || isPromptLoading}
+          className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm rounded-full bg-gray-800/60 backdrop-blur-sm border border-gray-700 hover:bg-gray-700/60 transition-colors text-gray-300 hover:text-white disabled:opacity-50 disabled:hover:bg-gray-800/60 disabled:cursor-not-allowed"
+        >
+          <Upload className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+          Upload Kubernetes manifests
         </button>
         <button
           onClick={() => setShowArtifactHubSearch(true)}
@@ -164,7 +182,7 @@ export function CreateChartOptions() {
         </button>
       </div>
 
-      <input ref={fileInputRef} type="file" accept=".tgz,.tar.gz" className="hidden" onChange={handleFileUpload} />
+      <input ref={fileInputRef} type="file" accept=".tgz,.tar.gz,.tar" className="hidden" onChange={handleFileUpload} />
       <PromptModal isOpen={showPromptModal} onClose={() => setShowPromptModal(false)} />
       <ArtifactHubSearchModal
         isOpen={showArtifactHubSearch}

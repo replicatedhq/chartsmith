@@ -36,7 +36,6 @@ func RenderChartNative(files []types.File, valuesYAML string) (string, error) {
 	chartFiles := make([]*chart.File, 0, len(files))
 	templates := make([]*chart.File, 0, len(files))
 	for _, file := range files {
-		fmt.Printf("adding file at %s\n", file.FilePath)
 		if strings.HasPrefix(file.FilePath, "templates/") {
 			// Add to Templates if it's in the templates directory
 			templates = append(templates, &chart.File{

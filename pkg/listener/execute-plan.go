@@ -74,10 +74,18 @@ func handleExecutePlanNotification(ctx context.Context, payload string) error {
 			detailedPlanDoneCh <- fmt.Errorf("failed to expand prompt: %w", err)
 			return
 		}
+
+		var chartID *string
+		if len(w.Charts) > 0 {
+			chartID = &w.Charts[0].ID
+		}
+
 		relevantFiles, err := workspace.ChooseRelevantFilesForChatMessage(
 			ctx,
 			w,
-			w.Charts[0].ID,
+			workspace.WorkspaceFilter{
+				ChartID: chartID,
+			},
 			w.CurrentRevision,
 			expandedPrompt,
 		)

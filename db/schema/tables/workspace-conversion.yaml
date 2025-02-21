@@ -1,0 +1,33 @@
+database: chartsmith
+name: workspace_conversion
+schema:
+  postgres:
+    primaryKey:
+    - id
+    columns:
+    - name: id
+      type: text
+      constraints:
+        notNull: true
+    - name: workspace_id
+      type: text
+      constraints:
+        notNull: true
+    - name: chat_message_ids
+      type: text[]
+    - name: created_at
+      type: timestamp
+      constraints:
+        notNull: true
+    - name: updated_at
+      type: timestamp
+      constraints:
+        notNull: true
+    - name: source_type
+      type: text
+      constraints:
+        notNull: true
+    - name: status
+      type: text
+      constraints:
+        notNull: true

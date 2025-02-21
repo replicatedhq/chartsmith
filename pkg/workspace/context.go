@@ -2,6 +2,7 @@ package workspace
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"path/filepath"
 	"slices"
@@ -20,15 +21,20 @@ type RelevantFile struct {
 	Similarity float64
 }
 
-func ChooseRelevantFilesForChatMessage(ctx context.Context,
+type WorkspaceFilter struct {
+	ChartID *string
+}
+
+func ChooseRelevantFilesForChatMessage(
+	ctx context.Context,
 	w *types.Workspace,
-	chartID string,
+	filter WorkspaceFilter,
 	revisionNumber int,
 	expandedPrompt string,
 ) ([]RelevantFile, error) {
 	logger.Debug("Choosing relevant files for chat message",
 		zap.String("workspace_id", w.ID),
-		zap.String("chart_id", chartID),
+		zap.Any("filter", filter),
 		zap.Int("revision_number", revisionNumber),
 		zap.Int("expanded_prompt_len", len(expandedPrompt)),
 	)
@@ -106,11 +112,11 @@ func ChooseRelevantFilesForChatMessage(ctx context.Context,
 	for rows.Next() {
 		var file types.File
 		var similarity float64
-
+		var chartID sql.NullString
 		err := rows.Scan(
 			&file.ID,
 			&file.RevisionNumber,
-			&file.ChartID,
+			&chartID,
 			&file.WorkspaceID,
 			&file.FilePath,
 			&file.Content,
@@ -119,6 +125,8 @@ func ChooseRelevantFilesForChatMessage(ctx context.Context,
 		if err != nil {
 			return nil, fmt.Errorf("error scanning file: %w", err)
 		}
+
+		file.ChartID = chartID.String
 
 		if !slices.Contains(extensionsWithHighSimilarity, filepath.Ext(file.FilePath)) {
 			similarity = similarity - 0.25

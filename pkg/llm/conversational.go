@@ -35,10 +35,17 @@ func ConversationalChatMessage(ctx context.Context, streamCh chan string, doneCh
 		return fmt.Errorf("failed to expand prompt: %w", err)
 	}
 
+	var chartID *string
+	if len(w.Charts) > 0 {
+		chartID = &w.Charts[0].ID
+	}
+
 	relevantFiles, err := workspace.ChooseRelevantFilesForChatMessage(
 		ctx,
 		w,
-		c.ID,
+		workspace.WorkspaceFilter{
+			ChartID: chartID,
+		},
 		w.CurrentRevision,
 		expandedPrompt,
 	)

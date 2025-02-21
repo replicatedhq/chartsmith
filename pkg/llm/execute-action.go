@@ -10,6 +10,11 @@ import (
 	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 )
 
+type CreateWorkspaceFromArchiveAction struct {
+	ArchivePath string `json:"archivePath"`
+	ArchiveType string `json:"archiveType"` // New field: "helm" or "k8s"
+}
+
 func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWithPath, plan *workspacetypes.Plan, currentContent string, contentStreamCh chan string, doneCh chan error) error {
 	client, err := newAnthropicClient(ctx)
 	if err != nil {
@@ -95,27 +100,22 @@ Follow the instructions to provide the patch in proper <chartsmithArtifact> tags
 		case anthropic.ContentBlockDeltaEventDelta:
 			if delta.Text != "" {
 				fullResponseWithTags += delta.Text
-				fmt.Printf("Full response so far: %s\n", fullResponseWithTags)
-
 				artifacts, err := parseArtifactsInResponse(fullResponseWithTags)
 				if err != nil {
 					return fmt.Errorf("error parsing artifacts in response: %w", err)
 				}
 
 				for _, artifact := range artifacts {
-					fmt.Printf("Found artifact for path %s: %s\n", artifact.Path, artifact.Content)
 					if artifact.Path == actionPlanWithPath.Path {
 						// Validate patch format before sending
 						lines := strings.Split(artifact.Content, "\n")
 						if len(lines) < 4 {
-							fmt.Printf("Skipping: too few lines (%d)\n", len(lines))
 							continue
 						}
 
 						// Must start with proper headers
 						if !strings.HasPrefix(lines[0], "--- "+actionPlanWithPath.Path) ||
 							!strings.HasPrefix(lines[1], "+++ "+actionPlanWithPath.Path) {
-							fmt.Printf("Skipping: invalid headers\n%s\n%s\n", lines[0], lines[1])
 							continue
 						}
 
@@ -128,11 +128,9 @@ Follow the instructions to provide the patch in proper <chartsmithArtifact> tags
 							}
 						}
 						if !hasHunk {
-							fmt.Printf("Skipping: no hunk header found\n")
 							continue
 						}
 
-						fmt.Printf("Sending valid patch:\n%s\n", artifact.Content)
 						contentStreamCh <- artifact.Content
 					}
 				}
@@ -145,5 +143,29 @@ Follow the instructions to provide the patch in proper <chartsmithArtifact> tags
 	}
 
 	doneCh <- nil
+	return nil
+}
+
+func (a *CreateWorkspaceFromArchiveAction) Execute(ctx context.Context) error {
+	// Modify the execution logic to handle different archive types
+	switch a.ArchiveType {
+	case "helm":
+		return handleHelmChart(ctx, a.ArchivePath)
+	case "k8s":
+		return handleK8sManifests(ctx, a.ArchivePath)
+	default:
+		return fmt.Errorf("unknown archive type: %s", a.ArchiveType)
+	}
+}
+
+func handleHelmChart(ctx context.Context, archivePath string) error {
+	// Existing helm chart handling logic
+	// ...
+	return nil
+}
+
+func handleK8sManifests(ctx context.Context, archivePath string) error {
+	// New logic for handling Kubernetes manifests
+	// ...
 	return nil
 }

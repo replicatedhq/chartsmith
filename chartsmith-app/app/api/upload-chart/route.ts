@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
       content: new Uint8Array(bytes),
     };
 
-    const workspace = await createWorkspaceFromArchiveAction(session, formData);
+    const workspace = await createWorkspaceFromArchiveAction(session, formData, "helm");
 
     return NextResponse.json({ workspaceId: workspace.id });
   } catch (error) {

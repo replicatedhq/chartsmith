@@ -67,6 +67,22 @@ func StartListeners(ctx context.Context) error {
 		return nil
 	})
 
+	l.AddHandler(ctx, "new_conversion", 5, time.Second*10, func(notification *pgconn.Notification) error {
+		if err := handleNewConversionNotification(ctx, notification.Payload); err != nil {
+			logger.Error(fmt.Errorf("failed to handle new conversion notification: %w", err))
+			return fmt.Errorf("failed to handle new conversion notification: %w", err)
+		}
+		return nil
+	})
+
+	l.AddHandler(ctx, "conversion_file", 1, time.Second*10, func(notification *pgconn.Notification) error {
+		if err := handleConversionFileNotification(ctx, notification.Payload); err != nil {
+			logger.Error(fmt.Errorf("failed to handle conversion file notification: %w", err))
+			return fmt.Errorf("failed to handle conversion file notification: %w", err)
+		}
+		return nil
+	})
+
 	l.Start(ctx)
 	defer l.Stop(ctx)
 

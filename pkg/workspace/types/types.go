@@ -86,16 +86,17 @@ type ActionFile struct {
 }
 
 type Chat struct {
-	ID               string           `json:"id"`
-	WorkspaceID      string           `json:"-"`
-	Prompt           string           `json:"prompt"`
-	Response         string           `json:"response"`
-	CreatedAt        time.Time        `json:"createdAt"`
-	IsIntentComplete bool             `json:"isIntentComplete"`
-	Intent           *Intent          `json:"0"`
-	FollowupActions  []FollowupAction `json:"followupActions"`
-	ResponseRenderID string           `json:"responseRenderId"`
-	ResponsePlanID   string           `json:"responsePlanId"`
+	ID                   string           `json:"id"`
+	WorkspaceID          string           `json:"-"`
+	Prompt               string           `json:"prompt"`
+	Response             string           `json:"response"`
+	CreatedAt            time.Time        `json:"createdAt"`
+	IsIntentComplete     bool             `json:"isIntentComplete"`
+	Intent               *Intent          `json:"0"`
+	FollowupActions      []FollowupAction `json:"followupActions"`
+	ResponseRenderID     string           `json:"responseRenderId"`
+	ResponsePlanID       string           `json:"responsePlanId"`
+	ResponseConversionID string           `json:"responseConversionId"`
 }
 
 type FollowupAction struct {
@@ -150,4 +151,19 @@ type RenderedFile struct {
 	WorkspaceID     string `json:"workspace_id"`
 	FilePath        string `json:"filePath"`
 	RenderedContent string `json:"renderedContent"`
+}
+
+type Conversion struct {
+	ID             string    `json:"id"`
+	WorkspaceID    string    `json:"workspaceId"`
+	ChatMessageIDs []string  `json:"chatMessageIds"`
+	CreatedAt      time.Time `json:"createdAt"`
+}
+
+type ConversionFile struct {
+	ID           string `json:"id"`
+	ConversionID string `json:"conversionId"`
+	FilePath     string `json:"filePath"`
+	FileContent  string `json:"fileContent"`
+	FileStatus   string `json:"fileStatus"`
 }

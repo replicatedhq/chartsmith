@@ -18,7 +18,7 @@ import { Session } from "@/lib/types/session";
 import { useTheme } from "../contexts/ThemeContext";
 
 // atoms
-import { messageByIdAtom, messagesAtom, renderByIdAtom, workspaceAtom } from "@/atoms/workspace";
+import { conversionByIdAtom, messageByIdAtom, messagesAtom, renderByIdAtom, workspaceAtom } from "@/atoms/workspace";
 
 // actions
 import { cancelMessageAction } from "@/lib/workspace/actions/cancel-message";
@@ -29,6 +29,16 @@ export interface ChatMessageProps {
   messageId: string;
   session: Session;
   showChatInput?: boolean;
+}
+
+function LoadingSpinner({ message }: { message: string }) {
+  const { theme } = useTheme();
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex-shrink-0 animate-spin rounded-full h-3 w-3 border border-t-transparent border-primary"></div>
+      <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>{message}</div>
+    </div>
+  );
 }
 
 export function ChatMessage({
@@ -50,6 +60,8 @@ export function ChatMessage({
   const [workspace] = useAtom(workspaceAtom);
   const [renderGetter] = useAtom(renderByIdAtom);
   const render = renderGetter(message!.responseRenderId!);
+  const [conversionGetter] = useAtom(conversionByIdAtom);
+  const conversion = conversionGetter(message!.responseConversionId!);
 
   const handleSubmitChat = async (e: FormEvent) => {
     e.preventDefault();
@@ -87,6 +99,46 @@ export function ChatMessage({
   const handleApplyChanges = async () => {
     console.log("handleApplyChanges");
   }
+
+  const renderAssistantContent = () => {
+    if (!message) return null;
+    // Show rendered charts
+    if (message.responseRenderId) {
+      return (
+        <div className="space-y-4">
+          {render?.charts.map((chart, index) => (
+            <Terminal
+              key={`${messageId}-${render.id}-${chart.id}-${index}`}
+              data-testid="chart-terminal"
+              chart={chart}
+              depUpdateCommandStreamed={chart.depUpdateCommand}
+              depUpdateStderrStreamed={chart.depUpdateStderr}
+              depUpdateStdoutStreamed={chart.depUpdateStdout}
+              helmTemplateCommandStreamed={chart.helmTemplateCommand}
+              helmTemplateStderrStreamed={chart.helmTemplateStderr}
+            />
+          ))}
+        </div>
+      );
+    }
+
+    // Show conversion status
+    if (message.responseConversionId) {
+      return <LoadingSpinner message="CONVERTING THE SOURCE..." />;
+    }
+
+    // Show markdown response
+    if (message.response) {
+      return <ReactMarkdown>{message.response}</ReactMarkdown>;
+    }
+
+    // Show generating response status
+    if (!message.responsePlanId) {
+      return <LoadingSpinner message="generating response..." />;
+    }
+
+    return null;
+  };
 
   if (!message || !workspace) return null;
 
@@ -140,29 +192,7 @@ export function ChatMessage({
           <div className={`p-3 rounded-2xl ${theme === "dark" ? "bg-dark-border/40" : "bg-gray-100"} rounded-tl-sm w-full`}>
             <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"} mb-1`}>ChartSmith</div>
             <div className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} ${message.isIgnored ? "opacity-50 line-through" : ""} text-[12px] markdown-content`}>
-              {message.responseRenderId ? (
-                <div className="space-y-4">
-                  {render?.charts.map((chart, index) => (
-                    <Terminal
-                      key={`${messageId}-${render.id}-${chart.id}-${index}`}
-                      data-testid="chart-terminal"
-                      chart={chart}
-                      depUpdateCommandStreamed={chart.depUpdateCommand}
-                      depUpdateStderrStreamed={chart.depUpdateStderr}
-                      depUpdateStdoutStreamed={chart.depUpdateStdout}
-                      helmTemplateCommandStreamed={chart.helmTemplateCommand}
-                      helmTemplateStderrStreamed={chart.helmTemplateStderr}
-                    />
-                  ))}
-                </div>
-              ) : message.response ? (
-                <ReactMarkdown>{message.response}</ReactMarkdown>
-              ) : (!message.responsePlanId && (
-                <div className="flex items-center gap-2">
-                  <div className="flex-shrink-0 animate-spin rounded-full h-3 w-3 border border-t-transparent border-primary"></div>
-                  <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>generating response...</div>
-                </div>
-              ))}
+              {renderAssistantContent()}
             </div>
             {message.followupActions && message.followupActions.length > 0 && (
               <div className="mt-4 flex gap-2 justify-end">

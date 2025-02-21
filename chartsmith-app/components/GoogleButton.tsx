@@ -12,8 +12,56 @@ export function GoogleButton() {
   const handleGoogleSignIn = () => {
     try {
       const authUrl = getGoogleAuthUrl();
+      
+      // Open popup window
+      const width = 500;
+      const height = 600;
+      const left = window.screenX + (window.outerWidth - width) / 2;
+      const top = window.screenY + (window.outerHeight - height) / 2;
+      
+      const popup = window.open(
+        authUrl,
+        "Google Sign In",
+        `width=${width},height=${height},left=${left},top=${top},popup=1`
+      );
 
-      window.location.href = authUrl;
+      // Listen for messages from popup
+      const messageHandler = async (event: MessageEvent) => {
+        if (event.data?.type === 'google-auth') {
+          window.removeEventListener('message', messageHandler);
+          if (popup) popup.close();
+          
+          if (event.data.error) {
+            toast({
+              title: "Error",
+              description: "Failed to sign in with Google. Please try again.",
+              variant: "destructive",
+            });
+            return;
+          }
+
+          // Set the session cookie
+          const expires = new Date();
+          expires.setDate(expires.getDate() + 7);
+          document.cookie = `session=${event.data.jwt}; expires=${expires.toUTCString()}; path=/; SameSite=Lax`;
+
+          // Handle any pending actions
+          const pendingArtifactHubUrl = sessionStorage.getItem('pendingArtifactHubUrl');
+          const pendingPrompt = sessionStorage.getItem('pendingPrompt');
+          
+          if (pendingArtifactHubUrl) {
+            sessionStorage.removeItem('pendingArtifactHubUrl');
+            window.location.href = `/artifacthub.io/packages/helm/${encodeURIComponent(pendingArtifactHubUrl)}`;
+          } else if (pendingPrompt) {
+            sessionStorage.removeItem('pendingPrompt');
+            window.location.href = `/workspace/new?prompt=${encodeURIComponent(pendingPrompt)}`;
+          } else {
+            window.location.href = '/';
+          }
+        }
+      };
+
+      window.addEventListener('message', messageHandler);
     } catch (error) {
       logger.error("Failed to initiate Google login", { error });
       toast({

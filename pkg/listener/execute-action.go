@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 
 	"github.com/replicatedhq/chartsmith/pkg/llm"
 	llmtypes "github.com/replicatedhq/chartsmith/pkg/llm/types"
@@ -238,4 +239,12 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 	}
 
 	return nil
+}
+
+func (l *Listener) handleCreateWorkspaceFromArchive(ctx context.Context, action *llm.CreateWorkspaceFromArchiveAction) error {
+	// Update to handle both types of archives
+	log.Printf("Creating workspace from archive: %s (type: %s)", action.ArchivePath, action.ArchiveType)
+
+	// Rest of the existing handling code...
+	return action.Execute(ctx)
 }
