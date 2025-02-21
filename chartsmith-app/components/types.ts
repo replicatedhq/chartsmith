@@ -1,4 +1,4 @@
-import { Plan, Workspace, WorkspaceFile, RenderedFile } from "@/lib/types/workspace";
+import { Plan, Workspace, WorkspaceFile, RenderedFile, Conversion, ConversionFile } from "@/lib/types/workspace";
 
 export interface FileNode {
   name: string;
@@ -95,7 +95,9 @@ export interface CentrifugoMessageData {
   helmTemplateCommand?: string;
   helmTemplateStdout?: string;
   helmTemplateStderr?: string;
+  conversion?: Conversion;
   conversionId?: string;
+  conversionFile?: ConversionFile;
   filePath?: string;
   status?: string;
 }

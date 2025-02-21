@@ -1,7 +1,7 @@
 import { getDB } from "../data/db";
 import { getParam } from "../data/param";
 
-import { Chart, WorkspaceFile, Workspace, Plan, ActionFile, ChatMessage, FollowupAction, Conversion } from "../types/workspace";
+import { Chart, WorkspaceFile, Workspace, Plan, ActionFile, ChatMessage, FollowupAction, Conversion, ConversionStatus, ConversionFileStatus, ConversionFile } from "../types/workspace";
 import * as srs from "secure-random-string";
 import { logger } from "../utils/logger";
 import { enqueueWork } from "../utils/queue";
@@ -229,11 +229,11 @@ export async function createConversion(userId: string, workspaceId: string, chat
 
       const conversionId: string = srs.default({ length: 12, alphanumeric: true });
 
-      await client.query(`INSERT INTO workspace_conversion (id, workspace_id, chat_message_ids, created_at, updated_at, source_type, status) VALUES ($1, $2, $3, now(), now(), $4, $5)`, [conversionId, workspaceId, [chatMessageId], "k8s", "pending"]);
+      await client.query(`INSERT INTO workspace_conversion (id, workspace_id, chat_message_ids, created_at, updated_at, source_type, status) VALUES ($1, $2, $3, now(), now(), $4, $5)`, [conversionId, workspaceId, [chatMessageId], "k8s", ConversionStatus.Pending]);
 
       for (const file of sourceFiles) {
         const fileId: string = srs.default({ length: 12, alphanumeric: true });
-        await client.query(`INSERT INTO workspace_conversion_file (id, conversion_id, file_path, file_content, file_status) VALUES ($1, $2, $3, $4, $5)`, [fileId, conversionId, file.filePath, file.content, "pending"]);
+        await client.query(`INSERT INTO workspace_conversion_file (id, conversion_id, file_path, file_content, file_status) VALUES ($1, $2, $3, $4, $5)`, [fileId, conversionId, file.filePath, file.content, ConversionFileStatus.Pending]);
       }
 
       await client.query("COMMIT");
@@ -270,13 +270,14 @@ export async function getConversion(conversionId: string): Promise<Conversion> {
     // get the source files
     const sourceFiles = await db.query(`SELECT id, file_path, file_content, file_status FROM workspace_conversion_file WHERE conversion_id = $1`, [conversionId]);
     for (const file of sourceFiles.rows) {
-      const workspaceFile: WorkspaceFile = {
+      const conversionFile: ConversionFile = {
         id: file.id,
         filePath: file.file_path,
         content: file.file_content,
+        status: file.file_status,
       }
 
-      conversion.sourceFiles.push(workspaceFile);
+      conversion.sourceFiles.push(conversionFile);
     }
 
     return conversion;

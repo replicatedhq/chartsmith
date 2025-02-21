@@ -55,14 +55,40 @@ export interface RenderedFile {
   renderedContent: string;
 }
 
+export enum ConversionStatus {
+  Pending = 'pending',
+  Analyzing = 'analyzing',
+  Sorting = 'sorting',
+  Templating = 'templating',
+  Normalizing = 'normalizing',
+  Simplifying = 'simplifying',
+  Finalizing = 'finalizing',
+  Complete = 'complete',
+}
+
 export interface Conversion {
   id: string;
   sourceType: string;
-  status: string;
+  status: ConversionStatus;
   workspaceId: string;
   chatMessageIds: string[];
   createdAt: Date;
-  sourceFiles: WorkspaceFile[];
+  sourceFiles: ConversionFile[];
+}
+
+export enum ConversionFileStatus {
+  Pending = 'pending',
+  Processing = 'converting',
+  Converted = 'converted',
+  Simplifying = 'simplifying',
+  Completed = 'completed',
+}
+
+export interface ConversionFile {
+  id: string;
+  filePath: string;
+  content: string;
+  status: ConversionFileStatus;
 }
 
 export interface Plan {

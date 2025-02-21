@@ -16,11 +16,18 @@ import { getWorkspaceRenderAction } from "@/lib/workspace/actions/get-workspace-
 
 
 // atoms
-import { messagesAtom, rendersAtom, workspaceAtom, handlePlanUpdatedAtom, allFilesBeforeApplyingPendingPatchesAtom, looseFilesBeforeApplyingPendingPatchesAtom, chartsBeforeApplyingPendingPatchesAtom } from "@/atoms/workspace";
+import {
+  messagesAtom,
+  rendersAtom,
+  workspaceAtom,
+  handlePlanUpdatedAtom,
+  looseFilesBeforeApplyingPendingPatchesAtom,
+  chartsBeforeApplyingPendingPatchesAtom,
+  handleConversionUpdatedAtom,
+  handleConversionFileUpdatedAtom
+ } from "@/atoms/workspace";
 import { selectedFileAtom } from "@/atoms/editor";
 
-// utils
-import { logger } from "@/lib/utils/logger";
 
 // types
 import { RenderedChart } from "@/lib/types/workspace";
@@ -40,11 +47,12 @@ export function useCentrifugo({
   const [, setRenders] = useAtom(rendersAtom)
   const [, setMessages] = useAtom(messagesAtom)
   const [, setSelectedFile] = useAtom(selectedFileAtom)
-  const [, handlePlanUpdated] = useAtom(handlePlanUpdatedAtom)
   const [, setChartsBeforeApplyingPendingPatches] = useAtom(chartsBeforeApplyingPendingPatchesAtom)
   const [, setLooseFilesBeforeApplyingPendingPatches] = useAtom(looseFilesBeforeApplyingPendingPatchesAtom)
-
+  const [, handleConversionUpdated] = useAtom(handleConversionUpdatedAtom)
+  const [, handleConversionFileUpdated] = useAtom(handleConversionFileUpdatedAtom)
   const [isReconnecting, setIsReconnecting] = useState(false);
+  const [, handlePlanUpdated] = useAtom(handlePlanUpdatedAtom);
 
   const handleRevisionCreated = useCallback(async (revision: any) => {
     if (!session || !revision.workspaceId) return;
@@ -222,25 +230,17 @@ export function useCentrifugo({
     });
   }, []);
 
-  const handleConversionFileUpdated = useCallback((data: CentrifugoMessageData) => {
-    console.log('Conversion file updated event received:', {
-      eventType: data.eventType,
-      conversionId: data.conversionId,
-      filePath: data.filePath,
-      status: data.status
-    });
-  }, []);
+  const handleConversionFileUpdatedMessage = useCallback((data: CentrifugoMessageData) => {
+    if (!data.conversionId || !data.conversionFile) return;
+    handleConversionFileUpdated(data.conversionId, data.conversionFile);
+  }, [handleConversionFileUpdated]);
 
-  const handleConversationStatusUpdated = useCallback((data: CentrifugoMessageData) => {
-    console.log('Conversation status updated event received:', {
-      eventType: data.eventType,
-      conversionId: data.conversionId,
-      status: data.status
-    });
+  const handleConversationUpdatedMessage = useCallback((data: CentrifugoMessageData) => {
+    if (!data.conversion) return;
+    handleConversionUpdated(data.conversion);
   }, []);
 
   const handleCentrifugoMessage = useCallback((message: { data: CentrifugoMessageData }) => {
-    console.log(`eventType: ${message.data.eventType}`);
     const eventType = message.data.eventType;
     if (eventType === 'plan-updated') {
       const plan = message.data.plan!;
@@ -258,9 +258,9 @@ export function useCentrifugo({
     } else if (eventType === 'render-updated') {
       handleRenderUpdated(message.data);
     } else if (eventType === 'conversion-file') {
-      handleConversionFileUpdated(message.data);
-    } else if (eventType === 'conversation-status') {
-      handleConversationStatusUpdated(message.data);
+      handleConversionFileUpdatedMessage(message.data);
+    } else if (eventType === 'conversion-status') {
+      handleConversationUpdatedMessage(message.data);
     }
 
     const isWorkspaceUpdatedEvent = message.data.workspace;
@@ -279,7 +279,9 @@ export function useCentrifugo({
     handleRenderStreamEvent,
     handleWorkspaceUpdated,
     handleArtifactReceived,
-    handleRenderUpdated
+    handleRenderUpdated,
+    handleConversionFileUpdatedMessage,
+    handleConversationUpdatedMessage
   ]);
 
   useEffect(() => {
@@ -326,7 +328,7 @@ export function useCentrifugo({
               }, RECONNECT_DELAY_MS);
             }
           } catch (err) {
-            console.log(`Failed to refresh Centrifugo token`, { err });
+            console.log('Failed to refresh Centrifugo token after error', { err });
           }
         }
       });
@@ -348,7 +350,7 @@ export function useCentrifugo({
                 }
               })
               .catch(err => {
-                console.log(`Failed to refresh Centrifugo token after error`, { err });
+                console.log('Failed to refresh Centrifugo token after error', { err });
               });
           }
         }
@@ -370,15 +372,18 @@ export function useCentrifugo({
         console.log('Successfully subscribed to:', channel);
       });
 
+      // Explicitly subscribe to the channel
       sub.subscribe();
 
+      // Explicitly connect
       try {
         centrifuge.connect();
       } catch (err) {
-        logger.error("Error connecting to Centrifugo:", err);
+        console.error("Error connecting to Centrifugo:", err);
         setIsReconnecting(true);
       }
 
+      // Return cleanup function
       return () => {
         try {
           if (centrifugeRef.current) {
@@ -388,7 +393,7 @@ export function useCentrifugo({
             setIsReconnecting(false);
           }
         } catch (err) {
-          logger.error("Error during Centrifugo cleanup:", err);
+          console.error("Error during Centrifugo cleanup:", err);
         }
       };
     };
@@ -396,5 +401,8 @@ export function useCentrifugo({
     setupCentrifuge();
   }, [session?.user?.id, workspace?.id, handleCentrifugoMessage]);
 
-  return { isReconnecting };
+  return {
+    handleCentrifugoMessage,
+    isReconnecting
+  };
 }

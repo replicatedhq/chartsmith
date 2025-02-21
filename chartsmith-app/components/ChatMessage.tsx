@@ -9,6 +9,7 @@ import ReactMarkdown from 'react-markdown';
 // Components
 import { Terminal } from "@/components/Terminal";
 import { FeedbackModal } from "@/components/FeedbackModal";
+import { ConversionProgress } from "@/components/ConversionProgress";
 
 // Types
 import { Message } from "@/components/types";
@@ -124,7 +125,7 @@ export function ChatMessage({
 
     // Show conversion status
     if (message.responseConversionId) {
-      return <LoadingSpinner message="CONVERTING THE SOURCE..." />;
+      return <ConversionProgress conversionId={message.responseConversionId} />;
     }
 
     // Show markdown response
@@ -146,7 +147,7 @@ export function ChatMessage({
     <div className="space-y-2" data-testid="chat-message">
       {/* User Message */}
       <div className="px-2 py-1" data-testid="user-message">
-        <div className={`p-3 rounded-2xl ${theme === "dark" ? "bg-primary/20" : "bg-primary/10"} rounded-tr-sm w-full`}>
+        <div className={`p-3 rounded-lg ${theme === "dark" ? "bg-primary/20" : "bg-primary/10"} rounded-tr-sm w-full`}>
           <div className="flex items-start gap-2">
             <Image
               src={session.user.imageUrl}
@@ -189,7 +190,7 @@ export function ChatMessage({
       {/* Assistant Message */}
       {(message.response || (message.isIntentComplete && !message.responsePlanId)) && (
         <div className="px-2 py-1" data-testid="assistant-message">
-          <div className={`p-3 rounded-2xl ${theme === "dark" ? "bg-dark-border/40" : "bg-gray-100"} rounded-tl-sm w-full`}>
+          <div className={`p-3 rounded-lg ${theme === "dark" ? "bg-dark-border/40" : "bg-gray-100"} rounded-tl-sm w-full`}>
             <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"} mb-1`}>ChartSmith</div>
             <div className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} ${message.isIgnored ? "opacity-50 line-through" : ""} text-[12px] markdown-content`}>
               {renderAssistantContent()}
