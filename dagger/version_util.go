@@ -22,7 +22,7 @@ func processVersion(ctx context.Context, requestedVersion string, githubToken *d
 
 	fmt.Printf("Latest version: %s\n", latestVersion)
 	parsedLatestVersion, err := semver.NewVersion(latestVersion)
-	if err != nil {
+	if err != nil && (requestedVersion == "major" || requestedVersion == "minor" || requestedVersion == "patch") {
 		return "", "", err
 	}
 
