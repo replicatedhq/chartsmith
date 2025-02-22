@@ -185,9 +185,11 @@ const (
 )
 
 type ConversionFile struct {
-	ID           string               `json:"id"`
-	ConversionID string               `json:"conversionId"`
-	FilePath     string               `json:"filePath"`
-	FileContent  string               `json:"content"`
-	FileStatus   ConversionFileStatus `json:"status"`
+	ID                   string               `json:"id"`
+	ConversionID         string               `json:"conversionId"`
+	FilePath             string               `json:"filePath"`
+	FileContent          string               `json:"content"`
+	FileStatus           ConversionFileStatus `json:"status"`
+	ConvertedFilePath    string               `json:"convertedFilePath"`
+	ConvertedFileContent string               `json:"convertedFileContent"`
 }

@@ -78,6 +78,13 @@ func handleNewConversionNotification(ctx context.Context, payload string) error 
 		return fmt.Errorf("failed to send conversation status event: %w", err)
 	}
 
+	// we need to inject a values.yaml and a Chart.yaml into the conversion
+	// other files that might be injected happen in the final stage, but these
+	// are needed
+	if err := workspace.AddDefaultFilesToConversion(ctx, c.ID); err != nil {
+		return fmt.Errorf("failed to add default files to conversion: %w", err)
+	}
+
 	conversionFiles, err := workspace.ListFilesToConvert(ctx, c.ID)
 	if err != nil {
 		return fmt.Errorf("failed to list files to convert: %w", err)

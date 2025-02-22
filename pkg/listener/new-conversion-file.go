@@ -67,6 +67,14 @@ func handleConversionFileNotification(ctx context.Context, payload string) error
 		return fmt.Errorf("failed to send conversion file status event: %w", err)
 	}
 
+	// we always need the values.yaml to send to the LLM with the file
+	valuesYAML, err := workspace.GetValuesYAMLForConversion(ctx, p.ConversionID)
+	if err != nil {
+		return fmt.Errorf("failed to get values.yaml for conversion: %w", err)
+	}
+
+	fmt.Println("valuesYAML", valuesYAML.ConvertedFileContent)
+
 	// sleep for a random time between 1 and 3 seconds
 	time.Sleep(time.Second * time.Duration(rand.Intn(2)+1))
 

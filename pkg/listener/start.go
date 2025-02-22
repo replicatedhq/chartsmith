@@ -77,7 +77,11 @@ func StartListeners(ctx context.Context) error {
 	}, nil)
 
 	l.AddHandler(ctx, "conversion_file", 10, time.Second*10, func(notification *pgconn.Notification) error {
-		return handleConversionFileNotificationWithLock(ctx, notification.Payload)
+		if err := handleConversionFileNotificationWithLock(ctx, notification.Payload); err != nil {
+			logger.Error(fmt.Errorf("failed to handle conversion file notification: %w", err))
+			return fmt.Errorf("failed to handle conversion file notification: %w", err)
+		}
+		return nil
 	}, conversionFileLockKeyExtractor)
 
 	l.Start(ctx)

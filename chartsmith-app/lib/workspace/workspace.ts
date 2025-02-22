@@ -268,7 +268,7 @@ export async function getConversion(conversionId: string): Promise<Conversion> {
     }
 
     // get the source files
-    const sourceFiles = await db.query(`SELECT id, file_path, file_content, file_status FROM workspace_conversion_file WHERE conversion_id = $1`, [conversionId]);
+    const sourceFiles = await db.query(`SELECT id, file_path, file_content, file_status FROM workspace_conversion_file WHERE conversion_id = $1 AND file_path IS NOT NULL AND file_content IS NOT NULL`, [conversionId]);
     for (const file of sourceFiles.rows) {
       const conversionFile: ConversionFile = {
         id: file.id,
