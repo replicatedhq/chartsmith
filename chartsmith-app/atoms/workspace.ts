@@ -1,5 +1,5 @@
 import { atom } from 'jotai'
-import type { Workspace, Plan, RenderedWorkspace, Chart, WorkspaceFile, Conversion } from '@/lib/types/workspace'
+import type { Workspace, Plan, RenderedWorkspace, Chart, WorkspaceFile, Conversion, ConversionFile, ConversionStatus } from '@/lib/types/workspace'
 import { Message } from '@/components/types'
 
 // Base atoms
@@ -28,6 +28,7 @@ export const conversionByIdAtom = atom(get => {
   const conversions = get(conversionsAtom)
   return (id: string) => conversions.find(c => c.id === id)
 })
+
 
 // Derived atoms
 export const looseFilesAtom = atom(get => {
@@ -83,5 +84,60 @@ export const handlePlanUpdatedAtom = atom(
   }
 )
 
+// Handle conversion updated, will update the conversion if its found, otherwise it will add it to the list
+export const handleConversionUpdatedAtom = atom(
+  null,
+  (get, set, conversion: Conversion) => {
+    const conversions = get(conversionsAtom)
+    const existingConversion = conversions.find(c => c.id === conversion.id)
 
+    if (existingConversion) {
+      // Update existing conversion
+      const updatedConversions = conversions.map(c => c.id === conversion.id ? conversion : c)
+      set(conversionsAtom, updatedConversions)
+    } else {
+      // Add new conversion
+      set(conversionsAtom, [...conversions, conversion])
+    }
+  }
+)
+
+export const handleConversionFileUpdatedAtom = atom(
+  null,
+  (get, set, conversionId: string, conversionFile: ConversionFile) => {
+    const conversions = get(conversionsAtom)
+    const conversion = conversions.find(c => c.id === conversionId)
+    if (!conversion) {
+      return;
+    }
+
+    const existingFile = conversion.sourceFiles.find(f => f.id === conversionFile.id);
+
+    const updatedConversion = {
+      ...conversion,
+      sourceFiles: conversion.sourceFiles.map(f => {
+        if (f.id === conversionFile.id) {
+          const updated = {
+            ...f,
+            content: conversionFile.content,
+            status: conversionFile.status,
+            filePath: conversionFile.filePath
+          };
+          return updated;
+        }
+        return f;
+      })
+    }
+
+    set(conversionsAtom, conversions.map(c =>
+      c.id === conversionId ? updatedConversion : c
+    ))
+  }
+)
+
+// Helper to determine overall conversion status based on file status
+function determineConversionStatus(currentStatus: ConversionStatus, status: string) {
+  // Add logic to determine if status should change based on file progress
+  return currentStatus;
+}
 

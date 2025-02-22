@@ -3,6 +3,7 @@ package listener
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -15,6 +16,9 @@ import (
 // NotificationHandler is a function type that handles notifications
 type NotificationHandler func(notification *pgconn.Notification) error
 
+// LockKeyExtractor is a function type that extracts the lock key from the payload
+type LockKeyExtractor func(payload []byte) (string, error)
+
 // Listener manages PostgreSQL LISTEN/NOTIFY subscriptions
 type Listener struct {
 	conn              *pgx.Conn
@@ -23,6 +27,8 @@ type Listener struct {
 	maxReconnectRetry int
 	processors        map[string]*queueProcessor
 	pgURI             string // Store the connection string for pooled connections
+	queueLocks        map[string]map[string]chan struct{}
+	mu                sync.Mutex
 }
 
 const (
@@ -30,13 +36,14 @@ const (
 )
 
 type queueProcessor struct {
-	channel     string
-	handler     NotificationHandler
-	workerPool  chan struct{}
-	processing  bool
-	pollTicker  *time.Ticker
-	maxWorkers  int
-	maxDuration time.Duration // Maximum time a task can be processing before considered failed
+	channel          string
+	handler          NotificationHandler
+	workerPool       chan struct{}
+	processing       bool
+	pollTicker       *time.Ticker
+	maxWorkers       int
+	maxDuration      time.Duration // Maximum time a task can be processing before considered failed
+	lockKeyExtractor LockKeyExtractor
 }
 
 // NewListener creates a new Listener instance
@@ -47,21 +54,24 @@ func NewListener() *Listener {
 		maxReconnectRetry: 10,
 		processors:        make(map[string]*queueProcessor),
 		pgURI:             param.Get().PGURI,
+		queueLocks:        make(map[string]map[string]chan struct{}),
+		mu:                sync.Mutex{},
 	}
 }
 
 // AddHandler registers a handler for a specific type of work
-func (l *Listener) AddHandler(ctx context.Context, channel string, maxWorkers int, maxDuration time.Duration, handler NotificationHandler) error {
+func (l *Listener) AddHandler(ctx context.Context, channel string, maxWorkers int, maxDuration time.Duration, handler NotificationHandler, lockKeyExtractor LockKeyExtractor) error {
 	l.handlers[channel] = handler
 
 	// Initialize queue processor
 	l.processors[channel] = &queueProcessor{
-		channel:     channel,
-		handler:     handler,
-		workerPool:  make(chan struct{}, maxWorkers),
-		pollTicker:  time.NewTicker(5 * time.Second),
-		maxWorkers:  maxWorkers,
-		maxDuration: maxDuration,
+		channel:          channel,
+		handler:          handler,
+		workerPool:       make(chan struct{}, maxWorkers),
+		pollTicker:       time.NewTicker(5 * time.Second),
+		maxWorkers:       maxWorkers,
+		maxDuration:      maxDuration,
+		lockKeyExtractor: lockKeyExtractor,
 	}
 
 	return nil
@@ -253,6 +263,24 @@ func (l *Listener) processQueue(ctx context.Context, processor *queueProcessor) 
 					Payload: string(messagePayload),
 				}
 
+				lockKey := ""
+				if processor.lockKeyExtractor != nil {
+					var err error
+					lockKey, err = processor.lockKeyExtractor(messagePayload)
+					if err != nil {
+						logger.Error(fmt.Errorf("failed to extract lock key: %w", err))
+						return
+					}
+				}
+
+				if lockKey != "" {
+					lockChan := l.getQueueLock(processor.channel, lockKey)
+					<-lockChan
+					defer func() {
+						lockChan <- struct{}{}
+					}()
+				}
+
 				// Process message
 				err := processor.handler(notification)
 
@@ -303,6 +331,24 @@ func (l *Listener) processQueue(ctx context.Context, processor *queueProcessor) 
 			return
 		}
 	}
+}
+
+// getQueueLock returns the lock channel for a queue and lockKey, creating it if it doesn't exist
+func (l *Listener) getQueueLock(queueName, lockKey string) chan struct{} {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	if _, exists := l.queueLocks[queueName]; !exists {
+		l.queueLocks[queueName] = make(map[string]chan struct{})
+	}
+
+	lockChan, exists := l.queueLocks[queueName][lockKey]
+	if !exists {
+		lockChan = make(chan struct{}, 1)
+		lockChan <- struct{}{}
+		l.queueLocks[queueName][lockKey] = lockChan
+	}
+	return lockChan
 }
 
 // reconnect attempts to reestablish the database connection

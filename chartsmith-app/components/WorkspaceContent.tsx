@@ -18,12 +18,12 @@ import { CommandMenuWrapper } from "@/components/CommandMenuWrapper";
 import { ChatContainer } from "@/components/ChatContainer";
 
 // server actions and types
-import { Plan, RenderedWorkspace, Workspace } from "@/lib/types/workspace";
+import { Conversion, Plan, RenderedWorkspace, Workspace } from "@/lib/types/workspace";
 
 // atoms
 import { chartsBeforeApplyingPendingPatchesAtom, looseFilesBeforeApplyingPendingPatchesAtom, workspaceAtom } from "@/atoms/workspace";
 import { editorContentAtom } from "@/atoms/editor";
-import { messagesAtom, plansAtom, rendersAtom } from "@/atoms/workspace";
+import { messagesAtom, plansAtom, rendersAtom, conversionsAtom } from "@/atoms/workspace";
 import { Message } from "./types";
 
 interface WorkspaceContentProps {
@@ -31,6 +31,7 @@ interface WorkspaceContentProps {
   initialMessages: Message[];
   initialPlans: Plan[];
   initialRenders: RenderedWorkspace[];
+  initialConversions: Conversion[];
   onOpenCommandMenu?: () => void;
 }
 
@@ -38,13 +39,15 @@ export function WorkspaceContent({
   initialWorkspace,
   initialMessages,
   initialPlans,
-  initialRenders
+  initialRenders,
+  initialConversions,
 }: WorkspaceContentProps) {
   // Instead of useHydrateAtoms, use useAtom and useEffect
   const [workspace, setWorkspace] = useAtom(workspaceAtom);
   const [, setMessages] = useAtom(messagesAtom);
   const [, setPlans] = useAtom(plansAtom);
   const [, setRenders] = useAtom(rendersAtom);
+  const [, setConversions] = useAtom(conversionsAtom);
   const [, setChartsBeforeApplyingPendingPatches] = useAtom(chartsBeforeApplyingPendingPatchesAtom);
   const [, setLooseFilesBeforeApplyingPendingPatches] = useAtom(looseFilesBeforeApplyingPendingPatchesAtom);
 
@@ -59,11 +62,13 @@ export function WorkspaceContent({
     setMessages(initialMessages);
     setPlans(initialPlans);
     setRenders(initialRenders);
+    setConversions(initialConversions);
   }, [
     initialWorkspace,
     initialMessages,
     initialPlans,
     initialRenders,
+    initialConversions,
     setWorkspace,
     setMessages,
     setPlans,

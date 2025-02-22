@@ -15,43 +15,10 @@ interface ChatContainerProps {
   session: Session;
 }
 
-function createMessagePlanMap(currentPlans: Plan[], messages: Message[]): Map<Message[], Plan> {
-  const userMessagePlanMap = new Map<Message[], Plan>();
-  const messageMap = new Map(messages.map(message => [message.id, message]));
-
-  // Process plans in chronological order
-  const sortedPlans = [...currentPlans].sort((a, b) => {
-    const aMessage = messages.find(m => m.id === a.chatMessageIds[0]);
-    const bMessage = messages.find(m => m.id === b.chatMessageIds[0]);
-    const aTime = aMessage?.createdAt ? new Date(aMessage.createdAt).getTime() : 0;
-    const bTime = bMessage?.createdAt ? new Date(bMessage.createdAt).getTime() : 0;
-    return aTime - bTime;
-  });
-
-  for (const plan of sortedPlans) {
-    const planMessages = plan.chatMessageIds
-      .map(id => messageMap.get(id))
-      .filter((message): message is Message => message !== undefined)
-      .sort((a, b) => {
-        const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-        const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-        return aTime - bTime;
-      });
-
-    if (planMessages.length > 0) {
-      userMessagePlanMap.set(planMessages, plan);
-    }
-  }
-
-  return userMessagePlanMap;
-}
-
 export function ChatContainer({ session }: ChatContainerProps) {
   const { theme } = useTheme();
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [renders] = useAtom(rendersAtom)
-  const [plans] = useAtom(plansAtom);
-  const [workspace, setWorkspace] = useAtom(workspaceAtom)
+  const [workspace] = useAtom(workspaceAtom)
   const [messages, setMessages] = useAtom(messagesAtom)
   const [chatInput, setChatInput] = useState("");
 
@@ -75,10 +42,6 @@ export function ChatContainer({ session }: ChatContainerProps) {
     setMessages(prev => [...prev, chatMessage]);
 
     setChatInput("");
-  };
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
   return (

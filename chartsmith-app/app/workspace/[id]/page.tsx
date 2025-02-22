@@ -7,6 +7,7 @@ import { cookies } from "next/headers";
 import { getWorkspaceMessagesAction } from "@/lib/workspace/actions/get-workspace-messages";
 import { getWorkspacePlansAction } from "@/lib/workspace/actions/get-workspace-plans";
 import { listWorkspaceRendersAction } from "@/lib/workspace/actions/list-workspace-renders";
+import { listWorkspaceConversionsAction } from "@/lib/workspace/actions/list-workspace-conversations";
 
 interface PageProps {
   params: Promise<{ id: string }>
@@ -31,10 +32,11 @@ export default async function WorkspacePage({
   }
 
   // Fetch all initial data
-  const [messages, plans, renders] = await Promise.all([
+  const [messages, plans, renders, conversions] = await Promise.all([
     getWorkspaceMessagesAction(session, workspace.id),
     getWorkspacePlansAction(session, workspace.id),
-    listWorkspaceRendersAction(session, workspace.id)
+    listWorkspaceRendersAction(session, workspace.id),
+    listWorkspaceConversionsAction(session, workspace.id)
   ])
 
   // Pass the initial data as props
@@ -44,6 +46,7 @@ export default async function WorkspacePage({
       initialMessages={messages}
       initialPlans={plans}
       initialRenders={renders}
+      initialConversions={conversions}
     />
   );
 }

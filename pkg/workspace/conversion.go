@@ -11,17 +11,17 @@ func GetConversation(ctx context.Context, id string) (*types.Conversion, error) 
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
 
-	query := `SELECT id, workspace_id, chat_message_ids, created_at FROM workspace_conversion WHERE id = $1`
+	query := `SELECT id, workspace_id, chat_message_ids, created_at, status FROM workspace_conversion WHERE id = $1`
 
 	var c types.Conversion
-	if err := conn.QueryRow(ctx, query, id).Scan(&c.ID, &c.WorkspaceID, &c.ChatMessageIDs, &c.CreatedAt); err != nil {
+	if err := conn.QueryRow(ctx, query, id).Scan(&c.ID, &c.WorkspaceID, &c.ChatMessageIDs, &c.CreatedAt, &c.Status); err != nil {
 		return nil, err
 	}
 
 	return &c, nil
 }
 
-func SetConversationStatus(ctx context.Context, id string, status string) error {
+func SetConversationStatus(ctx context.Context, id string, status types.ConversionStatus) error {
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
 
@@ -68,4 +68,16 @@ func GetConversionFile(ctx context.Context, conversionID string, fileID string) 
 	}
 
 	return &file, nil
+}
+
+func SetConversionFileStatus(ctx context.Context, id string, status types.ConversionFileStatus) error {
+	conn := persistence.MustGetPooledPostgresSession()
+	defer conn.Release()
+
+	query := `UPDATE workspace_conversion_file SET file_status = $1 WHERE id = $2`
+	if _, err := conn.Exec(ctx, query, status, id); err != nil {
+		return err
+	}
+
+	return nil
 }

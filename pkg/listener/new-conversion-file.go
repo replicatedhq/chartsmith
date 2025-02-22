@@ -4,12 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/replicatedhq/chartsmith/pkg/logger"
 	"github.com/replicatedhq/chartsmith/pkg/realtime"
 	realtimetypes "github.com/replicatedhq/chartsmith/pkg/realtime/types"
 	"github.com/replicatedhq/chartsmith/pkg/workspace"
+	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 	"go.uber.org/zap"
+	"golang.org/x/exp/rand"
 )
 
 type newConversionFilePayload struct {
@@ -41,16 +44,45 @@ func handleConversionFileNotification(ctx context.Context, payload string) error
 		return fmt.Errorf("failed to list user IDs for workspace: %w", err)
 	}
 
-	// send a test message
 	realtimeRecipient := realtimetypes.Recipient{
 		UserIDs: userIDs,
 	}
 
+	if err := workspace.SetConversionFileStatus(ctx, cf.ID, workspacetypes.ConversionFileStatusConverting); err != nil {
+		return fmt.Errorf("failed to set conversion file status: %w", err)
+	}
+
+	cf, err = workspace.GetConversionFile(ctx, p.ConversionID, p.FileID)
+	if err != nil {
+		return fmt.Errorf("failed to get conversion file: %w", err)
+	}
+
 	e := realtimetypes.ConversionFileStatusEvent{
-		WorkspaceID:  w.ID,
-		ConversionID: p.ConversionID,
-		FilePath:     cf.FilePath,
-		Status:       "pending",
+		WorkspaceID:    w.ID,
+		ConversionID:   p.ConversionID,
+		ConversionFile: cf,
+	}
+
+	if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
+		return fmt.Errorf("failed to send conversion file status event: %w", err)
+	}
+
+	// sleep for a random time between 1 and 3 seconds
+	time.Sleep(time.Second * time.Duration(rand.Intn(2)+1))
+
+	if err := workspace.SetConversionFileStatus(ctx, cf.ID, workspacetypes.ConversionFileStatusConverted); err != nil {
+		return fmt.Errorf("failed to set conversion file status: %w", err)
+	}
+
+	cf, err = workspace.GetConversionFile(ctx, p.ConversionID, p.FileID)
+	if err != nil {
+		return fmt.Errorf("failed to get conversion file: %w", err)
+	}
+
+	e = realtimetypes.ConversionFileStatusEvent{
+		WorkspaceID:    w.ID,
+		ConversionID:   p.ConversionID,
+		ConversionFile: cf,
 	}
 
 	if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {

@@ -153,17 +153,41 @@ type RenderedFile struct {
 	RenderedContent string `json:"renderedContent"`
 }
 
+type ConversionStatus string
+
+const (
+	ConversionStatusPending     ConversionStatus = "pending"
+	ConversionStatusAnalyzing   ConversionStatus = "analyzing"
+	ConversionStatusSorting     ConversionStatus = "sorting"
+	ConversionStatusTemplating  ConversionStatus = "templating"
+	ConversionStatusNormalizing ConversionStatus = "normalizing"
+	ConversionStatusSimplifying ConversionStatus = "simplifying"
+	ConversionStatusFinalizing  ConversionStatus = "finalizing"
+	ConversionStatusComplete    ConversionStatus = "complete"
+)
+
 type Conversion struct {
-	ID             string    `json:"id"`
-	WorkspaceID    string    `json:"workspaceId"`
-	ChatMessageIDs []string  `json:"chatMessageIds"`
-	CreatedAt      time.Time `json:"createdAt"`
+	ID             string           `json:"id"`
+	WorkspaceID    string           `json:"workspaceId"`
+	ChatMessageIDs []string         `json:"chatMessageIds"`
+	CreatedAt      time.Time        `json:"createdAt"`
+	Status         ConversionStatus `json:"status"`
 }
 
+type ConversionFileStatus string
+
+const (
+	ConversionFileStatusPending     ConversionFileStatus = "pending"
+	ConversionFileStatusConverting  ConversionFileStatus = "converting"
+	ConversionFileStatusConverted   ConversionFileStatus = "converted"
+	ConversionFileStatusSimplifying ConversionFileStatus = "simplifying"
+	ConversionFileStatusCompleted   ConversionFileStatus = "completed"
+)
+
 type ConversionFile struct {
-	ID           string `json:"id"`
-	ConversionID string `json:"conversionId"`
-	FilePath     string `json:"filePath"`
-	FileContent  string `json:"fileContent"`
-	FileStatus   string `json:"fileStatus"`
+	ID           string               `json:"id"`
+	ConversionID string               `json:"conversionId"`
+	FilePath     string               `json:"filePath"`
+	FileContent  string               `json:"content"`
+	FileStatus   ConversionFileStatus `json:"status"`
 }

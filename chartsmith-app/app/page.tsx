@@ -6,7 +6,7 @@ import { HomeHeader } from "@/components/HomeHeader";
 import { CreateChartOptions } from "@/components/CreateChartOptions";
 import { HomeNav } from "@/components/HomeNav";
 import { useSetAtom, useAtomValue } from 'jotai';
-import { messagesAtom, plansAtom, rendersAtom, workspaceAtom } from '@/atoms/workspace';
+import { messagesAtom, plansAtom, rendersAtom, workspaceAtom, conversionsAtom } from '@/atoms/workspace';
 
 export default function HomePage() {
   const workspace = useAtomValue(workspaceAtom);
@@ -14,6 +14,7 @@ export default function HomePage() {
   const setMessages = useSetAtom(messagesAtom);
   const setPlans = useSetAtom(plansAtom);
   const setRenders = useSetAtom(rendersAtom);
+  const setConversions = useSetAtom(conversionsAtom);
 
   useEffect(() => {
     if (workspace !== null) {
@@ -21,8 +22,9 @@ export default function HomePage() {
       setMessages([]);
       setPlans([]);
       setRenders([]);
+      setConversions([]);
     }
-  }, [workspace, setWorkspace, setMessages, setPlans, setRenders]);
+  }, [workspace, setWorkspace, setMessages, setPlans, setRenders, setConversions]);
 
   return (
     <div
