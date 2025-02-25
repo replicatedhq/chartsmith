@@ -5,6 +5,10 @@ WORKER_BUILD_DIR=bin
 GOOS?=$(shell go env GOOS)
 GOARCH?=$(shell go env GOARCH)
 
+.PHONY: run-postgres
+run-postgres:
+	docker run -d --name chartsmith-postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=chartsmith -p 5432:5432 postgres:16
+
 .PHONY: schema
 schema:
 	rm -rf ./db/generated-schema
@@ -21,7 +25,7 @@ build:
 .PHONY: run-worker
 run-worker: build
 	@echo "Running $(WORKER_BINARY_NAME)..."
-	@./$(WORKER_BUILD_DIR)/$(WORKER_BINARY_NAME) run
+	@./$(WORKER_BUILD_DIR)/$(WORKER_BINARY_NAME) run --
 
 .PHONY: bootstrap
 bootstrap: build

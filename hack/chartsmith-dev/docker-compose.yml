@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: ankane/pgvector:latest
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: chartsmith
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  centrifugo:
+    image: centrifugo/centrifugo:v5
+    ports:
+      - "8000:8000"
+    command: centrifugo --config /centrifugo/config.json
+    volumes:
+      - ./centrifugo:/centrifugo
+
+volumes:
+  postgres_data:

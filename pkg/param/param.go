@@ -14,15 +14,15 @@ var params *Params
 var awsSession *session.Session
 
 var paramLookup = map[string]string{
-	"ANTHROPIC_API_KEY":  "/chartsmith/anthropic_api_key",
-	"GROQ_API_KEY":       "/chartsmith/groq_api_key",
-	"VOYAGE_API_KEY":     "/chartsmith/voyage_api_key",
-	"PG_URI":             "/chartsmith/pg_uri",
-	"CENTRIFUGO_ADDRESS": "/chartsmith/centrifugo_address",
-	"CENTRIFUGO_API_KEY": "/chartsmith/centrifugo_api_key",
-	"TOKEN_ENCRYPTION":   "/chartsmith/token_encryption",
-	"SLACK_TOKEN":        "/chartsmith/slack_token",
-	"SLACK_CHANNEL":      "/chartsmith/slack_channel",
+	"ANTHROPIC_API_KEY":             "/chartsmith/anthropic_api_key",
+	"GROQ_API_KEY":                  "/chartsmith/groq_api_key",
+	"VOYAGE_API_KEY":                "/chartsmith/voyage_api_key",
+	"CHARTSMITH_PG_URI":             "/chartsmith/pg_uri",
+	"CHARTSMITH_CENTRIFUGO_ADDRESS": "/chartsmith/centrifugo_address",
+	"CHARTSMITH_CENTRIFUGO_API_KEY": "/chartsmith/centrifugo_api_key",
+	"CHARTSMITH_TOKEN_ENCRYPTION":   "/chartsmith/token_encryption",
+	"CHARTSMITH_SLACK_TOKEN":        "/chartsmith/slack_token",
+	"CHARTSMITH_SLACK_CHANNEL":      "/chartsmith/slack_channel",
 }
 
 type Params struct {
@@ -62,12 +62,12 @@ func Init(sess *session.Session) error {
 		AnthropicAPIKey:   paramsMap["ANTHROPIC_API_KEY"],
 		GroqAPIKey:        paramsMap["GROQ_API_KEY"],
 		VoyageAPIKey:      paramsMap["VOYAGE_API_KEY"],
-		PGURI:             paramsMap["PG_URI"],
-		CentrifugoAddress: paramsMap["CENTRIFUGO_ADDRESS"],
-		CentrifugoAPIKey:  paramsMap["CENTRIFUGO_API_KEY"],
-		TokenEncryption:   paramsMap["TOKEN_ENCRYPTION"],
-		SlackToken:        paramsMap["SLACK_TOKEN"],
-		SlackChannel:      paramsMap["SLACK_CHANNEL"],
+		PGURI:             paramsMap["CHARTSMITH_PG_URI"],
+		CentrifugoAddress: paramsMap["CHARTSMITH_CENTRIFUGO_ADDRESS"],
+		CentrifugoAPIKey:  paramsMap["CHARTSMITH_CENTRIFUGO_API_KEY"],
+		TokenEncryption:   paramsMap["CHARTSMITH_TOKEN_ENCRYPTION"],
+		SlackToken:        paramsMap["CHARTSMITH_SLACK_TOKEN"],
+		SlackChannel:      paramsMap["CHARTSMITH_SLACK_CHANNEL"],
 	}
 
 	return nil
