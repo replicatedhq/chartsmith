@@ -4,12 +4,12 @@ import (
 	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 )
 
-type ConversationStatusEvent struct {
+type ConversionStatusEvent struct {
 	WorkspaceID string                    `json:"workspaceId"`
 	Conversion  workspacetypes.Conversion `json:"conversion"`
 }
 
-func (e ConversationStatusEvent) GetMessageData() (map[string]interface{}, error) {
+func (e ConversionStatusEvent) GetMessageData() (map[string]interface{}, error) {
 	return map[string]interface{}{
 		"workspaceId": e.WorkspaceID,
 		"eventType":   "conversion-status",
@@ -17,6 +17,6 @@ func (e ConversationStatusEvent) GetMessageData() (map[string]interface{}, error
 	}, nil
 }
 
-func (e ConversationStatusEvent) GetChannelName() string {
+func (e ConversionStatusEvent) GetChannelName() string {
 	return e.WorkspaceID
 }

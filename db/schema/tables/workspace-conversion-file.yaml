@@ -21,7 +21,6 @@ schema:
       type: text
       constraints:
         notNull: true
-    - name: converted_file_path
-      type: text
-    - name: converted_file_content
-      type: text
+    - name: converted_files
+      type: jsonb
+

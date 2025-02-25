@@ -31,4 +31,7 @@ schema:
       type: text
       constraints:
         notNull: true
-
+    - name: chart_yaml
+      type: text
+    - name: values_yaml
+      type: text

@@ -4,27 +4,27 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"time"
 
+	"github.com/replicatedhq/chartsmith/pkg/llm"
 	"github.com/replicatedhq/chartsmith/pkg/logger"
+	"github.com/replicatedhq/chartsmith/pkg/persistence"
 	"github.com/replicatedhq/chartsmith/pkg/realtime"
 	realtimetypes "github.com/replicatedhq/chartsmith/pkg/realtime/types"
 	"github.com/replicatedhq/chartsmith/pkg/workspace"
 	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 	"go.uber.org/zap"
-	"golang.org/x/exp/rand"
 )
 
-type newConversionFilePayload struct {
+type conversionNextFilePayload struct {
 	WorkspaceID  string `json:"workspaceId"`
 	ConversionID string `json:"conversionId"`
-	FileID       string `json:"fileId"`
 }
 
-func handleConversionFileNotification(ctx context.Context, payload string) error {
-	logger.Info("Received conversion file notification", zap.String("payload", payload))
+func handleConversionNextFileNotification(ctx context.Context, payload string) error {
+	logger.Info("Received conversion file notification",
+		zap.String("payload", payload))
 
-	p := newConversionFilePayload{}
+	p := conversionNextFilePayload{}
 	if err := json.Unmarshal([]byte(payload), &p); err != nil {
 		return fmt.Errorf("failed to unmarshal payload: %w", err)
 	}
@@ -34,10 +34,23 @@ func handleConversionFileNotification(ctx context.Context, payload string) error
 		return fmt.Errorf("failed to get workspace: %w", err)
 	}
 
-	cf, err := workspace.GetConversionFile(ctx, p.ConversionID, p.FileID)
+	c, err := workspace.GetConversion(ctx, p.ConversionID)
 	if err != nil {
-		return fmt.Errorf("failed to get conversion file: %w", err)
+		return fmt.Errorf("failed to get conversion: %w", err)
 	}
+
+	// get all files, sort and pick the next one to conver
+	conversionFiles, err := workspace.ListFilesToConvert(ctx, p.ConversionID)
+	if err != nil {
+		return fmt.Errorf("failed to list files to convert: %w", err)
+	}
+	sortedConversionFiles := sortByConversionOrder(conversionFiles)
+
+	if len(sortedConversionFiles) == 0 {
+		return nil
+	}
+
+	cf := &sortedConversionFiles[0]
 
 	userIDs, err := workspace.ListUserIDsForWorkspace(ctx, w.ID)
 	if err != nil {
@@ -52,7 +65,7 @@ func handleConversionFileNotification(ctx context.Context, payload string) error
 		return fmt.Errorf("failed to set conversion file status: %w", err)
 	}
 
-	cf, err = workspace.GetConversionFile(ctx, p.ConversionID, p.FileID)
+	cf, err = workspace.GetConversionFile(ctx, p.ConversionID, cf.ID)
 	if err != nil {
 		return fmt.Errorf("failed to get conversion file: %w", err)
 	}
@@ -67,22 +80,28 @@ func handleConversionFileNotification(ctx context.Context, payload string) error
 		return fmt.Errorf("failed to send conversion file status event: %w", err)
 	}
 
-	// we always need the values.yaml to send to the LLM with the file
-	valuesYAML, err := workspace.GetValuesYAMLForConversion(ctx, p.ConversionID)
+	convertedFiles, updatedValuesYAML, err := llm.ConvertFile(ctx, llm.ConvertFileOpts{
+		Path:       cf.FilePath,
+		Content:    cf.FileContent,
+		ValuesYAML: c.ValuesYAML,
+	})
 	if err != nil {
-		return fmt.Errorf("failed to get values.yaml for conversion: %w", err)
+		logger.Error(fmt.Errorf("failed to convert file: %w", err))
 	}
-
-	fmt.Println("valuesYAML", valuesYAML.ConvertedFileContent)
-
-	// sleep for a random time between 1 and 3 seconds
-	time.Sleep(time.Second * time.Duration(rand.Intn(2)+1))
 
 	if err := workspace.SetConversionFileStatus(ctx, cf.ID, workspacetypes.ConversionFileStatusConverted); err != nil {
 		return fmt.Errorf("failed to set conversion file status: %w", err)
 	}
 
-	cf, err = workspace.GetConversionFile(ctx, p.ConversionID, p.FileID)
+	if err := workspace.UpdateValuesYAMLForConversion(ctx, p.ConversionID, updatedValuesYAML); err != nil {
+		return fmt.Errorf("failed to update values.yaml for conversion: %w", err)
+	}
+
+	if err := workspace.UpdateConvertedContentForFileConversion(ctx, cf.ID, convertedFiles); err != nil {
+		return fmt.Errorf("failed to update converted content for file conversion: %w", err)
+	}
+
+	cf, err = workspace.GetConversionFile(ctx, p.ConversionID, cf.ID)
 	if err != nil {
 		return fmt.Errorf("failed to get conversion file: %w", err)
 	}
@@ -95,6 +114,42 @@ func handleConversionFileNotification(ctx context.Context, payload string) error
 
 	if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
 		return fmt.Errorf("failed to send conversion file status event: %w", err)
+	}
+
+	// and check if there are more files to convert, add back to the queue if so
+	if len(sortedConversionFiles) > 1 {
+		if err := persistence.EnqueueWork(ctx, "conversion_next_file", map[string]interface{}{
+			"workspaceId":  w.ID,
+			"conversionId": p.ConversionID,
+		}); err != nil {
+			return fmt.Errorf("failed to enqueue file conversion: %w", err)
+		}
+	} else {
+		// advance the conversion step and queue the next job
+		if err := workspace.SetConversionStatus(ctx, p.ConversionID, workspacetypes.ConversionStatusNormalizing); err != nil {
+			return fmt.Errorf("failed to set conversion status: %w", err)
+		}
+
+		c, err := workspace.GetConversion(ctx, p.ConversionID)
+		if err != nil {
+			return fmt.Errorf("failed to get conversion: %w", err)
+		}
+
+		e := realtimetypes.ConversionStatusEvent{
+			WorkspaceID: w.ID,
+			Conversion:  *c,
+		}
+
+		if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
+			return fmt.Errorf("failed to send conversion status event: %w", err)
+		}
+
+		if err := persistence.EnqueueWork(ctx, "conversion_normalize_values", map[string]interface{}{
+			"workspaceId":  w.ID,
+			"conversionId": p.ConversionID,
+		}); err != nil {
+			return fmt.Errorf("failed to enqueue file conversion: %w", err)
+		}
 	}
 
 	return nil
