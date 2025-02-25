@@ -67,6 +67,7 @@ func sendMessage(channelName string, data map[string]interface{}) error {
 		log.Fatalf("Error creating request: %v", err)
 	}
 
+	fmt.Printf("sending with api key %s\n", apiKey)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "apikey "+apiKey)
 
