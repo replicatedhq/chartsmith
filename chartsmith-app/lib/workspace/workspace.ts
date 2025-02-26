@@ -280,12 +280,107 @@ export async function getConversion(conversionId: string): Promise<Conversion> {
       conversion.sourceFiles.push(conversionFile);
     }
 
+    // sort the conversion files by GVK, same as we do in go
+    // this just makes sure that the list is returned in the same order we will process them
+    // which polishes the UI a little
+    conversion.sourceFiles = sortByConversionOrder(conversion.sourceFiles);
+
     return conversion;
   } catch (err) {
     logger.error("Failed to get conversion", { err });
     throw err;
   }
 }
+
+// Helper function to sort conversion files by GVK priority
+function sortByConversionOrder(files: ConversionFile[]): ConversionFile[] {
+  return [...files].sort((a, b) => {
+    // Extract GVK and name from file content
+    const [aGVK, aName] = extractGVKAndName(a.content);
+    const [bGVK, bName] = extractGVKAndName(b.content);
+
+    // Get GVK priority
+    const aPriority = getGVKPriority(aGVK);
+    const bPriority = getGVKPriority(bGVK);
+
+    // If priorities are different, sort by priority
+    if (aPriority !== bPriority) {
+      return aPriority - bPriority;
+    }
+
+    // If GVKs are different, sort alphabetically by GVK
+    if (aGVK !== bGVK) {
+      return aGVK.localeCompare(bGVK);
+    }
+
+    // If GVKs are the same, sort by name
+    return aName.localeCompare(bName);
+  });
+}
+
+// Extract GVK and name from YAML content
+function extractGVKAndName(content: string): [string, string] {
+  try {
+    // Simple YAML parsing to extract apiVersion, kind, and metadata.name
+    const lines = content.split('\n');
+    let apiVersion = '';
+    let kind = '';
+    let name = '';
+
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+      if (trimmedLine.startsWith('apiVersion:')) {
+        apiVersion = trimmedLine.substring('apiVersion:'.length).trim();
+      } else if (trimmedLine.startsWith('kind:')) {
+        kind = trimmedLine.substring('kind:'.length).trim();
+      } else if (trimmedLine.startsWith('name:') && name === '') {
+        // Only capture the first name we find (should be in metadata)
+        name = trimmedLine.substring('name:'.length).trim();
+      }
+
+      // If we have all the information, break early
+      if (apiVersion && kind && name) {
+        break;
+      }
+    }
+
+    return [`${apiVersion}/${kind}`, name];
+  } catch (error) {
+    logger.debug("Failed to parse YAML content", { error });
+    return ['', ''];
+  }
+}
+
+// Get priority value for a GVK, matching the Go implementation
+function getGVKPriority(gvk: string): number {
+  switch (gvk) {
+    case 'v1/ConfigMap':
+      return 0;
+    case 'v1/Secret':
+      return 1;
+    case 'v1/PersistentVolumeClaim':
+      return 2;
+    case 'v1/ServiceAccount':
+      return 3;
+    case 'v1/Role':
+      return 4;
+    case 'v1/RoleBinding':
+      return 5;
+    case 'v1/ClusterRole':
+      return 6;
+    case 'v1/ClusterRoleBinding':
+      return 7;
+    case 'apps/v1/Deployment':
+      return 8;
+    case 'v1/StatefulSet':
+      return 9;
+    case 'v1/Service':
+      return 10;
+    default:
+      return 11;
+  }
+}
+
 export async function createPlan(userId: string, workspaceId: string, chatMessageId: string, superceedingPlanId?: string): Promise<Plan> {
   logger.info("Creating plan", { userId, workspaceId, chatMessageId, superceedingPlanId });
   try {

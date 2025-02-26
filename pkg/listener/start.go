@@ -76,13 +76,21 @@ func StartListeners(ctx context.Context) error {
 		return nil
 	}, nil)
 
-	l.AddHandler(ctx, "conversion_file", 10, time.Second*10, func(notification *pgconn.Notification) error {
-		if err := handleConversionFileNotificationWithLock(ctx, notification.Payload); err != nil {
+	l.AddHandler(ctx, "conversion_next_file", 10, time.Second*10, func(notification *pgconn.Notification) error {
+		if err := handleConversionNextFileNotificationWithLock(ctx, notification.Payload); err != nil {
 			logger.Error(fmt.Errorf("failed to handle conversion file notification: %w", err))
 			return fmt.Errorf("failed to handle conversion file notification: %w", err)
 		}
 		return nil
 	}, conversionFileLockKeyExtractor)
+
+	l.AddHandler(ctx, "conversion_normalize_values", 10, time.Second*10, func(notification *pgconn.Notification) error {
+		if err := handleConversionNormalizeValuesNotification(ctx, notification.Payload); err != nil {
+			logger.Error(fmt.Errorf("failed to handle conversion normalize values notification: %w", err))
+			return fmt.Errorf("failed to handle conversion normalize values notification: %w", err)
+		}
+		return nil
+	}, nil)
 
 	l.Start(ctx)
 	defer l.Stop(ctx)
@@ -105,6 +113,6 @@ func conversionFileLockKeyExtractor(payload []byte) (string, error) {
 	return conversionID, nil
 }
 
-func handleConversionFileNotificationWithLock(ctx context.Context, payload string) error {
-	return handleConversionFileNotification(ctx, payload)
+func handleConversionNextFileNotificationWithLock(ctx context.Context, payload string) error {
+	return handleConversionNextFileNotification(ctx, payload)
 }

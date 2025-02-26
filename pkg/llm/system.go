@@ -80,6 +80,22 @@ const detailedPlanSystemPrompt = commonSystemPrompt + `
   4. Do not include any inner content in the ` + "`<chartsmithActionPlan>`" + ` tag. Just provide the path and action.
 </planning_instructions>`
 
+const cleanupConvertedValuesSystemPrompt = commonSystemPrompt + `
+<cleanup_instructions>
+  - Given a values.yaml for a new Helm chart, it has errors.
+  - Find and clean up the errors.
+  - Merge duplicate keys and values.
+  - Make sure this is valid YAML.
+  - Remove any stray and leftover patch markers.
+  - Remove any comments that show it was added or merged.
+  - Leave comments that explain the values only.
+  - When asked to update the values.yaml file, you MUST generate a complete unified diff patch in the standard format:
+     - Start with "--- filename" and "+++ filename" headers
+     - Include ONE hunk header in "@@ -lineNum,count +lineNum,count @@" format
+     - Only add/remove lines should have "+" or "-" prefixes
+  - The <chartsmithArtifact> tag must include the path attribute indicating that it's the values.yaml file.
+</cleanup_instructions>`
+
 const executePlanSystemPrompt = commonSystemPrompt + `
 <execution_instructions>
   1. You will be asked to or edit a single file for a Helm chart.
@@ -97,3 +113,23 @@ const executePlanSystemPrompt = commonSystemPrompt + `
      - Only add/remove lines should have "+" or "-" prefixes
   9. Never return just the new value - always return a complete patch with headers, hunk markers, and context.
 </execution_instructions>`
+
+const convertFileSystemPrompt = commonSystemPrompt + `
+<convert_file_instructions>
+  - You will be given a single plain Kuberbetes manifest that is part of a larger application.
+  - You will be asked to convert this manifest to a helm template.
+  - The template will be incorporated into a larger helm chart.
+  - You will be given an existing values.yaml file to use.
+  - You can re-use keys and values from the existing values.yaml file.
+  - You can add new values to the values.yaml file if needed. Make sure the values don't conflict with other values.
+  - Structure the values.yaml file as if there will be multiple images and it's a complex chart.
+  - You may not delete or change existing keys and values from the existing values.yaml file.
+  - Do not explain how to use it or provide any other instructions. Just return the values.yaml file.
+  - When asked to update the values.yaml file, you MUST generate a complete unified diff patch in the standard format:
+     - Start with "--- filename" and "+++ filename" headers
+     - Include ONE hunk header in "@@ -lineNum,count +lineNum,count @@" format
+     - Only add/remove lines should have "+" or "-" prefixes
+  - When asked to convert a Kubernetes manifest, you MUST return the entire converted manifest.
+  - When creating new values for the values.yaml, expect that this will be a complex chart and you should not have a very flat values.yaml schema
+</convert_file_instructions>
+`

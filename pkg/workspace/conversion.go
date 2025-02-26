@@ -2,27 +2,34 @@ package workspace
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
+	"fmt"
 
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 	"github.com/replicatedhq/chartsmith/pkg/workspace/types"
-	"github.com/tuvistavie/securerandom"
 )
 
-func GetConversation(ctx context.Context, id string) (*types.Conversion, error) {
+func GetConversion(ctx context.Context, id string) (*types.Conversion, error) {
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
 
-	query := `SELECT id, workspace_id, chat_message_ids, created_at, status FROM workspace_conversion WHERE id = $1`
+	query := `SELECT id, workspace_id, chat_message_ids, created_at, status, chart_yaml, values_yaml FROM workspace_conversion WHERE id = $1`
 
 	var c types.Conversion
-	if err := conn.QueryRow(ctx, query, id).Scan(&c.ID, &c.WorkspaceID, &c.ChatMessageIDs, &c.CreatedAt, &c.Status); err != nil {
+	var valuesYAML sql.NullString
+	var chartYAML sql.NullString
+	if err := conn.QueryRow(ctx, query, id).Scan(&c.ID, &c.WorkspaceID, &c.ChatMessageIDs, &c.CreatedAt, &c.Status, &chartYAML, &valuesYAML); err != nil {
 		return nil, err
 	}
+
+	c.ValuesYAML = valuesYAML.String
+	c.ChartYAML = chartYAML.String
 
 	return &c, nil
 }
 
-func SetConversationStatus(ctx context.Context, id string, status types.ConversionStatus) error {
+func SetConversionStatus(ctx context.Context, id string, status types.ConversionStatus) error {
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
 
@@ -35,13 +42,12 @@ func SetConversationStatus(ctx context.Context, id string, status types.Conversi
 }
 
 // ListFilesToConvert returns all files that were in the original archive
-// This doesn't look at status, but it looks at if there was a file path and content
-// this excludes injected files like Chart.yaml and values.yaml
+// that have not been converted yet
 func ListFilesToConvert(ctx context.Context, id string) ([]types.ConversionFile, error) {
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
 
-	query := `SELECT id, conversion_id, file_path, file_content, file_status FROM workspace_conversion_file WHERE conversion_id = $1 AND file_path IS NOT NULL AND file_content IS NOT NULL`
+	query := `SELECT id, conversion_id, file_path, file_content, file_status FROM workspace_conversion_file WHERE conversion_id = $1 AND file_path IS NOT NULL AND file_content IS NOT NULL AND converted_files IS NULL`
 	rows, err := conn.Query(ctx, query, id)
 	if err != nil {
 		return nil, err
@@ -111,7 +117,15 @@ dependencies:
   version: 1.0.0-beta.32
 `
 
-	return addFileToConversion(ctx, conversionID, "Chart.yaml", content)
+	conn := persistence.MustGetPooledPostgresSession()
+	defer conn.Release()
+
+	query := `UPDATE workspace_conversion SET chart_yaml = $1 WHERE id = $2`
+	if _, err := conn.Exec(ctx, query, content, conversionID); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func addValuesYAMLToConversion(ctx context.Context, conversionID string) error {
@@ -152,47 +166,40 @@ tolerations: []
 affinity: {}
 `
 
-	return addFileToConversion(ctx, conversionID, "values.yaml", content)
-}
-
-func addFileToConversion(ctx context.Context, conversionID string, filePath string, content string) error {
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
 
-	id, err := securerandom.Hex(6)
-	if err != nil {
-		return err
-	}
-
-	query := `INSERT INTO workspace_conversion_file (id, conversion_id, file_path, file_content, file_status, converted_file_path, converted_file_content) VALUES ($1, $2, NULL, NULL, $3, $4, $5)`
-	if _, err := conn.Exec(ctx, query, id, conversionID, types.ConversionFileStatusPending, filePath, content); err != nil {
+	query := `UPDATE workspace_conversion SET values_yaml = $1 WHERE id = $2`
+	if _, err := conn.Exec(ctx, query, content, conversionID); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func GetValuesYAMLForConversion(ctx context.Context, conversionID string) (*types.ConversionFile, error) {
+func UpdateValuesYAMLForConversion(ctx context.Context, id string, valuesYAML string) error {
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
 
-	query := `SELECT id, converted_file_path, converted_file_content FROM workspace_conversion_file WHERE conversion_id = $1 AND converted_file_path = 'values.yaml'`
-
-	var file types.ConversionFile
-	row := conn.QueryRow(ctx, query, conversionID)
-	if err := row.Scan(&file.ID, &file.ConvertedFilePath, &file.ConvertedFileContent); err != nil {
-		return nil, err
+	query := `UPDATE workspace_conversion SET values_yaml = $1 WHERE id = $2`
+	if _, err := conn.Exec(ctx, query, valuesYAML, id); err != nil {
+		return err
 	}
 
-	return &file, nil
+	return nil
 }
 
-func UpdateConvertedContentForFileConversion(ctx context.Context, id string, convertedFilePath string, convertedFileContent string) error {
+func UpdateConvertedContentForFileConversion(ctx context.Context, id string, convertedFiles map[string]string) error {
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
 
-	query := `UPDATE workspace_conversion_file SET converted_file_path = $1, converted_file_content = $2 WHERE id = $3`
-	if _, err := conn.Exec(ctx, query, convertedFilePath, convertedFileContent, id); err != nil {
+	marshalled, err := json.Marshal(convertedFiles)
+	if err != nil {
+		return fmt.Errorf("failed to marshal converted files: %w", err)
+	}
+
+	query := `UPDATE workspace_conversion_file SET converted_files = $1 WHERE id = $2`
+	if _, err := conn.Exec(ctx, query, string(marshalled), id); err != nil {
 		return err
 	}
 

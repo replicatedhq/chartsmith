@@ -172,6 +172,8 @@ type Conversion struct {
 	ChatMessageIDs []string         `json:"chatMessageIds"`
 	CreatedAt      time.Time        `json:"createdAt"`
 	Status         ConversionStatus `json:"status"`
+	ChartYAML      string           `json:"chartYAML"`
+	ValuesYAML     string           `json:"valuesYAML"`
 }
 
 type ConversionFileStatus string
@@ -185,11 +187,10 @@ const (
 )
 
 type ConversionFile struct {
-	ID                   string               `json:"id"`
-	ConversionID         string               `json:"conversionId"`
-	FilePath             string               `json:"filePath"`
-	FileContent          string               `json:"content"`
-	FileStatus           ConversionFileStatus `json:"status"`
-	ConvertedFilePath    string               `json:"convertedFilePath"`
-	ConvertedFileContent string               `json:"convertedFileContent"`
+	ID             string               `json:"id"`
+	ConversionID   string               `json:"conversionId"`
+	FilePath       string               `json:"filePath"`
+	FileContent    string               `json:"content"`
+	FileStatus     ConversionFileStatus `json:"status"`
+	ConvertedFiles map[string]string    `json:"convertedFiles"`
 }
