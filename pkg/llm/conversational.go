@@ -127,12 +127,17 @@ func ConversationalChatMessage(ctx context.Context, streamCh chan string, doneCh
 		},
 	}
 
+	toolUnionParams := make([]anthropic.ToolUnionUnionParam, len(tools))
+	for i, tool := range tools {
+		toolUnionParams[i] = tool
+	}
+
 	for {
 		stream := client.Messages.NewStreaming(ctx, anthropic.MessageNewParams{
-			Model:     anthropic.F(anthropic.ModelClaude3_5Sonnet20241022),
+			Model:     anthropic.F(anthropic.ModelClaude3_7Sonnet20250219),
 			MaxTokens: anthropic.F(int64(8192)),
 			Messages:  anthropic.F(messages),
-			Tools:     anthropic.F(tools),
+			Tools:     anthropic.F(toolUnionParams),
 		})
 
 		message := anthropic.Message{}

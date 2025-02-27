@@ -30,7 +30,7 @@ Here is the prompt:
 	`, prompt)
 
 	resp, err := client.Messages.New(ctx, anthropic.MessageNewParams{
-		Model:     anthropic.F(anthropic.ModelClaude3_5Sonnet20241022),
+		Model:     anthropic.F(anthropic.ModelClaude3_7Sonnet20250219),
 		MaxTokens: anthropic.F(int64(8192)),
 		Messages:  anthropic.F([]anthropic.MessageParam{anthropic.NewUserMessage(anthropic.NewTextBlock(userMessage))}),
 	})

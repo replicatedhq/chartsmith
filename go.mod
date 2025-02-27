@@ -5,7 +5,7 @@ go 1.23.4
 toolchain go1.23.5
 
 require (
-	github.com/anthropics/anthropic-sdk-go v0.2.0-alpha.8
+	github.com/anthropics/anthropic-sdk-go v0.2.0-alpha.11
 	github.com/aws/aws-sdk-go v1.55.5
 	github.com/jackc/pgx/v5 v5.7.2
 	github.com/jpoz/groq v0.0.0-20240513145022-7a02894105a0

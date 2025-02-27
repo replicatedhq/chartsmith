@@ -51,7 +51,7 @@ func CreateExecutePlan(ctx context.Context, planActionCreatedCh chan types.Actio
 	messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(plan.Description)))
 
 	stream := client.Messages.NewStreaming(context.TODO(), anthropic.MessageNewParams{
-		Model:     anthropic.F(anthropic.ModelClaude3_5Sonnet20241022),
+		Model:     anthropic.F(anthropic.ModelClaude3_7Sonnet20250219),
 		MaxTokens: anthropic.F(int64(8192)),
 		Messages:  anthropic.F(messages),
 	})
