@@ -52,6 +52,7 @@ func buildEnvWorker(source *dagger.Directory) *dagger.Container {
 	source = source.WithoutDirectory("hack")
 	source = source.WithoutDirectory("db")
 	source = source.WithoutDirectory("chartsmith-app")
+	source = source.WithoutDirectory("bin")
 
 	cache := dag.CacheVolume("chartsmith-worker")
 
