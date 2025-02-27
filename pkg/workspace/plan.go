@@ -39,7 +39,7 @@ func PendingActionPathsForPlan(ctx context.Context, planID string) ([]string, er
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
 
-	query := `SELECT path FROM action_queue WHERE plan_id = $1 AND completed_at IS NULL`
+	query := `SELECT payload->>'path' FROM work_queue WHERE payload->>'planId' = $1 AND completed_at IS NULL`
 	rows, err := conn.Query(ctx, query, planID)
 	if err != nil {
 		return nil, fmt.Errorf("error listing pending actions: %w", err)

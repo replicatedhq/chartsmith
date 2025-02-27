@@ -53,12 +53,12 @@ func StartListeners(ctx context.Context) error {
 	}, nil)
 
 	l.AddHandler(ctx, "execute_action", 10, time.Second*10, func(notification *pgconn.Notification) error {
-		if err := handleExecuteActionNotification(ctx, notification.Payload); err != nil {
+		if err := handleExecuteActionNotificationWithLock(ctx, notification.Payload); err != nil {
 			logger.Error(fmt.Errorf("failed to handle execute action notification: %w", err))
 			return fmt.Errorf("failed to handle execute action notification: %w", err)
 		}
 		return nil
-	}, nil)
+	}, executeActionLockKeyExtractor)
 
 	l.AddHandler(ctx, "render_workspace", 5, time.Second*10, func(notification *pgconn.Notification) error {
 		if err := handleRenderWorkspaceNotification(ctx, notification.Payload); err != nil {
@@ -121,10 +121,28 @@ func conversionFileLockKeyExtractor(payload []byte) (string, error) {
 	return conversionID, nil
 }
 
+func executeActionLockKeyExtractor(payload []byte) (string, error) {
+	var payloadMap map[string]interface{}
+	if err := json.Unmarshal(payload, &payloadMap); err != nil {
+		return "", fmt.Errorf("failed to unmarshal payload: %w", err)
+	}
+
+	planID, ok := payloadMap["planId"].(string)
+	if !ok || planID == "" {
+		return "", fmt.Errorf("planId not found in payload or is not a string: %v", payloadMap)
+	}
+
+	return planID, nil
+}
+
 func handleConversionNextFileNotificationWithLock(ctx context.Context, payload string) error {
 	return handleConversionNextFileNotification(ctx, payload)
 }
 
 func handleConversionSimplifyNotificationWithLock(ctx context.Context, payload string) error {
 	return handleConversionSimplifyNotification(ctx, payload)
+}
+
+func handleExecuteActionNotificationWithLock(ctx context.Context, payload string) error {
+	return handleExecuteActionNotification(ctx, payload)
 }
