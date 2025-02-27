@@ -71,6 +71,8 @@ func buildEnvWorker(source *dagger.Directory) *dagger.Container {
 		WithDirectory("/go/src/github.com/replicatedhq/chartsmith", source).
 		WithWorkdir("/go/src/github.com/replicatedhq/chartsmith").
 		WithMountedCache("/go/pkg/mod", cache).
+		WithEnvVariable("GOOS", "linux").
+		WithEnvVariable("GOARCH", "amd64").
 		WithEnvVariable("GOMODCACHE", "/go/pkg/mod").
 		WithMountedCache("/go/build-cache", cache).
 		WithEnvVariable("GOCACHE", "/go/build-cache").
