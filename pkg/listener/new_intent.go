@@ -107,7 +107,7 @@ func handleNewIntentNotification(ctx context.Context, payload string) error {
 			case stream := <-streamCh:
 				buffer.WriteString(stream)
 
-				cleanedResponse := removeThinkingContent(buffer.String())
+				cleanedResponse := buffer.String()
 
 				cleanedResponse = strings.TrimSpace(cleanedResponse)
 
@@ -135,7 +135,7 @@ func handleNewIntentNotification(ctx context.Context, payload string) error {
 	// if the intent is proceed, we need to send a message to the planner
 	if intent.IsProceed && plan != nil {
 		// create a revision
-		rev, err := workspace.CreateRevision(ctx, w.ID, plan.ID, userIDs[0])
+		rev, err := workspace.CreateRevision(ctx, w.ID, &plan.ID, userIDs[0])
 		if err != nil {
 			return fmt.Errorf("failed to create revision: %w", err)
 		}
@@ -172,7 +172,7 @@ func handleNewIntentNotification(ctx context.Context, payload string) error {
 				case stream := <-streamCh:
 					buffer.WriteString(stream)
 
-					cleanedResponse := removeThinkingContent(buffer.String())
+					cleanedResponse := buffer.String()
 
 					cleanedResponse = strings.TrimSpace(cleanedResponse)
 
@@ -253,26 +253,4 @@ func handleNewIntentNotification(ctx context.Context, payload string) error {
 	}
 
 	return nil
-}
-
-func removeThinkingContent(input string) string {
-	if !strings.Contains(input, "<think>") && !strings.Contains(input, "</think>") {
-		return input
-	}
-
-	result := input
-	for strings.Contains(result, "<think>") && strings.Contains(result, "</think>") {
-		beforeThink := strings.Split(result, "<think>")[0]
-		afterThinkTag := strings.Split(result, "</think>")[1]
-		result = beforeThink + afterThinkTag
-	}
-
-	// Handle any remaining single tags
-	if strings.Contains(result, "<think>") {
-		return "" // Still has an opening tag with no close
-	} else if strings.Contains(result, "</think>") {
-		return strings.Split(result, "</think>")[1] // Keep only what's after the close tag
-	}
-
-	return result
 }

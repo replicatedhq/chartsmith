@@ -44,10 +44,9 @@ func GetRevision(ctx context.Context, workspaceID string, revisionNumber int) (*
 	return &revision, nil
 }
 
-func CreateRevision(ctx context.Context, workspaceID string, planID string, userID string) (types.Revision, error) {
+func CreateRevision(ctx context.Context, workspaceID string, planID *string, userID string) (types.Revision, error) {
 	logger.Info("Creating revision",
 		zap.String("workspace_id", workspaceID),
-		zap.String("plan_id", planID),
 		zap.String("user_id", userID))
 
 	conn := persistence.MustGetPooledPostgresSession()

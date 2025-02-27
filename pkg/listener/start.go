@@ -92,6 +92,14 @@ func StartListeners(ctx context.Context) error {
 		return nil
 	}, nil)
 
+	l.AddHandler(ctx, "conversion_simplify", 10, time.Second*10, func(notification *pgconn.Notification) error {
+		if err := handleConversionSimplifyNotificationWithLock(ctx, notification.Payload); err != nil {
+			logger.Error(fmt.Errorf("failed to handle conversion simplify notification: %w", err))
+			return fmt.Errorf("failed to handle conversion simplify notification: %w", err)
+		}
+		return nil
+	}, nil)
+
 	l.Start(ctx)
 	defer l.Stop(ctx)
 
@@ -115,4 +123,8 @@ func conversionFileLockKeyExtractor(payload []byte) (string, error) {
 
 func handleConversionNextFileNotificationWithLock(ctx context.Context, payload string) error {
 	return handleConversionNextFileNotification(ctx, payload)
+}
+
+func handleConversionSimplifyNotificationWithLock(ctx context.Context, payload string) error {
+	return handleConversionSimplifyNotification(ctx, payload)
 }

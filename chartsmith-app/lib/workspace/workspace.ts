@@ -59,7 +59,7 @@ export async function createWorkspace(createdType: string, userId: string, baseC
             [fileId, initialRevisionNumber, chartId, id, file.filePath, file.content, null],
           );
         }
-      } else {
+      } else if (createdType !== "archive") {
         // Fallback to bootstrap charts if baseChart is not provided
         const bootstrapCharts = await client.query(`SELECT id, name FROM bootstrap_chart`);
         for (const chart of bootstrapCharts.rows) {

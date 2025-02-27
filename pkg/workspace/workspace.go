@@ -317,11 +317,12 @@ func SetCurrentRevision(ctx context.Context, tx pgx.Tx, workspace *types.Workspa
 		conn := persistence.MustGetPooledPostgresSession()
 		defer conn.Release()
 
-		tx, err := conn.Begin(ctx)
+		t, err := conn.Begin(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("error starting transaction: %w", err)
 		}
-		defer tx.Rollback(ctx)
+		tx = t
+		defer t.Rollback(ctx)
 
 		shouldCommit = true
 	}

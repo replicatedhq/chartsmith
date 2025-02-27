@@ -38,7 +38,6 @@ Here is the converted values.yaml file:
 		return "", fmt.Errorf("failed to create message: %w", err)
 	}
 
-	fmt.Println(response.Content[0].Text)
 	artifacts, err := parseArtifactsInResponse(response.Content[0].Text)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse artifacts: %w", err)

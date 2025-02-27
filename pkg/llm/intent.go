@@ -41,7 +41,7 @@ Important: Do not respond with anything other than the JSON object.`,
 		commonSystemPrompt, prompt)
 
 	response, err := client.CreateChatCompletion(groq.CompletionCreateParams{
-		Model: "deepseek-r1-distill-llama-70b",
+		Model: "llama-3.3-70b-versatile",
 		ResponseFormat: groq.ResponseFormat{
 			Type: "json_object",
 		},
@@ -103,7 +103,7 @@ func FeedbackOnAmbiguousIntent(ctx context.Context, streamCh chan string, doneCh
 	client := groq.NewClient(groq.WithAPIKey(param.Get().GroqAPIKey))
 
 	chatCompletion, err := client.CreateChatCompletion(groq.CompletionCreateParams{
-		Model:  "deepseek-r1-distill-llama-70b",
+		Model:  "llama-3.3-70b-versatile",
 		Stream: true,
 		Messages: []groq.Message{
 			{
@@ -133,7 +133,7 @@ func DeclineOffTopicChatMessage(ctx context.Context, streamCh chan string, doneC
 	client := groq.NewClient(groq.WithAPIKey(param.Get().GroqAPIKey))
 
 	chatCompletion, err := client.CreateChatCompletion(groq.CompletionCreateParams{
-		Model:  "deepseek-r1-distill-llama-70b",
+		Model:  "llama-3.3-70b-versatile",
 		Stream: true,
 		Messages: []groq.Message{
 			{

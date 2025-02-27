@@ -66,6 +66,37 @@ func ListFilesToConvert(ctx context.Context, id string) ([]types.ConversionFile,
 	return files, nil
 }
 
+func ListConvertedFiles(ctx context.Context, id string) (map[string]string, error) {
+	conn := persistence.MustGetPooledPostgresSession()
+	defer conn.Release()
+
+	query := `SELECT converted_files FROM workspace_conversion_file WHERE conversion_id = $1`
+	rows, err := conn.Query(ctx, query, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	files := map[string]string{}
+	for rows.Next() {
+		var convertedFiles sql.NullString
+		if err := rows.Scan(&convertedFiles); err != nil {
+			return nil, err
+		}
+
+		rowFiles := map[string]string{}
+		if err := json.Unmarshal([]byte(convertedFiles.String), &rowFiles); err != nil {
+			return nil, err
+		}
+
+		for k, v := range rowFiles {
+			files[k] = v
+		}
+	}
+
+	return files, nil
+}
+
 func GetConversionFile(ctx context.Context, conversionID string, fileID string) (*types.ConversionFile, error) {
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()

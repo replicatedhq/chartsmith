@@ -143,29 +143,7 @@ func summarizeContentWithGroq(ctx context.Context, content string) (string, erro
 		return "", fmt.Errorf("failed to summarize content: %w", err)
 	}
 
-	return strings.TrimSpace(removeThinkingContent(chatCompletion.Choices[0].Message.Content)), nil
-}
-
-func removeThinkingContent(input string) string {
-	if !strings.Contains(input, "<think>") && !strings.Contains(input, "</think>") {
-		return input
-	}
-
-	result := input
-	for strings.Contains(result, "<think>") && strings.Contains(result, "</think>") {
-		beforeThink := strings.Split(result, "<think>")[0]
-		afterThinkTag := strings.Split(result, "</think>")[1]
-		result = beforeThink + afterThinkTag
-	}
-
-	// Handle any remaining single tags
-	if strings.Contains(result, "<think>") {
-		return "" // Still has an opening tag with no close
-	} else if strings.Contains(result, "</think>") {
-		return strings.Split(result, "</think>")[1] // Keep only what's after the close tag
-	}
-
-	return result
+	return strings.TrimSpace(chatCompletion.Choices[0].Message.Content), nil
 }
 
 func summarizeContentWithOllama(ctx context.Context, content string) (string, error) {
