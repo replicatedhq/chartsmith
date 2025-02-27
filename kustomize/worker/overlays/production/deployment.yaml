@@ -21,7 +21,7 @@ spec:
       - image: chartsmith-worker
         name: bootstrap
         command:
-          - /go/src/github.com/replicatedhq/chartsmith/bin/chartsmith-worker
+          - /chartsmith-worker
         args:
           - "bootstrap"
           - "--workspace-dir=/bootstrap/default-workspace"
