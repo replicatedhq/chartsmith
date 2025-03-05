@@ -74,6 +74,24 @@ function applyHunkToContent(content: string, hunk: PatchHunk): string {
   return [...before, ...hunk.content, ...after].join('\n');
 }
 
+function findMatchingLine(content: string[], startLine: number, contextLines: string[]): number {
+  // Look for the context lines in the original content
+  for (let i = Math.max(0, startLine - 10); i < content.length - contextLines.length + 1; i++) {
+    let matches = true;
+    for (let j = 0; j < contextLines.length; j++) {
+      const contextLine = contextLines[j].startsWith(' ') ? contextLines[j].substring(1) : contextLines[j];
+      if (content[i + j] !== contextLine) {
+        matches = false;
+        break;
+      }
+    }
+    if (matches) {
+      return i;
+    }
+  }
+  return startLine;
+}
+
 export async function updateFileAfterPatchOperation(
   fileId: string,
   revisionNumber: number,
@@ -138,10 +156,29 @@ export async function applyPatch(file: WorkspaceFile): Promise<WorkspaceFile> {
     let content = file.content;
     let currentHunkLines: string[] = [];
     let currentHunkHeader: string | null = null;
+    let seenFileHeader = false;
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       logger.debug('Processing line:', { lineNumber: i, line });
+
+      // Skip duplicate file headers
+      if ((line.startsWith('---') || line.startsWith('+++')) && seenFileHeader) {
+        // Skip both header lines
+        i++;
+        continue;
+      }
+
+      // Track first file header
+      if (line.startsWith('---')) {
+        seenFileHeader = true;
+        continue;
+      }
+
+      // Skip +++ line after first file header
+      if (line.startsWith('+++')) {
+        continue;
+      }
 
       if (line.startsWith('@@')) {
         // If we have a previous hunk, apply it
@@ -151,8 +188,14 @@ export async function applyPatch(file: WorkspaceFile): Promise<WorkspaceFile> {
             hunkHeader: currentHunkHeader
           });
 
+          // Look ahead to get context lines for finding the correct position
+          const contextLines = currentHunkLines.filter(l => !l.startsWith('-') && !l.startsWith('+') && !l.startsWith('\\')).slice(0, 3);
+
           const hunk = parseUnifiedDiffHunk(currentHunkHeader, currentHunkLines);
           if (hunk) {
+            // Find the actual line number where content matches
+            const contentLines = content.split('\n');
+            hunk.start = findMatchingLine(contentLines, hunk.start, contextLines);
             content = applyHunkToContent(content, hunk);
           }
         }
@@ -171,8 +214,14 @@ export async function applyPatch(file: WorkspaceFile): Promise<WorkspaceFile> {
         hunkHeader: currentHunkHeader
       });
 
+      // Look ahead to get context lines for finding the correct position
+      const contextLines = currentHunkLines.filter(l => !l.startsWith('-') && !l.startsWith('+') && !l.startsWith('\\')).slice(0, 3);
+
       const hunk = parseUnifiedDiffHunk(currentHunkHeader, currentHunkLines);
       if (hunk) {
+        // Find the actual line number where content matches
+        const contentLines = content.split('\n');
+        hunk.start = findMatchingLine(contentLines, hunk.start, contextLines);
         content = applyHunkToContent(content, hunk);
       }
     }
