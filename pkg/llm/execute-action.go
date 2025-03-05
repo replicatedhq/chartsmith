@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
+	"github.com/replicatedhq/chartsmith/pkg/diff"
 	llmtypes "github.com/replicatedhq/chartsmith/pkg/llm/types"
 	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 )
@@ -41,41 +42,52 @@ Here is the current content between XML tags:
 %s
 </current_content>
 
-CRITICAL INSTRUCTION: You MUST generate a complete unified diff patch in the standard format.
+CRITICAL INSTRUCTION: You MUST generate a unified diff patch in the standard format, but without line numbers (see instructions below).
 NEVER return just the new value - this is incorrect and will be rejected.
+Write out the changes similar to a unified diff like `+"`diff -U0`"+` would produce.
 
-The patch MUST contain ALL of these elements in this EXACT order:
+Make sure you include the first 2 lines with the file paths.
+Don't include timestamps with the file paths.
 
-1. File headers (both lines required):
-   --- %[1]s
-   +++ %[1]s
+Start each hunk of changes with a `+"`@@ ... @@`"+` line.
+Don't include line numbers like `+"`diff -U0`"+` does.
+The user's patch tool doesn't need them.
 
-2. Hunk header showing line numbers:
-   @@ -lineNum,lineCount +lineNum,lineCount @@
+The user's patch tool needs CORRECT patches that apply cleanly against the current contents of the file!
+Think carefully and make sure you include and mark all lines that need to be removed or changed as `+"-"+` lines.
+Make sure you mark all new or modified lines with `+"+"+`.
+Don't leave out any lines or the diff patch won't apply correctly.
 
-3. Context and changes:
-   - Three (3) lines of unchanged context BEFORE the change (no leading spaces)
-   - The removed line with "-" prefix
-   - The added line with "+" prefix
-   - Three (3) lines of unchanged context AFTER the change (no leading spaces)
+Indentation matters in the diffs!
+
+Start a new hunk for each section of the file that needs changes.
+
+Only output hunks that specify changes with `+"`+"+` or `+"-"+` lines.
+Skip any hunks that are entirely unchanging `+"` `"+` lines.
+
+Output hunks in whatever order makes the most sense.
+Hunks don't need to be in any particular order.
+
+When editing a function, method, loop, etc use a hunk to replace the *entire* code block.
+Delete the entire existing version with `+"`-"+` lines and then add a new, updated version with `+"`+"+` lines.
+This will help you generate correct code and correct diffs.
+
+To move code within a file, use 2 hunks: 1 to delete it from its current location, 1 to insert it in the new location.
+
 
 Complete example of the REQUIRED format:
---- %[1]s
-+++ %[1]s
-@@ -5,7 +5,7 @@
-# First context line
-# Second context line
-# Third context line
--replicaCount: 1
-+replicaCount: 3
-# Fourth context line
-# Fifth context line
-# Sixth context line
+--- templates/deployment.yaml
++++ templates/deployment.yaml
+@@ ... @@
+-  replicaCount: 1
++  replicaCount: 3
+@@ ... @@
+-      cpu: 10m
+-      memory: 128Mi
++      cpu: 20m
++      memory: 256Mi
+@@ ... @@
 
-IMPORTANT:
-- Context lines must NOT have leading spaces
-- Only added lines ("+") and removed lines ("-") should have a prefix
-- The patch must exactly match this format
 
 Follow the instructions to provide the patch in proper <chartsmithArtifact> tags.`,
 			actionPlanWithPath.Path, strings.TrimSpace(currentContent))
@@ -108,30 +120,13 @@ Follow the instructions to provide the patch in proper <chartsmithArtifact> tags
 				for _, artifact := range artifacts {
 					if artifact.Path == actionPlanWithPath.Path {
 						// Validate patch format before sending
-						lines := strings.Split(artifact.Content, "\n")
-						if len(lines) < 4 {
+						reconstructor := diff.NewDiffReconstructor(currentContent, artifact.Content)
+						reconstructedDiff, err := reconstructor.ReconstructDiff()
+						if err != nil {
 							continue
 						}
 
-						// Must start with proper headers
-						if !strings.HasPrefix(lines[0], "--- "+actionPlanWithPath.Path) ||
-							!strings.HasPrefix(lines[1], "+++ "+actionPlanWithPath.Path) {
-							continue
-						}
-
-						// Must have a hunk header
-						hasHunk := false
-						for _, line := range lines[2:] {
-							if strings.HasPrefix(line, "@@") {
-								hasHunk = true
-								break
-							}
-						}
-						if !hasHunk {
-							continue
-						}
-
-						contentStreamCh <- artifact.Content
+						contentStreamCh <- reconstructedDiff
 					}
 				}
 			}

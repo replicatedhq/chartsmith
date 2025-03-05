@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useState } from "react";
 import { useAtom } from "jotai";
-import { Check, X, ChevronUp, ChevronDown, CheckCheck } from "lucide-react";
+import { Check, X, ChevronUp, ChevronDown, CheckCheck, ChevronRight } from "lucide-react";
 
 // atoms
-import { selectedFileAtom } from "@/atoms/editor";
+import { selectedFileAtom, currentDiffIndexAtom, updateCurrentDiffIndexAtom } from "@/atoms/editor";
 import { allFilesBeforeApplyingPendingPatchesAtom, allFilesWithPendingPatchesAtom, workspaceAtom } from "@/atoms/workspace";
 
 // types
@@ -17,8 +17,8 @@ import type { WorkspaceFile } from "@/lib/types/workspace";
 import { useMonacoEditor } from "@/hooks/useMonacoEditor";
 
 // actions
-import { rejectPatchAction } from "@/lib/workspace/actions/reject-patch";
-import { acceptPatchAction } from "@/lib/workspace/actions/accept-patch";
+import { rejectPatchAction, rejectAllPatchesAction } from "@/lib/workspace/actions/reject-patch";
+import { acceptPatchAction, acceptAllPatchesAction } from "@/lib/workspace/actions/accept-patch";
 
 // types
 import type { Session } from "@/lib/types/session";
@@ -38,7 +38,7 @@ export function CodeEditor({
   onChange,
   onCommandK,
 }: CodeEditorProps) {
-  const [selectedFile] = useAtom(selectedFileAtom);
+  const [selectedFile, setSelectedFile] = useAtom(selectedFileAtom);
   const [workspace] = useAtom(workspaceAtom);
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const diffEditorRef = useRef<editor.IStandaloneDiffEditor | null>(null);
@@ -47,11 +47,24 @@ export function CodeEditor({
   const [allFilesWithPendingPatches] = useAtom(allFilesWithPendingPatchesAtom);
   const [allFilesBeforeApplyingPendingPatches] = useAtom(allFilesBeforeApplyingPendingPatchesAtom);
 
+  const [acceptDropdownOpen, setAcceptDropdownOpen] = useState(false);
+  const [rejectDropdownOpen, setRejectDropdownOpen] = useState(false);
+
+  const acceptButtonRef = useRef<HTMLDivElement>(null);
+  const rejectButtonRef = useRef<HTMLDivElement>(null);
+
+  const [currentDiffIndex, setCurrentDiffIndex] = useAtom(currentDiffIndexAtom);
+  const [, updateCurrentDiffIndex] = useAtom(updateCurrentDiffIndexAtom);
+
   useEffect(() => {
     if (selectedFile && onChange) {
       onChange(selectedFile.content);
     }
   }, [selectedFile, onChange]);
+
+  useEffect(() => {
+    updateCurrentDiffIndex(allFilesWithPendingPatches);
+  }, [selectedFile, allFilesWithPendingPatches, updateCurrentDiffIndex]);
 
   useEffect(() => {
     if (selectedFile?.pendingPatch && diffEditorRef.current) {
@@ -90,6 +103,22 @@ export function CodeEditor({
       attemptScroll();
     }
   }, [selectedFile?.pendingPatch, selectedFile?.filePath, value]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (acceptButtonRef.current && !acceptButtonRef.current.contains(event.target as Node)) {
+        setAcceptDropdownOpen(false);
+      }
+      if (rejectButtonRef.current && !rejectButtonRef.current.contains(event.target as Node)) {
+        setRejectDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   if (!workspace) {
     return null;
@@ -177,110 +206,266 @@ export function CodeEditor({
     console.log("onFileUpdate", updatedFile);
   };
 
+  const handleAcceptThisFile = async () => {
+    if (selectedFile?.pendingPatch) {
+      const updatedFile = await acceptPatchAction(session, selectedFile.id, workspace.currentRevisionNumber);
+      onChange?.(updatedFile.content);
+      onFileUpdate?.(updatedFile);
+      setAcceptDropdownOpen(false);
+    }
+  };
+
+  const handleAcceptAllFiles = async () => {
+    const updatedFiles = await acceptAllPatchesAction(session, workspace.id, workspace.currentRevisionNumber);
+    if (selectedFile && updatedFiles.some(f => f.id === selectedFile.id)) {
+      const updatedFile = updatedFiles.find(f => f.id === selectedFile.id);
+      if (updatedFile) {
+        onChange?.(updatedFile.content);
+        onFileUpdate?.(updatedFile);
+      }
+    }
+    setAcceptDropdownOpen(false);
+  };
+
+  const handleRejectThisFile = async () => {
+    if (selectedFile?.pendingPatch) {
+      await rejectPatchAction(session, selectedFile.id, workspace.currentRevisionNumber);
+      setRejectDropdownOpen(false);
+    }
+  };
+
+  const handleRejectAllFiles = async () => {
+    await rejectAllPatchesAction(session, workspace.id, workspace.currentRevisionNumber);
+    setRejectDropdownOpen(false);
+  };
+
+  const handlePrevDiff = () => {
+    if (allFilesWithPendingPatches.length === 0) return;
+
+    const newIndex = currentDiffIndex <= 0
+      ? allFilesWithPendingPatches.length - 1
+      : currentDiffIndex - 1;
+
+    setCurrentDiffIndex(newIndex);
+    setSelectedFile(allFilesWithPendingPatches[newIndex]);
+  };
+
+  const handleNextDiff = () => {
+    if (allFilesWithPendingPatches.length === 0) return;
+
+    const newIndex = currentDiffIndex >= allFilesWithPendingPatches.length - 1
+      ? 0
+      : currentDiffIndex + 1;
+
+    setCurrentDiffIndex(newIndex);
+    setSelectedFile(allFilesWithPendingPatches[newIndex]);
+  };
+
+  const currentFileNumber = allFilesWithPendingPatches.length > 0 ? currentDiffIndex + 1 : 0;
+
   const renderDiffHeader = () => (
-    <div className={`flex items-center justify-end gap-2 p-2 border-b min-h-[36px] pr-4 ${theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"}`}>
-      {allFilesWithPendingPatches.length > 0 && (
+    <div className={`flex items-center justify-end gap-2 p-2 border-b min-h-[36px] pr-4 ${theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"} sticky top-0 z-20`}>
+      <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
-          {allFilesWithPendingPatches.length > 0 && (
+          <span className={`text-xs font-mono ${
+            theme === "dark" ? "text-gray-400" : "text-gray-500"
+          }`}>
+            Showing {currentFileNumber}/{allFilesWithPendingPatches.length} files with diffs
+          </span>
+          <div className={`flex rounded overflow-hidden border ${theme === "dark" ? "border-dark-border" : "border-gray-200"}`}>
             <button
-              className={`px-3 py-1 text-xs rounded-md flex items-center gap-1 font-mono ${
+              className={`p-1 ${
                 theme === "dark"
-                  ? "bg-green-600 text-white hover:bg-green-700"
-                  : "bg-green-600 text-white hover:bg-green-700"
+                  ? "bg-dark-border/40 text-gray-300 hover:bg-dark-border/60"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
               }`}
-              onClick={() => {
-                const filesWithPatches = allFilesWithPendingPatches.filter(f => f.pendingPatch);
-                filesWithPatches.forEach(async (patchFile) => {
-                  const updatedFile = await acceptPatchAction(session, patchFile.id, workspace.currentRevisionNumber);
-                  onFileUpdate?.(updatedFile);
-                });
-              }}
+              onClick={handlePrevDiff}
             >
-              <CheckCheck className="w-3 h-3" />
-              Accept All
-            </button>
-          )}
-          {selectedFile?.pendingPatch && (
-            <>
-              <button
-              className={`px-3 py-1 text-xs rounded-md flex items-center gap-1 font-mono ${
-                theme === "dark"
-                  ? "bg-green-600 text-white hover:bg-green-700"
-                  : "bg-green-600 text-white hover:bg-green-700"
-              }`}
-              onClick={async () => {
-                const updatedFile = await acceptPatchAction(session, selectedFile.id, workspace.currentRevisionNumber);
-                onChange?.(updatedFile.content);
-                onFileUpdate?.(updatedFile);
-              }}
-            >
-              <Check className="w-3 h-3" />
-              Accept
+              <ChevronUp className="w-3 h-3" />
             </button>
             <button
-              className={`px-3 py-1 text-xs rounded-md flex items-center gap-1 font-mono ${
+              className={`p-1 border-l ${
                 theme === "dark"
-                  ? "bg-red-600 text-white hover:bg-red-700"
-                  : "bg-red-600 text-white hover:bg-red-700"
+                  ? "bg-dark-border/40 text-gray-300 hover:bg-dark-border/60 border-dark-border"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200 border-gray-200"
               }`}
-              onClick={() => {
-                rejectPatchAction(session, selectedFile.id, workspace.currentRevisionNumber);
-              }}
+              onClick={handleNextDiff}
             >
-              <X className="w-3 h-3" />
-              Reject
+              <ChevronDown className="w-3 h-3" />
             </button>
-          </>
+          </div>
+        </div>
+
+        {allFilesWithPendingPatches.length > 0 && selectedFile?.pendingPatch && (
+          <div className="flex items-center gap-2">
+            <div ref={acceptButtonRef} className="relative">
+              <div className="flex">
+                <button
+                  className={`px-3 py-1 text-xs rounded-l-md flex items-center gap-1 font-mono ${
+                    theme === "dark"
+                      ? "bg-green-600 text-white hover:bg-green-700"
+                      : "bg-green-600 text-white hover:bg-green-700"
+                  }`}
+                  onClick={handleAcceptThisFile}
+                >
+                  <Check className="w-3 h-3" />
+                  Accept
+                </button>
+                <button
+                  className={`px-1 py-1 text-xs rounded-r-md flex items-center border-l border-green-700 ${
+                    theme === "dark"
+                      ? "bg-green-600 text-white hover:bg-green-700"
+                      : "bg-green-600 text-white hover:bg-green-700"
+                  }`}
+                  onClick={() => setAcceptDropdownOpen(!acceptDropdownOpen)}
+                >
+                  <ChevronDown className="w-3 h-3" />
+                </button>
+              </div>
+              {acceptDropdownOpen && (
+                <div className={`absolute right-0 mt-1 w-56 rounded-md shadow-lg z-30 ${
+                  theme === "dark" ? "bg-dark-surface border border-dark-border" : "bg-white border border-gray-200"
+                }`}>
+                  <div className="py-1">
+                    <button
+                      className={`block w-full text-left px-4 py-2 text-xs ${
+                        theme === "dark" ? "text-gray-300 hover:bg-dark-border/40" : "text-gray-700 hover:bg-gray-100"
+                      }`}
+                      onClick={handleAcceptThisFile}
+                    >
+                      <div className="flex items-center">
+                        <span className="font-medium">This file only</span>
+                        <span className="ml-2 text-xs opacity-70">({selectedFile?.filePath?.split('/').pop()})</span>
+                      </div>
+                    </button>
+                    <button
+                      className={`block w-full text-left px-4 py-2 text-xs ${
+                        theme === "dark" ? "text-gray-300 hover:bg-dark-border/40" : "text-gray-700 hover:bg-gray-100"
+                      }`}
+                      onClick={handleAcceptAllFiles}
+                    >
+                      <div className="flex items-center">
+                        <span className="font-medium">All files</span>
+                        <span className="ml-2 text-xs opacity-70">({allFilesWithPendingPatches.length} files)</span>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div ref={rejectButtonRef} className="relative">
+              <div className="flex">
+                <button
+                  className={`px-3 py-1 text-xs rounded-l-md flex items-center gap-1 font-mono ${
+                    theme === "dark"
+                      ? "bg-red-600 text-white hover:bg-red-700"
+                      : "bg-red-600 text-white hover:bg-red-700"
+                  }`}
+                  onClick={handleRejectThisFile}
+                >
+                  <X className="w-3 h-3" />
+                  Reject
+                </button>
+                <button
+                  className={`px-1 py-1 text-xs rounded-r-md flex items-center border-l border-red-700 ${
+                    theme === "dark"
+                      ? "bg-red-600 text-white hover:bg-red-700"
+                      : "bg-red-600 text-white hover:bg-red-700"
+                  }`}
+                  onClick={() => setRejectDropdownOpen(!rejectDropdownOpen)}
+                >
+                  <ChevronDown className="w-3 h-3" />
+                </button>
+              </div>
+              {rejectDropdownOpen && (
+                <div className={`absolute right-0 mt-1 w-56 rounded-md shadow-lg z-30 ${
+                  theme === "dark" ? "bg-dark-surface border border-dark-border" : "bg-white border border-gray-200"
+                }`}>
+                  <div className="py-1">
+                    <button
+                      className={`block w-full text-left px-4 py-2 text-xs ${
+                        theme === "dark" ? "text-gray-300 hover:bg-dark-border/40" : "text-gray-700 hover:bg-gray-100"
+                      }`}
+                      onClick={handleRejectThisFile}
+                    >
+                      <div className="flex items-center">
+                        <span className="font-medium">This file only</span>
+                        <span className="ml-2 text-xs opacity-70">({selectedFile?.filePath?.split('/').pop()})</span>
+                      </div>
+                    </button>
+                    <button
+                      className={`block w-full text-left px-4 py-2 text-xs ${
+                        theme === "dark" ? "text-gray-300 hover:bg-dark-border/40" : "text-gray-700 hover:bg-gray-100"
+                      }`}
+                      onClick={handleRejectAllFiles}
+                    >
+                      <div className="flex items-center">
+                        <span className="font-medium">All files</span>
+                        <span className="ml-2 text-xs opacity-70">({allFilesWithPendingPatches.length} files)</span>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         )}
-      </div>
-    )}
-    <div className="ml-8 flex items-center gap-2">
-      <span className={`text-xs font-mono ${
-        theme === "dark" ? "text-gray-400" : "text-gray-500"
-      }`}>
-        Showing {allFilesBeforeApplyingPendingPatches.length - allFilesWithPendingPatches.length + 1}/{allFilesBeforeApplyingPendingPatches.length} diffs
-      </span>
-      <div className={`flex rounded overflow-hidden border ${theme === "dark" ? "border-dark-border" : "border-gray-200"}`}>
-        <button
-          className={`p-1 ${
-            theme === "dark"
-              ? "bg-dark-border/40 text-gray-300 hover:bg-dark-border/60"
-              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-          }`}
-          onClick={() => {/* TODO: Handle up */}}
-        >
-          <ChevronUp className="w-3 h-3" />
-        </button>
-        <button
-          className={`p-1 border-l ${
-            theme === "dark"
-              ? "bg-dark-border/40 text-gray-300 hover:bg-dark-border/60 border-dark-border"
-              : "bg-gray-100 text-gray-700 hover:bg-gray-200 border-gray-200"
-          }`}
-          onClick={() => {/* TODO: Handle down */}}
-        >
-          <ChevronDown className="w-3 h-3" />
-        </button>
+
+
       </div>
     </div>
-  </div>
-);
+  );
 
   return (
     <div className="flex-1 h-full flex flex-col">
       {showDiffHeader && renderDiffHeader()}
       {selectedFile?.pendingPatch ? (() => {
         const lines = selectedFile.pendingPatch.split('\n');
-        const modified = value || "";
-        const modifiedLines = modified.split('\n');
+        const original = value || "";
+        const originalLines = original.split('\n');
+        const modifiedLines = [...originalLines];
 
-        let currentLine = 0;
-        let contentStarted = false;
         let currentHunk = null;
+        let seenFileHeader = false;
 
-        for (const line of lines) {
-          // Skip metadata lines
-          if (line.startsWith('---') || line.startsWith('+++')) {
+        // Helper function to find the actual line number where content matches
+        const findMatchingLine = (startLine: number, contextLines: string[]): number => {
+          // Look for the context lines in the original content
+          for (let i = startLine; i < originalLines.length - contextLines.length + 1; i++) {
+            let matches = true;
+            for (let j = 0; j < contextLines.length; j++) {
+              const contextLine = contextLines[j].startsWith(' ') ? contextLines[j].substring(1) : contextLines[j];
+              if (originalLines[i + j] !== contextLine) {
+                matches = false;
+                break;
+              }
+            }
+            if (matches) {
+              return i;
+            }
+          }
+          return startLine;
+        };
+
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+
+          // Skip duplicate file headers
+          if ((line.startsWith('---') || line.startsWith('+++')) && seenFileHeader) {
+            // Skip both header lines
+            i++;
+            continue;
+          }
+
+          // Track first file header
+          if (line.startsWith('---')) {
+            seenFileHeader = true;
+            continue;
+          }
+
+          // Skip +++ line after first file header
+          if (line.startsWith('+++')) {
             continue;
           }
 
@@ -288,45 +473,56 @@ export function CodeEditor({
           if (line.startsWith('@@ ')) {
             const match = line.match(/@@ -(\d+),?(\d+)? \+(\d+),?(\d+)? @@/);
             if (match) {
+              // Look ahead to get context lines
+              const contextLines = [];
+              let j = i + 1;
+              while (j < lines.length && !lines[j].startsWith('@@')) {
+                if (!lines[j].startsWith('-') && !lines[j].startsWith('+') && !lines[j].startsWith('\\')) {
+                  contextLines.push(lines[j]);
+                }
+                if (contextLines.length >= 3) break; // Get up to 3 context lines
+                j++;
+              }
+
+              const suggestedLine = parseInt(match[1]) - 1; // Convert to 0-based
+              const actualLine = findMatchingLine(Math.max(0, suggestedLine - 10), contextLines);
+
               currentHunk = {
-                startLine: parseInt(match[3]) - 1,
-                linesCount: match[4] ? parseInt(match[4]) : 1
+                originalStart: parseInt(match[1]) - 1,
+                originalCount: match[2] ? parseInt(match[2]) : 1,
+                modifiedStart: parseInt(match[3]) - 1,
+                modifiedCount: match[4] ? parseInt(match[4]) : 1,
+                currentLine: actualLine
               };
-              currentLine = currentHunk.startLine;
-              contentStarted = true;
             }
             continue;
           }
 
-          // Only process content if we're in a valid hunk
-          if (contentStarted && currentHunk) {
-            if (line.startsWith('+')) {
-              modifiedLines.splice(currentLine, 0, line.substring(1));
-              currentLine++;
-            } else if (line.startsWith('-')) {
-              if (currentLine < modifiedLines.length) {
-                modifiedLines.splice(currentLine, 1);
-              }
-            } else {
-              // Context lines - remove leading space if it exists
-              const contextLine = line.startsWith(' ') ? line.substring(1) : line;
-              if (currentLine >= modifiedLines.length) {
-                modifiedLines.push(contextLine);
-              } else {
-                modifiedLines[currentLine] = contextLine;
-              }
-              currentLine++;
-            }
+          if (!currentHunk) continue;
+
+          if (line.startsWith('-')) {
+            // Remove line from modified content at the current position
+            modifiedLines.splice(currentHunk.currentLine, 1);
+          } else if (line.startsWith('+')) {
+            // Add new line at the current position
+            modifiedLines.splice(currentHunk.currentLine, 0, line.substring(1));
+            currentHunk.currentLine++;
+          } else if (!line.startsWith('\\')) { // Skip "\ No newline" markers
+            // Context line - move to next line
+            currentHunk.currentLine++;
           }
         }
+
+        // Filter out any undefined lines that might have been created
+        const cleanModifiedLines = modifiedLines.filter(line => line !== undefined);
 
         return (
           <div className="flex-1">
             <DiffEditor
               height="100%"
               language="yaml"
-              original={value || ""}
-              modified={modifiedLines.join('\n')}
+              original={original}
+              modified={cleanModifiedLines.join('\n')}
               theme={theme === "light" ? "vs" : "vs-dark"}
               onMount={handleDiffEditorMount}
               options={{

@@ -10,6 +10,7 @@ import { ChatMessage } from "./ChatMessage";
 import { messagesAtom, plansAtom, rendersAtom, workspaceAtom } from "@/atoms/workspace";
 import { useAtom } from "jotai";
 import { createChatMessageAction } from "@/lib/workspace/actions/create-chat-message";
+import { ScrollingContent } from "./ScrollingContent";
 
 interface ChatContainerProps {
   session: Session;
@@ -17,16 +18,9 @@ interface ChatContainerProps {
 
 export function ChatContainer({ session }: ChatContainerProps) {
   const { theme } = useTheme();
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   const [workspace] = useAtom(workspaceAtom)
   const [messages, setMessages] = useAtom(messagesAtom)
   const [chatInput, setChatInput] = useState("");
-
-  useEffect(() => {
-    if (messages) {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [messages]);
 
   if (!messages || !workspace) {
     return null;
@@ -47,33 +41,29 @@ export function ChatContainer({ session }: ChatContainerProps) {
   return (
     <div className={`h-[calc(100vh-3.5rem)] border-r flex flex-col min-h-0 overflow-hidden transition-all duration-300 ease-in-out w-full relative ${theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"}`}>
       <div className="flex-1 overflow-y-auto">
-        <div className="pb-32">
-          {messages.map((item, index) => (
-            <div key={item.id}>
-              <ChatMessage
-                key={item.id}
-                messageId={item.id}
-                session={session}
-              />
-              {item.responsePlanId ? (
-                <PlanChatMessage
-                  planId={item.responsePlanId}
-                  session={session}
-                  workspaceId={workspace.id}
+        <ScrollingContent>
+          <div className="pb-32">
+            {messages.map((item, index) => (
+              <div key={item.id}>
+                <ChatMessage
+                  key={item.id}
                   messageId={item.id}
-                  showActions={index === messages.length - 1}
-                  showChatInput={false}
+                  session={session}
                 />
-              ) : null}
-            </div>
-          ))}
-        </div>
-        <style jsx>{`
-          @keyframes progress {
-            0% { transform: translateX(-100%); }
-            100% { transform: translateX(100%); }
-          }
-        `}</style>
+                {item.responsePlanId ? (
+                  <PlanChatMessage
+                    planId={item.responsePlanId}
+                    session={session}
+                    workspaceId={workspace.id}
+                    messageId={item.id}
+                    showActions={index === messages.length - 1}
+                    showChatInput={false}
+                  />
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </ScrollingContent>
       </div>
       {workspace?.currentRevisionNumber && workspace?.currentRevisionNumber > 0 && (
         <div className={`absolute bottom-0 left-0 right-0 ${theme === "dark" ? "bg-dark-surface" : "bg-white"} border-t ${theme === "dark" ? "border-dark-border" : "border-gray-200"}`}>

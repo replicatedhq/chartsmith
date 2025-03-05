@@ -153,6 +153,8 @@ async function filesInArchive(extractPath: string): Promise<WorkspaceFile[]> {
     filePath: file.filePath.substring(commonPrefix.length),
   }));
 
+  const filePaths = filesWithoutCommonPrefix.map(file => file.filePath);
+  console.log("filePaths", filePaths);
   // remove anything in a "charts" directory
   const filesWithoutCharts = filesWithoutCommonPrefix.filter(file => !file.filePath.includes("charts/"));
   return filesWithoutCharts;
