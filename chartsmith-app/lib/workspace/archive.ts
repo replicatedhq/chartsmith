@@ -138,8 +138,6 @@ async function downloadChartFilesFromArtifactHub(url: string): Promise<Workspace
   const packageInfoJson = await packageInfo.json();
 
   const contentURL = packageInfoJson.content_url;
-
-  // download it to a tmp directory
   const extractPath = await downloadChartArchiveFromURL(contentURL);
   await removeBinaryFilesInPath(extractPath);
   return filesInArchive(extractPath);
@@ -147,14 +145,14 @@ async function downloadChartFilesFromArtifactHub(url: string): Promise<Workspace
 
 async function filesInArchive(extractPath: string): Promise<WorkspaceFile[]> {
   const files = await parseFilesInDirectory(extractPath);
+  const filePaths = files.map(file => file.filePath);
   const commonPrefix = await findCommonPrefix(files);
+
   const filesWithoutCommonPrefix = files.map(file => ({
     ...file,
     filePath: file.filePath.substring(commonPrefix.length),
   }));
 
-  const filePaths = filesWithoutCommonPrefix.map(file => file.filePath);
-  console.log("filePaths", filePaths);
   // remove anything in a "charts" directory
   const filesWithoutCharts = filesWithoutCommonPrefix.filter(file => !file.filePath.includes("charts/"));
   return filesWithoutCharts;
@@ -186,17 +184,14 @@ async function downloadChartArchiveFromURL(url: string): Promise<string> {
   }
 
   const filename = path.basename(new URL(url).pathname);
-  const extractPath = path.join(tmpDir, filename.replace(/\.tar\.gz$/, ''));
+  const extractPath = path.join(tmpDir, filename.replace(/\.(tar\.gz|tgz)$/, ''));
 
   await fs.mkdir(extractPath);
 
   return new Promise((resolve, reject) => {
     response.body.pipe(gunzip())
       .pipe(tar.extract({ cwd: extractPath }))
-      .on('finish', async () => {
-        await removeBinaryFilesInPath(extractPath);
-        resolve(extractPath);
-      })
+      .on('finish', () => resolve(extractPath))
       .on('error', reject);
   });
 }
@@ -208,35 +203,33 @@ async function removeBinaryFilesInPath(extractPath: string) {
     const stats = await fs.stat(filePath);
 
     if (stats.isFile()) {
+      // Never remove yaml files
+      if (filePath.endsWith('.yaml') || filePath.endsWith('.yml')) {
+        continue;
+      }
+
       try {
-        // Read first 512 bytes of the file to check encoding
         const fd = await fs.open(filePath, 'r');
         const buffer = Buffer.alloc(512);
         await fd.read(buffer, 0, 512, 0);
         await fd.close();
 
-        // Check if the buffer contains non-text characters
         const isBinary = buffer.some(byte => (byte < 32 && ![9, 10, 13].includes(byte)) || byte === 65533);
-
         if (isBinary) {
           await fs.unlink(filePath);
         }
       } catch (error) {
-        // If we can't read the file, better safe than sorry - remove it
         await fs.unlink(filePath);
       }
     }
   }
 }
 
-// parseFilesInDirectory will walk extractPath, and create a WorkspaceFile for each file
-// before returning, it will strip the common prefix that all file paths have
 async function parseFilesInDirectory(extractPath: string): Promise<WorkspaceFile[]> {
   const workspaceFiles: WorkspaceFile[] = [];
 
   async function walk(dir: string) {
     const entries = await fs.readdir(dir, { withFileTypes: true });
-
     for (const entry of entries) {
       const entryPath = path.join(dir, entry.name);
       if (entry.isFile()) {
