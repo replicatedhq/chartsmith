@@ -513,6 +513,17 @@ export function CodeEditor({
           }
         }
 
+        // Handle case where patch adds content to end of file
+        if (currentHunk && currentHunk.currentLine >= modifiedLines.length) {
+          // If we're past the end of the file, append remaining added lines
+          for (let i = currentHunk.currentLine; i < lines.length; i++) {
+            const line = lines[i];
+            if (line.startsWith('+')) {
+              modifiedLines.push(line.substring(1));
+            }
+          }
+        }
+
         // Filter out any undefined lines that might have been created
         const cleanModifiedLines = modifiedLines.filter(line => line !== undefined);
 

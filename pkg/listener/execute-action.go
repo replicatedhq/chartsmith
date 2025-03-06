@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/replicatedhq/chartsmith/pkg/llm"
 	llmtypes "github.com/replicatedhq/chartsmith/pkg/llm/types"
@@ -113,6 +114,7 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 	doneCh := make(chan error)
 
 	go func() {
+		fmt.Printf("Starting ExecuteAction goroutine for path: %s\n", p.Path)
 		action := ""
 
 		for _, item := range plan.ActionFiles {
@@ -136,16 +138,24 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 		}
 	}()
 
+	fmt.Printf("Starting channel select loop for path: %s\n", p.Path)
 	done := false
 	finalContent := ""
+	timeout := time.After(5 * time.Minute)
+
 	for !done {
 		select {
+		case <-timeout:
+			fmt.Printf("Timeout reached for path: %s\n", p.Path)
+			return fmt.Errorf("timeout waiting for action execution")
 		case err = <-doneCh:
+			fmt.Printf("Received from doneCh for path %s: %v\n", p.Path, err)
 			if err != nil {
 				logger.Error(fmt.Errorf("failed to execute action: %w", err))
 			}
 			done = true
 		case stream := <-streamCh:
+			fmt.Printf("Received content from streamCh for path %s (len: %d)\n", p.Path, len(stream))
 			finalContent = stream
 
 			// send the final content to the realtime server
