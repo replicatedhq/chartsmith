@@ -22,3 +22,15 @@ export const updateCurrentDiffIndexAtom = atom(
     }
   }
 )
+
+// New atom to handle file updates after accepting/rejecting patches
+export const updateFileContentAtom = atom(
+  null,
+  (get, set, updatedFile: WorkspaceFile) => {
+    const selectedFile = get(selectedFileAtom);
+    if (selectedFile?.id === updatedFile.id) {
+      set(selectedFileAtom, updatedFile);
+      set(editorContentAtom, updatedFile.content);
+    }
+  }
+)

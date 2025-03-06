@@ -5,7 +5,7 @@ import { useAtom } from "jotai";
 import { Check, X, ChevronUp, ChevronDown, CheckCheck, ChevronRight } from "lucide-react";
 
 // atoms
-import { selectedFileAtom, currentDiffIndexAtom, updateCurrentDiffIndexAtom } from "@/atoms/editor";
+import { selectedFileAtom, currentDiffIndexAtom, updateCurrentDiffIndexAtom, updateFileContentAtom } from "@/atoms/editor";
 import { allFilesBeforeApplyingPendingPatchesAtom, allFilesWithPendingPatchesAtom, workspaceAtom, addFileToWorkspaceAtom } from "@/atoms/workspace";
 
 // types
@@ -79,7 +79,7 @@ export function CodeEditor({
   onCommandK,
 }: CodeEditorProps) {
   const [selectedFile, setSelectedFile] = useAtom(selectedFileAtom);
-  const [workspace] = useAtom(workspaceAtom);
+  const [workspace, setWorkspace] = useAtom(workspaceAtom);
   const [, addFileToWorkspace] = useAtom(addFileToWorkspaceAtom);
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const diffEditorRef = useRef<editor.IStandaloneDiffEditor | null>(null);
@@ -96,6 +96,8 @@ export function CodeEditor({
 
   const [currentDiffIndex, setCurrentDiffIndex] = useAtom(currentDiffIndexAtom);
   const [, updateCurrentDiffIndex] = useAtom(updateCurrentDiffIndexAtom);
+
+  const [, updateFileContent] = useAtom(updateFileContentAtom);
 
   useEffect(() => {
     if (selectedFile && onChange) {
@@ -250,21 +252,57 @@ export function CodeEditor({
   const handleAcceptThisFile = async () => {
     if (selectedFile?.pendingPatch) {
       const updatedFile = await acceptPatchAction(session, selectedFile.id, workspace.currentRevisionNumber);
-      onChange?.(updatedFile.content);
-      onFileUpdate?.(updatedFile);
+
+      // Update editor state
+      updateFileContent(updatedFile);
+
+      // Update workspace state
+      const updatedWorkspace = {
+        ...workspace,
+        files: workspace.files.map(f =>
+          f.id === updatedFile.id ? updatedFile : f
+        ),
+        charts: workspace.charts.map(chart => ({
+          ...chart,
+          files: chart.files.map(f =>
+            f.id === updatedFile.id ? updatedFile : f
+          )
+        }))
+      };
+      setWorkspace(updatedWorkspace);
+
       setAcceptDropdownOpen(false);
     }
   };
 
   const handleAcceptAllFiles = async () => {
     const updatedFiles = await acceptAllPatchesAction(session, workspace.id, workspace.currentRevisionNumber);
+
+    // Update editor state for currently selected file if it was updated
     if (selectedFile && updatedFiles.some(f => f.id === selectedFile.id)) {
       const updatedFile = updatedFiles.find(f => f.id === selectedFile.id);
       if (updatedFile) {
-        onChange?.(updatedFile.content);
-        onFileUpdate?.(updatedFile);
+        updateFileContent(updatedFile);
       }
     }
+
+    // Update workspace state
+    const updatedWorkspace = {
+      ...workspace,
+      files: workspace.files.map(f => {
+        const updatedFile = updatedFiles.find(uf => uf.id === f.id);
+        return updatedFile || f;
+      }),
+      charts: workspace.charts.map(chart => ({
+        ...chart,
+        files: chart.files.map(f => {
+          const updatedFile = updatedFiles.find(uf => uf.id === f.id);
+          return updatedFile || f;
+        })
+      }))
+    };
+    setWorkspace(updatedWorkspace);
+
     setAcceptDropdownOpen(false);
   };
 
