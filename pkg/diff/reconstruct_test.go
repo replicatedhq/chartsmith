@@ -249,6 +249,31 @@ line3`,
  line4
 `,
 		},
+		{
+			name: "preserves exact patch format",
+			originalContent: `line1
+line2
+line3
+line4
+line5`,
+			diffContent: `--- a/file.txt
++++ b/file.txt
+@@ -2,4 +2,4 @@
+ line2
+-line3
++newline3
+ line4
+ line5`,
+			want: `--- a/file.txt
++++ b/file.txt
+@@ -2,4 +2,4 @@
+ line2
+-line3
++newline3
+ line4
+ line5
+`,
+		},
 	}
 
 	for _, tt := range tests {

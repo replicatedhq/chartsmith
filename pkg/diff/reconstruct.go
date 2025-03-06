@@ -52,23 +52,29 @@ func (d *DiffReconstructor) ReconstructDiff() (string, error) {
 		return "", fmt.Errorf("failed to parse hunks: %w", err)
 	}
 
-	// Combine overlapping or adjacent hunks
-	hunks = d.combineHunks(hunks)
-
 	// Build the final diff
 	var result strings.Builder
-	basePath := filepath.Base(origFile)
 
-	// Check if we should preserve the original path format
-	if strings.Contains(d.diffContent, "--- Chart.yaml") {
-		result.WriteString(fmt.Sprintf("--- %s\n", basePath))
-		result.WriteString(fmt.Sprintf("+++ %s\n", basePath))
+	// Preserve original header format if it matches standard format
+	headerLines := lines[:startIdx]
+	if len(headerLines) >= 2 &&
+		strings.HasPrefix(headerLines[0], "--- ") &&
+		strings.HasPrefix(headerLines[1], "+++ ") {
+		result.WriteString(headerLines[0] + "\n")
+		result.WriteString(headerLines[1] + "\n")
 	} else {
-		result.WriteString(fmt.Sprintf("--- a/%s\n", basePath))
-		result.WriteString(fmt.Sprintf("+++ b/%s\n", basePath))
+		// Fall back to normalized format
+		basePath := filepath.Base(origFile)
+		if strings.Contains(d.diffContent, "--- Chart.yaml") {
+			result.WriteString(fmt.Sprintf("--- %s\n", basePath))
+			result.WriteString(fmt.Sprintf("+++ %s\n", basePath))
+		} else {
+			result.WriteString(fmt.Sprintf("--- a/%s\n", basePath))
+			result.WriteString(fmt.Sprintf("+++ b/%s\n", basePath))
+		}
 	}
 
-	// Write hunks
+	// Write hunks preserving original content
 	for _, h := range hunks {
 		result.WriteString(h.header + "\n")
 		for _, line := range h.content {
@@ -95,35 +101,19 @@ func (d *DiffReconstructor) parseHunks(lines []string) ([]hunk, error) {
 	var hunks []hunk
 	var currentHunk *hunk
 
-	originalLines := strings.Split(d.originalContent, "\n")
-
 	for i := 0; i < len(lines); i++ {
 		line := strings.TrimRight(lines[i], "\r\n")
 
 		if strings.HasPrefix(line, "@@ ") {
 			if currentHunk != nil {
-				// Calculate actual counts based on content
-				addCount, removeCount := 0, 0
-				for _, l := range currentHunk.content {
-					if strings.HasPrefix(l, "+") {
-						addCount++
-					} else if strings.HasPrefix(l, "-") {
-						removeCount++
-					}
-				}
-				currentHunk.originalCount = removeCount + len(currentHunk.content) - addCount - removeCount
-				currentHunk.modifiedCount = addCount + len(currentHunk.content) - addCount - removeCount
-				currentHunk.header = fmt.Sprintf("@@ -%d,%d +%d,%d @@",
-					currentHunk.originalStart, currentHunk.originalCount,
-					currentHunk.modifiedStart, currentHunk.modifiedCount)
+				// Preserve the original hunk header
 				hunks = append(hunks, *currentHunk)
 			}
 
-			h, err := d.parseHunkHeader(line, originalLines)
-			if err != nil {
-				return nil, err
+			currentHunk = &hunk{
+				header:  line,
+				content: []string{},
 			}
-			currentHunk = h
 			continue
 		}
 
@@ -133,20 +123,6 @@ func (d *DiffReconstructor) parseHunks(lines []string) ([]hunk, error) {
 	}
 
 	if currentHunk != nil {
-		// Calculate actual counts for last hunk
-		addCount, removeCount := 0, 0
-		for _, l := range currentHunk.content {
-			if strings.HasPrefix(l, "+") {
-				addCount++
-			} else if strings.HasPrefix(l, "-") {
-				removeCount++
-			}
-		}
-		currentHunk.originalCount = removeCount + len(currentHunk.content) - addCount - removeCount
-		currentHunk.modifiedCount = addCount + len(currentHunk.content) - addCount - removeCount
-		currentHunk.header = fmt.Sprintf("@@ -%d,%d +%d,%d @@",
-			currentHunk.originalStart, currentHunk.originalCount,
-			currentHunk.modifiedStart, currentHunk.modifiedCount)
 		hunks = append(hunks, *currentHunk)
 	}
 

@@ -31,6 +31,46 @@ interface CodeEditorProps {
   onCommandK?: () => void;
 }
 
+function parseDiff(originalContent: string, diffContent: string): string {
+  const lines = diffContent.split('\n');
+  const originalLines = originalContent.split('\n');
+  const modifiedLines = [...originalLines]; // Start with original content
+  let currentLine = 0;
+
+  // Find first hunk
+  let i = 0;
+  while (i < lines.length) {
+    if (lines[i].startsWith('@@')) {
+      const match = lines[i].match(/@@ -(\d+),\d+ \+(\d+),\d+ @@/);
+      if (match) {
+        currentLine = parseInt(match[2]) - 1; // Use the target line number
+      }
+      i++;
+      continue;
+    }
+
+    if (lines[i].startsWith('---') || lines[i].startsWith('+++')) {
+      i++;
+      continue;
+    }
+
+    if (lines[i].startsWith('+')) {
+      // Insert new line
+      modifiedLines.splice(currentLine, 0, lines[i].slice(1));
+      currentLine++;
+    } else if (lines[i].startsWith('-')) {
+      // Remove line
+      modifiedLines.splice(currentLine, 1);
+    } else {
+      // Context line - move to next line
+      currentLine++;
+    }
+    i++;
+  }
+
+  return modifiedLines.join('\n');
+}
+
 export function CodeEditor({
   session,
   theme = "dark",
@@ -456,55 +496,60 @@ export function CodeEditor({
     }
   };
 
+  if (selectedFile?.pendingPatch) {
+    const modified = parseDiff(selectedFile.content, selectedFile.pendingPatch);
+
+    return (
+      <div className="flex-1 h-full flex flex-col">
+        {showDiffHeader && renderDiffHeader()}
+        <div className="flex-1">
+          <DiffEditor
+            height="100%"
+            language={getLanguage(selectedFile.filePath)}
+            original={selectedFile.content}
+            modified={modified}
+            theme={theme === "light" ? "vs" : "vs-dark"}
+            onMount={handleDiffEditorMount}
+            options={{
+              ...editorOptions,
+              renderSideBySide: false,
+              diffWordWrap: 'off',
+              originalEditable: false,
+              renderOverviewRuler: false,
+              ignoreTrimWhitespace: false,
+              renderWhitespace: 'none',
+              renderLineHighlight: 'none',
+              quickSuggestions: false,
+              folding: false,
+              lineNumbers: 'on',
+              scrollBeyondLastLine: false,
+              minimap: { enabled: false },
+            }}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 h-full flex flex-col">
       {showDiffHeader && renderDiffHeader()}
-      {selectedFile?.pendingPatch ? (() => {
-        return (
-          <div className="flex-1">
-            <DiffEditor
-              height="100%"
-              language={getLanguage(selectedFile.filePath)}
-              original={value || ""}
-              modified={selectedFile.pendingPatch}
-              theme={theme === "light" ? "vs" : "vs-dark"}
-              onMount={handleDiffEditorMount}
-              options={{
-                ...editorOptions,
-                renderSideBySide: false,
-                diffWordWrap: 'off',
-                originalEditable: false,
-                renderOverviewRuler: false,
-                ignoreTrimWhitespace: false,
-                renderWhitespace: 'none',
-                renderLineHighlight: 'none',
-                quickSuggestions: false,
-                folding: false,
-                lineNumbers: 'on',
-                scrollBeyondLastLine: false,
-                minimap: { enabled: false },
-              }}
-            />
-          </div>
-        );
-      })() : (
-        <div className="flex-1 h-full">
-          <Editor
-            height="100%"
-            defaultLanguage={getLanguage(selectedFile?.filePath || '')}
-            language={getLanguage(selectedFile?.filePath || '')}
-            value={selectedFile?.content ?? value ?? ""}
-            onChange={onChange}
-            theme={theme === "light" ? "vs" : "vs-dark"}
-            options={{
-              ...editorOptions,
-              readOnly: !onChange,
-            }}
-            onMount={handleEditorMount}
-            key={`${selectedFile?.id}-${selectedFile?.filePath}-${theme}`}
-          />
-        </div>
-      )}
+      <div className="flex-1 h-full">
+        <Editor
+          height="100%"
+          defaultLanguage={getLanguage(selectedFile?.filePath || '')}
+          language={getLanguage(selectedFile?.filePath || '')}
+          value={selectedFile?.content ?? value ?? ""}
+          onChange={onChange}
+          theme={theme === "light" ? "vs" : "vs-dark"}
+          options={{
+            ...editorOptions,
+            readOnly: !onChange,
+          }}
+          onMount={handleEditorMount}
+          key={`${selectedFile?.id}-${selectedFile?.filePath}-${theme}`}
+        />
+      </div>
     </div>
   );
 }
