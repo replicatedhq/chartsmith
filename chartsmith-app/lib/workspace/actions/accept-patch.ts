@@ -52,8 +52,8 @@ function preprocessPatch(patch: string): string {
 }
 
 function calculateHunkInfo(lines: string[]) {
-  let oldStart = 1
-  let newStart = 1
+  const oldStart = 1
+  const newStart = 1
   let oldLines = 0
   let newLines = 0
 

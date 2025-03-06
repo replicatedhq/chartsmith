@@ -246,7 +246,7 @@ export function useCentrifugo({
     // Handle file creation
     if (message.type === 'execute_action' && message.action === 'create_file') {
       const { filePath, content } = message.data;
-      await handleNewFile(filePath, content);
+      handleArtifactReceived({ path: filePath, content });
     }
 
     // ... rest of message handling ...
@@ -295,8 +295,7 @@ export function useCentrifugo({
     handleArtifactReceived,
     handleRenderUpdated,
     handleConversionFileUpdatedMessage,
-    handleConversationUpdatedMessage,
-    handleExecuteAction
+    handleConversationUpdatedMessage
   ]);
 
   useEffect(() => {

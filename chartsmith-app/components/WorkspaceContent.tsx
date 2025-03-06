@@ -73,6 +73,7 @@ export function WorkspaceContent({
     setMessages,
     setPlans,
     setRenders,
+    setConversions,
     setChartsBeforeApplyingPendingPatches,
     setLooseFilesBeforeApplyingPendingPatches
   ]);

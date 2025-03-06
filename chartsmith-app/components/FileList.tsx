@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useMemo } from 'react';
 import { FileSearch, FileCheck, Loader2, ArrowRight } from 'lucide-react';
 import { ConversionFile, ConversionFileStatus } from '@/lib/types/workspace';
 
@@ -17,6 +17,9 @@ function truncateMiddle(str: string, maxLength: number) {
 
 export function FileList({ files, currentFileIndex, isTemplateStep = false }: FileListProps) {
   const activeFileRef = useRef<HTMLDivElement>(null);
+  
+  // Create a memoized status string to use in the dependency array
+  const fileStatusString = useMemo(() => files.map(f => f.status).join(','), [files]);
 
   useEffect(() => {
     if (activeFileRef.current) {
@@ -25,7 +28,7 @@ export function FileList({ files, currentFileIndex, isTemplateStep = false }: Fi
         block: 'center'
       });
     }
-  }, [files.map(f => f.status).join(',')]);
+  }, [fileStatusString]);
 
   const getVisibleFiles = () => {
     const windowSize = 30;

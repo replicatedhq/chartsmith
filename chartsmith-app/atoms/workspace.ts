@@ -141,21 +141,29 @@ function determineConversionStatus(currentStatus: ConversionStatus, status: stri
   return currentStatus;
 }
 
+// Create a writable version of the atoms we need to update
+export const allFilesBeforeApplyingPendingPatchesWritableAtom = atom(
+  get => get(allFilesBeforeApplyingPendingPatchesAtom),
+  (get, set, newFiles: WorkspaceFile[]) => {
+    // This is a writable version that we can use
+    set(looseFilesBeforeApplyingPendingPatchesAtom, newFiles);
+    // Note: We would need to update charts too if needed
+  }
+);
+
 export const addFileToWorkspaceAtom = atom(
   null,
   (get, set, newFile: WorkspaceFile) => {
     const workspace = get(workspaceAtom);
     if (!workspace) return;
 
-    // Update allFilesBeforeApplyingPendingPatches
-    set(allFilesBeforeApplyingPendingPatchesAtom, (prev) => [...prev, newFile]);
+    // Update looseFilesBeforeApplyingPendingPatches directly
+    set(looseFilesBeforeApplyingPendingPatchesAtom, prev => [...prev, newFile]);
 
     // Update allFilesWithPendingPatches if needed
     if (newFile.pendingPatch) {
-      set(allFilesWithPendingPatchesAtom, (prev) => [...prev, newFile]);
+      // This is already a derived atom, so we don't need to update it directly
+      // It will update based on the changes to looseFilesBeforeApplyingPendingPatchesAtom
     }
-
-    // You might also want to update any other relevant atoms that track files
   }
 );
-
