@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
 	"github.com/replicatedhq/chartsmith/pkg/diff"
@@ -17,6 +18,8 @@ type CreateWorkspaceFromArchiveAction struct {
 }
 
 func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWithPath, plan *workspacetypes.Plan, currentContent string, contentStreamCh chan string, doneCh chan error) error {
+	fmt.Printf("Starting ExecuteAction for path: %s\n", actionPlanWithPath.Path)
+
 	client, err := newAnthropicClient(ctx)
 	if err != nil {
 		return err
@@ -95,15 +98,20 @@ Follow the instructions to provide the patch in proper <chartsmithArtifact> tags
 		messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(updateMessage)))
 	}
 
-	stream := client.Messages.NewStreaming(context.TODO(), anthropic.MessageNewParams{
+	fmt.Printf("Starting Anthropic stream for path: %s\n", actionPlanWithPath.Path)
+	stream := client.Messages.NewStreaming(ctx, anthropic.MessageNewParams{
 		Model:     anthropic.F(anthropic.ModelClaude3_7Sonnet20250219),
 		MaxTokens: anthropic.F(int64(8192)),
 		Messages:  anthropic.F(messages),
 	})
 
 	fullResponseWithTags := ""
-
 	message := anthropic.Message{}
+
+	fmt.Printf("Entering stream processing loop for path: %s\n", actionPlanWithPath.Path)
+	streamStartTime := time.Now()
+	lastUpdateTime := time.Now()
+
 	for stream.Next() {
 		event := stream.Current()
 		message.Accumulate(event)
@@ -111,15 +119,17 @@ Follow the instructions to provide the patch in proper <chartsmithArtifact> tags
 		switch delta := event.Delta.(type) {
 		case anthropic.ContentBlockDeltaEventDelta:
 			if delta.Text != "" {
+				lastUpdateTime = time.Now()
+
 				fullResponseWithTags += delta.Text
 				artifacts, err := parseArtifactsInResponse(fullResponseWithTags)
 				if err != nil {
-					return fmt.Errorf("error parsing artifacts in response: %w", err)
+					fmt.Printf("Error parsing artifacts: %v\n", err)
 				}
 
 				for _, artifact := range artifacts {
 					if artifact.Path == actionPlanWithPath.Path {
-						// Validate patch format before sending
+
 						reconstructor := diff.NewDiffReconstructor(currentContent, artifact.Content)
 						reconstructedDiff, err := reconstructor.ReconstructDiff()
 						if err != nil {
@@ -131,12 +141,27 @@ Follow the instructions to provide the patch in proper <chartsmithArtifact> tags
 				}
 			}
 		}
+
+		// Check for potential stall
+		if time.Since(lastUpdateTime) > 30*time.Second {
+			fmt.Printf("WARNING: No updates for 30s on path: %s\n", actionPlanWithPath.Path)
+		}
 	}
+
+	// Add timeout check for the overall stream
+	if time.Since(streamStartTime) > 5*time.Minute {
+		return fmt.Errorf("stream timed out after 5 minutes for path: %s", actionPlanWithPath.Path)
+	}
+
+	fmt.Printf("Stream completed after %v for path: %s\n", time.Since(streamStartTime), actionPlanWithPath.Path)
 
 	if stream.Err() != nil {
+		fmt.Printf("Stream error for path %s: %v\n", actionPlanWithPath.Path, stream.Err())
 		doneCh <- stream.Err()
+		return stream.Err()
 	}
 
+	fmt.Printf("Sending nil to doneCh for path: %s\n", actionPlanWithPath.Path)
 	doneCh <- nil
 	return nil
 }

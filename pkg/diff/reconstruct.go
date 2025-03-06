@@ -3,7 +3,6 @@ package diff
 import (
 	"fmt"
 	"regexp"
-	"strconv"
 	"strings"
 )
 
@@ -24,25 +23,30 @@ func NewDiffReconstructor(originalContent, diffContent string) *DiffReconstructo
 func (d *DiffReconstructor) ReconstructDiff() (string, error) {
 	lines := strings.Split(strings.TrimSpace(d.diffContent), "\n")
 	if len(lines) < 4 {
-		return "", fmt.Errorf("invalid diff: too few lines")
+		return "", fmt.Errorf("invalid diff: too few lines (got %d, need at least 4)", len(lines))
 	}
 
 	// Keep the header lines
 	cleanedLines := make([]string, 0, len(lines))
+
+	// Validate and clean up file headers
+	if !strings.HasPrefix(lines[0], "--- ") {
+		return "", fmt.Errorf("invalid diff: first line must start with '--- ' (got %q)", lines[0])
+	}
+	if !strings.HasPrefix(lines[1], "+++ ") {
+		return "", fmt.Errorf("invalid diff: second line must start with '+++ ' (got %q)", lines[1])
+	}
+
 	cleanedLines = append(cleanedLines, lines[0], lines[1])
 
 	// Keep track of line counts for reconstructing line numbers
 	originalLineCount := 0
 	modifiedLineCount := 0
 
-	// First, validate the file headers
-	if !strings.HasPrefix(lines[0], "--- ") || !strings.HasPrefix(lines[1], "+++ ") {
-		return "", fmt.Errorf("invalid diff: missing file headers")
-	}
-
 	var currentHunkLines []string
 	for i := 2; i < len(lines); i++ {
 		line := lines[i]
+
 		if strings.HasPrefix(line, "@@") {
 			// If we have a previous hunk, add it to cleanedLines
 			if len(currentHunkLines) > 0 {
@@ -52,7 +56,8 @@ func (d *DiffReconstructor) ReconstructDiff() (string, error) {
 
 			hunk, nextLines, err := d.reconstructHunkHeader(line, lines[i:], &originalLineCount, &modifiedLineCount)
 			if err != nil {
-				return "", fmt.Errorf("failed to reconstruct hunk: %w", err)
+				// Add more context to the error
+				return "", fmt.Errorf("failed to reconstruct hunk at line %d: %w (line: %q)", i, err, line)
 			}
 			currentHunkLines = append(currentHunkLines, hunk)
 			currentHunkLines = append(currentHunkLines, nextLines...)
@@ -69,14 +74,28 @@ func (d *DiffReconstructor) ReconstructDiff() (string, error) {
 		cleanedLines = append(cleanedLines, currentHunkLines...)
 	}
 
-	return strings.Join(cleanedLines, "\n") + "\n", nil
+	result := strings.Join(cleanedLines, "\n") + "\n"
+
+	// Validate the final diff
+	if !strings.HasPrefix(result, "--- ") || !strings.Contains(result, "\n+++ ") {
+		return "", fmt.Errorf("invalid final diff format: missing file headers")
+	}
+
+	return result, nil
 }
 
 func (d *DiffReconstructor) reconstructHunkHeader(hunkHeader string, remainingLines []string, originalLineCount, modifiedLineCount *int) (string, []string, error) {
-	// Parse the original line numbers from the hunk header
-	originalMatch := regexp.MustCompile(`@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$`).FindStringSubmatch(hunkHeader)
+	// Update regex to make line numbers optional
+	originalMatch := regexp.MustCompile(`@@ -(\d+)?(?:,(\d+))? \+(\d+)?(?:,(\d+))? @@(.*)$`).FindStringSubmatch(hunkHeader)
 	if originalMatch == nil {
-		return "", nil, fmt.Errorf("invalid hunk header format")
+		// Add more detailed error message
+		return "", nil, fmt.Errorf("invalid hunk header format: %q", hunkHeader)
+	}
+
+	// Default to line 1 if no line numbers provided
+	startLine := "1"
+	if originalMatch[1] != "" {
+		startLine = originalMatch[1]
 	}
 
 	// Extract context preserving whitespace
@@ -93,6 +112,7 @@ func (d *DiffReconstructor) reconstructHunkHeader(hunkHeader string, remainingLi
 		if strings.HasPrefix(line, "@@") {
 			break
 		}
+
 		hunkLines = append(hunkLines, line)
 		if strings.HasPrefix(line, "-") {
 			sectionOriginalLines++
@@ -104,19 +124,16 @@ func (d *DiffReconstructor) reconstructHunkHeader(hunkHeader string, remainingLi
 		}
 	}
 
-	// If we have original line counts in the hunk header, use them
-	if originalMatch[2] != "" {
-		sectionOriginalLines, _ = strconv.Atoi(originalMatch[2])
-	}
-	if originalMatch[4] != "" {
-		sectionModifiedLines, _ = strconv.Atoi(originalMatch[4])
+	// If we have no changes, this is probably an invalid hunk
+	if sectionOriginalLines == 0 && sectionModifiedLines == 0 {
+		return "", nil, fmt.Errorf("hunk contains no changes")
 	}
 
 	// Construct the new hunk header with line numbers
 	newHunk := fmt.Sprintf("@@ -%s,%d +%s,%d @@%s",
-		originalMatch[1],
+		startLine,
 		sectionOriginalLines,
-		originalMatch[3],
+		startLine,
 		sectionModifiedLines,
 		context)
 
