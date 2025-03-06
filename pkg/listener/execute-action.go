@@ -155,7 +155,6 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 			}
 			done = true
 		case stream := <-streamCh:
-			fmt.Printf("Received content from streamCh for path %s (len: %d)\n", p.Path, len(stream))
 			finalContent = stream
 
 			// send the final content to the realtime server

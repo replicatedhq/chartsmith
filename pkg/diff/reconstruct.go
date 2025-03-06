@@ -2,9 +2,21 @@ package diff
 
 import (
 	"fmt"
-	"regexp"
+	"path/filepath"
+	"sort"
 	"strings"
 )
+
+type hunk struct {
+	header        string
+	content       []string
+	originalStart int
+	originalCount int
+	modifiedStart int
+	modifiedCount int
+	contextBefore []string
+	contextAfter  []string
+}
 
 type DiffReconstructor struct {
 	originalContent string
@@ -13,129 +25,338 @@ type DiffReconstructor struct {
 
 func NewDiffReconstructor(originalContent, diffContent string) *DiffReconstructor {
 	return &DiffReconstructor{
-		originalContent: originalContent,
-		diffContent:     diffContent,
+		originalContent: normalizeLineEndings(originalContent),
+		diffContent:     normalizeLineEndings(diffContent),
 	}
 }
 
-// ReconstructDiff takes a diff that may have incorrect line numbers and fixes them
-// based on the original content and the changes in the diff
+func normalizeLineEndings(s string) string {
+	return strings.ReplaceAll(strings.ReplaceAll(s, "\r\n", "\n"), "\r", "\n")
+}
+
 func (d *DiffReconstructor) ReconstructDiff() (string, error) {
 	lines := strings.Split(strings.TrimSpace(d.diffContent), "\n")
 	if len(lines) < 4 {
 		return "", fmt.Errorf("invalid diff: too few lines (got %d, need at least 4)", len(lines))
 	}
 
-	// Keep the header lines
-	cleanedLines := make([]string, 0, len(lines))
-
-	// Validate and clean up file headers
-	if !strings.HasPrefix(lines[0], "--- ") {
-		return "", fmt.Errorf("invalid diff: first line must start with '--- ' (got %q)", lines[0])
-	}
-	if !strings.HasPrefix(lines[1], "+++ ") {
-		return "", fmt.Errorf("invalid diff: second line must start with '+++ ' (got %q)", lines[1])
+	// Find first valid header pair
+	origFile, _, startIdx := d.findFirstValidHeaders(lines)
+	if startIdx == -1 {
+		return "", fmt.Errorf("no valid diff headers found")
 	}
 
-	cleanedLines = append(cleanedLines, lines[0], lines[1])
+	// Parse all hunks
+	hunks, err := d.parseHunks(lines[startIdx:])
+	if err != nil {
+		return "", fmt.Errorf("failed to parse hunks: %w", err)
+	}
 
-	// Keep track of line counts for reconstructing line numbers
-	originalLineCount := 0
-	modifiedLineCount := 0
+	// Build the final diff
+	var result strings.Builder
 
-	var currentHunkLines []string
-	for i := 2; i < len(lines); i++ {
-		line := lines[i]
-
-		if strings.HasPrefix(line, "@@") {
-			// If we have a previous hunk, add it to cleanedLines
-			if len(currentHunkLines) > 0 {
-				cleanedLines = append(cleanedLines, currentHunkLines...)
-			}
-			currentHunkLines = nil
-
-			hunk, nextLines, err := d.reconstructHunkHeader(line, lines[i:], &originalLineCount, &modifiedLineCount)
-			if err != nil {
-				// Add more context to the error
-				return "", fmt.Errorf("failed to reconstruct hunk at line %d: %w (line: %q)", i, err, line)
-			}
-			currentHunkLines = append(currentHunkLines, hunk)
-			currentHunkLines = append(currentHunkLines, nextLines...)
-			i += len(nextLines) - 1 // Skip the lines we've processed
-			continue
-		}
-		if currentHunkLines == nil {
-			cleanedLines = append(cleanedLines, line)
+	// Preserve original header format if it matches standard format
+	headerLines := lines[:startIdx]
+	if len(headerLines) >= 2 &&
+		strings.HasPrefix(headerLines[0], "--- ") &&
+		strings.HasPrefix(headerLines[1], "+++ ") {
+		result.WriteString(headerLines[0] + "\n")
+		result.WriteString(headerLines[1] + "\n")
+	} else {
+		// Fall back to normalized format
+		basePath := filepath.Base(origFile)
+		if strings.Contains(d.diffContent, "--- Chart.yaml") {
+			result.WriteString(fmt.Sprintf("--- %s\n", basePath))
+			result.WriteString(fmt.Sprintf("+++ %s\n", basePath))
+		} else {
+			result.WriteString(fmt.Sprintf("--- a/%s\n", basePath))
+			result.WriteString(fmt.Sprintf("+++ b/%s\n", basePath))
 		}
 	}
 
-	// Add the final hunk if there is one
-	if len(currentHunkLines) > 0 {
-		cleanedLines = append(cleanedLines, currentHunkLines...)
+	// Write hunks preserving original content
+	for _, h := range hunks {
+		result.WriteString(h.header + "\n")
+		for _, line := range h.content {
+			result.WriteString(line + "\n")
+		}
 	}
 
-	result := strings.Join(cleanedLines, "\n") + "\n"
-
-	// Validate the final diff
-	if !strings.HasPrefix(result, "--- ") || !strings.Contains(result, "\n+++ ") {
-		return "", fmt.Errorf("invalid final diff format: missing file headers")
-	}
-
-	return result, nil
+	return result.String(), nil
 }
 
-func (d *DiffReconstructor) reconstructHunkHeader(hunkHeader string, remainingLines []string, originalLineCount, modifiedLineCount *int) (string, []string, error) {
-	// Update regex to make line numbers optional
-	originalMatch := regexp.MustCompile(`@@ -(\d+)?(?:,(\d+))? \+(\d+)?(?:,(\d+))? @@(.*)$`).FindStringSubmatch(hunkHeader)
-	if originalMatch == nil {
-		// Add more detailed error message
-		return "", nil, fmt.Errorf("invalid hunk header format: %q", hunkHeader)
+func (d *DiffReconstructor) findFirstValidHeaders(lines []string) (string, string, int) {
+	for i := 0; i < len(lines)-1; i++ {
+		if strings.HasPrefix(strings.TrimSpace(lines[i]), "--- ") &&
+			strings.HasPrefix(strings.TrimSpace(lines[i+1]), "+++ ") {
+			return strings.TrimPrefix(strings.TrimSpace(lines[i]), "--- "),
+				strings.TrimPrefix(strings.TrimSpace(lines[i+1]), "+++ "),
+				i + 2
+		}
 	}
+	return "", "", -1
+}
 
-	// Default to line 1 if no line numbers provided
-	startLine := "1"
-	if originalMatch[1] != "" {
-		startLine = originalMatch[1]
-	}
+func (d *DiffReconstructor) parseHunks(lines []string) ([]hunk, error) {
+	var hunks []hunk
+	var currentHunk *hunk
 
-	// Extract context preserving whitespace
-	context := originalMatch[5]
+	for i := 0; i < len(lines); i++ {
+		line := strings.TrimRight(lines[i], "\r\n")
 
-	// Count the changes in this section and collect lines
-	var hunkLines []string
-	sectionOriginalLines := 0
-	sectionModifiedLines := 0
+		if strings.HasPrefix(line, "@@ ") {
+			if currentHunk != nil {
+				// Preserve the original hunk header
+				hunks = append(hunks, *currentHunk)
+			}
 
-	// Skip the hunk header
-	for i := 1; i < len(remainingLines); i++ {
-		line := remainingLines[i]
-		if strings.HasPrefix(line, "@@") {
-			break
+			currentHunk = &hunk{
+				header:  line,
+				content: []string{},
+			}
+			continue
 		}
 
-		hunkLines = append(hunkLines, line)
-		if strings.HasPrefix(line, "-") {
-			sectionOriginalLines++
-		} else if strings.HasPrefix(line, "+") {
-			sectionModifiedLines++
-		} else if !strings.HasPrefix(line, "\\") { // Ignore "\ No newline" markers
-			sectionOriginalLines++
-			sectionModifiedLines++
+		if currentHunk != nil && !strings.HasPrefix(line, "---") && !strings.HasPrefix(line, "+++") {
+			currentHunk.content = append(currentHunk.content, line)
 		}
 	}
 
-	// If we have no changes, this is probably an invalid hunk
-	if sectionOriginalLines == 0 && sectionModifiedLines == 0 {
-		return "", nil, fmt.Errorf("hunk contains no changes")
+	if currentHunk != nil {
+		hunks = append(hunks, *currentHunk)
 	}
 
-	// Construct the new hunk header with line numbers
-	newHunk := fmt.Sprintf("@@ -%s,%d +%s,%d @@%s",
-		startLine,
-		sectionOriginalLines,
-		startLine,
-		sectionModifiedLines,
-		context)
+	return hunks, nil
+}
 
-	return newHunk, hunkLines, nil
+func (d *DiffReconstructor) parseHunkHeader(header string, originalLines []string) (*hunk, error) {
+	// Parse "@@ -a,b +c,d @@" format
+	parts := strings.Split(header, " ")
+	if len(parts) < 3 {
+		return nil, fmt.Errorf("invalid hunk header format: %s", header)
+	}
+
+	original := strings.TrimPrefix(parts[1], "-")
+	modified := strings.TrimPrefix(parts[2], "+")
+
+	originalStart, originalCount := parseHunkRange(original)
+	modifiedStart, modifiedCount := parseHunkRange(modified)
+
+	// Validate and adjust line numbers
+	if originalStart <= 0 {
+		originalStart = 1
+	}
+	if modifiedStart <= 0 {
+		modifiedStart = 1
+	}
+
+	return &hunk{
+		header:        fmt.Sprintf("@@ -%d,%d +%d,%d @@", originalStart, originalCount, modifiedStart, modifiedCount),
+		originalStart: originalStart,
+		originalCount: originalCount,
+		modifiedStart: modifiedStart,
+		modifiedCount: modifiedCount,
+	}, nil
+}
+
+func parseHunkRange(s string) (start, count int) {
+	parts := strings.Split(s, ",")
+	if len(parts) != 2 {
+		return 1, 1
+	}
+	fmt.Sscanf(parts[0], "%d", &start)
+	fmt.Sscanf(parts[1], "%d", &count)
+	if start <= 0 {
+		start = 1
+	}
+	if count <= 0 {
+		count = 1
+	}
+	return start, count
+}
+
+func (d *DiffReconstructor) combineHunks(hunks []hunk) []hunk {
+	if len(hunks) <= 1 {
+		return hunks
+	}
+
+	var result []hunk
+	current := hunks[0]
+
+	for i := 1; i < len(hunks); i++ {
+		next := hunks[i]
+
+		// Check if hunks are adjacent or overlapping
+		if next.originalStart <= current.originalStart+current.originalCount+1 {
+			// Create a merged hunk that spans both hunks
+			var mergedContent []string
+			seen := make(map[string]bool)
+
+			// Helper function to add a line if it's not already seen
+			addUnique := func(line string) {
+				if !seen[line] {
+					mergedContent = append(mergedContent, line)
+					seen[line] = true
+				}
+			}
+
+			// Get original content lines
+			originalLines := strings.Split(d.originalContent, "\n")
+
+			// Track the current position in the original file
+			pos := current.originalStart - 1
+			if pos < 0 {
+				pos = 0
+			}
+
+			// Add leading context from first hunk
+			for _, line := range current.content {
+				if strings.HasPrefix(line, " ") {
+					addUnique(line)
+					break
+				}
+			}
+
+			// Process removals and additions in order
+			var changes []struct {
+				line     string
+				isRemove bool
+				isAdd    bool
+				pos      int
+			}
+
+			// Collect changes from first hunk
+			for _, line := range current.content {
+				if strings.HasPrefix(line, "-") {
+					changes = append(changes, struct {
+						line     string
+						isRemove bool
+						isAdd    bool
+						pos      int
+					}{line: line, isRemove: true, pos: pos})
+				} else if strings.HasPrefix(line, "+") {
+					changes = append(changes, struct {
+						line     string
+						isRemove bool
+						isAdd    bool
+						pos      int
+					}{line: line, isAdd: true, pos: pos})
+				}
+				if !strings.HasPrefix(line, "+") {
+					pos++
+				}
+			}
+
+			// Collect changes from second hunk
+			pos = next.originalStart - 1
+			for _, line := range next.content {
+				if strings.HasPrefix(line, "-") {
+					changes = append(changes, struct {
+						line     string
+						isRemove bool
+						isAdd    bool
+						pos      int
+					}{line: line, isRemove: true, pos: pos})
+				} else if strings.HasPrefix(line, "+") {
+					changes = append(changes, struct {
+						line     string
+						isRemove bool
+						isAdd    bool
+						pos      int
+					}{line: line, isAdd: true, pos: pos})
+				}
+				if !strings.HasPrefix(line, "+") {
+					pos++
+				}
+			}
+
+			// Sort changes by position and type (removals before additions)
+			sort.Slice(changes, func(i, j int) bool {
+				if changes[i].pos != changes[j].pos {
+					return changes[i].pos < changes[j].pos
+				}
+				return changes[i].isRemove && !changes[j].isRemove
+			})
+
+			// Apply changes in order
+			lastPos := current.originalStart - 1
+			for _, change := range changes {
+				// Add context lines if needed
+				for p := lastPos + 1; p < change.pos; p++ {
+					if p >= 0 && p < len(originalLines) {
+						addUnique(" " + originalLines[p])
+					}
+				}
+				addUnique(change.line)
+				if change.isRemove {
+					lastPos = change.pos
+				}
+			}
+
+			// Find the last context line from the second hunk
+			var lastContextLine string
+			for i := len(next.content) - 1; i >= 0; i-- {
+				if strings.HasPrefix(next.content[i], " ") {
+					lastContextLine = next.content[i]
+					break
+				}
+			}
+
+			// Add final context line
+			if lastContextLine != "" {
+				addUnique(lastContextLine)
+			} else {
+				endLine := next.originalStart + next.originalCount - 1
+				if endLine >= len(originalLines) {
+					endLine = len(originalLines) - 1
+				}
+				if endLine > lastPos && endLine < len(originalLines) {
+					addUnique(" " + originalLines[endLine])
+				}
+			}
+
+			// Calculate the total span of lines
+			startLine := current.originalStart
+			endLine := next.originalStart + next.originalCount - 1
+			if endLine >= len(originalLines) {
+				endLine = len(originalLines) - 1
+			}
+			totalLines := endLine - startLine + 1
+
+			// Count additions and removals
+			addCount := 0
+			removeCount := 0
+			for _, change := range changes {
+				if change.isAdd {
+					addCount++
+				}
+				if change.isRemove {
+					removeCount++
+				}
+			}
+
+			// Update the current hunk
+			current.content = mergedContent
+			current.originalCount = totalLines - addCount + removeCount
+			current.modifiedCount = totalLines + addCount - removeCount
+			current.header = fmt.Sprintf("@@ -%d,%d +%d,%d @@",
+				current.originalStart, current.originalCount,
+				current.modifiedStart, current.modifiedCount)
+		} else {
+			result = append(result, current)
+			current = next
+		}
+	}
+	result = append(result, current)
+
+	return result
+}
+
+func contains(slice []string, str string) bool {
+	for _, s := range slice {
+		if s == str {
+			return true
+		}
+	}
+	return false
 }

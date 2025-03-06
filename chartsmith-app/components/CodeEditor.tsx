@@ -5,8 +5,8 @@ import { useAtom } from "jotai";
 import { Check, X, ChevronUp, ChevronDown, CheckCheck, ChevronRight } from "lucide-react";
 
 // atoms
-import { selectedFileAtom, currentDiffIndexAtom, updateCurrentDiffIndexAtom } from "@/atoms/editor";
-import { allFilesBeforeApplyingPendingPatchesAtom, allFilesWithPendingPatchesAtom, workspaceAtom } from "@/atoms/workspace";
+import { selectedFileAtom, currentDiffIndexAtom, updateCurrentDiffIndexAtom, updateFileContentAtom } from "@/atoms/editor";
+import { allFilesBeforeApplyingPendingPatchesAtom, allFilesWithPendingPatchesAtom, workspaceAtom, addFileToWorkspaceAtom } from "@/atoms/workspace";
 
 // types
 import type { editor } from "monaco-editor";
@@ -31,6 +31,46 @@ interface CodeEditorProps {
   onCommandK?: () => void;
 }
 
+function parseDiff(originalContent: string, diffContent: string): string {
+  const lines = diffContent.split('\n');
+  const originalLines = originalContent.split('\n');
+  const modifiedLines = [...originalLines]; // Start with original content
+  let currentLine = 0;
+
+  // Find first hunk
+  let i = 0;
+  while (i < lines.length) {
+    if (lines[i].startsWith('@@')) {
+      const match = lines[i].match(/@@ -(\d+),\d+ \+(\d+),\d+ @@/);
+      if (match) {
+        currentLine = parseInt(match[2]) - 1; // Use the target line number
+      }
+      i++;
+      continue;
+    }
+
+    if (lines[i].startsWith('---') || lines[i].startsWith('+++')) {
+      i++;
+      continue;
+    }
+
+    if (lines[i].startsWith('+')) {
+      // Insert new line
+      modifiedLines.splice(currentLine, 0, lines[i].slice(1));
+      currentLine++;
+    } else if (lines[i].startsWith('-')) {
+      // Remove line
+      modifiedLines.splice(currentLine, 1);
+    } else {
+      // Context line - move to next line
+      currentLine++;
+    }
+    i++;
+  }
+
+  return modifiedLines.join('\n');
+}
+
 export function CodeEditor({
   session,
   theme = "dark",
@@ -39,7 +79,8 @@ export function CodeEditor({
   onCommandK,
 }: CodeEditorProps) {
   const [selectedFile, setSelectedFile] = useAtom(selectedFileAtom);
-  const [workspace] = useAtom(workspaceAtom);
+  const [workspace, setWorkspace] = useAtom(workspaceAtom);
+  const [, addFileToWorkspace] = useAtom(addFileToWorkspaceAtom);
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const diffEditorRef = useRef<editor.IStandaloneDiffEditor | null>(null);
   const { handleEditorInit } = useMonacoEditor(selectedFile);
@@ -55,6 +96,8 @@ export function CodeEditor({
 
   const [currentDiffIndex, setCurrentDiffIndex] = useAtom(currentDiffIndexAtom);
   const [, updateCurrentDiffIndex] = useAtom(updateCurrentDiffIndexAtom);
+
+  const [, updateFileContent] = useAtom(updateFileContentAtom);
 
   useEffect(() => {
     if (selectedFile && onChange) {
@@ -209,21 +252,57 @@ export function CodeEditor({
   const handleAcceptThisFile = async () => {
     if (selectedFile?.pendingPatch) {
       const updatedFile = await acceptPatchAction(session, selectedFile.id, workspace.currentRevisionNumber);
-      onChange?.(updatedFile.content);
-      onFileUpdate?.(updatedFile);
+
+      // Update editor state
+      updateFileContent(updatedFile);
+
+      // Update workspace state
+      const updatedWorkspace = {
+        ...workspace,
+        files: workspace.files.map(f =>
+          f.id === updatedFile.id ? updatedFile : f
+        ),
+        charts: workspace.charts.map(chart => ({
+          ...chart,
+          files: chart.files.map(f =>
+            f.id === updatedFile.id ? updatedFile : f
+          )
+        }))
+      };
+      setWorkspace(updatedWorkspace);
+
       setAcceptDropdownOpen(false);
     }
   };
 
   const handleAcceptAllFiles = async () => {
     const updatedFiles = await acceptAllPatchesAction(session, workspace.id, workspace.currentRevisionNumber);
+
+    // Update editor state for currently selected file if it was updated
     if (selectedFile && updatedFiles.some(f => f.id === selectedFile.id)) {
       const updatedFile = updatedFiles.find(f => f.id === selectedFile.id);
       if (updatedFile) {
-        onChange?.(updatedFile.content);
-        onFileUpdate?.(updatedFile);
+        updateFileContent(updatedFile);
       }
     }
+
+    // Update workspace state
+    const updatedWorkspace = {
+      ...workspace,
+      files: workspace.files.map(f => {
+        const updatedFile = updatedFiles.find(uf => uf.id === f.id);
+        return updatedFile || f;
+      }),
+      charts: workspace.charts.map(chart => ({
+        ...chart,
+        files: chart.files.map(f => {
+          const updatedFile = updatedFiles.find(uf => uf.id === f.id);
+          return updatedFile || f;
+        })
+      }))
+    };
+    setWorkspace(updatedWorkspace);
+
     setAcceptDropdownOpen(false);
   };
 
@@ -417,161 +496,98 @@ export function CodeEditor({
     </div>
   );
 
+  const handleNewFile = async (filePath: string, content: string) => {
+    if (!workspace) return;
+
+    // Create a new WorkspaceFile object
+    const newFile = {
+      id: `${workspace.id}:${filePath}`, // Format matches backend ID generation
+      workspaceId: workspace.id,
+      filePath: filePath,
+      content: content,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      pendingPatch: undefined,
+      isDeleted: false
+    };
+
+    // Add the new file to workspace state
+    await addFileToWorkspace(newFile);
+  };
+
+  const getLanguage = (filePath: string) => {
+    const ext = filePath.split('.').pop()?.toLowerCase();
+    switch (ext) {
+      case 'yaml':
+      case 'yml':
+        return 'yaml';
+      case 'ts':
+      case 'tsx':
+        return 'typescript';
+      case 'js':
+      case 'jsx':
+        return 'javascript';
+      case 'txt':
+        return 'plaintext';
+      default:
+        return 'plaintext';
+    }
+  };
+
+  if (selectedFile?.pendingPatch) {
+    const modified = parseDiff(selectedFile.content, selectedFile.pendingPatch);
+
+    return (
+      <div className="flex-1 h-full flex flex-col">
+        {showDiffHeader && renderDiffHeader()}
+        <div className="flex-1">
+          <DiffEditor
+            height="100%"
+            language={getLanguage(selectedFile.filePath)}
+            original={selectedFile.content}
+            modified={modified}
+            theme={theme === "light" ? "vs" : "vs-dark"}
+            onMount={handleDiffEditorMount}
+            options={{
+              ...editorOptions,
+              renderSideBySide: false,
+              diffWordWrap: 'off',
+              originalEditable: false,
+              renderOverviewRuler: false,
+              ignoreTrimWhitespace: false,
+              renderWhitespace: 'none',
+              renderLineHighlight: 'none',
+              quickSuggestions: false,
+              folding: false,
+              lineNumbers: 'on',
+              scrollBeyondLastLine: false,
+              minimap: { enabled: false },
+            }}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 h-full flex flex-col">
       {showDiffHeader && renderDiffHeader()}
-      {selectedFile?.pendingPatch ? (() => {
-        const lines = selectedFile.pendingPatch.split('\n');
-        const original = value || "";
-        const originalLines = original.split('\n');
-        const modifiedLines = [...originalLines];
-
-        let currentHunk = null;
-        let seenFileHeader = false;
-
-        // Helper function to find the actual line number where content matches
-        const findMatchingLine = (startLine: number, contextLines: string[]): number => {
-          // Look for the context lines in the original content
-          for (let i = startLine; i < originalLines.length - contextLines.length + 1; i++) {
-            let matches = true;
-            for (let j = 0; j < contextLines.length; j++) {
-              const contextLine = contextLines[j].startsWith(' ') ? contextLines[j].substring(1) : contextLines[j];
-              if (originalLines[i + j] !== contextLine) {
-                matches = false;
-                break;
-              }
-            }
-            if (matches) {
-              return i;
-            }
-          }
-          return startLine;
-        };
-
-        for (let i = 0; i < lines.length; i++) {
-          const line = lines[i];
-
-          // Skip duplicate file headers
-          if ((line.startsWith('---') || line.startsWith('+++')) && seenFileHeader) {
-            // Skip both header lines
-            i++;
-            continue;
-          }
-
-          // Track first file header
-          if (line.startsWith('---')) {
-            seenFileHeader = true;
-            continue;
-          }
-
-          // Skip +++ line after first file header
-          if (line.startsWith('+++')) {
-            continue;
-          }
-
-          // Handle hunk headers
-          if (line.startsWith('@@ ')) {
-            const match = line.match(/@@ -(\d+),?(\d+)? \+(\d+),?(\d+)? @@/);
-            if (match) {
-              // Look ahead to get context lines
-              const contextLines = [];
-              let j = i + 1;
-              while (j < lines.length && !lines[j].startsWith('@@')) {
-                if (!lines[j].startsWith('-') && !lines[j].startsWith('+') && !lines[j].startsWith('\\')) {
-                  contextLines.push(lines[j]);
-                }
-                if (contextLines.length >= 3) break; // Get up to 3 context lines
-                j++;
-              }
-
-              const suggestedLine = parseInt(match[1]) - 1; // Convert to 0-based
-              const actualLine = findMatchingLine(Math.max(0, suggestedLine - 10), contextLines);
-
-              currentHunk = {
-                originalStart: parseInt(match[1]) - 1,
-                originalCount: match[2] ? parseInt(match[2]) : 1,
-                modifiedStart: parseInt(match[3]) - 1,
-                modifiedCount: match[4] ? parseInt(match[4]) : 1,
-                currentLine: actualLine
-              };
-            }
-            continue;
-          }
-
-          if (!currentHunk) continue;
-
-          if (line.startsWith('-')) {
-            // Remove line from modified content at the current position
-            modifiedLines.splice(currentHunk.currentLine, 1);
-          } else if (line.startsWith('+')) {
-            // Add new line at the current position
-            modifiedLines.splice(currentHunk.currentLine, 0, line.substring(1));
-            currentHunk.currentLine++;
-          } else if (!line.startsWith('\\')) { // Skip "\ No newline" markers
-            // Context line - move to next line
-            currentHunk.currentLine++;
-          }
-        }
-
-        // Handle case where patch adds content to end of file
-        if (currentHunk && currentHunk.currentLine >= modifiedLines.length) {
-          // If we're past the end of the file, append remaining added lines
-          for (let i = currentHunk.currentLine; i < lines.length; i++) {
-            const line = lines[i];
-            if (line.startsWith('+')) {
-              modifiedLines.push(line.substring(1));
-            }
-          }
-        }
-
-        // Filter out any undefined lines that might have been created
-        const cleanModifiedLines = modifiedLines.filter(line => line !== undefined);
-
-        return (
-          <div className="flex-1">
-            <DiffEditor
-              height="100%"
-              language="yaml"
-              original={original}
-              modified={cleanModifiedLines.join('\n')}
-              theme={theme === "light" ? "vs" : "vs-dark"}
-              onMount={handleDiffEditorMount}
-              options={{
-                ...editorOptions,
-                renderSideBySide: false,
-                diffWordWrap: 'off',
-                originalEditable: false,
-                renderOverviewRuler: false,
-                ignoreTrimWhitespace: false,
-                renderWhitespace: 'none',
-                renderLineHighlight: 'none',
-                quickSuggestions: false,
-                folding: false,
-                lineNumbers: 'on',
-                scrollBeyondLastLine: false,
-                minimap: { enabled: false },
-              }}
-            />
-          </div>
-        );
-      })() : (
-        <div className="flex-1 h-full">
-          <Editor
-            height="100%"
-            defaultLanguage="yaml"
-            language="yaml"
-            value={selectedFile?.content ?? value ?? ""}
-            onChange={onChange}
-            theme={theme === "light" ? "vs" : "vs-dark"}
-            options={{
-              ...editorOptions,
-              readOnly: !onChange,
-            }}
-            onMount={handleEditorMount}
-            key={`${selectedFile?.id}-${selectedFile?.filePath}-${theme}`}
-          />
-        </div>
-      )}
+      <div className="flex-1 h-full">
+        <Editor
+          height="100%"
+          defaultLanguage={getLanguage(selectedFile?.filePath || '')}
+          language={getLanguage(selectedFile?.filePath || '')}
+          value={selectedFile?.content ?? value ?? ""}
+          onChange={onChange}
+          theme={theme === "light" ? "vs" : "vs-dark"}
+          options={{
+            ...editorOptions,
+            readOnly: !onChange,
+          }}
+          onMount={handleEditorMount}
+          key={`${selectedFile?.id}-${selectedFile?.filePath}-${theme}`}
+        />
+      </div>
     </div>
   );
 }
