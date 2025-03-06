@@ -6,7 +6,7 @@ import { Check, X, ChevronUp, ChevronDown, CheckCheck, ChevronRight } from "luci
 
 // atoms
 import { selectedFileAtom, currentDiffIndexAtom, updateCurrentDiffIndexAtom } from "@/atoms/editor";
-import { allFilesBeforeApplyingPendingPatchesAtom, allFilesWithPendingPatchesAtom, workspaceAtom } from "@/atoms/workspace";
+import { allFilesBeforeApplyingPendingPatchesAtom, allFilesWithPendingPatchesAtom, workspaceAtom, addFileToWorkspaceAtom } from "@/atoms/workspace";
 
 // types
 import type { editor } from "monaco-editor";
@@ -40,6 +40,7 @@ export function CodeEditor({
 }: CodeEditorProps) {
   const [selectedFile, setSelectedFile] = useAtom(selectedFileAtom);
   const [workspace] = useAtom(workspaceAtom);
+  const [, addFileToWorkspace] = useAtom(addFileToWorkspaceAtom);
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const diffEditorRef = useRef<editor.IStandaloneDiffEditor | null>(null);
   const { handleEditorInit } = useMonacoEditor(selectedFile);
@@ -417,123 +418,55 @@ export function CodeEditor({
     </div>
   );
 
+  const handleNewFile = async (filePath: string, content: string) => {
+    if (!workspace) return;
+
+    // Create a new WorkspaceFile object
+    const newFile = {
+      id: `${workspace.id}:${filePath}`, // Format matches backend ID generation
+      workspaceId: workspace.id,
+      filePath: filePath,
+      content: content,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      pendingPatch: undefined,
+      isDeleted: false
+    };
+
+    // Add the new file to workspace state
+    await addFileToWorkspace(newFile);
+  };
+
+  const getLanguage = (filePath: string) => {
+    const ext = filePath.split('.').pop()?.toLowerCase();
+    switch (ext) {
+      case 'yaml':
+      case 'yml':
+        return 'yaml';
+      case 'ts':
+      case 'tsx':
+        return 'typescript';
+      case 'js':
+      case 'jsx':
+        return 'javascript';
+      case 'txt':
+        return 'plaintext';
+      default:
+        return 'plaintext';
+    }
+  };
+
   return (
     <div className="flex-1 h-full flex flex-col">
       {showDiffHeader && renderDiffHeader()}
       {selectedFile?.pendingPatch ? (() => {
-        const lines = selectedFile.pendingPatch.split('\n');
-        const original = value || "";
-        const originalLines = original.split('\n');
-        const modifiedLines = [...originalLines];
-
-        let currentHunk = null;
-        let seenFileHeader = false;
-
-        // Helper function to find the actual line number where content matches
-        const findMatchingLine = (startLine: number, contextLines: string[]): number => {
-          // Look for the context lines in the original content
-          for (let i = startLine; i < originalLines.length - contextLines.length + 1; i++) {
-            let matches = true;
-            for (let j = 0; j < contextLines.length; j++) {
-              const contextLine = contextLines[j].startsWith(' ') ? contextLines[j].substring(1) : contextLines[j];
-              if (originalLines[i + j] !== contextLine) {
-                matches = false;
-                break;
-              }
-            }
-            if (matches) {
-              return i;
-            }
-          }
-          return startLine;
-        };
-
-        for (let i = 0; i < lines.length; i++) {
-          const line = lines[i];
-
-          // Skip duplicate file headers
-          if ((line.startsWith('---') || line.startsWith('+++')) && seenFileHeader) {
-            // Skip both header lines
-            i++;
-            continue;
-          }
-
-          // Track first file header
-          if (line.startsWith('---')) {
-            seenFileHeader = true;
-            continue;
-          }
-
-          // Skip +++ line after first file header
-          if (line.startsWith('+++')) {
-            continue;
-          }
-
-          // Handle hunk headers
-          if (line.startsWith('@@ ')) {
-            const match = line.match(/@@ -(\d+),?(\d+)? \+(\d+),?(\d+)? @@/);
-            if (match) {
-              // Look ahead to get context lines
-              const contextLines = [];
-              let j = i + 1;
-              while (j < lines.length && !lines[j].startsWith('@@')) {
-                if (!lines[j].startsWith('-') && !lines[j].startsWith('+') && !lines[j].startsWith('\\')) {
-                  contextLines.push(lines[j]);
-                }
-                if (contextLines.length >= 3) break; // Get up to 3 context lines
-                j++;
-              }
-
-              const suggestedLine = parseInt(match[1]) - 1; // Convert to 0-based
-              const actualLine = findMatchingLine(Math.max(0, suggestedLine - 10), contextLines);
-
-              currentHunk = {
-                originalStart: parseInt(match[1]) - 1,
-                originalCount: match[2] ? parseInt(match[2]) : 1,
-                modifiedStart: parseInt(match[3]) - 1,
-                modifiedCount: match[4] ? parseInt(match[4]) : 1,
-                currentLine: actualLine
-              };
-            }
-            continue;
-          }
-
-          if (!currentHunk) continue;
-
-          if (line.startsWith('-')) {
-            // Remove line from modified content at the current position
-            modifiedLines.splice(currentHunk.currentLine, 1);
-          } else if (line.startsWith('+')) {
-            // Add new line at the current position
-            modifiedLines.splice(currentHunk.currentLine, 0, line.substring(1));
-            currentHunk.currentLine++;
-          } else if (!line.startsWith('\\')) { // Skip "\ No newline" markers
-            // Context line - move to next line
-            currentHunk.currentLine++;
-          }
-        }
-
-        // Handle case where patch adds content to end of file
-        if (currentHunk && currentHunk.currentLine >= modifiedLines.length) {
-          // If we're past the end of the file, append remaining added lines
-          for (let i = currentHunk.currentLine; i < lines.length; i++) {
-            const line = lines[i];
-            if (line.startsWith('+')) {
-              modifiedLines.push(line.substring(1));
-            }
-          }
-        }
-
-        // Filter out any undefined lines that might have been created
-        const cleanModifiedLines = modifiedLines.filter(line => line !== undefined);
-
         return (
           <div className="flex-1">
             <DiffEditor
               height="100%"
-              language="yaml"
-              original={original}
-              modified={cleanModifiedLines.join('\n')}
+              language={getLanguage(selectedFile.filePath)}
+              original={value || ""}
+              modified={selectedFile.pendingPatch}
               theme={theme === "light" ? "vs" : "vs-dark"}
               onMount={handleDiffEditorMount}
               options={{
@@ -558,8 +491,8 @@ export function CodeEditor({
         <div className="flex-1 h-full">
           <Editor
             height="100%"
-            defaultLanguage="yaml"
-            language="yaml"
+            defaultLanguage={getLanguage(selectedFile?.filePath || '')}
+            language={getLanguage(selectedFile?.filePath || '')}
             value={selectedFile?.content ?? value ?? ""}
             onChange={onChange}
             theme={theme === "light" ? "vs" : "vs-dark"}

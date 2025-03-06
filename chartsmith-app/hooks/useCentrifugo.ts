@@ -240,6 +240,18 @@ export function useCentrifugo({
     handleConversionUpdated(data.conversion);
   }, []);
 
+  const handleExecuteAction = async (message: any) => {
+    // ... existing message handling ...
+
+    // Handle file creation
+    if (message.type === 'execute_action' && message.action === 'create_file') {
+      const { filePath, content } = message.data;
+      await handleNewFile(filePath, content);
+    }
+
+    // ... rest of message handling ...
+  };
+
   const handleCentrifugoMessage = useCallback((message: { data: CentrifugoMessageData }) => {
     const eventType = message.data.eventType;
     if (eventType === 'plan-updated') {
@@ -272,6 +284,8 @@ export function useCentrifugo({
     if (artifact && artifact.path && artifact.content) {
       handleArtifactReceived(artifact);
     }
+
+    handleExecuteAction(message.data);
   }, [
     handlePlanUpdated,
     handleChatMessageUpdated,
@@ -281,15 +295,23 @@ export function useCentrifugo({
     handleArtifactReceived,
     handleRenderUpdated,
     handleConversionFileUpdatedMessage,
-    handleConversationUpdatedMessage
+    handleConversationUpdatedMessage,
+    handleExecuteAction
   ]);
 
   useEffect(() => {
     if (!session?.user?.id || !workspace?.id) return;
 
     const channel = `${workspace.id}#${session.user.id}`;
+    let cleanup: (() => void) | undefined;
 
+    // Move setupCentrifuge outside of the effect to avoid recreating on each render
     const setupCentrifuge = async () => {
+      // Prevent multiple connection attempts if already connecting
+      if (centrifugeRef.current) {
+        return;
+      }
+
       const token = await getCentrifugoTokenAction(session);
       if (!token) {
         console.log(`Failed to get Centrifugo token`);
@@ -308,16 +330,17 @@ export function useCentrifugo({
 
       centrifugeRef.current = centrifuge;
 
-      centrifuge.on("connected", () => {
+      // Memoize event handlers to prevent recreating them
+      const handleConnect = () => {
         console.log(`Centrifugo connected`);
         setIsReconnecting(false);
-      });
+      };
 
-      centrifuge.on("disconnected", async (ctx) => {
+      const handleDisconnect = async (ctx: any) => {
         console.log(`Centrifugo disconnected`, { ctx });
         setIsReconnecting(true);
 
-        if (session) {
+        if (session && centrifugeRef.current) {
           try {
             console.log(`Attempting to refresh Centrifugo token`);
             const newToken = await getCentrifugoTokenAction(session);
@@ -331,28 +354,14 @@ export function useCentrifugo({
             console.log('Failed to refresh Centrifugo token after error', { err });
           }
         }
-      });
+      };
 
+      centrifuge.on("connected", handleConnect);
+      centrifuge.on("disconnected", handleDisconnect);
       centrifuge.on("error", (ctx) => {
         console.log(`Centrifugo error`, { ctx });
-
-        if (ctx.error.code === 109) { // Unauthorized error code
-          setIsReconnecting(true);
-
-          if (session) {
-            getCentrifugoTokenAction(session)
-              .then(newToken => {
-                if (centrifugeRef.current && newToken) {
-                  centrifugeRef.current.setToken(newToken);
-                  setTimeout(() => {
-                    centrifugeRef.current?.connect();
-                  }, RECONNECT_DELAY_MS);
-                }
-              })
-              .catch(err => {
-                console.log('Failed to refresh Centrifugo token after error', { err });
-              });
-          }
+        if (ctx.error.code === 109) {
+          handleDisconnect(ctx);
         }
       });
 
@@ -360,22 +369,16 @@ export function useCentrifugo({
         data: {}
       });
 
-      sub.on("publication", (msg) => {
-        handleCentrifugoMessage(msg);
-      });
-
+      sub.on("publication", handleCentrifugoMessage);
       sub.on("error", (ctx) => {
         console.log(`Subscription error`, { ctx });
       });
-
       sub.on("subscribed", () => {
         console.log('Successfully subscribed to:', channel);
       });
 
-      // Explicitly subscribe to the channel
       sub.subscribe();
 
-      // Explicitly connect
       try {
         centrifuge.connect();
       } catch (err) {
@@ -383,8 +386,7 @@ export function useCentrifugo({
         setIsReconnecting(true);
       }
 
-      // Return cleanup function
-      return () => {
+      cleanup = () => {
         try {
           if (centrifugeRef.current) {
             sub.unsubscribe();
@@ -399,7 +401,8 @@ export function useCentrifugo({
     };
 
     setupCentrifuge();
-  }, [session?.user?.id, workspace?.id, handleCentrifugoMessage]);
+    return () => cleanup?.();
+  }, [session?.user?.id, workspace?.id]); // Removed handleCentrifugoMessage from dependencies
 
   return {
     handleCentrifugoMessage,

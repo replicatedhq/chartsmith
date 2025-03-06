@@ -141,3 +141,21 @@ function determineConversionStatus(currentStatus: ConversionStatus, status: stri
   return currentStatus;
 }
 
+export const addFileToWorkspaceAtom = atom(
+  null,
+  (get, set, newFile: WorkspaceFile) => {
+    const workspace = get(workspaceAtom);
+    if (!workspace) return;
+
+    // Update allFilesBeforeApplyingPendingPatches
+    set(allFilesBeforeApplyingPendingPatchesAtom, (prev) => [...prev, newFile]);
+
+    // Update allFilesWithPendingPatches if needed
+    if (newFile.pendingPatch) {
+      set(allFilesWithPendingPatchesAtom, (prev) => [...prev, newFile]);
+    }
+
+    // You might also want to update any other relevant atoms that track files
+  }
+);
+

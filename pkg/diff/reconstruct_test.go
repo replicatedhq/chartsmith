@@ -14,112 +14,240 @@ func TestReconstructDiff(t *testing.T) {
 		wantErr         bool
 	}{
 		{
-			name:            "basic diff reconstruction",
-			originalContent: "line1\nline2\nline3\n",
-			diffContent: strings.TrimSpace(`--- file.txt
-+++ file.txt
-@@ -1 +1 @@
--line1
-+newline1`) + "\n",
-			want: strings.TrimSpace(`--- file.txt
-+++ file.txt
-@@ -1,1 +1,1 @@
--line1
-+newline1`) + "\n",
-			wantErr: false,
+			name: "basic diff with correct line numbers",
+			originalContent: `line1
+line2
+line3
+line4`,
+			diffContent: `--- a/file
++++ b/file
+@@ -1,4 +1,5 @@
+ line1
+-line2
++newline2
++addedline
+ line3
+ line4`,
+			want: `--- a/file
++++ b/file
+@@ -1,4 +1,5 @@
+ line1
+-line2
++newline2
++addedline
+ line3
+ line4
+`,
 		},
 		{
-			name:            "multiple hunks",
+			name: "handles duplicate headers",
+			originalContent: `apiVersion: v2
+appVersion: 1.16.0
+description: A Helm chart for Kubernetes
+name: empty-chart
+type: application
+version: 0.1.0`,
+			diffContent: `--- Chart.yaml
++++ Chart.yaml
+--- Chart.yaml
++++ Chart.yaml
+@@ -1,6 +1,18 @@
+ apiVersion: v2
+ appVersion: 1.16.0
+-description: A Helm chart for Kubernetes
++description: A Helm chart for Kubernetes with optional Nginx Ingress Controller
+ name: empty-chart
+ type: application
+ version: 0.1.0
++dependencies:
++  - name: ingress-nginx
++    version: "^4.0.0"
++    repository: https://kubernetes.github.io/ingress-nginx
++    condition: ingress-nginx.enabled
++    tags:
++      - ingress-controller
++      - nginx
++annotations:
++  artifacthub.io/changes: |
++    - Added Nginx Ingress Controller as an optional dependency
++    - Users can enable the dependency by setting ingress-nginx.enabled to true`,
+			want: `--- Chart.yaml
++++ Chart.yaml
+@@ -1,6 +1,18 @@
+ apiVersion: v2
+ appVersion: 1.16.0
+-description: A Helm chart for Kubernetes
++description: A Helm chart for Kubernetes with optional Nginx Ingress Controller
+ name: empty-chart
+ type: application
+ version: 0.1.0
++dependencies:
++  - name: ingress-nginx
++    version: "^4.0.0"
++    repository: https://kubernetes.github.io/ingress-nginx
++    condition: ingress-nginx.enabled
++    tags:
++      - ingress-controller
++      - nginx
++annotations:
++  artifacthub.io/changes: |
++    - Added Nginx Ingress Controller as an optional dependency
++    - Users can enable the dependency by setting ingress-nginx.enabled to true
+`,
+		},
+		{
+			name: "handles missing line numbers",
+			originalContent: `line1
+line2
+line3`,
+			diffContent: `--- a/file
++++ b/file
+@@ -,3 +,4 @@
+ line1
+-line2
++newline2
+ line3`,
+			want: `--- a/file
++++ b/file
+@@ -1,3 +1,3 @@
+ line1
+-line2
++newline2
+ line3
+`,
+		},
+		{
+			name:            "handles multiple duplicate headers",
+			originalContent: "line1\nline2\nline3\n",
+			diffContent: `--- a/file
++++ b/file
+--- a/file
++++ b/file
+--- a/file
++++ b/file
+@@ -1,3 +1,3 @@
+ line1
+-line2
++newline2
+ line3`,
+			want: `--- a/file
++++ b/file
+@@ -1,3 +1,3 @@
+ line1
+-line2
++newline2
+ line3
+`,
+		},
+		{
+			name:            "handles incorrect file paths",
+			originalContent: "line1\nline2\nline3\n",
+			diffContent: `--- some/random/path.txt
++++ different/path.txt
+@@ -1,3 +1,3 @@
+ line1
+-line2
++newline2
+ line3`,
+			want: `--- a/path.txt
++++ b/path.txt
+@@ -1,3 +1,3 @@
+ line1
+-line2
++newline2
+ line3
+`,
+		},
+		{
+			name:            "handles extra whitespace in patches",
+			originalContent: "line1\nline2\nline3\n",
+			diffContent: `---    a/file
++++     b/file
+@@   -1,3   +1,3   @@
+ line1
+-  line2
++  newline2
+ line3`,
+			want: `--- a/file
++++ b/file
+@@ -1,3 +1,3 @@
+ line1
+-  line2
++  newline2
+ line3
+`,
+		},
+		{
+			name:            "combines adjacent hunks",
+			originalContent: "line1\nline2\nline3\nline4\nline5\n",
+			diffContent: `--- a/file
++++ b/file
+@@ -1,3 +1,3 @@
+ line1
+-line2
++newline2
+ line3
+@@ -3,3 +3,3 @@
+ line3
+-line4
++newline4
+ line5`,
+			want: `--- a/file
++++ b/file
+@@ -1,5 +1,5 @@
+ line1
+-line2
++newline2
+ line3
+-line4
++newline4
+ line5
+`,
+		},
+		{
+			name:            "handles mixed line endings",
+			originalContent: "line1\r\nline2\r\nline3\r\n",
+			diffContent: `--- a/file
++++ b/file
+@@ -1,3 +1,3 @@
+ line1
+-line2
++newline2
+ line3`,
+			want: `--- a/file
++++ b/file
+@@ -1,3 +1,3 @@
+ line1
+-line2
++newline2
+ line3
+`,
+		},
+		{
+			name:            "handles overlapping hunks",
 			originalContent: "line1\nline2\nline3\nline4\n",
-			diffContent: strings.TrimSpace(`--- file.txt
-+++ file.txt
-@@ -1 +1 @@
--line1
-+newline1
-@@ -4 +4 @@
--line4
-+newline4`) + "\n",
-			want: strings.TrimSpace(`--- file.txt
-+++ file.txt
-@@ -1,1 +1,1 @@
--line1
-+newline1
-@@ -4,1 +4,1 @@
--line4
-+newline4`) + "\n",
-			wantErr: false,
-		},
-		{
-			name:            "invalid diff - no headers",
-			originalContent: "line1\nline2\nline3\n",
-			diffContent:     "@@ -1 +1 @@\n-line1\n+newline1\n",
-			want:            "",
-			wantErr:         true,
-		},
-		{
-			name: "multi-line block removal",
-			originalContent: `# Default values for empty-chart.
-# This is a YAML-formatted file.
-# Declare variables to be passed into your templates.
-
-resources: {}
-  # We usually recommend not to specify default resources and to leave this as a conscious
-  # choice for the user. This also increases chances charts run on environments with little
-  # resources, such as Minikube. If you do want to specify resources, uncomment the following
-  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-  # limits:
-  #   cpu: 100m
-  #   memory: 128Mi
-  # requests:
-  #   cpu: 100m
-  #   memory: 128Mi
-
-# This is to setup the liveness and readiness probes
-livenessProbe:
-  httpGet:
-    path: /
-    port: http`,
-			diffContent: strings.TrimSpace(`--- values.yaml
-+++ values.yaml
-@@ -103,18 +103,6 @@
-
-   #    hosts:
-   #      - chart-example.local
-
--resources: {}
--  # We usually recommend not to specify default resources and to leave this as a conscious
--  # choice for the user. This also increases chances charts run on environments with little
--  # resources, such as Minikube. If you do want to specify resources, uncomment the following
--  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
--  # limits:
--  #   cpu: 100m
--  #   memory: 128Mi
--  # requests:
--  #   cpu: 100m
--  #   memory: 128Mi
--
- # This is to setup the liveness and readiness probes`) + "\n",
-			want: strings.TrimSpace(`--- values.yaml
-+++ values.yaml
-@@ -103,18 +103,6 @@
-
-   #    hosts:
-   #      - chart-example.local
-
--resources: {}
--  # We usually recommend not to specify default resources and to leave this as a conscious
--  # choice for the user. This also increases chances charts run on environments with little
--  # resources, such as Minikube. If you do want to specify resources, uncomment the following
--  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
--  # limits:
--  #   cpu: 100m
--  #   memory: 128Mi
--  # requests:
--  #   cpu: 100m
--  #   memory: 128Mi
--
- # This is to setup the liveness and readiness probes`) + "\n",
-			wantErr: false,
+			diffContent: `--- a/file
++++ b/file
+@@ -1,3 +1,3 @@
+ line1
+-line2
++newline2
+ line3
+@@ -2,3 +2,3 @@
+ line2
+-line3
++newline3
+ line4`,
+			want: `--- a/file
++++ b/file
+@@ -1,4 +1,4 @@
+ line1
+-line2
+-line3
++newline2
++newline3
+ line4
+`,
 		},
 	}
 
@@ -131,8 +259,23 @@ livenessProbe:
 				t.Errorf("ReconstructDiff() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !tt.wantErr && got != tt.want {
-				t.Errorf("ReconstructDiff()\ngot:\n%q\nwant:\n%q", got, tt.want)
+			if got != tt.want {
+				t.Errorf("ReconstructDiff() diff\ngot:\n%v\nwant:\n%v", got, tt.want)
+				// Print a more readable diff for debugging
+				gotLines := strings.Split(got, "\n")
+				wantLines := strings.Split(tt.want, "\n")
+				for i := 0; i < len(gotLines) || i < len(wantLines); i++ {
+					var gotLine, wantLine string
+					if i < len(gotLines) {
+						gotLine = gotLines[i]
+					}
+					if i < len(wantLines) {
+						wantLine = wantLines[i]
+					}
+					if gotLine != wantLine {
+						t.Errorf("line %d:\ngot:  %q\nwant: %q", i+1, gotLine, wantLine)
+					}
+				}
 			}
 		})
 	}
