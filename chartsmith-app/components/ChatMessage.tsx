@@ -71,7 +71,7 @@ export function ChatMessage({
     if (onContentUpdate && message) {
       onContentUpdate();
     }
-  }, [message?.response, message?.responseRenderId, message?.responseConversionId, onContentUpdate]);
+  }, [message, message?.response, message?.responseRenderId, message?.responseConversionId, onContentUpdate]);
 
   const handleSubmitChat = async (e: FormEvent) => {
     e.preventDefault();

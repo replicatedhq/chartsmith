@@ -116,11 +116,14 @@ export function PlanChatMessage({
     // Let ScrollingContent handle the actual scrolling
     callContentUpdate();
     
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     plan?.description, 
     plan?.status, 
     plan?.actionFiles?.length,
-    callContentUpdate
+    callContentUpdate,
+    // Include plan in the deps array to fix the warning
+    plan
   ]);
 
   const handleIgnore = async () => {

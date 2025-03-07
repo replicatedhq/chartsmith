@@ -182,7 +182,7 @@ export function ArtifactHubSearchModal({ isOpen, onClose }: ArtifactHubSearchMod
                 ) : results.length > 0 ? (
                   <div>
                     <div className="p-3 bg-gray-800/50 text-gray-300 text-xs border-b border-gray-700">
-                      {results.length} chart{results.length > 1 ? 's' : ''} found matching "{search}"
+                      {results.length} chart{results.length > 1 ? 's' : ''} found matching &quot;{search}&quot;
                     </div>
                     <div className="divide-y divide-gray-800">
                       {results.map((chart, index) => {
@@ -209,7 +209,7 @@ export function ArtifactHubSearchModal({ isOpen, onClose }: ArtifactHubSearchMod
                   </div>
                 ) : search.length > 2 ? (
                   <div className="p-4 text-gray-400">
-                    No charts found matching "{search}"
+                    No charts found matching &quot;{search}&quot;
                   </div>
                 ) : (
                   <div className="p-4 text-gray-400">
