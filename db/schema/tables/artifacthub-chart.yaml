@@ -40,7 +40,7 @@ schema:
       constraints:
         notNull: true
       default: "false"
-    indices:
+    indexes:
     - name: artifacthub_chart_name_version_idx
       columns: [name, version]
     - name: artifacthub_chart_name_idx
