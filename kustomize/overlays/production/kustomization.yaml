@@ -1,3 +1,4 @@
 resources:
   - ../../worker/overlays/production
   - ../../app/overlays/production
+  - ../../artifacthub-cache/overlays/production

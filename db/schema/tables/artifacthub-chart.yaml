@@ -1,0 +1,46 @@
+database: chartsmith
+name: artifacthub_chart
+schema:
+  postgres:
+    columns:
+    - name: id
+      type: text
+      constraints:
+        primaryKey: true
+        notNull: true
+    - name: name
+      type: text
+      constraints:
+        notNull: true
+    - name: version
+      type: text
+      constraints:
+        notNull: true
+    - name: content_url
+      type: text
+      constraints:
+        notNull: true
+    - name: repository
+      type: text
+      constraints:
+        notNull: true
+    - name: created_at
+      type: timestamp with time zone
+      constraints:
+        notNull: true
+        default: now()
+    - name: available
+      type: boolean
+      constraints:
+        notNull: true
+        default: true
+    - name: verified
+      type: boolean
+      constraints:
+        notNull: true
+        default: false
+    indices:
+    - name: artifacthub_chart_name_version_idx
+      columns: [name, version]
+    - name: artifacthub_chart_name_idx
+      columns: [name]

@@ -1,0 +1,14 @@
+database: chartsmith
+name: artifacthub_meta
+schema:
+  postgres:
+    columns:
+    - name: key
+      type: text
+      constraints:
+        primaryKey: true
+        notNull: true
+    - name: value
+      type: text
+      constraints:
+        notNull: true

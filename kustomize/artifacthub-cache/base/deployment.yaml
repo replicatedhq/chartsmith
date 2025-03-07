@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chartsmith-artifacthub-cache
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: chartsmith-artifacthub-cache
+  template:
+    metadata:
+      labels:
+        app: chartsmith-artifacthub-cache
+    spec:
+      containers:
+        - name: chartsmith-artifacthub-cache
+          image: chartsmith-worker
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              while true; do
+                echo "$(date): Running ArtifactHub cache update"
+                /chartsmith-worker artifacthub --force
+                
+                # Check exit code
+                EXIT_CODE=$?
+                if [ $EXIT_CODE -ne 0 ]; then
+                  echo "$(date): ArtifactHub cache update failed with exit code $EXIT_CODE. Retrying in 1 minute..."
+                  sleep 60
+                else
+                  echo "$(date): ArtifactHub cache update successful. Sleeping for 2 hours before next update."
+                  sleep 7200
+                fi
+              done
