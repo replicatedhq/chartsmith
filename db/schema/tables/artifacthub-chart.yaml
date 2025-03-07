@@ -2,11 +2,12 @@ database: chartsmith
 name: artifacthub_chart
 schema:
   postgres:
+    primaryKey:
+    - id
     columns:
     - name: id
       type: text
       constraints:
-        primaryKey: true
         notNull: true
     - name: name
       type: text
@@ -25,20 +26,20 @@ schema:
       constraints:
         notNull: true
     - name: created_at
-      type: timestamp with time zone
+      type: timestamp
       constraints:
         notNull: true
-        default: now()
+        default: "now()"
     - name: available
       type: boolean
       constraints:
         notNull: true
-        default: true
+        default: "true"
     - name: verified
       type: boolean
       constraints:
         notNull: true
-        default: false
+      default: "false"
     indices:
     - name: artifacthub_chart_name_version_idx
       columns: [name, version]

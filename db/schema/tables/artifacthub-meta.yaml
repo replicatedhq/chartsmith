@@ -2,11 +2,12 @@ database: chartsmith
 name: artifacthub_meta
 schema:
   postgres:
+    primaryKey:
+    - key
     columns:
     - name: key
       type: text
       constraints:
-        primaryKey: true
         notNull: true
     - name: value
       type: text
