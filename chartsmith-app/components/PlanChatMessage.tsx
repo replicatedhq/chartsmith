@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useLayoutEffect } from "react";
+import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from "react";
 import ReactMarkdown from 'react-markdown';
 import { useAtom } from "jotai";
 
@@ -28,6 +28,7 @@ interface PlanChatMessageProps {
   planId: string;
   onProceed?: () => void;
   onIgnore?: () => void;
+  onContentUpdate?: () => void;
   session?: Session;
   workspaceId?: string;
   messageId?: string;
@@ -39,6 +40,7 @@ export function PlanChatMessage({
   showChatInput = true,
   onProceed,
   onIgnore,
+  onContentUpdate,
   session,
   messageId,
 }: PlanChatMessageProps) {
@@ -69,6 +71,8 @@ export function PlanChatMessage({
         behavior: 'smooth',
         block: 'start'
       });
+      // Notify parent that content has updated for global scrolling
+      onContentUpdate?.();
     } else if (actionFilesExpanded) {
       // Multiple delayed scrolls to ensure content is visible as it expands
       const delays = [100, 200, 300];
@@ -78,10 +82,12 @@ export function PlanChatMessage({
             behavior: 'smooth',
             block: 'start'
           });
+          // Notify parent that content has updated for global scrolling
+          onContentUpdate?.();
         }, delay);
       });
     }
-  }, [plan, actionFilesExpanded]);
+  }, [plan, actionFilesExpanded, onContentUpdate]);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -96,6 +102,26 @@ export function PlanChatMessage({
   useEffect(() => {
     adjustTextareaHeight();
   }, [chatInput]);
+  
+  // We need to memoize this to avoid creating a new function on every render
+  const callContentUpdate = useCallback(() => {
+    if (onContentUpdate) onContentUpdate();
+  }, [onContentUpdate]);
+  
+  // Trigger scroll to bottom when plan updates - specifically for streaming content
+  useEffect(() => {
+    if (!plan) return;
+    
+    // Only need to call once as this effect will re-run when the plan properties change
+    // Let ScrollingContent handle the actual scrolling
+    callContentUpdate();
+    
+  }, [
+    plan?.description, 
+    plan?.status, 
+    plan?.actionFiles?.length,
+    callContentUpdate
+  ]);
 
   const handleIgnore = async () => {
     if (session && plan) {

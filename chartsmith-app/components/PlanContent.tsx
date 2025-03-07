@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect } from "react";
 import { useAtom } from "jotai";
 
 // atoms
@@ -20,13 +20,12 @@ interface PlanContentProps {
 export function PlanContent({ session }: PlanContentProps) {
   const [workspace] = useAtom(workspaceAtom);
   const [messages] = useAtom(messagesAtom);
-  const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Scroll to bottom when messages change or content updates
+  // We don't need to track content updates anymore since ScrollingContent handles scrolling
+  
+  // Scroll to bottom only when messages change
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
+    // No longer needed - ScrollingContent will handle scrolling
   }, [messages]);
 
   if (!workspace || !messages) {
@@ -35,8 +34,8 @@ export function PlanContent({ session }: PlanContentProps) {
 
   return (
     <div className="min-h-full w-full">
-      <div className="px-4 w-full max-w-3xl py-8 mx-auto">
-        <ScrollingContent ref={scrollRef}>
+      <div className="px-4 w-full max-w-3xl py-8 mx-auto h-full">
+        <ScrollingContent forceScroll={true}>
           <Card className="p-6 w-full border-dark-border/40 shadow-lg">
             {messages.map((item, index) => (
               <div key={item.id}>
@@ -45,10 +44,7 @@ export function PlanContent({ session }: PlanContentProps) {
                   messageId={item.id}
                   session={session}
                   onContentUpdate={() => {
-                    // Scroll to bottom when content updates
-                    if (scrollRef.current) {
-                      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-                    }
+                    // No longer need to track updates - ScrollingContent will handle it
                   }}
                 />
                 {item.responsePlanId && (
@@ -60,10 +56,7 @@ export function PlanContent({ session }: PlanContentProps) {
                     messageId={item.id}
                     showActions={index === messages.length - 1}
                     onContentUpdate={() => {
-                      // Scroll to bottom when plan content updates
-                      if (scrollRef.current) {
-                        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-                      }
+                      // No longer need to track updates - ScrollingContent will handle it
                     }}
                   />
                 )}

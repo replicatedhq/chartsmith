@@ -1,41 +1,79 @@
 "use client";
 
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect, useState, useLayoutEffect } from "react";
 
 interface ScrollingContentProps {
   children: React.ReactNode;
+  forceScroll?: boolean;
 }
 
-export function ScrollingContent({ children }: ScrollingContentProps) {
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+export function ScrollingContent({ children, forceScroll = false }: ScrollingContentProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
-
+  
+  // Set up scroll detection
   useEffect(() => {
-    const parent = messagesEndRef.current?.closest('.overflow-auto');
-    if (!parent) return;
+    const container = containerRef.current;
+    if (!container) return;
 
     const handleScroll = () => {
-      const isAtBottom = parent.scrollHeight - parent.clientHeight - parent.scrollTop < 50;
+      // Consider "at bottom" when within 100px of the bottom
+      const isAtBottom = container.scrollHeight - container.clientHeight - container.scrollTop < 100;
       setShouldAutoScroll(isAtBottom);
     };
 
-    parent.addEventListener('scroll', handleScroll);
-    return () => parent.removeEventListener('scroll', handleScroll);
+    container.addEventListener('scroll', handleScroll);
+    return () => container.removeEventListener('scroll', handleScroll);
   }, []);
 
-  useEffect(() => {
-    if (messagesEndRef.current && shouldAutoScroll) {
-      const parent = messagesEndRef.current.closest('.overflow-auto');
-      if (parent) {
-        parent.scrollTop = parent.scrollHeight;
-      }
+  // Simple function to scroll to bottom
+  const scrollToBottom = () => {
+    const container = containerRef.current;
+    if (!container) return;
+    
+    container.scrollTop = container.scrollHeight;
+  };
+
+  // Auto-scroll when children change (simpler approach)
+  useLayoutEffect(() => {
+    if (shouldAutoScroll || forceScroll) {
+      // Scroll immediately
+      scrollToBottom();
+      
+      // Also try scrolling after a short delay to catch any content that's still loading
+      setTimeout(scrollToBottom, 50);
+      setTimeout(scrollToBottom, 300);
     }
-  });
+  }, [children, shouldAutoScroll, forceScroll]);
+
+  // Use a mutation observer to catch DOM changes from streaming updates
+  useEffect(() => {
+    if (!containerRef.current) return;
+    
+    const observer = new MutationObserver(() => {
+      if (shouldAutoScroll || forceScroll) {
+        scrollToBottom();
+      }
+    });
+    
+    observer.observe(containerRef.current, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+    
+    return () => observer.disconnect();
+  }, [shouldAutoScroll, forceScroll]);
 
   return (
-    <>
+    <div 
+      ref={containerRef} 
+      className="overflow-auto w-full h-full"
+      style={{ scrollBehavior: 'smooth' }}
+    >
       {children}
-      <div ref={messagesEndRef} />
-    </>
+      {/* Extra space to ensure we can scroll past the content */}
+      <div style={{ height: '10px', width: '100%' }} />
+    </div>
   );
 }
