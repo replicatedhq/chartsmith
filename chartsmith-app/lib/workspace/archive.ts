@@ -133,14 +133,44 @@ async function downloadChartFilesFromArtifactHub(url: string): Promise<Workspace
   const org = orgAndName[1];
   const name = orgAndName[2];
 
-  // use the artifacthub api to get the source of the files
-  const packageInfo = await fetch(`https://artifacthub.io/api/v1/packages/helm/${org}/${name}`);
-  const packageInfoJson = await packageInfo.json();
+  try {
+    // First check if we have the chart in our local database
+    const { getArtifactHubChart } = await import('@/lib/artifacthub/artifacthub');
+    const chart = await getArtifactHubChart(org, name);
+    
+    if (chart && chart.content_url) {
+      console.log(`Using cached chart from local database: ${org}/${name} v${chart.version}`);
+      // We found the chart in our local database
+      const extractPath = await downloadChartArchiveFromURL(chart.content_url);
+      await removeBinaryFilesInPath(extractPath);
+      return filesInArchive(extractPath);
+    }
+  } catch (error) {
+    console.error("Error fetching from local cache, falling back to ArtifactHub API", error);
+  }
 
-  const contentURL = packageInfoJson.content_url;
-  const extractPath = await downloadChartArchiveFromURL(contentURL);
-  await removeBinaryFilesInPath(extractPath);
-  return filesInArchive(extractPath);
+  // Fallback to ArtifactHub API if local cache failed
+  try {
+    // use the artifacthub api to get the source of the files
+    const packageInfo = await fetch(`https://artifacthub.io/api/v1/packages/helm/${org}/${name}`);
+    if (!packageInfo.ok) {
+      throw new Error(`Failed to fetch package info: ${packageInfo.status} ${packageInfo.statusText}`);
+    }
+    
+    const packageInfoJson = await packageInfo.json();
+    const contentURL = packageInfoJson.content_url;
+    
+    if (!contentURL) {
+      throw new Error("Content URL not found in package info");
+    }
+    
+    const extractPath = await downloadChartArchiveFromURL(contentURL);
+    await removeBinaryFilesInPath(extractPath);
+    return filesInArchive(extractPath);
+  } catch (error) {
+    console.error("Error in downloadChartFilesFromArtifactHub", error);
+    throw new Error(`Failed to download chart files: ${error.message}`);
+  }
 }
 
 async function filesInArchive(extractPath: string): Promise<WorkspaceFile[]> {

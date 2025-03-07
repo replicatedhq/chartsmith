@@ -1,4 +1,5 @@
 resources:
   - ../../worker/overlays/staging
   - ../../app/overlays/staging
+  - ../../artifacthub-cache/overlays/staging
 

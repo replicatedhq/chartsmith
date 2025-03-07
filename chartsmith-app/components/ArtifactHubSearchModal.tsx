@@ -177,25 +177,43 @@ export function ArtifactHubSearchModal({ isOpen, onClose }: ArtifactHubSearchMod
                 ) : isSearching ? (
                   <div className="p-4 text-gray-400 flex items-center gap-2">
                     <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                    Validating...
+                    Searching for charts...
                   </div>
                 ) : results.length > 0 ? (
-                  <div className="divide-y divide-gray-800">
-                    {results.map((chart, index) => (
-                      <button
-                        key={index}
-                        onClick={() => handleChartSelect(chart)}
-                        disabled={isSearching || isImporting}
-                        className={`w-full p-4 text-left hover:bg-gray-800/50 text-gray-300 hover:text-white transition-colors disabled:opacity-50 disabled:hover:bg-transparent disabled:cursor-not-allowed
-                          ${selectedIndex === index ? 'bg-gray-800/50 text-white' : ''}`}
-                      >
-                        {chart}
-                      </button>
-                    ))}
+                  <div>
+                    <div className="p-3 bg-gray-800/50 text-gray-300 text-xs border-b border-gray-700">
+                      {results.length} chart{results.length > 1 ? 's' : ''} found matching "{search}"
+                    </div>
+                    <div className="divide-y divide-gray-800">
+                      {results.map((chart, index) => {
+                        const chartUrl = new URL(chart);
+                        const chartPath = chartUrl.pathname.split('/');
+                        const repoName = chartPath[chartPath.length - 2] || "";
+                        const chartName = chartPath[chartPath.length - 1] || "";
+                        
+                        return (
+                          <button
+                            key={index}
+                            onClick={() => handleChartSelect(chart)}
+                            disabled={isSearching || isImporting}
+                            className={`w-full p-4 text-left hover:bg-gray-800/50 text-gray-300 hover:text-white transition-colors disabled:opacity-50 disabled:hover:bg-transparent disabled:cursor-not-allowed
+                              ${selectedIndex === index ? 'bg-gray-800/50 text-white' : ''}`}
+                          >
+                            <div className="flex items-center">
+                              <span className="font-medium">{repoName}/{chartName}</span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : search.length > 2 ? (
+                  <div className="p-4 text-gray-400">
+                    No charts found matching "{search}"
                   </div>
                 ) : (
                   <div className="p-4 text-gray-400">
-                    Not a valid ArtifactHub package
+                    Please enter at least 3 characters to search, or a specific URL/repo format
                   </div>
                 )}
               </div>

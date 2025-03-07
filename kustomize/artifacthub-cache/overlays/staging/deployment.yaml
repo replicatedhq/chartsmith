@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chartsmith-artifacthub-cache
+spec:
+  template:
+    spec:
+      containers:
+        - name: chartsmith-artifacthub-cache
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              memory: 1Gi
+          env:
+            - name: USE_EC2_PARAMETERS
+              value: "true"
+            - name: AWS_REGION
+              value: us-east-1
