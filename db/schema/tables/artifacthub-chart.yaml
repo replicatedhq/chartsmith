@@ -29,7 +29,7 @@ schema:
       type: timestamp
       constraints:
         notNull: true
-        default: "now()"
+      default: "now()"
     - name: available
       type: boolean
       constraints:
