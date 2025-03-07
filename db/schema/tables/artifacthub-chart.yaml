@@ -34,7 +34,7 @@ schema:
       type: boolean
       constraints:
         notNull: true
-        default: "true"
+      default: "true"
     - name: verified
       type: boolean
       constraints:
