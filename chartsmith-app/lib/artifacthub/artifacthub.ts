@@ -66,6 +66,8 @@ export async function searchArtifactHubCharts(query: string): Promise<string[]> 
 
 export async function getArtifactHubChart(org: string, name: string): Promise<ArtifactHubChart | null> {
   try {
+    const db = getDB(await getParam("DB_URI"));
+    
     const result = await db.query(
       `SELECT name, version, repository, content_url
        FROM artifacthub_chart

@@ -32,43 +32,224 @@ interface CodeEditorProps {
 }
 
 function parseDiff(originalContent: string, diffContent: string): string {
-  const lines = diffContent.split('\n');
+  // Quick checks for empty inputs
+  if (!diffContent || diffContent.trim() === '') {
+    return originalContent;
+  }
+  
+  const lines = diffContent.trim().split('\n');
   const originalLines = originalContent.split('\n');
   const modifiedLines = [...originalLines]; // Start with original content
-  let currentLine = 0;
-
-  // Find first hunk
-  let i = 0;
-  while (i < lines.length) {
-    if (lines[i].startsWith('@@')) {
-      const match = lines[i].match(/@@ -(\d+),\d+ \+(\d+),\d+ @@/);
-      if (match) {
-        currentLine = parseInt(match[2]) - 1; // Use the target line number
+  
+  interface Hunk {
+    originalStart: number;
+    originalCount: number;
+    modifiedStart: number;
+    modifiedCount: number;
+    lines: string[];
+  }
+  
+  // Detect special cases for new files or simple content replacement patches
+  const isNewFile = diffContent.includes('@@ -0,0 +1,');
+  const isSimpleReplacement = diffContent.match(/@@ -1,\d+ \+1,\d+ @@/);
+  const hasProperDiffMarkers = diffContent.includes('\n+') || diffContent.includes('\n-');
+  
+  // SPECIAL HANDLING FOR NEW FILES
+  if (isNewFile) {
+    // For new files, extract everything after the hunk header
+    let contentStart = diffContent.indexOf('@@');
+    if (contentStart !== -1) {
+      contentStart = diffContent.indexOf('\n', contentStart);
+      if (contentStart !== -1) {
+        // Make sure we're not returning an empty string
+        const content = diffContent.substring(contentStart + 1).trim();
+        if (content) {
+          return content;
+        }
       }
-      i++;
-      continue;
     }
-
-    if (lines[i].startsWith('---') || lines[i].startsWith('+++')) {
-      i++;
-      continue;
+  }
+  
+  // SPECIAL HANDLING FOR REPLACEMENT PATCHES
+  if (isSimpleReplacement && !hasProperDiffMarkers) {
+    // Extract the content from the patch (everything after the header)
+    let contentStart = diffContent.indexOf('@@');
+    if (contentStart !== -1) {
+      contentStart = diffContent.indexOf('\n', contentStart);
+      if (contentStart !== -1) {
+        const content = diffContent.substring(contentStart + 1).trim();
+        if (content) {
+          return content;
+        }
+      }
     }
-
-    if (lines[i].startsWith('+')) {
-      // Insert new line
-      modifiedLines.splice(currentLine, 0, lines[i].slice(1));
-      currentLine++;
-    } else if (lines[i].startsWith('-')) {
-      // Remove line
-      modifiedLines.splice(currentLine, 1);
-    } else {
-      // Context line - move to next line
-      currentLine++;
-    }
+  }
+  
+  // Skip past header lines to find hunks
+  let i = 0;
+  while (i < lines.length && !(lines[i].startsWith('---') || lines[i].startsWith('+++'))) {
     i++;
   }
-
+  
+  // Extract all hunks
+  const hunks: Hunk[] = [];
+  let currentHunk: Hunk | null = null;
+  
+  for (; i < lines.length; i++) {
+    const line = lines[i];
+    
+    // Parse hunk headers
+    if (line.startsWith('@@')) {
+      // Save previous hunk if exists
+      if (currentHunk) {
+        hunks.push(currentHunk);
+      }
+      
+      // Parse header like "@@ -A,B +C,D @@"
+      const match = line.match(/@@ -(\d+),(\d+) \+(\d+),(\d+) @@/);
+      if (match) {
+        const [_, originalStart, originalCount, modifiedStart, modifiedCount] = 
+          match.map(n => parseInt(n || '1'));
+          
+        currentHunk = {
+          originalStart,
+          originalCount,
+          modifiedStart,
+          modifiedCount,
+          lines: []
+        };
+      } else {
+        // Handle simpler format without line numbers
+        currentHunk = {
+          originalStart: 1,
+          originalCount: 1,
+          modifiedStart: 1,
+          modifiedCount: 1,
+          lines: []
+        };
+        
+        // Try to find the line numbers by context matching
+        const contextStart = i + 1;
+        const contextLines: string[] = [];
+        
+        // Collect context lines (those with space prefix)
+        for (let j = i + 1; j < Math.min(i + 11, lines.length); j++) {
+          if (lines[j].startsWith(' ')) {
+            contextLines.push(lines[j].substring(1));
+          } else if (!lines[j].startsWith('+') && !lines[j].startsWith('-')) {
+            break;
+          }
+        }
+        
+        if (contextLines.length > 0) {
+          // Find best match for these context lines in original content
+          const bestPosition = findBestPosition(originalLines, contextLines);
+          if (bestPosition > 0) {
+            currentHunk.originalStart = bestPosition;
+            currentHunk.modifiedStart = bestPosition;
+          }
+        }
+      }
+      continue;
+    }
+    
+    // Skip file headers
+    if (line.startsWith('---') || line.startsWith('+++')) {
+      continue;
+    }
+    
+    // For patches without proper markers in simple replacement, prefix with the appropriate marker
+    if (currentHunk && isSimpleReplacement && !hasProperDiffMarkers) {
+      // In this case, treat all content as additions (since the backend doesn't add markers)
+      currentHunk.lines.push(`+${line}`);
+    } else {
+      // Add content lines to current hunk normally
+      if (currentHunk) {
+        currentHunk.lines.push(line);
+      }
+    }
+  }
+  
+  // Add the last hunk if exists
+  if (currentHunk) {
+    hunks.push(currentHunk);
+  }
+  
+  // Sort hunks by original start position
+  hunks.sort((a, b) => a.originalStart - b.originalStart);
+  
+  // Apply hunks to the original content
+  let linesOffset = 0; // Track offset caused by previous hunks
+  
+  for (const hunk of hunks) {
+    // Adjust start position based on previous modifications
+    const adjustedStart = hunk.modifiedStart - 1 + linesOffset;
+    let currentLine = adjustedStart;
+    let removedCount = 0;
+    let addedCount = 0;
+    
+    for (const line of hunk.lines) {
+      if (line.startsWith('+')) {
+        // Add new line
+        modifiedLines.splice(currentLine, 0, line.substring(1));
+        currentLine++;
+        addedCount++;
+      } else if (line.startsWith('-')) {
+        // Remove line
+        if (currentLine < modifiedLines.length) {
+          modifiedLines.splice(currentLine, 1);
+          removedCount++;
+        }
+      } else if (line.startsWith(' ')) {
+        // Context line - just move current position
+        currentLine++;
+      }
+    }
+    
+    // Adjust offset based on lines added/removed in this hunk
+    linesOffset += (addedCount - removedCount);
+  }
+  
   return modifiedLines.join('\n');
+}
+
+// Helper function to find best position for context lines in original content
+function findBestPosition(originalLines: string[], contextLines: string[]): number {
+  if (contextLines.length === 0) return 1;
+  
+  let bestPos = 1;
+  let bestScore = 0;
+  
+  for (let pos = 0; pos <= originalLines.length - contextLines.length; pos++) {
+    let score = 0;
+    
+    for (let i = 0; i < contextLines.length; i++) {
+      // Compare line by line, ignoring whitespace
+      const contextNorm = contextLines[i].trim();
+      const originalNorm = originalLines[pos + i].trim();
+      
+      if (contextNorm === originalNorm) {
+        score += 1;
+      } else if (contextNorm.replace(/\s+/g, '') === originalNorm.replace(/\s+/g, '')) {
+        // Same content but different whitespace
+        score += 0.8;
+      } else if (originalNorm.includes(contextNorm) || contextNorm.includes(originalNorm)) {
+        // Partial match
+        score += 0.5;
+      }
+    }
+    
+    // Normalize score based on number of context lines
+    const normalizedScore = score / contextLines.length;
+    
+    if (normalizedScore > bestScore) {
+      bestScore = normalizedScore;
+      bestPos = pos + 1; // Convert to 1-based indexing
+    }
+  }
+  
+  // Only return position if we have a good match
+  return bestScore > 0.6 ? bestPos : 1;
 }
 
 export function CodeEditor({
@@ -535,40 +716,85 @@ export function CodeEditor({
   };
 
   if (selectedFile?.pendingPatch) {
-    const modified = parseDiff(selectedFile.content, selectedFile.pendingPatch);
-
-    return (
-      <div className="flex-1 h-full flex flex-col">
-        {showDiffHeader && renderDiffHeader()}
-        <div className="flex-1">
-          <DiffEditor
-            height="100%"
-            language={getLanguage(selectedFile.filePath)}
-            original={selectedFile.content}
-            modified={modified}
-            theme={theme === "light" ? "vs" : "vs-dark"}
-            onMount={handleDiffEditorMount}
-            options={{
-              ...editorOptions,
-              renderSideBySide: false,
-              diffWordWrap: 'off',
-              originalEditable: false,
-              renderOverviewRuler: false,
-              ignoreTrimWhitespace: false,
-              renderWhitespace: 'none',
-              renderLineHighlight: 'none',
-              quickSuggestions: false,
-              folding: false,
-              lineNumbers: 'on',
-              scrollBeyondLastLine: false,
-              minimap: { enabled: false },
-            }}
-          />
+    try {
+      // Add error handling around the diff parsing
+      const modified = parseDiff(selectedFile.content, selectedFile.pendingPatch);
+      
+      // For new files where the content is completely empty but we have a patch,
+      // we can check if it's a new file pattern and handle it specially
+      const isNewFilePatch = selectedFile.pendingPatch.includes('@@ -0,0 +1,');
+      const original = selectedFile.content;
+      
+      // Don't use a changing key, as it forces remounts and causes loading flashes
+      // const editorKey = `diff-${selectedFile.id}-${selectedFile.filePath}-${theme}`;
+      const editorKey = 'diff-editor';
+      
+      return (
+        <div className="flex-1 h-full flex flex-col">
+          {showDiffHeader && renderDiffHeader()}
+          <div className="flex-1">
+            <DiffEditor
+              key={editorKey}
+              height="100%"
+              language={getLanguage(selectedFile.filePath)}
+              original={original}
+              modified={modified}
+              theme={theme === "light" ? "vs" : "vs-dark"}
+              onMount={handleDiffEditorMount}
+              options={{
+                ...editorOptions,
+                renderSideBySide: false,
+                diffWordWrap: 'off',
+                originalEditable: false,
+                renderOverviewRuler: false,
+                ignoreTrimWhitespace: false,
+                renderWhitespace: 'none',
+                renderLineHighlight: 'none',
+                quickSuggestions: false,
+                folding: false,
+                lineNumbers: 'on',
+                scrollBeyondLastLine: false,
+                minimap: { enabled: false },
+              }}
+            />
+          </div>
         </div>
-      </div>
-    );
+      );
+    } catch (error) {
+      console.error("Error parsing diff:", error);
+      
+      // Fallback to showing raw content if diff parsing fails
+      return (
+        <div className="flex-1 h-full flex flex-col">
+          {showDiffHeader && renderDiffHeader()}
+          <div className="flex-1 h-full">
+            <Editor
+              height="100%"
+              defaultLanguage={getLanguage(selectedFile.filePath)}
+              language={getLanguage(selectedFile.filePath)}
+              value={selectedFile.pendingPatch}
+              theme={theme === "light" ? "vs" : "vs-dark"}
+              options={{
+                ...editorOptions,
+                readOnly: true,
+              }}
+              onMount={handleEditorMount}
+              key="fallback-editor"
+            />
+          </div>
+        </div>
+      );
+    }
   }
 
+  // No need for excessive logging
+  
+  // Don't use a changing key, as it forces remounts and causes loading flashes
+  // const editorKey = selectedFile 
+  //   ? `editor-${selectedFile.id}-${selectedFile.filePath}-${theme}`
+  //   : `editor-empty-${theme}`;
+  const editorKey = 'standard-editor';
+  
   return (
     <div className="flex-1 h-full flex flex-col">
       {showDiffHeader && renderDiffHeader()}
@@ -585,7 +811,7 @@ export function CodeEditor({
             readOnly: !onChange,
           }}
           onMount={handleEditorMount}
-          key={`${selectedFile?.id}-${selectedFile?.filePath}-${theme}`}
+          key={editorKey}
         />
       </div>
     </div>

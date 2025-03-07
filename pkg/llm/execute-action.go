@@ -45,55 +45,64 @@ Here is the current content between XML tags:
 %s
 </current_content>
 
-CRITICAL INSTRUCTION: You MUST generate a unified diff patch in the standard format, but without line numbers (see instructions below).
-NEVER return just the new value - this is incorrect and will be rejected.
-Write out the changes similar to a unified diff like `+"`diff -U0`"+` would produce.
+CRITICAL INSTRUCTION: You MUST generate a unified diff patch to correctly update this file.
 
-Make sure you include the first 2 lines with the file paths.
-Don't include timestamps with the file paths.
+FORMAT REQUIREMENTS:
+1. Start with these two header lines:
+   --- %s
+   +++ %s
 
-Start each hunk of changes with a `+"`@@ ... @@`"+` line.
-Don't include line numbers like `+"`diff -U0`"+` does.
-The user's patch tool doesn't need them.
+2. For each block of changes, create a patch hunk that starts with "@@ ... @@"
+   - Do NOT include line numbers in these markers - use exactly "@@ ... @@"
 
-The user's patch tool needs CORRECT patches that apply cleanly against the current contents of the file!
-Think carefully and make sure you include and mark all lines that need to be removed or changed as `+"-"+` lines.
-Make sure you mark all new or modified lines with `+"+"+`.
-Don't leave out any lines or the diff patch won't apply correctly.
+3. When showing context and changes:
+   - Prefix unchanged context lines with a single space
+   - Prefix lines to be REMOVED with "-"
+   - Prefix lines to be ADDED with "+"
+   - Include AT LEAST 3 lines of unchanged context before and after your changes
+   - Maintain EXACT indentation in all lines (context, added, and removed)
 
-Indentation matters in the diffs!
+4. WHOLE BLOCKS: When editing functions, methods, classes, or other logical blocks:
+   - Include the ENTIRE block in your diff (the whole function/method/loop/etc)
+   - First show all lines of the original block with "-" prefix
+   - Then show all lines of the new block with "+" prefix
+   - This approach is MUCH more reliable than small surgical changes
 
-Start a new hunk for each section of the file that needs changes.
+5. SEPARATE HUNKS: Use separate hunks (@@ ... @@) for:
+   - Different functions or blocks that aren't adjacent
+   - Changes in different parts of the file
+   - Each hunk should be complete and self-contained
 
-Only output hunks that specify changes with `+"`+"+` or `+"-"+` lines.
-Skip any hunks that are entirely unchanging `+"` `"+` lines.
+6. INDENTATION: Preserve the EXACT whitespace/indentation of the original code
 
-Output hunks in whatever order makes the most sense.
-Hunks don't need to be in any particular order.
+Example of a properly formatted diff:
 
-When editing a function, method, loop, etc use a hunk to replace the *entire* code block.
-Delete the entire existing version with `+"`-"+` lines and then add a new, updated version with `+"`+"+` lines.
-This will help you generate correct code and correct diffs.
-
-To move code within a file, use 2 hunks: 1 to delete it from its current location, 1 to insert it in the new location.
-
-
-Complete example of the REQUIRED format:
---- templates/deployment.yaml
-+++ templates/deployment.yaml
+--- path/to/file.yaml
++++ path/to/file.yaml
 @@ ... @@
--  replicaCount: 1
-+  replicaCount: 3
-@@ ... @@
--      cpu: 10m
--      memory: 128Mi
-+      cpu: 20m
-+      memory: 256Mi
-@@ ... @@
+ class MyClass:
+     def other_method(self):
+         return True
+-    def target_method(self, param1, param2):
+-        # Original method
+-        result = param1 + param2
+-        return result
++    def target_method(self, param1, param2, param3=None):
++        # Updated method
++        if param3 is not None:
++            result = param1 + param2 + param3
++        else:
++            result = param1 + param2
++        return result
+     def another_method(self):
+         # This method stays the same
+         pass
 
+The diff above completely replaces the entire target_method with proper context.
 
-Follow the instructions to provide the patch in proper <chartsmithArtifact> tags.`,
-			actionPlanWithPath.Path, strings.TrimSpace(currentContent))
+Generate a high-quality diff and provide it within <chartsmithArtifact> tags.`,
+			actionPlanWithPath.Path, strings.TrimSpace(currentContent), 
+			actionPlanWithPath.Path, actionPlanWithPath.Path)
 
 		messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(updateMessage)))
 	}

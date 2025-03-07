@@ -1,5 +1,5 @@
 "use client";
-import React, { useRef, useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Send } from "lucide-react";
 import { useTheme } from "../contexts/ThemeContext";
 import { Message } from "./types";
@@ -21,6 +21,7 @@ export function ChatContainer({ session }: ChatContainerProps) {
   const [workspace] = useAtom(workspaceAtom)
   const [messages, setMessages] = useAtom(messagesAtom)
   const [chatInput, setChatInput] = useState("");
+  // No need for refs as ScrollingContent manages its own scrolling
 
   if (!messages || !workspace) {
     return null;
@@ -38,10 +39,12 @@ export function ChatContainer({ session }: ChatContainerProps) {
     setChatInput("");
   };
 
+  // ScrollingContent will now handle all the scrolling behavior
+
   return (
     <div className={`h-[calc(100vh-3.5rem)] border-r flex flex-col min-h-0 overflow-hidden transition-all duration-300 ease-in-out w-full relative ${theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"}`}>
-      <div className="flex-1 overflow-y-auto">
-        <ScrollingContent>
+      <div className="flex-1 h-full">
+        <ScrollingContent forceScroll={true}>
           <div className="pb-32">
             {messages.map((item, index) => (
               <div key={item.id}>
@@ -49,6 +52,9 @@ export function ChatContainer({ session }: ChatContainerProps) {
                   key={item.id}
                   messageId={item.id}
                   session={session}
+                  onContentUpdate={() => {
+                    // No need to update state - ScrollingContent will handle scrolling
+                  }}
                 />
                 {item.responsePlanId ? (
                   <PlanChatMessage
@@ -58,6 +64,9 @@ export function ChatContainer({ session }: ChatContainerProps) {
                     messageId={item.id}
                     showActions={index === messages.length - 1}
                     showChatInput={false}
+                    onContentUpdate={() => {
+                      // No need to update state - ScrollingContent will handle scrolling
+                    }}
                   />
                 ) : null}
               </div>

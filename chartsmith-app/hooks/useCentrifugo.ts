@@ -108,27 +108,98 @@ export function useCentrifugo({
     // Implementation can be added based on requirements
   }, []);
 
+  // Helper function to determine if a patch is for a new file
+  const isNewFilePatch = (patch?: string) => {
+    if (!patch) return false;
+    return patch.includes('@@ -0,0 +1,');
+  };
+
+  // Helper function to get the appropriate content for a file
+  const getFileContent = (existingContent: string | undefined, artifact: { path: string, content: string, pendingPatch?: string }) => {
+    // If we have a pending patch for a new file, content should be empty string
+    if (isNewFilePatch(artifact.pendingPatch)) {
+      return "";
+    }
+    
+    // For existing files with patches, preserve their content
+    if (existingContent) {
+      return existingContent;
+    }
+    
+    // For existing files that don't have content yet, use artifact.content if available
+    return artifact.content || "";
+  };
+
   const handleArtifactReceived = useCallback((artifact: { path: string, content: string, pendingPatch?: string }) => {
     if (!setSelectedFile) return;
+
+    console.log("Artifact received:", artifact);
+
+    // Generate a consistent file ID once to use in both places
+    const fileId = `file-${Date.now()}`;
 
     setWorkspace(workspace => {
       if (!workspace) return workspace;
 
-      const existingWorkspaceFile = workspace.files?.find(f => f.filePath === artifact.path);
-      const chartWithFile = workspace.charts?.find(chart =>
-        chart.files.some(f => f.filePath === artifact.path)
-      );
+      console.log("Current workspace:", workspace);
 
-      if (!existingWorkspaceFile && !chartWithFile) {
+      // First check for the file in the top-level files array
+      const existingWorkspaceFile = workspace.files?.find(f => f.filePath === artifact.path);
+      console.log("Existing workspace file:", existingWorkspaceFile);
+
+      // Then check if the file exists in any chart
+      let chartWithFile = null;
+      let fileInChart = null;
+      
+      if (workspace.charts) {
+        for (const chart of workspace.charts) {
+          const foundFile = chart.files.find(f => f.filePath === artifact.path);
+          if (foundFile) {
+            chartWithFile = chart;
+            fileInChart = foundFile;
+            break;
+          }
+        }
+      }
+      
+      console.log("Chart with file:", chartWithFile);
+      console.log("File in chart:", fileInChart);
+
+      // Check if it's a new file patch
+      const isNewFile = !existingWorkspaceFile && !fileInChart;
+      const isNewFileFromPatch = isNewFilePatch(artifact.pendingPatch);
+      
+      console.log("Is new file:", isNewFile, "Is new file from patch:", isNewFileFromPatch);
+
+      // Fix for new files - ensure proper initialization for diff to work
+      // If the file doesn't exist anywhere, create a new file and add it to both places
+      if (isNewFile) {
+        console.log("Creating new file:", artifact.path);
+        
+        // For new files that have a pending patch but no content, initialize content to empty string
+        // This matches backend behavior where new files have content="" and pendingPatch with the full content
         const newFile = {
-          id: `file-${Date.now()}`,
+          id: fileId,
           filePath: artifact.path,
-          content: artifact.content,
-          pendingPatch: artifact.pendingPatch
+          // For new files, use empty content and pendingPatch with the full content
+          content: "",
+          // Make sure pendingPatch always exists for new files
+          pendingPatch: artifact.pendingPatch || artifact.content || ""
         };
 
+        // Add to both the first chart AND to the top-level files array
+        // Make sure we have at least one chart
+        if (!workspace.charts || workspace.charts.length === 0) {
+          console.error("No charts in workspace to add file to");
+          return workspace;
+        }
+
+        console.log("Adding new file to workspace and first chart with empty content and patch:", newFile);
+        
         return {
           ...workspace,
+          // Add the new file to the workspace files array
+          files: [...(workspace.files || []), newFile],
           charts: workspace.charts.map((chart, index) =>
             index === 0 ? {
               ...chart,
@@ -138,24 +209,33 @@ export function useCentrifugo({
         };
       }
 
+      // If the file exists and has a pending patch, track the pre-patch state
       if (chartWithFile && artifact.pendingPatch) {
+        console.log("Tracking chart before applying pending patch");
         setChartsBeforeApplyingPendingPatches(prev => [...prev, chartWithFile]);
       }
 
+      console.log("Updating existing file in workspace");
+
+      // Determine content for existing files based on the patch type
+      const existingContent = existingWorkspaceFile?.content || fileInChart?.content;
+
+      // Update files in the top-level files array
       const updatedFiles = workspace.files?.map(file =>
         file.filePath === artifact.path ? {
           ...file,
-          content: artifact.content,
+          content: getFileContent(file.content, artifact),
           pendingPatch: artifact.pendingPatch
         } : file
       ) || [];
 
+      // Update files in all charts
       const updatedCharts = workspace.charts?.map(chart => ({
         ...chart,
         files: chart.files.map(file =>
           file.filePath === artifact.path ? {
             ...file,
-            content: artifact.content,
+            content: getFileContent(file.content, artifact),
             pendingPatch: artifact.pendingPatch
           } : file
         )
@@ -168,15 +248,22 @@ export function useCentrifugo({
       };
     });
 
+    // Create a representation of the file for the editor with appropriate content
+    // This is a key change: We now deep clone the file to ensure React triggers proper re-renders
     const file = {
-      id: `file-${Date.now()}`,
+      id: fileId, // Use the same ID created above
       filePath: artifact.path,
-      content: artifact.content,
-      pendingPatch: artifact.pendingPatch
+      // For new files, set empty content
+      content: isNewFilePatch(artifact.pendingPatch) ? "" : (artifact.content || ""),
+      // Make sure pendingPatch is always defined, even for empty patches
+      pendingPatch: artifact.pendingPatch || artifact.content || ""
     };
+    
+    // Removed excessive logging
 
+    // Set the selected file without excessive logging
     setSelectedFile(file);
-  }, [setSelectedFile]);
+  }, [setSelectedFile, setChartsBeforeApplyingPendingPatches]);
 
   const handleRenderStreamEvent = useCallback(async (data: CentrifugoMessageData) => {
     if (!session) return;
@@ -281,8 +368,16 @@ export function useCentrifugo({
     }
 
     const artifact = message.data.artifact;
-    if (artifact && artifact.path && artifact.content) {
-      handleArtifactReceived(artifact);
+    if (artifact) {
+      console.log("Raw artifact from message:", artifact);
+      
+      // Check if path and content exist, even if content is empty string
+      if (artifact.path) {
+        console.log("Calling handleArtifactReceived with path:", artifact.path);
+        handleArtifactReceived(artifact);
+      } else {
+        console.error("Artifact missing required path:", artifact);
+      }
     }
 
     handleExecuteAction(message.data);
