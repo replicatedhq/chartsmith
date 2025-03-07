@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { useAtom } from "jotai";
 
 // atoms
@@ -20,6 +20,14 @@ interface PlanContentProps {
 export function PlanContent({ session }: PlanContentProps) {
   const [workspace] = useAtom(workspaceAtom);
   const [messages] = useAtom(messagesAtom);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Scroll to bottom when messages change or content updates
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages]);
 
   if (!workspace || !messages) {
     return null;
@@ -28,7 +36,7 @@ export function PlanContent({ session }: PlanContentProps) {
   return (
     <div className="min-h-full w-full">
       <div className="px-4 w-full max-w-3xl py-8 mx-auto">
-        <ScrollingContent>
+        <ScrollingContent ref={scrollRef}>
           <Card className="p-6 w-full border-dark-border/40 shadow-lg">
             {messages.map((item, index) => (
               <div key={item.id}>
@@ -36,6 +44,12 @@ export function PlanContent({ session }: PlanContentProps) {
                   key={item.id}
                   messageId={item.id}
                   session={session}
+                  onContentUpdate={() => {
+                    // Scroll to bottom when content updates
+                    if (scrollRef.current) {
+                      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+                    }
+                  }}
                 />
                 {item.responsePlanId && (
                   <PlanChatMessage
@@ -45,6 +59,12 @@ export function PlanContent({ session }: PlanContentProps) {
                     workspaceId={workspace.id}
                     messageId={item.id}
                     showActions={index === messages.length - 1}
+                    onContentUpdate={() => {
+                      // Scroll to bottom when plan content updates
+                      if (scrollRef.current) {
+                        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+                      }
+                    }}
                   />
                 )}
               </div>

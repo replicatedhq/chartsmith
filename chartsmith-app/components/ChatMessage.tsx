@@ -30,6 +30,7 @@ export interface ChatMessageProps {
   messageId: string;
   session: Session;
   showChatInput?: boolean;
+  onContentUpdate?: () => void;
 }
 
 function LoadingSpinner({ message }: { message: string }) {
@@ -46,6 +47,7 @@ export function ChatMessage({
   messageId,
   session,
   showChatInput,
+  onContentUpdate,
 }: ChatMessageProps) {
   const { theme } = useTheme();
   const [showReportModal, setShowReportModal] = useState(false);
@@ -63,6 +65,13 @@ export function ChatMessage({
   const render = renderGetter(message!.responseRenderId!);
   const [conversionGetter] = useAtom(conversionByIdAtom);
   const conversion = conversionGetter(message!.responseConversionId!);
+
+  // Move the useEffect outside of renderAssistantContent
+  useEffect(() => {
+    if (onContentUpdate && message) {
+      onContentUpdate();
+    }
+  }, [message?.response, message?.responseRenderId, message?.responseConversionId, onContentUpdate]);
 
   const handleSubmitChat = async (e: FormEvent) => {
     e.preventDefault();
@@ -103,6 +112,7 @@ export function ChatMessage({
 
   const renderAssistantContent = () => {
     if (!message) return null;
+
     // Show rendered charts
     if (message.responseRenderId) {
       return (

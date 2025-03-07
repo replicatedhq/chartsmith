@@ -167,9 +167,9 @@ async function downloadChartFilesFromArtifactHub(url: string): Promise<Workspace
     const extractPath = await downloadChartArchiveFromURL(contentURL);
     await removeBinaryFilesInPath(extractPath);
     return filesInArchive(extractPath);
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error in downloadChartFilesFromArtifactHub", error);
-    throw new Error(`Failed to download chart files: ${error.message}`);
+    throw new Error(`Failed to download chart files: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 

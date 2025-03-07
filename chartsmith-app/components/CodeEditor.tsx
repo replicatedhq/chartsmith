@@ -32,6 +32,11 @@ interface CodeEditorProps {
 }
 
 function parseDiff(originalContent: string, diffContent: string): string {
+  // Quick checks for empty inputs
+  if (!diffContent || diffContent.trim() === '') {
+    return originalContent;
+  }
+  
   const lines = diffContent.trim().split('\n');
   const originalLines = originalContent.split('\n');
   const modifiedLines = [...originalLines]; // Start with original content
@@ -42,6 +47,42 @@ function parseDiff(originalContent: string, diffContent: string): string {
     modifiedStart: number;
     modifiedCount: number;
     lines: string[];
+  }
+  
+  // Detect special cases for new files or simple content replacement patches
+  const isNewFile = diffContent.includes('@@ -0,0 +1,');
+  const isSimpleReplacement = diffContent.match(/@@ -1,\d+ \+1,\d+ @@/);
+  const hasProperDiffMarkers = diffContent.includes('\n+') || diffContent.includes('\n-');
+  
+  // SPECIAL HANDLING FOR NEW FILES
+  if (isNewFile) {
+    // For new files, extract everything after the hunk header
+    let contentStart = diffContent.indexOf('@@');
+    if (contentStart !== -1) {
+      contentStart = diffContent.indexOf('\n', contentStart);
+      if (contentStart !== -1) {
+        // Make sure we're not returning an empty string
+        const content = diffContent.substring(contentStart + 1).trim();
+        if (content) {
+          return content;
+        }
+      }
+    }
+  }
+  
+  // SPECIAL HANDLING FOR REPLACEMENT PATCHES
+  if (isSimpleReplacement && !hasProperDiffMarkers) {
+    // Extract the content from the patch (everything after the header)
+    let contentStart = diffContent.indexOf('@@');
+    if (contentStart !== -1) {
+      contentStart = diffContent.indexOf('\n', contentStart);
+      if (contentStart !== -1) {
+        const content = diffContent.substring(contentStart + 1).trim();
+        if (content) {
+          return content;
+        }
+      }
+    }
   }
   
   // Skip past header lines to find hunks
@@ -117,9 +158,15 @@ function parseDiff(originalContent: string, diffContent: string): string {
       continue;
     }
     
-    // Add content lines to current hunk
-    if (currentHunk) {
-      currentHunk.lines.push(line);
+    // For patches without proper markers in simple replacement, prefix with the appropriate marker
+    if (currentHunk && isSimpleReplacement && !hasProperDiffMarkers) {
+      // In this case, treat all content as additions (since the backend doesn't add markers)
+      currentHunk.lines.push(`+${line}`);
+    } else {
+      // Add content lines to current hunk normally
+      if (currentHunk) {
+        currentHunk.lines.push(line);
+      }
     }
   }
   
@@ -669,40 +716,85 @@ export function CodeEditor({
   };
 
   if (selectedFile?.pendingPatch) {
-    const modified = parseDiff(selectedFile.content, selectedFile.pendingPatch);
-
-    return (
-      <div className="flex-1 h-full flex flex-col">
-        {showDiffHeader && renderDiffHeader()}
-        <div className="flex-1">
-          <DiffEditor
-            height="100%"
-            language={getLanguage(selectedFile.filePath)}
-            original={selectedFile.content}
-            modified={modified}
-            theme={theme === "light" ? "vs" : "vs-dark"}
-            onMount={handleDiffEditorMount}
-            options={{
-              ...editorOptions,
-              renderSideBySide: false,
-              diffWordWrap: 'off',
-              originalEditable: false,
-              renderOverviewRuler: false,
-              ignoreTrimWhitespace: false,
-              renderWhitespace: 'none',
-              renderLineHighlight: 'none',
-              quickSuggestions: false,
-              folding: false,
-              lineNumbers: 'on',
-              scrollBeyondLastLine: false,
-              minimap: { enabled: false },
-            }}
-          />
+    try {
+      // Add error handling around the diff parsing
+      const modified = parseDiff(selectedFile.content, selectedFile.pendingPatch);
+      
+      // For new files where the content is completely empty but we have a patch,
+      // we can check if it's a new file pattern and handle it specially
+      const isNewFilePatch = selectedFile.pendingPatch.includes('@@ -0,0 +1,');
+      const original = selectedFile.content;
+      
+      // Don't use a changing key, as it forces remounts and causes loading flashes
+      // const editorKey = `diff-${selectedFile.id}-${selectedFile.filePath}-${theme}`;
+      const editorKey = 'diff-editor';
+      
+      return (
+        <div className="flex-1 h-full flex flex-col">
+          {showDiffHeader && renderDiffHeader()}
+          <div className="flex-1">
+            <DiffEditor
+              key={editorKey}
+              height="100%"
+              language={getLanguage(selectedFile.filePath)}
+              original={original}
+              modified={modified}
+              theme={theme === "light" ? "vs" : "vs-dark"}
+              onMount={handleDiffEditorMount}
+              options={{
+                ...editorOptions,
+                renderSideBySide: false,
+                diffWordWrap: 'off',
+                originalEditable: false,
+                renderOverviewRuler: false,
+                ignoreTrimWhitespace: false,
+                renderWhitespace: 'none',
+                renderLineHighlight: 'none',
+                quickSuggestions: false,
+                folding: false,
+                lineNumbers: 'on',
+                scrollBeyondLastLine: false,
+                minimap: { enabled: false },
+              }}
+            />
+          </div>
         </div>
-      </div>
-    );
+      );
+    } catch (error) {
+      console.error("Error parsing diff:", error);
+      
+      // Fallback to showing raw content if diff parsing fails
+      return (
+        <div className="flex-1 h-full flex flex-col">
+          {showDiffHeader && renderDiffHeader()}
+          <div className="flex-1 h-full">
+            <Editor
+              height="100%"
+              defaultLanguage={getLanguage(selectedFile.filePath)}
+              language={getLanguage(selectedFile.filePath)}
+              value={selectedFile.pendingPatch}
+              theme={theme === "light" ? "vs" : "vs-dark"}
+              options={{
+                ...editorOptions,
+                readOnly: true,
+              }}
+              onMount={handleEditorMount}
+              key="fallback-editor"
+            />
+          </div>
+        </div>
+      );
+    }
   }
 
+  // No need for excessive logging
+  
+  // Don't use a changing key, as it forces remounts and causes loading flashes
+  // const editorKey = selectedFile 
+  //   ? `editor-${selectedFile.id}-${selectedFile.filePath}-${theme}`
+  //   : `editor-empty-${theme}`;
+  const editorKey = 'standard-editor';
+  
   return (
     <div className="flex-1 h-full flex flex-col">
       {showDiffHeader && renderDiffHeader()}
@@ -719,7 +811,7 @@ export function CodeEditor({
             readOnly: !onChange,
           }}
           onMount={handleEditorMount}
-          key={`${selectedFile?.id}-${selectedFile?.filePath}-${theme}`}
+          key={editorKey}
         />
       </div>
     </div>

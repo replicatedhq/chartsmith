@@ -330,15 +330,8 @@ func (d *DiffReconstructor) enhanceHunks(hunks []hunk) ([]hunk, error) {
 		enhancedHunk.contextBefore = contextBefore
 		enhancedHunk.contextAfter = contextAfter
 		
-		// Normalize indentation for context lines
-		for j, line := range enhancedHunk.content {
-			if strings.HasPrefix(line, " ") {
-				origLine := strings.TrimPrefix(line, " ")
-				// Preserve the content but not the indentation - that will be fixed later
-				enhancedHunk.content[j] = " " + origLine
-			}
-		}
-		
+		// Preserve original content exactly, including all whitespace
+		// This avoids mangling indentation in the patches
 		enhancedHunks[i] = enhancedHunk
 	}
 	
@@ -437,6 +430,13 @@ func (d *DiffReconstructor) findBestMatchForHunk(originalLines []string, context
 }
 
 func (d *DiffReconstructor) adjustIndentation(lines []string, originalLines []string, startPos int) []string {
+	// For whitespace-sensitive issues, just preserve the original lines
+	// This is a more conservative approach that prevents whitespace mangling
+	return lines
+	
+	// Below is the original, more aggressive whitespace-fixing approach
+	// Left commented for future reference if needed
+	/*
 	adjustedLines := make([]string, len(lines))
 	linePos := startPos - 1 // Convert to 0-based indexing
 	
@@ -477,6 +477,7 @@ func (d *DiffReconstructor) adjustIndentation(lines []string, originalLines []st
 	}
 	
 	return adjustedLines
+	*/
 }
 
 func parseHunkRange(s string) (start, count int) {
