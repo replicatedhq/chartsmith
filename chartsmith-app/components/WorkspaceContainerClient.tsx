@@ -4,7 +4,7 @@ import React from "react";
 import { useAtom } from "jotai";
 
 // atoms
-import { editorViewAtom, selectedFileAtom } from "@/atoms/editor";
+import { editorViewAtom, selectedFileAtom } from "@/atoms/workspace";
 import { looseFilesAtom, workspaceAtom } from "@/atoms/workspace";
 
 // components
@@ -118,7 +118,7 @@ export function WorkspaceContainerClient({
           </div>
         </div>
       </div>
-      
+
       <DebugPanel isVisible={isDebugVisible} />
     </>
   );

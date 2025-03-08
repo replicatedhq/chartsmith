@@ -3,7 +3,7 @@ import { FileText, ChevronDown, ChevronRight, Trash2 } from "lucide-react";
 import { useTheme } from "../contexts/ThemeContext";
 import { DeleteFileModal } from "./DeleteFileModal";
 import { Chart, WorkspaceFile } from "@/lib/types/workspace";
-import { selectedFileAtom } from "@/atoms/editor";
+import { selectedFileAtom } from "@/atoms/workspace";
 import { useAtom } from "jotai";
 
 interface TreeNode {
@@ -183,14 +183,14 @@ export function FileTree({ files = [], charts = [] }: FileTreeProps) {
     let additions = 0;
     let deletions = 0;
     let contentStarted = false;
-    
+
     // Check if this is a new file patch (indicated by @@ -0,0 +1,N @@)
     const isNewFile = patch.includes('@@ -0,0 +1,');
-    
+
     // Check if this is a simple content replacement without proper diff markers
     const isSimpleReplacement = patch.match(/@@ -1,\d+ \+1,\d+ @@/);
     const hasProperDiffMarkers = patch.includes('\n+') || patch.includes('\n-');
-    
+
     // For new files, count every non-header line as an addition
     if (isNewFile) {
       console.log("Counting additions for new file");
@@ -199,28 +199,28 @@ export function FileTree({ files = [], charts = [] }: FileTreeProps) {
         if (line.startsWith('---') || line.startsWith('+++') || line.startsWith('@@')) {
           continue;
         }
-        
+
         // For new files, lines might not be prefixed with '+' in some cases
         additions++;
       }
-    } 
+    }
     // For simple replacement patches without proper markers, compare line counts
     else if (isSimpleReplacement && !hasProperDiffMarkers) {
       console.log("Handling simple replacement patch without markers");
-      
+
       // Try to extract old and new line counts from the patch header
       const match = patch.match(/@@ -1,(\d+) \+1,(\d+) @@/);
       if (match) {
         const oldLineCount = parseInt(match[1]);
         const newLineCount = parseInt(match[2]);
-        
+
         // Count the difference as additions or deletions
         if (newLineCount > oldLineCount) {
           additions = newLineCount - oldLineCount;
         } else if (oldLineCount > newLineCount) {
           deletions = oldLineCount - newLineCount;
         }
-        
+
         // If line counts are the same but content differs, show at least one change
         if (newLineCount === oldLineCount && hasContentChanges(patch)) {
           additions = 1;
@@ -249,19 +249,19 @@ export function FileTree({ files = [], charts = [] }: FileTreeProps) {
         }
       }
     }
-    
+
     return { additions, deletions };
   };
-  
+
   // Helper function to check if a patch actually changes content
   const hasContentChanges = (patch: string) => {
     // If the patch is sufficiently different from the original content, assume it has changes
     const headerEndIndex = patch.indexOf('@@');
     if (headerEndIndex === -1) return true;
-    
+
     const nextNewline = patch.indexOf('\n', headerEndIndex);
     if (nextNewline === -1) return false;
-    
+
     // There's content after the header, which indicates changes
     return nextNewline < patch.length - 1;
   };

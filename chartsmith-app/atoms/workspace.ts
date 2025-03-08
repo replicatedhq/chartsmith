@@ -1,9 +1,11 @@
 import { atom } from 'jotai'
 import type { Workspace, Plan, RenderedWorkspace, Chart, WorkspaceFile, Conversion, ConversionFile, ConversionStatus } from '@/lib/types/workspace'
-import { Message } from '@/components/types'
+import { Message, FileNode } from '@/components/types'
 
 // Base atoms
 export const workspaceAtom = atom<Workspace | null>(null)
+export const editorContentAtom = atom<string>("")
+export const selectedFileAtom = atom<WorkspaceFile | undefined>(undefined)
 
 export const messagesAtom = atom<Message[]>([])
 export const messageByIdAtom = atom(get => {
@@ -29,6 +31,59 @@ export const conversionByIdAtom = atom(get => {
   return (id: string) => conversions.find(c => c.id === id)
 })
 
+export type EditorView = "source" | "rendered";
+
+interface ViewState {
+  sourceFile?: FileNode;
+  renderedFile?: FileNode;
+}
+
+export const editorViewAtom = atom<EditorView>("source");
+
+export const editorViewStateAtom = atom<ViewState>({
+  sourceFile: undefined,
+});
+
+// Convenience atom for updating file selection based on current view
+export const updateFileSelectionAtom = atom(
+  null,
+  (get, set, file: FileNode) => {
+    const currentView = get(editorViewAtom);
+    set(editorViewStateAtom, (prev) => ({
+      ...prev,
+      [currentView === "source" ? "sourceFile" : "renderedFile"]: file,
+    }));
+  }
+);
+
+// Navigation atoms for files with diffs
+export const currentDiffIndexAtom = atom<number>(0)
+
+// Derived atom to update the current diff index when selected file changes
+export const updateCurrentDiffIndexAtom = atom(
+  null,
+  (get, set, filesWithDiffs: WorkspaceFile[]) => {
+    const selectedFile = get(selectedFileAtom);
+    if (selectedFile && filesWithDiffs.length > 0) {
+      const index = filesWithDiffs.findIndex(f => f.id === selectedFile.id);
+      if (index !== -1) {
+        set(currentDiffIndexAtom, index);
+      }
+    }
+  }
+)
+
+// New atom to handle file updates after accepting/rejecting patches
+export const updateFileContentAtom = atom(
+  null,
+  (get, set, updatedFile: WorkspaceFile) => {
+    const selectedFile = get(selectedFileAtom);
+    if (selectedFile?.id === updatedFile.id) {
+      set(selectedFileAtom, updatedFile);
+      set(editorContentAtom, updatedFile.content);
+    }
+  }
+)
 
 // Derived atoms
 export const looseFilesAtom = atom(get => {

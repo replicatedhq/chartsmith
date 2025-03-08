@@ -5,7 +5,7 @@ import { useAtom } from "jotai";
 import { Check, X, ChevronUp, ChevronDown, CheckCheck, ChevronRight } from "lucide-react";
 
 // atoms
-import { selectedFileAtom, currentDiffIndexAtom, updateCurrentDiffIndexAtom, updateFileContentAtom } from "@/atoms/editor";
+import { selectedFileAtom, currentDiffIndexAtom, updateCurrentDiffIndexAtom, updateFileContentAtom } from "@/atoms/workspace";
 import { allFilesBeforeApplyingPendingPatchesAtom, allFilesWithPendingPatchesAtom, workspaceAtom, addFileToWorkspaceAtom } from "@/atoms/workspace";
 
 // types

@@ -26,7 +26,7 @@ import {
   handleConversionUpdatedAtom,
   handleConversionFileUpdatedAtom
  } from "@/atoms/workspace";
-import { selectedFileAtom } from "@/atoms/editor";
+import { selectedFileAtom } from "@/atoms/workspace";
 
 
 // types
@@ -120,12 +120,12 @@ export function useCentrifugo({
     if (isNewFilePatch(artifact.pendingPatch)) {
       return "";
     }
-    
+
     // For existing files with patches, preserve their content
     if (existingContent) {
       return existingContent;
     }
-    
+
     // For existing files that don't have content yet, use artifact.content if available
     return artifact.content || "";
   };
@@ -150,7 +150,7 @@ export function useCentrifugo({
       // Then check if the file exists in any chart
       let chartWithFile = null;
       let fileInChart = null;
-      
+
       if (workspace.charts) {
         for (const chart of workspace.charts) {
           const foundFile = chart.files.find(f => f.filePath === artifact.path);
@@ -161,21 +161,21 @@ export function useCentrifugo({
           }
         }
       }
-      
+
       console.log("Chart with file:", chartWithFile);
       console.log("File in chart:", fileInChart);
 
       // Check if it's a new file patch
       const isNewFile = !existingWorkspaceFile && !fileInChart;
       const isNewFileFromPatch = isNewFilePatch(artifact.pendingPatch);
-      
+
       console.log("Is new file:", isNewFile, "Is new file from patch:", isNewFileFromPatch);
 
       // Fix for new files - ensure proper initialization for diff to work
       // If the file doesn't exist anywhere, create a new file and add it to both places
       if (isNewFile) {
         console.log("Creating new file:", artifact.path);
-        
+
         // For new files that have a pending patch but no content, initialize content to empty string
         // This matches backend behavior where new files have content="" and pendingPatch with the full content
         const newFile = {
@@ -195,7 +195,7 @@ export function useCentrifugo({
         }
 
         console.log("Adding new file to workspace and first chart with empty content and patch:", newFile);
-        
+
         return {
           ...workspace,
           // Add the new file to the workspace files array
@@ -258,7 +258,7 @@ export function useCentrifugo({
       // Make sure pendingPatch is always defined, even for empty patches
       pendingPatch: artifact.pendingPatch || artifact.content || ""
     };
-    
+
     // Removed excessive logging
 
     // Set the selected file without excessive logging
@@ -370,7 +370,7 @@ export function useCentrifugo({
     const artifact = message.data.artifact;
     if (artifact) {
       console.log("Raw artifact from message:", artifact);
-      
+
       // Check if path and content exist, even if content is empty string
       if (artifact.path) {
         console.log("Calling handleArtifactReceived with path:", artifact.path);
