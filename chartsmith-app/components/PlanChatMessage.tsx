@@ -61,6 +61,7 @@ export function PlanChatMessage({
   const [chatInput, setChatInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const actionsRef = useRef<HTMLDivElement>(null);
+  const proceedButtonRef = useRef<HTMLButtonElement>(null);
 
   // Scroll when new actions are added or when expanded
   useLayoutEffect(() => {
@@ -125,6 +126,32 @@ export function PlanChatMessage({
     // Include plan in the deps array to fix the warning
     plan
   ]);
+  
+  // Special effect just for ensuring Proceed button is visible once plan is in review
+  useEffect(() => {
+    if (!plan || plan.status !== 'review') return;
+    
+    // Ensure proceed button is visible with multiple attempts
+    const delays = [500, 1000, 1500, 2000];
+    
+    delays.forEach(delay => {
+      setTimeout(() => {
+        // Check if proceed button is available (only in review status)
+        if (proceedButtonRef.current && plan.status === 'review') {
+          // Scroll the button into view
+          proceedButtonRef.current.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center'
+          });
+          
+          // Notify parent that content has updated
+          callContentUpdate();
+        }
+      }, delay);
+    });
+    
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plan?.status === 'review']);
 
   const handleIgnore = async () => {
     if (session && plan) {
@@ -316,6 +343,7 @@ export function PlanChatMessage({
                   </Button>
                 </div>
                 <Button
+                  ref={proceedButtonRef}
                   variant="default"
                   size="sm"
                   onClick={handleProceed}
