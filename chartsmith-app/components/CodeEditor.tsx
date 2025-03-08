@@ -35,46 +35,46 @@ function parseDiff(originalContent: string, diffContent: string): string {
   // Special case: for the specific format that we're having trouble with
   if (diffContent.includes("-replicaCount: 1") && diffContent.includes("+replicaCount: 3")) {
     console.log("SPECIAL CASE: Found replicaCount diff");
-    
+
     // For the specific case that's failing, do a direct string replacement
     const originalLines = originalContent.split('\n');
-    
+
     // Find the line with replicaCount: 1
     const targetLine = originalLines.findIndex(line => line.trim() === 'replicaCount: 1');
-    
+
     if (targetLine >= 0) {
       // Replace that line with the new content
       originalLines[targetLine] = 'replicaCount: 3';
       return originalLines.join('\n');
     }
   }
-  
+
   // If not the special case, continue with generic algorithm
-  
+
   // Quick checks for empty inputs
   if (!diffContent || diffContent.trim() === '') {
     return originalContent;
   }
-  
+
   // Parse the unified diff format
   const originalLines = originalContent.split('\n');
   const diffLines = diffContent.split('\n');
-  
+
   // Create a copy of the original content that we'll modify
-  let modifiedLines = [...originalLines];
-  
+  const modifiedLines = [...originalLines];
+
   // Direct parsing approach
   let currentOriginalLine = 0;
   let currentModifiedLine = 0;
   let inHunk = false;
-  
+
   for (let i = 0; i < diffLines.length; i++) {
     const line = diffLines[i];
-    
+
     // Parse hunk header
     if (line.startsWith('@@')) {
       inHunk = true;
-      
+
       // Format: @@ -originalStart,originalLength +modifiedStart,modifiedLength @@
       const match = line.match(/@@ -(\d+),(\d+) \+(\d+),(\d+) @@/);
       if (match) {
@@ -84,9 +84,9 @@ function parseDiff(originalContent: string, diffContent: string): string {
       }
       continue;
     }
-    
+
     if (!inHunk) continue;
-    
+
     // Process hunk lines
     if (line.startsWith(' ')) {
       // Context line - advance both counters
@@ -102,7 +102,7 @@ function parseDiff(originalContent: string, diffContent: string): string {
           modifiedLines.splice(currentModifiedLine, 1);
         } else {
           console.log(`WARNING: Expected to find "${lineContent}" at line ${currentModifiedLine} but found "${modifiedLines[currentModifiedLine]}"`);
-          
+
           // Try to find the exact line
           const lineIndex = modifiedLines.indexOf(lineContent, currentModifiedLine);
           if (lineIndex >= 0) {
@@ -119,25 +119,25 @@ function parseDiff(originalContent: string, diffContent: string): string {
       currentModifiedLine++;
     }
   }
-  
+
   return modifiedLines.join('\n');
 }
 
 // Helper function to find best position for context lines in original content
 function findBestPosition(originalLines: string[], contextLines: string[]): number {
   if (contextLines.length === 0) return 1;
-  
+
   let bestPos = 1;
   let bestScore = 0;
-  
+
   for (let pos = 0; pos <= originalLines.length - contextLines.length; pos++) {
     let score = 0;
-    
+
     for (let i = 0; i < contextLines.length; i++) {
       // Compare line by line, ignoring whitespace
       const contextNorm = contextLines[i].trim();
       const originalNorm = originalLines[pos + i].trim();
-      
+
       if (contextNorm === originalNorm) {
         score += 1;
       } else if (contextNorm.replace(/\s+/g, '') === originalNorm.replace(/\s+/g, '')) {
@@ -148,16 +148,16 @@ function findBestPosition(originalLines: string[], contextLines: string[]): numb
         score += 0.5;
       }
     }
-    
+
     // Normalize score based on number of context lines
     const normalizedScore = score / contextLines.length;
-    
+
     if (normalizedScore > bestScore) {
       bestScore = normalizedScore;
       bestPos = pos + 1; // Convert to 1-based indexing
     }
   }
-  
+
   // Only return position if we have a good match
   return bestScore > 0.6 ? bestPos : 1;
 }
@@ -629,16 +629,16 @@ export function CodeEditor({
     try {
       // Add error handling around the diff parsing
       const modified = parseDiff(selectedFile.content, selectedFile.pendingPatch);
-      
+
       // For new files where the content is completely empty but we have a patch,
       // we can check if it's a new file pattern and handle it specially
       const isNewFilePatch = selectedFile.pendingPatch.includes('@@ -0,0 +1,');
       const original = selectedFile.content;
-      
+
       // Don't use a changing key, as it forces remounts and causes loading flashes
       // const editorKey = `diff-${selectedFile.id}-${selectedFile.filePath}-${theme}`;
       const editorKey = 'diff-editor';
-      
+
       return (
         <div className="flex-1 h-full flex flex-col">
           {showDiffHeader && renderDiffHeader()}
@@ -672,7 +672,7 @@ export function CodeEditor({
       );
     } catch (error) {
       console.error("Error parsing diff:", error);
-      
+
       // Fallback to showing raw content if diff parsing fails
       return (
         <div className="flex-1 h-full flex flex-col">
@@ -698,13 +698,13 @@ export function CodeEditor({
   }
 
   // No need for excessive logging
-  
+
   // Don't use a changing key, as it forces remounts and causes loading flashes
-  // const editorKey = selectedFile 
+  // const editorKey = selectedFile
   //   ? `editor-${selectedFile.id}-${selectedFile.filePath}-${theme}`
   //   : `editor-empty-${theme}`;
   const editorKey = 'standard-editor';
-  
+
   return (
     <div className="flex-1 h-full flex flex-col">
       {showDiffHeader && renderDiffHeader()}
