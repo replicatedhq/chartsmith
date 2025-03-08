@@ -44,7 +44,8 @@ export async function listMessagesForWorkspace(workspaceID: string): Promise<Cha
                 workspace_chat.followup_actions,
                 workspace_chat.response_render_id,
                 workspace_chat.response_plan_id,
-                workspace_chat.response_conversion_id
+                workspace_chat.response_conversion_id,
+                workspace_chat.response_rollback_to_revision_number
             FROM
                 workspace_chat
             WHERE
@@ -76,8 +77,10 @@ export async function listMessagesForWorkspace(workspaceID: string): Promise<Cha
         responseRenderId: row.response_render_id,
         responsePlanId: row.response_plan_id,
         responseConversionId: row.response_conversion_id,
+        responseRollbackToRevisionNumber: row.response_rollback_to_revision_number,
         isComplete: true,
       };
+
       messages.push(message);
     }
 

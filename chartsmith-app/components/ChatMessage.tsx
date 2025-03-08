@@ -25,6 +25,7 @@ import { conversionByIdAtom, messageByIdAtom, messagesAtom, renderByIdAtom, work
 import { cancelMessageAction } from "@/lib/workspace/actions/cancel-message";
 import { performFollowupAction } from "@/lib/workspace/actions/perform-followup-action";
 import { createChatMessageAction } from "@/lib/workspace/actions/create-chat-message";
+import { rollbackWorkspaceAction } from "@/lib/workspace/actions/rollback";
 
 export interface ChatMessageProps {
   messageId: string;
@@ -60,7 +61,7 @@ export function ChatMessage({
   const [messageGetter] = useAtom(messageByIdAtom);
   const message = messageGetter(messageId);
 
-  const [workspace] = useAtom(workspaceAtom);
+  const [workspace, setWorkspace] = useAtom(workspaceAtom);
   const [renderGetter] = useAtom(renderByIdAtom);
   const render = renderGetter(message!.responseRenderId!);
   const [conversionGetter] = useAtom(conversionByIdAtom);
@@ -204,6 +205,31 @@ export function ChatMessage({
             <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"} mb-1`}>ChartSmith</div>
             <div className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} ${message.isIgnored ? "opacity-50 line-through" : ""} text-[12px] markdown-content`}>
               {renderAssistantContent()}
+
+              {/* Rollback link for imported charts - only show if it's not the current revision */}
+              {message.responseRollbackToRevisionNumber !== undefined &&
+               workspace.currentRevisionNumber !== message.responseRollbackToRevisionNumber && (
+                <div className="mt-2 text-[9px] border-t border-gray-200 dark:border-dark-border/30 pt-1 flex justify-end">
+                  <button
+                    className={`${theme === "dark" ? "text-gray-500 hover:text-gray-300" : "text-gray-400 hover:text-gray-600"} hover:underline flex items-center`}
+                    onClick={async () => {
+                      try {
+                        const updatedWorkspace = await rollbackWorkspaceAction(session, workspace.id, message.responseRollbackToRevisionNumber!);
+                        setWorkspace(updatedWorkspace);
+                        console.log(`Successfully rolled back to revision ${message.responseRollbackToRevisionNumber}`);
+                      } catch (error) {
+                        console.error(`Error rolling back to revision:`, error);
+                      }
+                    }}
+                  >
+                    <svg className="w-2 h-2 mr-1" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12Z" stroke="currentColor" strokeWidth="2"/>
+                      <path d="M12 8L12 13M12 13L15 10M12 13L9 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    rollback to this revision
+                  </button>
+                </div>
+              )}
             </div>
             {message.followupActions && message.followupActions.length > 0 && (
               <div className="mt-4 flex gap-2 justify-end">

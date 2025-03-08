@@ -25,6 +25,7 @@ export async function createWorkspaceFromArchiveAction(session: Session, formDat
       prompt: `Import the Helm chart from the uploaded file named ${file.name}`,
       response: `Got it. I found a ${baseChart.name} chart in the ${file.name} file. What's next?`,
       knownIntent: ChatMessageIntent.NON_PLAN,
+      responseRollbackToRevisionNumber: 1,
     });
 
     return w;
@@ -37,6 +38,7 @@ export async function createWorkspaceFromArchiveAction(session: Session, formDat
       response: `I'll create a Helm chart from the Kubernetes manifests in the uploaded file named ${file.name}`,
       knownIntent: ChatMessageIntent.CONVERT_K8S_TO_HELM,
       additionalFiles: looseFiles,
+      responseRollbackToRevisionNumber: 1,
     });
 
     return w;

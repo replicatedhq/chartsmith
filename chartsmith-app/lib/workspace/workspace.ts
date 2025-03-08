@@ -138,6 +138,7 @@ export interface CreateChatMessageParams {
   knownIntent?: ChatMessageIntent;
   followupActions?: FollowupAction[];
   additionalFiles?: WorkspaceFile[];
+  responseRollbackToRevisionNumber?: number;
 }
 
 export async function createChatMessage(userId: string, workspaceId: string, params: CreateChatMessageParams): Promise<ChatMessage> {
@@ -166,11 +167,12 @@ export async function createChatMessage(userId: string, workspaceId: string, par
         followup_actions,
         response_render_id,
         response_plan_id,
-        response_conversion_id
+        response_conversion_id,
+        response_rollback_to_revision_number
       )
       VALUES (
         $1, $2, now(), $3, $4, $5, 0, false,
-        $6, $7, $8, false, false, false, $9, $10, null, null, null
+        $6, $7, $8, false, false, false, $9, $10, null, null, null, $11
       )`;
 
     const values = [
@@ -184,6 +186,7 @@ export async function createChatMessage(userId: string, workspaceId: string, par
       params.knownIntent === ChatMessageIntent.PLAN,
       params.knownIntent === ChatMessageIntent.RENDER,
       params.followupActions ? JSON.stringify(params.followupActions) : null,
+      params.responseRollbackToRevisionNumber,
     ];
 
     await client.query(query, values);
@@ -445,7 +448,8 @@ export async function getChatMessage(chatMessageId: string): Promise<ChatMessage
         followup_actions,
         response_render_id,
         response_plan_id,
-        response_conversion_id
+        response_conversion_id,
+        response_rollback_to_revision_number
       FROM workspace_chat
       WHERE id = $1`;
 
@@ -462,6 +466,7 @@ export async function getChatMessage(chatMessageId: string): Promise<ChatMessage
       responseRenderId: result.rows[0].response_render_id,
       responsePlanId: result.rows[0].response_plan_id,
       responseConversionId: result.rows[0].response_conversion_id,
+      responseRollbackToRevisionNumber: result.rows[0].response_rollback_to_revision_number,
       isComplete: true
     };
 
@@ -794,6 +799,59 @@ export async function listPlans(workspaceId: string): Promise<Plan[]> {
     return plans;
   } catch (err) {
     logger.error("Failed to list plans", { err });
+    throw err;
+  }
+}
+
+export async function rollbackToRevision(workspaceId: string, revisionNumber: number) {
+  logger.info("Rolling back to revision", { workspaceId, revisionNumber });
+
+  const db = getDB(await getParam("DB_URI"));
+
+  try {
+    await db.query('BEGIN');
+
+    await db.query(`update workspace set current_revision_number = $1 where id = $2`, [revisionNumber, workspaceId]);
+    await db.query(`delete from workspace_revision where workspace_id = $1 and revision_number > $2`, [workspaceId, revisionNumber]);
+
+    // get the render ids
+    const result = await db.query(`select id from workspace_rendered where workspace_id = $1 and revision_number > $2`, [workspaceId, revisionNumber]);
+    const renderIds = result.rows.map((row: { id: string }) => row.id);
+
+    await db.query(`delete from workspace_rendered where workspace_id = $1 and revision_number > $2`, [workspaceId, revisionNumber]);
+
+    // Only run the delete queries if there are render IDs to delete
+    if (renderIds.length > 0) {
+      // Properly escape render IDs as prepared statement parameters
+      const placeholders = renderIds.map((_, idx) => `$${idx + 1}`).join(',');
+      await db.query(`delete from workspace_rendered_chart where workspace_render_id in (${placeholders})`, renderIds);
+      await db.query(`delete from workspace_rendered_file where workspace_render_id in (${placeholders})`, renderIds);
+    }
+
+    // get the chat message ids for later revisions
+    const chatMessageResult = await db.query(`select id from workspace_chat where workspace_id = $1 and revision_number > $2`, [workspaceId, revisionNumber]);
+    const chatMessageIds = chatMessageResult.rows.map((row: { id: string }) => row.id);
+
+    const chatMessageIdPlaceholders = chatMessageIds.map((_, idx) => `$${idx + 1}`).join(',');
+    await db.query(`delete from workspace_chat where workspace_id = $1 and revision_number > $2`, [workspaceId, revisionNumber]);
+
+    // get the plan ids for later revisions
+    const planResult = await db.query(`select id from workspace_plan where workspace_id = $1 and chat_message_ids @> $2`, [workspaceId, chatMessageIds]);
+    const planIds = planResult.rows.map((row: { id: string }) => row.id);
+
+    const planIdPlaceholders = planIds.map((_, idx) => `$${idx + 1}`).join(',');
+    await db.query(`delete from workspace_plan_action_file where plan_id in (${planIdPlaceholders})`, planIds);
+
+    await db.query(`delete from workspace_plan where id in (${planIdPlaceholders})`, planIds);
+
+
+    await db.query(`delete from workspace_file where workspace_id = $1 and revision_number > $2`, [workspaceId, revisionNumber]);
+
+    await db.query(`delete from workspace_chart where workspace_id = $1 and revision_number > $2`, [workspaceId, revisionNumber]);
+
+    await db.query('COMMIT');
+  } catch (err) {
+    await db.query('ROLLBACK');
     throw err;
   }
 }

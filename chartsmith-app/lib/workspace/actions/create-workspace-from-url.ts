@@ -24,6 +24,7 @@ export async function createWorkspaceFromUrlAction(session: Session, url: string
     response: `Got it. I found a ${baseChart.name} chart in the ${url} repository and finished importing it. What's next?`,
     knownIntent: ChatMessageIntent.NON_PLAN,
     followupActions: followupActions,
+    responseRollbackToRevisionNumber: 1,
   });
 
   return w;

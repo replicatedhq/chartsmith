@@ -93,6 +93,7 @@ export function useCentrifugo({
         followupActions: chatMessage.followupActions,
         responseRenderId: chatMessage.responseRenderId,
         responsePlanId: chatMessage.responsePlanId,
+        responseRollbackToRevisionNumber: chatMessage.responseRollbackToRevisionNumber,
       };
 
       if (index >= 0) {
