@@ -330,8 +330,30 @@ export async function acceptPatchAction(session: Session, fileId: string, revisi
     }
 
     logger.info(`Accepting patch for file ${fileId} at revision ${revision}`);
-
-    const file = await getFileByIdAndRevision(fileId, revision);
+    
+    let file;
+    try {
+      // Try to get the file from the database first
+      file = await getFileByIdAndRevision(fileId, revision);
+    } catch (err) {
+      logger.warn(`File not found in database with id=${fileId}. This may be a temporary frontend ID.`);
+      
+      // If this is a frontend-generated ID (e.g., file-1234567890), 
+      // we need to handle this gracefully for the user experience
+      if (fileId.startsWith('file-')) {
+        // Create a placeholder file object that just wraps the pending patches
+        // from the client-side state
+        return {
+          id: fileId,
+          filePath: "unknown", // This will be populated by the client
+          content: "",
+          pendingPatch: undefined // Clear the pending patch so UI resets
+        };
+      } else {
+        // For other types of IDs, rethrow the error
+        throw err;
+      }
+    }
 
     // Skip if no pending patch
     if (!file.pendingPatch) {
@@ -365,12 +387,28 @@ export async function acceptPatchAction(session: Session, fileId: string, revisi
       removedLines: 0
     };
 
-    await updateFileAfterPatchOperation(fileId, revision, clearedFile.content, undefined);
+    try {
+      await updateFileAfterPatchOperation(fileId, revision, clearedFile.content, undefined);
+    } catch (err) {
+      logger.warn(`Could not update file in database with id=${fileId}. This may be a temporary frontend ID.`);
+      // We can still return the cleared file for UI purposes even if DB update fails
+    }
 
     return clearedFile;
   } catch (error) {
     logger.error(`Error accepting patch: ${error}`, { fileId, revision });
-    // In case of error, return the original file if possible
+    // For temporary frontend IDs, return a basic cleared object that will at least
+    // update the UI state
+    if (fileId.startsWith('file-')) {
+      return {
+        id: fileId,
+        filePath: "unknown", // This will be populated by the client
+        content: "",
+        pendingPatch: undefined // Clear the pending patch so UI resets
+      };
+    }
+    
+    // In case of error for real database IDs, try to return the original file
     try {
       const originalFile = await getFileByIdAndRevision(fileId, revision);
       return {

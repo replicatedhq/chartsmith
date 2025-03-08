@@ -271,6 +271,7 @@ export function useCentrifugo({
       return;
     }
 
+    console.log(data);
     let renders = await setRenders(prev => {
       const newRenders = [...prev];
 

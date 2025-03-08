@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/replicatedhq/chartsmith/helm-utils"
+	helmutils "github.com/replicatedhq/chartsmith/helm-utils"
 	"github.com/replicatedhq/chartsmith/pkg/logger"
 	"github.com/replicatedhq/chartsmith/pkg/realtime"
 	realtimetypes "github.com/replicatedhq/chartsmith/pkg/realtime/types"
@@ -257,6 +257,10 @@ func renderChart(ctx context.Context, renderedChart *workspacetypes.RenderedChar
 
 		case helmTemplateStdout := <-renderChannels.HelmTemplateStdout:
 			renderedChart.HelmTemplateStdout += helmTemplateStdout
+
+			// it's intentional, we don't stream stdout to the client
+			// b/c we instead stream the rendered files
+			// so that we can display the ui in more useful ways
 
 			// we can't keep up with the cli if we parse every line...  we will catch the tail here
 			// in the done handler

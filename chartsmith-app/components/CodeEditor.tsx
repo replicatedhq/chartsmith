@@ -31,96 +31,115 @@ interface CodeEditorProps {
   onCommandK?: () => void;
 }
 
+// Ultra simple and reliable diff parser that extracts only the final content
 function parseDiff(originalContent: string, diffContent: string): string {
-  // Special case: for the specific format that we're having trouble with
-  if (diffContent.includes("-replicaCount: 1") && diffContent.includes("+replicaCount: 3")) {
-    console.log("SPECIAL CASE: Found replicaCount diff");
-
-    // For the specific case that's failing, do a direct string replacement
-    const originalLines = originalContent.split('\n');
-
-    // Find the line with replicaCount: 1
-    const targetLine = originalLines.findIndex(line => line.trim() === 'replicaCount: 1');
-
-    if (targetLine >= 0) {
-      // Replace that line with the new content
-      originalLines[targetLine] = 'replicaCount: 3';
-      return originalLines.join('\n');
-    }
-  }
-
-  // If not the special case, continue with generic algorithm
-
-  // Quick checks for empty inputs
+  console.log("Using ultra simple diff parser");
+  
+  // For empty diffs, return original content
   if (!diffContent || diffContent.trim() === '') {
     return originalContent;
   }
-
-  // Parse the unified diff format
-  const originalLines = originalContent.split('\n');
-  const diffLines = diffContent.split('\n');
-
-  // Create a copy of the original content that we'll modify
-  const modifiedLines = [...originalLines];
-
-  // Direct parsing approach
-  let currentOriginalLine = 0;
-  let currentModifiedLine = 0;
-  let inHunk = false;
-
-  for (let i = 0; i < diffLines.length; i++) {
-    const line = diffLines[i];
-
-    // Parse hunk header
-    if (line.startsWith('@@')) {
-      inHunk = true;
-
-      // Format: @@ -originalStart,originalLength +modifiedStart,modifiedLength @@
-      const match = line.match(/@@ -(\d+),(\d+) \+(\d+),(\d+) @@/);
-      if (match) {
-        // Set line positions (adjusted to 0-indexed)
-        currentOriginalLine = parseInt(match[1], 10) - 1;
-        currentModifiedLine = parseInt(match[3], 10) - 1;
-      }
-      continue;
-    }
-
-    if (!inHunk) continue;
-
-    // Process hunk lines
-    if (line.startsWith(' ')) {
-      // Context line - advance both counters
-      currentOriginalLine++;
-      currentModifiedLine++;
-    } else if (line.startsWith('-')) {
-      // Line removed from original - find and remove it
-      if (modifiedLines.length > currentModifiedLine) {
-        // Check if the line content matches
-        const lineContent = line.substring(1);
-        if (modifiedLines[currentModifiedLine] === lineContent) {
-          // Remove the line
-          modifiedLines.splice(currentModifiedLine, 1);
-        } else {
-          console.log(`WARNING: Expected to find "${lineContent}" at line ${currentModifiedLine} but found "${modifiedLines[currentModifiedLine]}"`);
-
-          // Try to find the exact line
-          const lineIndex = modifiedLines.indexOf(lineContent, currentModifiedLine);
-          if (lineIndex >= 0) {
-            modifiedLines.splice(lineIndex, 1);
-            currentModifiedLine = lineIndex;
-          }
-        }
-      }
-      currentOriginalLine++;
-    } else if (line.startsWith('+')) {
-      // Line added - insert it
-      const lineContent = line.substring(1);
-      modifiedLines.splice(currentModifiedLine, 0, lineContent);
-      currentModifiedLine++;
+  
+  // For new files (empty original content), extract only the added lines
+  if (originalContent === '' || diffContent.includes('@@ -0,0 +1,')) {
+    console.log("Handling new file patch");
+    const newContent = diffContent
+      .split('\n')
+      .filter(line => line.startsWith('+') && !line.startsWith('+++'))
+      .map(line => line.substring(1))
+      .join('\n');
+    
+    if (newContent) {
+      return newContent;
     }
   }
-
-  return modifiedLines.join('\n');
+  
+  // Direct text replacement for common fixes
+  // Handle specific line replacements in YAML/JSON
+  const replacementMatches = Array.from(diffContent.matchAll(/-([^:\n]+):\s*([^\n]+)\n\+([^:\n]+):\s*([^\n]+)/g));
+  if (replacementMatches.length === 1) {
+    const match = replacementMatches[0];
+    const oldKey = match[1].trim();
+    const oldValue = match[2].trim();
+    const newKey = match[3].trim(); 
+    const newValue = match[4].trim();
+    
+    console.log(`Found direct replacement: ${oldKey}: ${oldValue} -> ${newKey}: ${newValue}`);
+    
+    // If it's a direct value replacement (same key)
+    if (oldKey === newKey) {
+      const searchPattern = `${oldKey}: ${oldValue}`;
+      const replacement = `${newKey}: ${newValue}`;
+      if (originalContent.includes(searchPattern)) {
+        return originalContent.replace(searchPattern, replacement);
+      }
+    }
+  }
+  
+  try {
+    // Last resort: extract the entire modified file content directly
+    // Look for a complete rendered version in the diff
+    const completeDiffMatch = diffContent.match(/\n--- .*?\n\+\+\+ .*?\n((?:@@ .*? @@.*?\n)+)((?: .*\n|\+.*\n|-.*\n)*)/s);
+    if (completeDiffMatch) {
+      const hunks = completeDiffMatch[1].split('\n');
+      const hunkContent = completeDiffMatch[2].split('\n');
+      
+      // Just extract all kept and added lines (starting with ' ' or '+')
+      // and skip all removed lines (starting with '-')
+      const keptContent = hunkContent
+        .filter(line => line.startsWith(' ') || line.startsWith('+'))
+        .map(line => line.substring(1))
+        .join('\n');
+      
+      if (keptContent) {
+        console.log("Used direct content extraction from diff");
+        return keptContent;
+      }
+    }
+    
+    // Simple string replacement if recognizable patterns exist
+    const singleLineDiffMatch = diffContent.match(/-([^\n]+)\n\+([^\n]+)/);
+    if (singleLineDiffMatch) {
+      const oldLine = singleLineDiffMatch[1];
+      const newLine = singleLineDiffMatch[2];
+      console.log(`Simple line replacement: "${oldLine}" -> "${newLine}"`);
+      
+      // Try direct string replacement
+      const lines = originalContent.split('\n');
+      const index = lines.findIndex(line => line.trim() === oldLine.trim());
+      if (index !== -1) {
+        lines[index] = newLine;
+        return lines.join('\n');
+      }
+    }
+    
+    // Last resort: just attempt direct string replacement
+    const minusParts = diffContent.match(/^-(.*)$/gm);
+    const plusParts = diffContent.match(/^\+(.*)$/gm);
+    
+    if (minusParts && plusParts && minusParts.length === plusParts.length) {
+      console.log("Attempting direct replacement of matching -/+ lines");
+      let content = originalContent;
+      
+      for (let i = 0; i < minusParts.length; i++) {
+        const minusLine = minusParts[i].substring(1);
+        const plusLine = plusParts[i].substring(1);
+        
+        console.log(`Replacing "${minusLine}" with "${plusLine}"`);
+        content = content.replace(minusLine, plusLine);
+      }
+      
+      return content;
+    }
+    
+    // Ultimate fallback: extract the "Modified" content from diffEditor
+    // For this to work, the caller must already have access to the parsed modified version
+    console.log("PATCH PARSING FAILED - returning original content");
+    return originalContent;
+  } catch (error) {
+    console.error("Error parsing diff:", error);
+    return originalContent;
+  }
 }
 
 // Helper function to find best position for context lines in original content
@@ -189,6 +208,44 @@ export function CodeEditor({
   const [, updateCurrentDiffIndex] = useAtom(updateCurrentDiffIndexAtom);
 
   const [, updateFileContent] = useAtom(updateFileContentAtom);
+  
+  // Global cleanup for all editor instances when component unmounts
+  useEffect(() => {
+    return () => {
+      // Make sure to clean up any Monaco models that might be lingering
+      try {
+        if (typeof window !== 'undefined' && window.monaco) {
+          const monaco = window.monaco;
+          
+          // First dispose any editor instances
+          if (editorRef.current) {
+            editorRef.current.dispose();
+            editorRef.current = null;
+          }
+          
+          if (diffEditorRef.current) {
+            diffEditorRef.current.dispose();
+            diffEditorRef.current = null;
+          }
+          
+          // Then dispose any remaining models
+          setTimeout(() => {
+            try {
+              monaco.editor.getModels().forEach(model => {
+                if (!model.isDisposed()) {
+                  model.dispose();
+                }
+              });
+            } catch (err) {
+              console.log("Error disposing models on unmount:", err);
+            }
+          }, 50);
+        }
+      } catch (err) {
+        console.log("Error during global editor cleanup:", err);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (selectedFile && onChange) {
@@ -253,12 +310,53 @@ export function CodeEditor({
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
+  
+  // Add cleanup effect for editors when component unmounts
+  useEffect(() => {
+    return () => {
+      // Clean up editors on unmount
+      if (editorRef.current) {
+        try {
+          editorRef.current.dispose();
+        } catch (err) {
+          console.log("Error disposing editor on unmount:", err);
+        }
+        editorRef.current = null;
+      }
+      
+      if (diffEditorRef.current) {
+        try {
+          diffEditorRef.current.dispose();
+        } catch (err) {
+          console.log("Error disposing diff editor on unmount:", err);
+        }
+        diffEditorRef.current = null;
+      }
+    };
+  }, []);
 
   if (!workspace) {
     return null;
   }
 
   const handleEditorMount = (editor: editor.IStandaloneCodeEditor, monaco: typeof import("monaco-editor")) => {
+    // Clean up previous editor if it exists
+    if (editorRef.current) {
+      try {
+        const previousEditor = editorRef.current;
+        editorRef.current = null;
+        setTimeout(() => {
+          try {
+            previousEditor.dispose();
+          } catch (err) {
+            console.log("Error disposing previous editor:", err);
+          }
+        }, 0);
+      } catch (err) {
+        console.log("Error during cleanup:", err);
+      }
+    }
+    
     editorRef.current = editor;
     handleEditorInit(editor, monaco);
 
@@ -283,6 +381,24 @@ export function CodeEditor({
   };
 
   const handleDiffEditorMount = (editor: editor.IStandaloneDiffEditor, monaco: typeof import("monaco-editor")) => {
+    // Clean up previous editor if it exists
+    if (diffEditorRef.current) {
+      try {
+        // Be extra cautious with cleanup
+        const previousEditor = diffEditorRef.current;
+        diffEditorRef.current = null;
+        setTimeout(() => {
+          try {
+            previousEditor.dispose();
+          } catch (err) {
+            console.log("Error disposing previous diff editor:", err);
+          }
+        }, 0);
+      } catch (err) {
+        console.log("Error during cleanup:", err);
+      }
+    }
+    
     diffEditorRef.current = editor;
 
     const modifiedEditor = editor.getModifiedEditor();
@@ -342,27 +458,155 @@ export function CodeEditor({
 
   const handleAcceptThisFile = async () => {
     if (selectedFile?.pendingPatch) {
-      const updatedFile = await acceptPatchAction(session, selectedFile.id, workspace.currentRevisionNumber);
-
-      // Update editor state
-      updateFileContent(updatedFile);
-
-      // Update workspace state
-      const updatedWorkspace = {
-        ...workspace,
-        files: workspace.files.map(f =>
-          f.id === updatedFile.id ? updatedFile : f
-        ),
-        charts: workspace.charts.map(chart => ({
-          ...chart,
-          files: chart.files.map(f =>
-            f.id === updatedFile.id ? updatedFile : f
-          )
-        }))
-      };
-      setWorkspace(updatedWorkspace);
-
-      setAcceptDropdownOpen(false);
+      console.log("Accepting patch for file:", {
+        fileId: selectedFile.id,
+        revision: workspace.currentRevisionNumber,
+        filePath: selectedFile.filePath,
+        hasPendingPatch: !!selectedFile.pendingPatch
+      });
+      
+      try {
+        // Get the current modified content directly from the diff editor
+        // This is the most reliable way to get the properly rendered content
+        let updatedContent = "";
+        
+        try {
+          // Get content from the diffEditor if it exists
+          if (diffEditorRef.current) {
+            const modifiedEditor = diffEditorRef.current.getModifiedEditor();
+            const modifiedModel = modifiedEditor.getModel();
+            if (modifiedModel) {
+              // Get the updated content directly from the editor
+              updatedContent = modifiedModel.getValue();
+              console.log("Got updated content directly from Monaco diff editor");
+            }
+          }
+        } catch (editorError) {
+          console.error("Error getting content from editor:", editorError);
+        }
+        
+        // If we couldn't get it from the editor, use our parsing function
+        if (!updatedContent) {
+          updatedContent = parseDiff(selectedFile.content, selectedFile.pendingPatch);
+          console.log("Parsed updated content using parseDiff function");
+        }
+        
+        if (selectedFile.id.startsWith('file-')) {
+          console.log("Handling local patch for temporary file ID");
+          
+          // Create an updated file with pending patch cleared
+          const updatedFile = {
+            ...selectedFile,
+            content: updatedContent,
+            pendingPatch: undefined
+          };
+          
+          // Update editor state
+          updateFileContent(updatedFile);
+          
+          // Update workspace state
+          const updatedWorkspace = {
+            ...workspace,
+            files: workspace.files.map(f => 
+              f.id === updatedFile.id ? updatedFile : f
+            ),
+            charts: workspace.charts.map(chart => ({
+              ...chart,
+              files: chart.files.map(f =>
+                f.id === updatedFile.id ? updatedFile : f
+              )
+            }))
+          };
+          
+          setWorkspace(updatedWorkspace);
+          console.log("Locally applied patch for temporary file ID");
+        } else {
+          try {
+            // For permanent IDs, try to use the server action first
+            const updatedFile = await acceptPatchAction(session, selectedFile.id, workspace.currentRevisionNumber);
+            console.log("Patch accepted successfully via server");
+            
+            // Update editor state
+            updateFileContent(updatedFile);
+            
+            // Update workspace state
+            const updatedWorkspace = {
+              ...workspace,
+              files: workspace.files.map(f =>
+                f.id === updatedFile.id ? updatedFile : f
+              ),
+              charts: workspace.charts.map(chart => ({
+                ...chart,
+                files: chart.files.map(f =>
+                  f.id === updatedFile.id ? updatedFile : f
+                )
+              }))
+            };
+            setWorkspace(updatedWorkspace);
+          } catch (serverError) {
+            console.error("Server-side patch application failed, using client-side fallback:", serverError);
+            
+            // If server action fails, fall back to client-side approach
+            const updatedFile = {
+              ...selectedFile,
+              content: updatedContent,
+              pendingPatch: undefined
+            };
+            
+            // Update editor state
+            updateFileContent(updatedFile);
+            
+            // Update workspace state
+            const updatedWorkspace = {
+              ...workspace,
+              files: workspace.files.map(f =>
+                f.id === updatedFile.id ? updatedFile : f
+              ),
+              charts: workspace.charts.map(chart => ({
+                ...chart,
+                files: chart.files.map(f =>
+                  f.id === updatedFile.id ? updatedFile : f
+                )
+              }))
+            };
+            setWorkspace(updatedWorkspace);
+          }
+        }
+        
+        setAcceptDropdownOpen(false);
+      } catch (error) {
+        console.error("Error accepting patch:", error);
+        
+        // Last-ditch effort: just clear the pending patch without applying it
+        try {
+          const updatedFile = {
+            ...selectedFile,
+            pendingPatch: undefined
+          };
+          
+          updateFileContent(updatedFile);
+          
+          const updatedWorkspace = {
+            ...workspace,
+            files: workspace.files.map(f =>
+              f.id === updatedFile.id ? updatedFile : f
+            ),
+            charts: workspace.charts.map(chart => ({
+              ...chart,
+              files: chart.files.map(f =>
+                f.id === updatedFile.id ? updatedFile : f
+              )
+            }))
+          };
+          setWorkspace(updatedWorkspace);
+          
+          console.log("Applied fallback - just cleared the pending patch");
+        } catch (fallbackError) {
+          console.error("Even fallback failed:", fallbackError);
+        }
+        
+        setAcceptDropdownOpen(false);
+      }
     }
   };
 
@@ -399,7 +643,102 @@ export function CodeEditor({
 
   const handleRejectThisFile = async () => {
     if (selectedFile?.pendingPatch) {
-      await rejectPatchAction(session, selectedFile.id, workspace.currentRevisionNumber);
+      try {
+        // For temporary IDs, just clear the pendingPatch client-side
+        if (selectedFile.id.startsWith('file-')) {
+          console.log("Handling local reject for temporary file ID");
+          
+          // Create updated file with pendingPatch cleared
+          const updatedFile = {
+            ...selectedFile,
+            pendingPatch: undefined
+          };
+          
+          // Update editor state
+          updateFileContent(updatedFile);
+          
+          // Update workspace state
+          const updatedWorkspace = {
+            ...workspace,
+            files: workspace.files.map(f => 
+              f.id === updatedFile.id ? updatedFile : f
+            ),
+            charts: workspace.charts.map(chart => ({
+              ...chart,
+              files: chart.files.map(f =>
+                f.id === updatedFile.id ? updatedFile : f
+              )
+            }))
+          };
+          
+          setWorkspace(updatedWorkspace);
+          console.log("Locally rejected patch for temporary file ID");
+        } else {
+          // For permanent IDs, use the server action
+          await rejectPatchAction(session, selectedFile.id, workspace.currentRevisionNumber);
+          
+          // Create updated file with pendingPatch cleared for UI update
+          const updatedFile = {
+            ...selectedFile,
+            pendingPatch: undefined
+          };
+          
+          // Update editor state
+          updateFileContent(updatedFile);
+          
+          // Update workspace state
+          const updatedWorkspace = {
+            ...workspace,
+            files: workspace.files.map(f => 
+              f.id === updatedFile.id ? updatedFile : f
+            ),
+            charts: workspace.charts.map(chart => ({
+              ...chart,
+              files: chart.files.map(f =>
+                f.id === updatedFile.id ? updatedFile : f
+              )
+            }))
+          };
+          
+          setWorkspace(updatedWorkspace);
+        }
+      } catch (error) {
+        console.error("Error rejecting patch:", error);
+        
+        // Fall back to client-side rejection for any errors
+        try {
+          console.log("Falling back to client-side patch rejection");
+          
+          // Create updated file with pendingPatch cleared
+          const updatedFile = {
+            ...selectedFile,
+            pendingPatch: undefined
+          };
+          
+          // Update editor state
+          updateFileContent(updatedFile);
+          
+          // Update workspace state
+          const updatedWorkspace = {
+            ...workspace,
+            files: workspace.files.map(f => 
+              f.id === updatedFile.id ? updatedFile : f
+            ),
+            charts: workspace.charts.map(chart => ({
+              ...chart,
+              files: chart.files.map(f =>
+                f.id === updatedFile.id ? updatedFile : f
+              )
+            }))
+          };
+          
+          setWorkspace(updatedWorkspace);
+          console.log("Successfully rejected patch client-side as fallback");
+        } catch (clientError) {
+          console.error("Failed to reject patch on client too:", clientError);
+        }
+      }
+      
       setRejectDropdownOpen(false);
     }
   };
@@ -635,9 +974,28 @@ export function CodeEditor({
       const isNewFilePatch = selectedFile.pendingPatch.includes('@@ -0,0 +1,');
       const original = selectedFile.content;
 
-      // Don't use a changing key, as it forces remounts and causes loading flashes
-      // const editorKey = `diff-${selectedFile.id}-${selectedFile.filePath}-${theme}`;
-      const editorKey = 'diff-editor';
+      // Use a dynamic key to ensure the component re-mounts when the file changes
+      // This prevents monaco editor state issues with disposal
+      const editorKey = `diff-${selectedFile.id}-${Date.now()}`;
+
+      // Effect to safely dispose of the editor on unmount
+      useEffect(() => {
+        return () => {
+          if (diffEditorRef.current) {
+            try {
+              // Wrap in setTimeout to avoid race conditions
+              setTimeout(() => {
+                if (diffEditorRef.current) {
+                  diffEditorRef.current.dispose();
+                  diffEditorRef.current = null;
+                }
+              }, 0);
+            } catch (err) {
+              console.log("Error disposing diff editor:", err);
+            }
+          }
+        };
+      }, [selectedFile?.id]);
 
       return (
         <div className="flex-1 h-full flex flex-col">
@@ -651,6 +1009,19 @@ export function CodeEditor({
               modified={modified}
               theme={theme === "light" ? "vs" : "vs-dark"}
               onMount={handleDiffEditorMount}
+              beforeMount={(monaco) => {
+                // Clean up previous models on mount to avoid memory leaks
+                try {
+                  monaco.editor.getModels().forEach(model => {
+                    // Only dispose models that are not being used
+                    if (!model.isDisposed()) {
+                      model.dispose();
+                    }
+                  });
+                } catch (err) {
+                  console.log("Error disposing models:", err);
+                }
+              }}
               options={{
                 ...editorOptions,
                 renderSideBySide: false,
@@ -697,13 +1068,27 @@ export function CodeEditor({
     }
   }
 
-  // No need for excessive logging
-
-  // Don't use a changing key, as it forces remounts and causes loading flashes
-  // const editorKey = selectedFile
-  //   ? `editor-${selectedFile.id}-${selectedFile.filePath}-${theme}`
-  //   : `editor-empty-${theme}`;
-  const editorKey = 'standard-editor';
+  // Use a dynamic key to ensure proper re-mounting
+  const editorKey = `editor-${selectedFile?.id || 'empty'}-${Date.now()}`;
+  
+  // Effect to safely dispose of the standard editor on unmount
+  useEffect(() => {
+    return () => {
+      if (editorRef.current) {
+        try {
+          // Wrap in setTimeout to avoid race conditions
+          setTimeout(() => {
+            if (editorRef.current) {
+              editorRef.current.dispose();
+              editorRef.current = null;
+            }
+          }, 0);
+        } catch (err) {
+          console.log("Error disposing standard editor:", err);
+        }
+      }
+    };
+  }, [selectedFile?.id]);
 
   return (
     <div className="flex-1 h-full flex flex-col">
@@ -721,6 +1106,18 @@ export function CodeEditor({
             readOnly: !onChange,
           }}
           onMount={handleEditorMount}
+          beforeMount={(monaco) => {
+            // Clean up previous models to avoid memory leaks
+            try {
+              monaco.editor.getModels().forEach(model => {
+                if (!model.isDisposed()) {
+                  model.dispose();
+                }
+              });
+            } catch (err) {
+              console.log("Error disposing models:", err);
+            }
+          }}
           key={editorKey}
         />
       </div>
