@@ -47,6 +47,8 @@ Here is the current content between XML tags:
 
 CRITICAL INSTRUCTION: You MUST generate a unified diff patch to correctly update this file.
 
+PRECISION IS REQUIRED: The patch will be applied programmatically, not reviewed by humans. DO NOT optimize for human readability at the expense of precise patch application.
+
 FORMAT REQUIREMENTS:
 1. Start with these two header lines:
    --- %s
@@ -68,14 +70,18 @@ FORMAT REQUIREMENTS:
    - Then show all lines of the new block with "+" prefix
    - This approach is MUCH more reliable than small surgical changes
 
-5. SEPARATE HUNKS: Use separate hunks (@@ ... @@) for:
+5. SEPARATE HUNKS: CRITICAL INSTRUCTION - You MUST use separate hunks (@@ ... @@) for:
    - Different functions or blocks that aren't adjacent
    - Changes in different parts of the file
+   - ANY changes that are more than 3 lines apart
+   - NEVER collapse or combine nearby changes into a single hunk
+   - Keep hunks small and focused on specific changes
    - Each hunk should be complete and self-contained
+   - A change to line 10 and a change to line 15 MUST be in separate hunks
 
 6. INDENTATION: Preserve the EXACT whitespace/indentation of the original code
 
-Example of a properly formatted diff:
+Example of a properly formatted diff with MULTIPLE HUNKS:
 
 --- path/to/file.yaml
 +++ path/to/file.yaml
@@ -97,8 +103,14 @@ Example of a properly formatted diff:
      def another_method(self):
          # This method stays the same
          pass
+@@ ... @@
+ class OtherClass:
+     def __init__(self):
+-        self.value = 10
++        self.value = 20
+         self.name = "example"
 
-The diff above completely replaces the entire target_method with proper context.
+Notice that changes to different classes use SEPARATE HUNKS with their own @@ ... @@ markers.
 
 Generate a high-quality diff and provide it within <chartsmithArtifact> tags.`,
 			actionPlanWithPath.Path, strings.TrimSpace(currentContent), 
