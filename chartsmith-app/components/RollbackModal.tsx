@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { X, AlertTriangle } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { Session } from "@/lib/types/session";
@@ -51,6 +51,29 @@ export function RollbackModal({
     }
   }, [isOpen]);
 
+  const handleCancel = () => {
+    setIsCancelling(true);
+    onClose();
+  };
+
+  const handleRollbackComplete = useCallback(async () => {
+    setIsRollbackComplete(true);
+    
+    try {
+      const updatedWorkspace = await rollbackWorkspaceAction(session, workspaceId, revisionNumber);
+      const updatedMessages = await getWorkspaceMessagesAction(session, workspaceId);
+      
+      onSuccess(updatedWorkspace, updatedMessages);
+      
+      // Close the modal after successful rollback
+      setTimeout(() => {
+        onClose();
+      }, 500);
+    } catch (error) {
+      console.error("Error during rollback:", error);
+    }
+  }, [session, workspaceId, revisionNumber, onSuccess, onClose]);
+
   // Start the countdown after initial render
   useEffect(() => {
     let timer: NodeJS.Timeout;
@@ -73,30 +96,7 @@ export function RollbackModal({
     return () => {
       if (timer) clearInterval(timer);
     };
-  }, [isOpen, isInitialRender, isRollbackComplete, isCancelling]);
-
-  const handleCancel = () => {
-    setIsCancelling(true);
-    onClose();
-  };
-
-  const handleRollbackComplete = async () => {
-    setIsRollbackComplete(true);
-    
-    try {
-      const updatedWorkspace = await rollbackWorkspaceAction(session, workspaceId, revisionNumber);
-      const updatedMessages = await getWorkspaceMessagesAction(session, workspaceId);
-      
-      onSuccess(updatedWorkspace, updatedMessages);
-      
-      // Close the modal after successful rollback
-      setTimeout(() => {
-        onClose();
-      }, 500);
-    } catch (error) {
-      console.error("Error during rollback:", error);
-    }
-  };
+  }, [isOpen, isInitialRender, isRollbackComplete, isCancelling, handleRollbackComplete]);
 
   if (!isOpen) return null;
 

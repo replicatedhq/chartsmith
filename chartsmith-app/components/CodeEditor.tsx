@@ -79,7 +79,8 @@ function parseDiff(originalContent: string, diffContent: string): string {
   try {
     // Last resort: extract the entire modified file content directly
     // Look for a complete rendered version in the diff
-    const completeDiffMatch = diffContent.match(/\n--- .*?\n\+\+\+ .*?\n((?:@@ .*? @@.*?\n)+)((?: .*\n|\+.*\n|-.*\n)*)/s);
+    // Using multiline flag (.*)+ pattern instead of dotAll flag (s) for compatibility
+    const completeDiffMatch = diffContent.match(/\n--- [\s\S]*?\n\+\+\+ [\s\S]*?\n((?:@@ [\s\S]*? @@[\s\S]*?\n)+)((?: [\s\S]*\n|\+[\s\S]*\n|-[\s\S]*\n)*)/);
     if (completeDiffMatch) {
       const hunks = completeDiffMatch[1].split('\n');
       const hunkContent = completeDiffMatch[2].split('\n');
@@ -212,34 +213,17 @@ export function CodeEditor({
   // Global cleanup for all editor instances when component unmounts
   useEffect(() => {
     return () => {
-      // Make sure to clean up any Monaco models that might be lingering
+      // Make sure to clean up editor instances
       try {
-        if (typeof window !== 'undefined' && window.monaco) {
-          const monaco = window.monaco;
-          
-          // First dispose any editor instances
-          if (editorRef.current) {
-            editorRef.current.dispose();
-            editorRef.current = null;
-          }
-          
-          if (diffEditorRef.current) {
-            diffEditorRef.current.dispose();
-            diffEditorRef.current = null;
-          }
-          
-          // Then dispose any remaining models
-          setTimeout(() => {
-            try {
-              monaco.editor.getModels().forEach(model => {
-                if (!model.isDisposed()) {
-                  model.dispose();
-                }
-              });
-            } catch (err) {
-              console.log("Error disposing models on unmount:", err);
-            }
-          }, 50);
+        // First dispose any editor instances
+        if (editorRef.current) {
+          editorRef.current.dispose();
+          editorRef.current = null;
+        }
+        
+        if (diffEditorRef.current) {
+          diffEditorRef.current.dispose();
+          diffEditorRef.current = null;
         }
       } catch (err) {
         console.log("Error during global editor cleanup:", err);
@@ -978,25 +962,6 @@ export function CodeEditor({
       // This prevents monaco editor state issues with disposal
       const editorKey = `diff-${selectedFile.id}-${Date.now()}`;
 
-      // Effect to safely dispose of the editor on unmount
-      useEffect(() => {
-        return () => {
-          if (diffEditorRef.current) {
-            try {
-              // Wrap in setTimeout to avoid race conditions
-              setTimeout(() => {
-                if (diffEditorRef.current) {
-                  diffEditorRef.current.dispose();
-                  diffEditorRef.current = null;
-                }
-              }, 0);
-            } catch (err) {
-              console.log("Error disposing diff editor:", err);
-            }
-          }
-        };
-      }, [selectedFile?.id]);
-
       return (
         <div className="flex-1 h-full flex flex-col">
           {showDiffHeader && renderDiffHeader()}
@@ -1070,25 +1035,6 @@ export function CodeEditor({
 
   // Use a dynamic key to ensure proper re-mounting
   const editorKey = `editor-${selectedFile?.id || 'empty'}-${Date.now()}`;
-  
-  // Effect to safely dispose of the standard editor on unmount
-  useEffect(() => {
-    return () => {
-      if (editorRef.current) {
-        try {
-          // Wrap in setTimeout to avoid race conditions
-          setTimeout(() => {
-            if (editorRef.current) {
-              editorRef.current.dispose();
-              editorRef.current = null;
-            }
-          }, 0);
-        } catch (err) {
-          console.log("Error disposing standard editor:", err);
-        }
-      }
-    };
-  }, [selectedFile?.id]);
 
   return (
     <div className="flex-1 h-full flex flex-col">
