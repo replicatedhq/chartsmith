@@ -10,6 +10,7 @@ import ReactMarkdown from 'react-markdown';
 import { Terminal } from "@/components/Terminal";
 import { FeedbackModal } from "@/components/FeedbackModal";
 import { ConversionProgress } from "@/components/ConversionProgress";
+import { RollbackModal } from "@/components/RollbackModal";
 
 // Types
 import { Message } from "@/components/types";
@@ -25,6 +26,7 @@ import { conversionByIdAtom, messageByIdAtom, messagesAtom, renderByIdAtom, work
 import { cancelMessageAction } from "@/lib/workspace/actions/cancel-message";
 import { performFollowupAction } from "@/lib/workspace/actions/perform-followup-action";
 import { createChatMessageAction } from "@/lib/workspace/actions/create-chat-message";
+import { getWorkspaceMessagesAction } from "@/lib/workspace/actions/get-workspace-messages";
 
 export interface ChatMessageProps {
   messageId: string;
@@ -51,6 +53,7 @@ export function ChatMessage({
 }: ChatMessageProps) {
   const { theme } = useTheme();
   const [showReportModal, setShowReportModal] = useState(false);
+  const [showRollbackModal, setShowRollbackModal] = useState(false);
   const [, setShowDropdown] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -60,7 +63,7 @@ export function ChatMessage({
   const [messageGetter] = useAtom(messageByIdAtom);
   const message = messageGetter(messageId);
 
-  const [workspace] = useAtom(workspaceAtom);
+  const [workspace, setWorkspace] = useAtom(workspaceAtom);
   const [renderGetter] = useAtom(renderByIdAtom);
   const render = renderGetter(message!.responseRenderId!);
   const [conversionGetter] = useAtom(conversionByIdAtom);
@@ -204,6 +207,23 @@ export function ChatMessage({
             <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"} mb-1`}>ChartSmith</div>
             <div className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} ${message.isIgnored ? "opacity-50 line-through" : ""} text-[12px] markdown-content`}>
               {renderAssistantContent()}
+
+              {/* Rollback link for imported charts - only show if it's not the current revision */}
+              {message.responseRollbackToRevisionNumber !== undefined &&
+               workspace.currentRevisionNumber !== message.responseRollbackToRevisionNumber && (
+                <div className="mt-2 text-[9px] border-t border-gray-200 dark:border-dark-border/30 pt-1 flex justify-end">
+                  <button
+                    className={`${theme === "dark" ? "text-gray-500 hover:text-gray-300" : "text-gray-400 hover:text-gray-600"} hover:underline flex items-center`}
+                    onClick={() => setShowRollbackModal(true)}
+                  >
+                    <svg className="w-2 h-2 mr-1" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12Z" stroke="currentColor" strokeWidth="2"/>
+                      <path d="M12 8L12 13M12 13L15 10M12 13L9 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    rollback to this revision
+                  </button>
+                </div>
+              )}
             </div>
             {message.followupActions && message.followupActions.length > 0 && (
               <div className="mt-4 flex gap-2 justify-end">
@@ -278,6 +298,20 @@ export function ChatMessage({
         workspaceId={workspace.id}
         session={session}
       />
+
+      {message.responseRollbackToRevisionNumber !== undefined && (
+        <RollbackModal
+          isOpen={showRollbackModal}
+          onClose={() => setShowRollbackModal(false)}
+          workspaceId={workspace.id}
+          revisionNumber={message.responseRollbackToRevisionNumber}
+          session={session}
+          onSuccess={(updatedWorkspace, updatedMessages) => {
+            setWorkspace(updatedWorkspace);
+            setMessages(updatedMessages);
+          }}
+        />
+      )}
     </div>
   );
 }

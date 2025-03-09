@@ -21,8 +21,8 @@ import { ChatContainer } from "@/components/ChatContainer";
 import { Conversion, Plan, RenderedWorkspace, Workspace } from "@/lib/types/workspace";
 
 // atoms
-import { chartsBeforeApplyingPendingPatchesAtom, looseFilesBeforeApplyingPendingPatchesAtom, workspaceAtom } from "@/atoms/workspace";
-import { editorContentAtom } from "@/atoms/editor";
+import { chartsBeforeApplyingPendingPatchesAtom, editorViewAtom, looseFilesBeforeApplyingPendingPatchesAtom, selectedFileAtom, workspaceAtom } from "@/atoms/workspace";
+import { editorContentAtom } from "@/atoms/workspace";
 import { messagesAtom, plansAtom, rendersAtom, conversionsAtom } from "@/atoms/workspace";
 import { Message } from "./types";
 
@@ -50,6 +50,8 @@ export function WorkspaceContent({
   const [, setConversions] = useAtom(conversionsAtom);
   const [, setChartsBeforeApplyingPendingPatches] = useAtom(chartsBeforeApplyingPendingPatchesAtom);
   const [, setLooseFilesBeforeApplyingPendingPatches] = useAtom(looseFilesBeforeApplyingPendingPatchesAtom);
+  const [, setEditorView] = useAtom(editorViewAtom);
+  const [, setSelectedFile] = useAtom(selectedFileAtom);
 
   // Hydrate atoms on mount and when initial values change
   useEffect(() => {
@@ -63,6 +65,9 @@ export function WorkspaceContent({
     setPlans(initialPlans);
     setRenders(initialRenders);
     setConversions(initialConversions);
+
+    setEditorView("source");
+    setSelectedFile(undefined);
   }, [
     initialWorkspace,
     initialMessages,

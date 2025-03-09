@@ -38,6 +38,7 @@ export interface Message {
   responseRenderId?: string;
   responsePlanId?: string;
   responseConversionId?: string;
+  responseRollbackToRevisionNumber?: number;
   planId?: string;
 }
 
@@ -117,6 +118,7 @@ export interface RawChatMessage {
   isCanceled: boolean;
   responseRenderId?: string;
   responsePlanId?: string;
+  responseRollbackToRevisionNumber?: number;
   isComplete?: boolean;
   isApplied?: boolean;
   isApplying?: boolean;

@@ -63,3 +63,5 @@ schema:
       default: "false"
     - name: followup_actions
       type: jsonb
+    - name: response_rollback_to_revision_number
+      type: integer

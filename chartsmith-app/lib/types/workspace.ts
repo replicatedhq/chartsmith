@@ -120,6 +120,7 @@ export interface ChatMessage {
   responseRenderId?: string;
   responsePlanId?: string;
   responseConversionId?: string;
+  responseRollbackToRevisionNumber?: number;
   isComplete: boolean;  // Add required Message properties
   workspaceId?: string;
   userId?: string;

@@ -86,17 +86,18 @@ type ActionFile struct {
 }
 
 type Chat struct {
-	ID                   string           `json:"id"`
-	WorkspaceID          string           `json:"-"`
-	Prompt               string           `json:"prompt"`
-	Response             string           `json:"response"`
-	CreatedAt            time.Time        `json:"createdAt"`
-	IsIntentComplete     bool             `json:"isIntentComplete"`
-	Intent               *Intent          `json:"0"`
-	FollowupActions      []FollowupAction `json:"followupActions"`
-	ResponseRenderID     string           `json:"responseRenderId"`
-	ResponsePlanID       string           `json:"responsePlanId"`
-	ResponseConversionID string           `json:"responseConversionId"`
+	ID                               string           `json:"id"`
+	WorkspaceID                      string           `json:"-"`
+	Prompt                           string           `json:"prompt"`
+	Response                         string           `json:"response"`
+	CreatedAt                        time.Time        `json:"createdAt"`
+	IsIntentComplete                 bool             `json:"isIntentComplete"`
+	Intent                           *Intent          `json:"0"`
+	FollowupActions                  []FollowupAction `json:"followupActions"`
+	ResponseRenderID                 string           `json:"responseRenderId"`
+	ResponsePlanID                   string           `json:"responsePlanId"`
+	ResponseConversionID             string           `json:"responseConversionId"`
+	ResponseRollbackToRevisionNumber *int             `json:"responseRollbackToRevisionNumber"`
 }
 
 type FollowupAction struct {
