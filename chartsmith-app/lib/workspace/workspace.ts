@@ -832,7 +832,6 @@ export async function rollbackToRevision(workspaceId: string, revisionNumber: nu
     const chatMessageResult = await db.query(`select id from workspace_chat where workspace_id = $1 and revision_number > $2`, [workspaceId, revisionNumber]);
     const chatMessageIds = chatMessageResult.rows.map((row: { id: string }) => row.id);
 
-    const chatMessageIdPlaceholders = chatMessageIds.map((_, idx) => `$${idx + 1}`).join(',');
     await db.query(`delete from workspace_chat where workspace_id = $1 and revision_number > $2`, [workspaceId, revisionNumber]);
 
     // get the plan ids for later revisions
@@ -848,6 +847,7 @@ export async function rollbackToRevision(workspaceId: string, revisionNumber: nu
     await db.query(`delete from workspace_file where workspace_id = $1 and revision_number > $2`, [workspaceId, revisionNumber]);
 
     await db.query(`delete from workspace_chart where workspace_id = $1 and revision_number > $2`, [workspaceId, revisionNumber]);
+
 
     await db.query('COMMIT');
   } catch (err) {
