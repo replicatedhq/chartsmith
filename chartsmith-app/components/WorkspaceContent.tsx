@@ -66,6 +66,7 @@ export function WorkspaceContent({
     setRenders(initialRenders);
     setConversions(initialConversions);
 
+    // Always reset to source view with no file selected when switching workspaces
     setEditorView("source");
     setSelectedFile(undefined);
   }, [
@@ -80,7 +81,9 @@ export function WorkspaceContent({
     setRenders,
     setConversions,
     setChartsBeforeApplyingPendingPatches,
-    setLooseFilesBeforeApplyingPendingPatches
+    setLooseFilesBeforeApplyingPendingPatches,
+    setEditorView,
+    setSelectedFile
   ]);
 
   const { session } = useSession();

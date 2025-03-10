@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect, FormEvent } from "react";
 import { useAtom } from "jotai";
+import { atom } from "jotai";
 import Image from "next/image";
 import { Send } from "lucide-react";
 import ReactMarkdown from 'react-markdown';
@@ -45,6 +46,31 @@ function LoadingSpinner({ message }: { message: string }) {
   );
 }
 
+// Helper atom to track which messages we've seen for each revision
+const seenRevisionMessagesAtom = atom<Record<number, string>>({});
+
+// Helper function to determine if a message is the first one for its revision number
+function isFirstMessageForRevision(message: Message, messageId: string, allMessages: Message[]): boolean {
+  if (!message.responseRollbackToRevisionNumber) {
+    return false; // No revision number to check
+  }
+  
+  const revisionNumber = message.responseRollbackToRevisionNumber;
+  
+  // Find all messages that have this revision number and sort by creation date
+  const messagesWithRevision = allMessages
+    .filter(m => m.responseRollbackToRevisionNumber === revisionNumber)
+    .sort((a, b) => {
+      const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return aTime - bTime;
+    });
+  
+  // Check if this message is the first one with this revision
+  return messagesWithRevision.length > 0 && 
+         messagesWithRevision[0].id === messageId;
+}
+
 export function ChatMessage({
   messageId,
   session,
@@ -59,15 +85,23 @@ export function ChatMessage({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const [, setMessages] = useAtom(messagesAtom);
+  const [messages, setMessages] = useAtom(messagesAtom);
   const [messageGetter] = useAtom(messageByIdAtom);
   const message = messageGetter(messageId);
 
   const [workspace, setWorkspace] = useAtom(workspaceAtom);
   const [renderGetter] = useAtom(renderByIdAtom);
-  const render = renderGetter(message!.responseRenderId!);
+  // Only call the getter if responseRenderId exists
+  const render = message?.responseRenderId ? renderGetter(message.responseRenderId) : undefined;
   const [conversionGetter] = useAtom(conversionByIdAtom);
-  const conversion = conversionGetter(message!.responseConversionId!);
+  // Only call the getter if responseConversionId exists
+  const conversion = message?.responseConversionId ? conversionGetter(message.responseConversionId) : undefined;
+  
+  // Check if this is the first message for its revision
+  const isFirstForRevision = React.useMemo(() => {
+    if (!message || !message.responseRollbackToRevisionNumber) return false;
+    return isFirstMessageForRevision(message, messageId, messages);
+  }, [message, messageId, messages]);
 
   // Move the useEffect outside of renderAssistantContent
   useEffect(() => {
@@ -118,9 +152,13 @@ export function ChatMessage({
 
     // Show rendered charts
     if (message.responseRenderId) {
+      if (!render || !render.charts) {
+        return <LoadingSpinner message="Loading rendered content..." />;
+      }
+      
       return (
         <div className="space-y-4">
-          {render?.charts.map((chart, index) => (
+          {render.charts.map((chart, index) => (
             <Terminal
               key={`${messageId}-${render.id}-${chart.id}-${index}`}
               data-testid="chart-terminal"
@@ -138,6 +176,9 @@ export function ChatMessage({
 
     // Show conversion status
     if (message.responseConversionId) {
+      if (!conversion) {
+        return <LoadingSpinner message="Loading conversion status..." />;
+      }
       return <ConversionProgress conversionId={message.responseConversionId} />;
     }
 
@@ -208,9 +249,13 @@ export function ChatMessage({
             <div className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} ${message.isIgnored ? "opacity-50 line-through" : ""} text-[12px] markdown-content`}>
               {renderAssistantContent()}
 
-              {/* Rollback link for imported charts - only show if it's not the current revision */}
+              {/* Rollback link - only show if:
+                 1. It has a rollback revision number
+                 2. It's not the current revision
+                 3. It's the first message for that revision */}
               {message.responseRollbackToRevisionNumber !== undefined &&
-               workspace.currentRevisionNumber !== message.responseRollbackToRevisionNumber && (
+               workspace.currentRevisionNumber !== message.responseRollbackToRevisionNumber &&
+               isFirstForRevision && (
                 <div className="mt-2 text-[9px] border-t border-gray-200 dark:border-dark-border/30 pt-1 flex justify-end">
                   <button
                     className={`${theme === "dark" ? "text-gray-500 hover:text-gray-300" : "text-gray-400 hover:text-gray-600"} hover:underline flex items-center`}

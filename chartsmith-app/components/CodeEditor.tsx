@@ -189,6 +189,10 @@ export function CodeEditor({
   onChange,
   onCommandK,
 }: CodeEditorProps) {
+  // Track previous values to prevent loading flicker
+  const [isEditorLoading, setIsEditorLoading] = useState(false);
+  const prevContentRef = useRef<string | undefined>(undefined);
+  
   const [selectedFile, setSelectedFile] = useAtom(selectedFileAtom);
   const [workspace, setWorkspace] = useAtom(workspaceAtom);
   const [, addFileToWorkspace] = useAtom(addFileToWorkspaceAtom);
@@ -209,6 +213,13 @@ export function CodeEditor({
   const [, updateCurrentDiffIndex] = useAtom(updateCurrentDiffIndexAtom);
 
   const [, updateFileContent] = useAtom(updateFileContentAtom);
+  
+  // Keep previous content in sync with current selection
+  useEffect(() => {
+    if (selectedFile?.content) {
+      prevContentRef.current = selectedFile.content;
+    }
+  }, [selectedFile?.content]);
   
   // Global cleanup for all editor instances when component unmounts
   useEffect(() => {
@@ -231,11 +242,21 @@ export function CodeEditor({
     };
   }, []);
 
+  // When selectedFile changes, make sure we don't flash loading state
   useEffect(() => {
     if (selectedFile && onChange) {
       onChange(selectedFile.content);
     }
   }, [selectedFile, onChange]);
+  
+  
+  // Update content whenever selectedFile changes
+  useEffect(() => {
+    // Don't show loading state if we already have an editor reference
+    if (selectedFile && (editorRef.current || diffEditorRef.current)) {
+      setIsEditorLoading(false);
+    }
+  }, [selectedFile]);
 
   useEffect(() => {
     updateCurrentDiffIndex(allFilesWithPendingPatches);
@@ -324,25 +345,10 @@ export function CodeEditor({
   }
 
   const handleEditorMount = (editor: editor.IStandaloneCodeEditor, monaco: typeof import("monaco-editor")) => {
-    // Clean up previous editor if it exists
-    if (editorRef.current) {
-      try {
-        const previousEditor = editorRef.current;
-        editorRef.current = null;
-        setTimeout(() => {
-          try {
-            previousEditor.dispose();
-          } catch (err) {
-            console.log("Error disposing previous editor:", err);
-          }
-        }, 0);
-      } catch (err) {
-        console.log("Error during cleanup:", err);
-      }
-    }
-    
+    // Store the editor reference and mark loading as complete
     editorRef.current = editor;
     handleEditorInit(editor, monaco);
+    setIsEditorLoading(false);
 
     const commandId = 'chartsmith.openCommandPalette';
     editor.addAction({
@@ -365,26 +371,10 @@ export function CodeEditor({
   };
 
   const handleDiffEditorMount = (editor: editor.IStandaloneDiffEditor, monaco: typeof import("monaco-editor")) => {
-    // Clean up previous editor if it exists
-    if (diffEditorRef.current) {
-      try {
-        // Be extra cautious with cleanup
-        const previousEditor = diffEditorRef.current;
-        diffEditorRef.current = null;
-        setTimeout(() => {
-          try {
-            previousEditor.dispose();
-          } catch (err) {
-            console.log("Error disposing previous diff editor:", err);
-          }
-        }, 0);
-      } catch (err) {
-        console.log("Error during cleanup:", err);
-      }
-    }
-    
+    // Store the editor reference and mark loading as complete  
     diffEditorRef.current = editor;
-
+    setIsEditorLoading(false);
+    
     const modifiedEditor = editor.getModifiedEditor();
     const originalEditor = editor.getOriginalEditor();
 
@@ -958,9 +948,8 @@ export function CodeEditor({
       const isNewFilePatch = selectedFile.pendingPatch.includes('@@ -0,0 +1,');
       const original = selectedFile.content;
 
-      // Use a dynamic key to ensure the component re-mounts when the file changes
-      // This prevents monaco editor state issues with disposal
-      const editorKey = `diff-${selectedFile.id}-${Date.now()}`;
+      // Use a stable key to prevent remounting and loading flicker
+      const editorKey = `diff-monaco`;
 
       return (
         <div className="flex-1 h-full flex flex-col">
@@ -1033,8 +1022,9 @@ export function CodeEditor({
     }
   }
 
-  // Use a dynamic key to ensure proper re-mounting
-  const editorKey = `editor-${selectedFile?.id || 'empty'}-${Date.now()}`;
+  // Use a stable key instead of a dynamic one to prevent remounting
+  // This prevents the loading flicker when switching between files
+  const editorKey = `editor-monaco`;
 
   return (
     <div className="flex-1 h-full flex flex-col">
@@ -1044,7 +1034,7 @@ export function CodeEditor({
           height="100%"
           defaultLanguage={getLanguage(selectedFile?.filePath || '')}
           language={getLanguage(selectedFile?.filePath || '')}
-          value={selectedFile?.content ?? value ?? ""}
+          value={selectedFile?.content ?? prevContentRef.current ?? value ?? ""}
           onChange={onChange}
           theme={theme === "light" ? "vs" : "vs-dark"}
           options={{

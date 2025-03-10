@@ -89,7 +89,7 @@ export interface CentrifugoMessageData {
   eventType?: string;
   renderedFile?: RenderedFile;
   renderChartId?: string;
-  renderWorkspaceId?: string;
+  renderId?: string;
   depUpdateCommand?: string;
   depUpdateStdout?: string;
   depUpdateStderr?: string;

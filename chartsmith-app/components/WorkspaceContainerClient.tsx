@@ -2,9 +2,11 @@
 
 import React from "react";
 import { useAtom } from "jotai";
+import { FileText } from "lucide-react";
+import Editor from "@monaco-editor/react";
 
 // atoms
-import { editorViewAtom, selectedFileAtom } from "@/atoms/workspace";
+import { editorViewAtom, selectedFileAtom, renderedFilesAtom } from "@/atoms/workspace";
 import { looseFilesAtom, workspaceAtom } from "@/atoms/workspace";
 
 // components
@@ -41,12 +43,13 @@ export function WorkspaceContainerClient({
   const [workspace] = useAtom(workspaceAtom);
   const [looseFiles] = useAtom(looseFilesAtom);
   const [view, setView] = useAtom(editorViewAtom);
+  const [renderedFiles] = useAtom(renderedFilesAtom);
+
+
 
   if (!workspace) {
     return null;
   }
-
-  const renderedFiles: RenderedFile[] = [];
 
   return (
     <>
@@ -90,30 +93,103 @@ export function WorkspaceContainerClient({
                 Rendered
               </div>
             </div>
-            <div className="flex-1 overflow-auto">
-              {view === "rendered" && selectedFile && !renderedFiles.find(rf => rf.filePath === selectedFile.filePath) ? (
-                <div className="flex flex-col items-center justify-center h-full text-sm text-gray-500 space-y-2">
-                  <div>This file was not included in the rendered output</div>
-                  <Button
-                    variant="default"
-                    size="sm"
-                    onClick={async () => {
-                      await createChatMessageAction(session, workspace.id, `Why was the file ${selectedFile.filePath} not included in the rendered output?`);
-                    }}
-                    className="bg-primary hover:bg-primary/90 text-white"
-                  >
-                    Why was this file not included?
-                  </Button>
-                </div>
+            <div className="flex-1 h-full overflow-auto">
+              {view === "rendered" ? (
+                selectedFile ? (
+                  // Try to find a rendered version of the selected file
+                  (() => {
+                    let renderedFile = null;
+                    
+                    // Try exact match first
+                    renderedFile = renderedFiles.find(rf => rf.filePath === selectedFile.filePath);
+                    
+                    // If no exact match, look for a rendered file with a matching name
+                    if (!renderedFile) {
+                      const selectedFileName = selectedFile.filePath.split('/').pop() || '';
+                      renderedFile = renderedFiles.find(rf => {
+                        const renderedFileName = rf.filePath.split('/').pop() || '';
+                        return renderedFileName === selectedFileName;
+                      });
+                    }
+                    
+                    // Special handling for templates
+                    if (!renderedFile && selectedFile.filePath.includes('/templates/')) {
+                      // For template files, look for a corresponding YAML file in the rendered output
+                      const baseFileName = selectedFile.filePath.split('/').pop()?.replace('.yaml.tpl', '.yaml').replace('.tpl', '') || '';
+                      
+                      renderedFile = renderedFiles.find(rf => {
+                        const renderedFileName = rf.filePath.split('/').pop() || '';
+                        return renderedFileName === baseFileName;
+                      });
+                      
+                    }
+                    
+                    // If we find a rendered version, show it
+                    if (renderedFile) {
+                      // Get the rendered content
+                      const renderedContent = renderedFile.renderedContent || "";
+                      
+                      // Use a unique key to force the CodeEditor to fully remount with new content
+                      // This prevents old content from persisting in Monaco Editor
+                      // Use direct Monaco Editor instance instead of CodeEditor component
+                      // to completely avoid any potential state issues
+                      return (
+                        <div key={`rendered-${renderedFile.id}-${Date.now()}`} className="h-full">
+                          <Editor
+                            height="100%"
+                            defaultLanguage="yaml"
+                            language="yaml"
+                            value={renderedContent}
+                            theme={resolvedTheme === "dark" ? "vs-dark" : "vs"}
+                            options={{
+                              readOnly: true,
+                              minimap: { enabled: false },
+                              fontSize: 11,
+                              lineNumbers: 'on',
+                              scrollBeyondLastLine: false,
+                              automaticLayout: true,
+                              tabSize: 2
+                            }}
+                          />
+                        </div>
+                      );
+                    } else {
+                      // Show a message if this file isn't in rendered output
+                      return (
+                        <div className="flex flex-col items-center justify-center h-full text-sm text-gray-500 space-y-2">
+                          <div>This file was not included in the rendered output</div>
+                          <Button
+                            variant="default"
+                            size="sm"
+                            onClick={async () => {
+                              await createChatMessageAction(session, workspace.id, `Why was the file ${selectedFile.filePath} not included in the rendered output?`);
+                            }}
+                            className="bg-primary hover:bg-primary/90 text-white"
+                          >
+                            Why was this file not included?
+                          </Button>
+                        </div>
+                      );
+                    }
+                  })()
+                ) : (
+                  // If no file is selected, show a message
+                  <div className="flex flex-col items-center justify-center h-full text-sm text-gray-500">
+                    <div>Select a file to view its rendered output</div>
+                  </div>
+                )
               ) : (
+                // Source view - show the regular editor
                 selectedFile && (
-                  <CodeEditor
-                    session={session}
-                    theme={resolvedTheme}
-                    value={editorContent}
-                    onChange={onEditorChange}
-                    onCommandK={onCommandK}
-                  />
+                  <div key={`source-${selectedFile.id}-${view}`} className="h-full">
+                    <CodeEditor
+                      session={session}
+                      theme={resolvedTheme}
+                      value={editorContent}
+                      onChange={onEditorChange}
+                      onCommandK={onCommandK}
+                    />
+                  </div>
                 )
               )}
             </div>

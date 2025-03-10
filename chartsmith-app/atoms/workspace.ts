@@ -222,3 +222,13 @@ export const addFileToWorkspaceAtom = atom(
     }
   }
 );
+
+// Derived atom for getting all rendered files
+export const renderedFilesAtom = atom(get => {
+  const renders = get(rendersAtom);
+  return renders.flatMap(render => 
+    render.charts.flatMap(chart => 
+      chart.renderedFiles || []
+    )
+  );
+});

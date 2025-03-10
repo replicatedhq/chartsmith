@@ -134,19 +134,14 @@ export function useCentrifugo({
   const handleArtifactReceived = useCallback((artifact: { path: string, content: string, pendingPatch?: string }) => {
     if (!setSelectedFile) return;
 
-    console.log("Artifact received:", artifact);
-
     // Generate a consistent file ID once to use in both places
     const fileId = `file-${Date.now()}`;
 
     setWorkspace(workspace => {
       if (!workspace) return workspace;
 
-      console.log("Current workspace:", workspace);
-
       // First check for the file in the top-level files array
       const existingWorkspaceFile = workspace.files?.find(f => f.filePath === artifact.path);
-      console.log("Existing workspace file:", existingWorkspaceFile);
 
       // Then check if the file exists in any chart
       let chartWithFile = null;
@@ -163,20 +158,13 @@ export function useCentrifugo({
         }
       }
 
-      console.log("Chart with file:", chartWithFile);
-      console.log("File in chart:", fileInChart);
-
       // Check if it's a new file patch
       const isNewFile = !existingWorkspaceFile && !fileInChart;
       const isNewFileFromPatch = isNewFilePatch(artifact.pendingPatch);
 
-      console.log("Is new file:", isNewFile, "Is new file from patch:", isNewFileFromPatch);
-
       // Fix for new files - ensure proper initialization for diff to work
       // If the file doesn't exist anywhere, create a new file and add it to both places
       if (isNewFile) {
-        console.log("Creating new file:", artifact.path);
-
         // For new files that have a pending patch but no content, initialize content to empty string
         // This matches backend behavior where new files have content="" and pendingPatch with the full content
         const newFile = {
@@ -191,11 +179,8 @@ export function useCentrifugo({
         // Add to both the first chart AND to the top-level files array
         // Make sure we have at least one chart
         if (!workspace.charts || workspace.charts.length === 0) {
-          console.error("No charts in workspace to add file to");
           return workspace;
         }
-
-        console.log("Adding new file to workspace and first chart with empty content and patch:", newFile);
 
         return {
           ...workspace,
@@ -212,11 +197,8 @@ export function useCentrifugo({
 
       // If the file exists and has a pending patch, track the pre-patch state
       if (chartWithFile && artifact.pendingPatch) {
-        console.log("Tracking chart before applying pending patch");
         setChartsBeforeApplyingPendingPatches(prev => [...prev, chartWithFile]);
       }
-
-      console.log("Updating existing file in workspace");
 
       // Determine content for existing files based on the patch type
       const existingContent = existingWorkspaceFile?.content || fileInChart?.content;
@@ -250,7 +232,6 @@ export function useCentrifugo({
     });
 
     // Create a representation of the file for the editor with appropriate content
-    // This is a key change: We now deep clone the file to ensure React triggers proper re-renders
     const file = {
       id: fileId, // Use the same ID created above
       filePath: artifact.path,
@@ -260,15 +241,12 @@ export function useCentrifugo({
       pendingPatch: artifact.pendingPatch || artifact.content || ""
     };
 
-    // Removed excessive logging
-
-    // Set the selected file without excessive logging
     setSelectedFile(file);
   }, [setSelectedFile, setChartsBeforeApplyingPendingPatches]);
 
   const handleRenderStreamEvent = useCallback(async (data: CentrifugoMessageData) => {
     if (!session) return;
-    if (data.eventType !== 'render-stream' || !data.renderChartId || !data.renderWorkspaceId) {
+    if (data.eventType !== 'render-stream' || !data.renderChartId || !data.renderId) {
       return;
     }
 
@@ -277,9 +255,9 @@ export function useCentrifugo({
       const newRenders = [...prev];
 
       // if the message has a renderWorkspaceId that we don't know, fetch and add it
-      if (!newRenders.find(render => render.id === data.renderWorkspaceId)) {
-        if (data.renderWorkspaceId) {
-          getWorkspaceRenderAction(session, data.renderWorkspaceId).then(newWorkspaceRender => {
+      if (!newRenders.find(render => render.id === data.renderId)) {
+        if (data.renderId) {
+          getWorkspaceRenderAction(session, data.renderId).then(newWorkspaceRender => {
             setRenders(prev => [...prev, newWorkspaceRender]);
           });
         }
@@ -288,7 +266,7 @@ export function useCentrifugo({
 
       // Now update the renders with the new stream data
       return newRenders.map(render => {
-        if (render.id !== data.renderWorkspaceId) return render;
+        if (render.id !== data.renderId) return render;
 
         return {
           ...render,
@@ -310,14 +288,50 @@ export function useCentrifugo({
     });
   }, [session, setRenders]);
 
-  const handleRenderUpdated = useCallback((data: CentrifugoMessageData) => {
-    console.log('Render updated event received:', {
-      eventType: data.eventType,
-      renderChartId: data.renderChartId,
-      renderWorkspaceId: data.renderWorkspaceId,
-      fullData: data
+  const handleRenderFileEvent = useCallback((data: CentrifugoMessageData) => {
+    if (!data.renderId || !data.renderChartId || !data.renderedFile) return;
+
+
+    const render = data.renderId;
+    const renderChartId = data.renderChartId;
+    const renderedFile = data.renderedFile;
+
+
+    setRenders(prev => {
+      const newRenders = [...prev];
+      const index = newRenders.findIndex(r => r.id === render);
+      
+      // If the render exists, update it with the new file
+      if (index !== -1) {
+        // Create a copy of the render
+        const updatedRender = { ...newRenders[index] };
+        
+        // Find the chart to update
+        const chartIndex = updatedRender.charts.findIndex(c => c.id === renderChartId);
+        
+        if (chartIndex !== -1) {
+          // Create a copy of the chart
+          const updatedChart = { ...updatedRender.charts[chartIndex] };
+          
+          // Add the new file to the chart's rendered files
+          updatedChart.renderedFiles = [
+            ...(updatedChart.renderedFiles || []),
+            renderedFile
+          ];
+          
+          // Update the chart in the render
+          updatedRender.charts[chartIndex] = updatedChart;
+          
+          // Update the render in the list
+          newRenders[index] = updatedRender;
+          
+        }
+      }
+      
+      return newRenders;
     });
-  }, []);
+
+  }, [setRenders]);
 
   const handleConversionFileUpdatedMessage = useCallback((data: CentrifugoMessageData) => {
     if (!data.conversionId || !data.conversionFile) return;
@@ -356,8 +370,8 @@ export function useCentrifugo({
       handleRevisionCreated(message.data.revision!);
     } else if (eventType === 'render-stream') {
       handleRenderStreamEvent(message.data);
-    } else if (eventType === 'render-updated') {
-      handleRenderUpdated(message.data);
+    } else if (eventType === 'render-file') {
+      handleRenderFileEvent(message.data);
     } else if (eventType === 'conversion-file') {
       handleConversionFileUpdatedMessage(message.data);
     } else if (eventType === 'conversion-status') {
@@ -371,11 +385,8 @@ export function useCentrifugo({
 
     const artifact = message.data.artifact;
     if (artifact) {
-      console.log("Raw artifact from message:", artifact);
-
       // Check if path and content exist, even if content is empty string
       if (artifact.path) {
-        console.log("Calling handleArtifactReceived with path:", artifact.path);
         handleArtifactReceived(artifact);
       } else {
         console.error("Artifact missing required path:", artifact);
@@ -390,7 +401,7 @@ export function useCentrifugo({
     handleRenderStreamEvent,
     handleWorkspaceUpdated,
     handleArtifactReceived,
-    handleRenderUpdated,
+    handleRenderFileEvent,
     handleConversionFileUpdatedMessage,
     handleConversationUpdatedMessage
   ]);

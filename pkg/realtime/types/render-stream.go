@@ -2,7 +2,7 @@ package types
 
 type RenderStreamEvent struct {
 	WorkspaceID         string `json:"workspaceId"`
-	RenderWorkspaceID   string `json:"renderWorkspaceId"`
+	RenderID            string `json:"renderId"`
 	RenderChartID       string `json:"renderChartId"`
 	DepUpdateCommand    string `json:"depUpdateCommand,omitempty"`
 	DepUpdateStdout     string `json:"depUpdateStdout,omitempty"`
@@ -16,7 +16,7 @@ func (e RenderStreamEvent) GetMessageData() (map[string]interface{}, error) {
 	return map[string]interface{}{
 		"workspaceId":         e.WorkspaceID,
 		"eventType":           "render-stream",
-		"renderWorkspaceId":   e.RenderWorkspaceID,
+		"renderId":            e.RenderID,
 		"renderChartId":       e.RenderChartID,
 		"depUpdateCommand":    e.DepUpdateCommand,
 		"depUpdateStdout":     e.DepUpdateStdout,
