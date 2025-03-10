@@ -262,6 +262,7 @@ export function CodeEditor({
     updateCurrentDiffIndex(allFilesWithPendingPatches);
   }, [selectedFile, allFilesWithPendingPatches, updateCurrentDiffIndex]);
 
+  
   useEffect(() => {
     if (selectedFile?.pendingPatch && diffEditorRef.current) {
       const attemptScroll = (attempt = 1, maxAttempts = 5) => {
@@ -290,6 +291,7 @@ export function CodeEditor({
               lineNumber: firstChange.modifiedStartLineNumber,
               column: 1
             });
+            
           } else if (attempt < maxAttempts) {
             attemptScroll(attempt + 1);
           }
@@ -317,7 +319,24 @@ export function CodeEditor({
   }, []);
   
   // Add cleanup effect for editors when component unmounts
+  // Add a simple CSS fix for the revert buttons
   useEffect(() => {
+    // Create a style element that specifically targets the margin width and hides elements
+    let styleElement = document.getElementById('monaco-diff-editor-fix');
+    if (!styleElement) {
+      styleElement = document.createElement('style');
+      styleElement.id = 'monaco-diff-editor-fix';
+      styleElement.innerHTML = `
+        /* Just hide the revert buttons */
+        .monaco-diff-editor .codicon-arrow-small-left,
+        .monaco-diff-editor [title="Revert this change"],
+        .monaco-diff-editor [title="Copy this change to the other side"] {
+          display: none !important;
+        }
+      `;
+      document.head.appendChild(styleElement);
+    }
+    
     return () => {
       // Clean up editors on unmount
       if (editorRef.current) {
@@ -331,6 +350,7 @@ export function CodeEditor({
       
       if (diffEditorRef.current) {
         try {
+          
           diffEditorRef.current.dispose();
         } catch (err) {
           console.log("Error disposing diff editor on unmount:", err);
@@ -377,7 +397,8 @@ export function CodeEditor({
     
     const modifiedEditor = editor.getModifiedEditor();
     const originalEditor = editor.getOriginalEditor();
-
+    
+  
     const commandId = 'chartsmith.openCommandPalette';
     [modifiedEditor, originalEditor].forEach(ed => {
       ed.addAction({
@@ -972,6 +993,7 @@ export function CodeEditor({
                       model.dispose();
                     }
                   });
+                  
                 } catch (err) {
                   console.log("Error disposing models:", err);
                 }
@@ -979,17 +1001,9 @@ export function CodeEditor({
               options={{
                 ...editorOptions,
                 renderSideBySide: false,
-                diffWordWrap: 'off',
                 originalEditable: false,
-                renderOverviewRuler: false,
-                ignoreTrimWhitespace: false,
-                renderWhitespace: 'none',
-                renderLineHighlight: 'none',
-                quickSuggestions: false,
-                folding: false,
-                lineNumbers: 'on',
-                scrollBeyondLastLine: false,
-                minimap: { enabled: false },
+                diffCodeLens: false,
+                readOnly: true
               }}
             />
           </div>
