@@ -268,7 +268,7 @@ export function useCentrifugo({
 
   const handleRenderStreamEvent = useCallback(async (data: CentrifugoMessageData) => {
     if (!session) return;
-    if (data.eventType !== 'render-stream' || !data.renderChartId || !data.renderWorkspaceId) {
+    if (data.eventType !== 'render-stream' || !data.renderChartId || !data.renderId) {
       return;
     }
 
@@ -277,9 +277,9 @@ export function useCentrifugo({
       const newRenders = [...prev];
 
       // if the message has a renderWorkspaceId that we don't know, fetch and add it
-      if (!newRenders.find(render => render.id === data.renderWorkspaceId)) {
-        if (data.renderWorkspaceId) {
-          getWorkspaceRenderAction(session, data.renderWorkspaceId).then(newWorkspaceRender => {
+      if (!newRenders.find(render => render.id === data.renderId)) {
+        if (data.renderId) {
+          getWorkspaceRenderAction(session, data.renderId).then(newWorkspaceRender => {
             setRenders(prev => [...prev, newWorkspaceRender]);
           });
         }
@@ -288,7 +288,7 @@ export function useCentrifugo({
 
       // Now update the renders with the new stream data
       return newRenders.map(render => {
-        if (render.id !== data.renderWorkspaceId) return render;
+        if (render.id !== data.renderId) return render;
 
         return {
           ...render,
@@ -310,14 +310,61 @@ export function useCentrifugo({
     });
   }, [session, setRenders]);
 
-  const handleRenderUpdated = useCallback((data: CentrifugoMessageData) => {
-    console.log('Render updated event received:', {
-      eventType: data.eventType,
-      renderChartId: data.renderChartId,
-      renderWorkspaceId: data.renderWorkspaceId,
-      fullData: data
+  const handleRenderFileEvent = useCallback((data: CentrifugoMessageData) => {
+    if (!data.renderId || !data.renderChartId || !data.renderedFile) return;
+
+    console.log("Render file event received:", data);
+
+    const render = data.renderId;
+    const renderChartId = data.renderChartId;
+    const renderedFile = data.renderedFile;
+
+    // Important: Make sure we properly set the filePath on the renderedFile object
+    if (!renderedFile.filePath && renderedFile.id) {
+      console.log("Rendered file missing filePath, attempting to extract from id", renderedFile);
+      // If filePath is missing, we need to infer it from other data
+      // This might be needed depending on the backend's response format
+    }
+
+    console.log("Render:", render);
+    console.log("Rendered file:", renderedFile);
+
+    setRenders(prev => {
+      const newRenders = [...prev];
+      const index = newRenders.findIndex(r => r.id === render);
+      
+      // If the render exists, update it with the new file
+      if (index !== -1) {
+        // Create a copy of the render
+        const updatedRender = { ...newRenders[index] };
+        
+        // Find the chart to update
+        const chartIndex = updatedRender.charts.findIndex(c => c.id === renderChartId);
+        
+        if (chartIndex !== -1) {
+          // Create a copy of the chart
+          const updatedChart = { ...updatedRender.charts[chartIndex] };
+          
+          // Add the new file to the chart's rendered files
+          updatedChart.renderedFiles = [
+            ...(updatedChart.renderedFiles || []),
+            renderedFile
+          ];
+          
+          // Update the chart in the render
+          updatedRender.charts[chartIndex] = updatedChart;
+          
+          // Update the render in the list
+          newRenders[index] = updatedRender;
+          
+          console.log("Updated renders with new file:", renderedFile.filePath);
+        }
+      }
+      
+      return newRenders;
     });
-  }, []);
+
+  }, [setRenders]);
 
   const handleConversionFileUpdatedMessage = useCallback((data: CentrifugoMessageData) => {
     if (!data.conversionId || !data.conversionFile) return;
@@ -356,8 +403,8 @@ export function useCentrifugo({
       handleRevisionCreated(message.data.revision!);
     } else if (eventType === 'render-stream') {
       handleRenderStreamEvent(message.data);
-    } else if (eventType === 'render-updated') {
-      handleRenderUpdated(message.data);
+    } else if (eventType === 'render-file') {
+      handleRenderFileEvent(message.data);
     } else if (eventType === 'conversion-file') {
       handleConversionFileUpdatedMessage(message.data);
     } else if (eventType === 'conversion-status') {
@@ -390,7 +437,7 @@ export function useCentrifugo({
     handleRenderStreamEvent,
     handleWorkspaceUpdated,
     handleArtifactReceived,
-    handleRenderUpdated,
+    handleRenderFileEvent,
     handleConversionFileUpdatedMessage,
     handleConversationUpdatedMessage
   ]);

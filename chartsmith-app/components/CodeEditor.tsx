@@ -249,6 +249,13 @@ export function CodeEditor({
     }
   }, [selectedFile, onChange]);
   
+  // Debug log the current value being provided
+  useEffect(() => {
+    if (value) {
+      console.log("CodeEditor received value:", value.substring(0, 100) + "...");
+    }
+  }, [value]);
+  
   // Update content whenever selectedFile changes
   useEffect(() => {
     // Don't show loading state if we already have an editor reference

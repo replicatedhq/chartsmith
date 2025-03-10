@@ -147,10 +147,10 @@ func renderChart(ctx context.Context, renderedChart *workspacetypes.RenderedChar
 			for _, file := range updatedRenderedFiles {
 				if file.ID != "" {
 					e := realtimetypes.RenderFileEvent{
-						WorkspaceID:       w.ID,
-						RenderWorkspaceID: renderedWorkspace.ID,
-						RenderChartID:     renderedChart.ID,
-						RenderedFile:      file,
+						WorkspaceID:   w.ID,
+						RenderID:      renderedWorkspace.ID,
+						RenderChartID: renderedChart.ID,
+						RenderedFile:  file,
 					}
 
 					if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
@@ -170,7 +170,7 @@ func renderChart(ctx context.Context, renderedChart *workspacetypes.RenderedChar
 
 			e := realtimetypes.RenderStreamEvent{
 				WorkspaceID:         w.ID,
-				RenderWorkspaceID:   renderedWorkspace.ID,
+				RenderID:            renderedWorkspace.ID,
 				RenderChartID:       renderedChart.ID,
 				DepUpdateCommand:    renderedChart.DepupdateCommand,
 				DepUpdateStdout:     renderedChart.DepupdateStdout,
@@ -193,7 +193,7 @@ func renderChart(ctx context.Context, renderedChart *workspacetypes.RenderedChar
 
 			e := realtimetypes.RenderStreamEvent{
 				WorkspaceID:         w.ID,
-				RenderWorkspaceID:   renderedWorkspace.ID,
+				RenderID:            renderedWorkspace.ID,
 				RenderChartID:       renderedChart.ID,
 				DepUpdateCommand:    renderedChart.DepupdateCommand,
 				DepUpdateStdout:     renderedChart.DepupdateStdout,
@@ -217,7 +217,7 @@ func renderChart(ctx context.Context, renderedChart *workspacetypes.RenderedChar
 			e := realtimetypes.RenderStreamEvent{
 				WorkspaceID:         w.ID,
 				RenderChartID:       renderedChart.ID,
-				RenderWorkspaceID:   renderedWorkspace.ID,
+				RenderID:            renderedWorkspace.ID,
 				DepUpdateCommand:    renderedChart.DepupdateCommand,
 				DepUpdateStdout:     renderedChart.DepupdateStdout,
 				DepUpdateStderr:     renderedChart.DepupdateStderr,
@@ -239,7 +239,7 @@ func renderChart(ctx context.Context, renderedChart *workspacetypes.RenderedChar
 
 			e := realtimetypes.RenderStreamEvent{
 				WorkspaceID:         w.ID,
-				RenderWorkspaceID:   renderedWorkspace.ID,
+				RenderID:            renderedWorkspace.ID,
 				RenderChartID:       renderedChart.ID,
 				DepUpdateCommand:    renderedChart.DepupdateCommand,
 				DepUpdateStdout:     renderedChart.DepupdateStdout,
@@ -264,13 +264,6 @@ func renderChart(ctx context.Context, renderedChart *workspacetypes.RenderedChar
 			// b/c we instead stream the rendered files
 			// so that we can display the ui in more useful ways
 
-			// we can't keep up with the cli if we parse every line...  we will catch the tail here
-			// in the done handler
-			lineCount := strings.Count(renderedChart.HelmTemplateStdout, "\n")
-			if lineCount%30 != 0 {
-				continue
-			}
-
 			// updatedRenderedFiles is the list of files that have changes in this call
 			// not the entire list again.  this is the list we need to send to a client who might be watching
 			updatedRenderedFiles, err := parseRenderedFiles(ctx, renderedChart.HelmTemplateStdout, chart.Name, &renderedFiles, workspaceFiles)
@@ -281,12 +274,13 @@ func renderChart(ctx context.Context, renderedChart *workspacetypes.RenderedChar
 			for _, file := range updatedRenderedFiles {
 				if file.ID != "" {
 					e := realtimetypes.RenderFileEvent{
-						WorkspaceID:       w.ID,
-						RenderWorkspaceID: renderedWorkspace.ID,
-						RenderChartID:     renderedChart.ID,
-						RenderedFile:      file,
+						WorkspaceID:   w.ID,
+						RenderID:      renderedWorkspace.ID,
+						RenderChartID: renderedChart.ID,
+						RenderedFile:  file,
 					}
 
+					fmt.Printf("sending render file event: %+v\n", e)
 					if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
 						return fmt.Errorf("failed to send render updated event: %w", err)
 					}
@@ -325,6 +319,7 @@ func parseRenderedFiles(ctx context.Context, stdout string, chartName string, re
 
 	// Split the stdout into individual YAML documents
 	documents := strings.Split(stdout, "\n---\n")
+
 	updatedFiles := []workspacetypes.RenderedFile{}
 
 	for _, doc := range documents {
@@ -380,7 +375,7 @@ func parseRenderedFiles(ctx context.Context, stdout string, chartName string, re
 				}
 			}
 
-			// logger.Debug("new rendered filefile", zap.String("path", path), zap.String("id", renderedFile.ID))
+			logger.Debug("new rendered file", zap.String("path", path), zap.String("id", renderedFile.ID))
 
 			*renderedFiles = append(*renderedFiles, renderedFile)
 			updatedFiles = append(updatedFiles, renderedFile)
