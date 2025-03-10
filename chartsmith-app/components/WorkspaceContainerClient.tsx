@@ -46,12 +46,6 @@ export function WorkspaceContainerClient({
   const [renderedFiles] = useAtom(renderedFilesAtom);
 
 
-  // Debugging logs to help us understand the issue
-  React.useEffect(() => {
-    if (renderedFiles.length > 0) {
-      console.log("Available rendered files:", renderedFiles.map(f => f.filePath));
-    }
-  }, [renderedFiles]);
 
   if (!workspace) {
     return null;
@@ -104,9 +98,6 @@ export function WorkspaceContainerClient({
                 selectedFile ? (
                   // Try to find a rendered version of the selected file
                   (() => {
-                    console.log("Selected file path:", selectedFile.filePath);
-                    console.log("All rendered files:", renderedFiles);
-                    
                     let renderedFile = null;
                     
                     // Try exact match first
@@ -131,20 +122,11 @@ export function WorkspaceContainerClient({
                         return renderedFileName === baseFileName;
                       });
                       
-                      if (renderedFile) {
-                        console.log("Found matching rendered file for template:", baseFileName);
-                      }
                     }
                     
                     // If we find a rendered version, show it
                     if (renderedFile) {
-                      console.log("Found rendered file with content:", {
-                        filePath: renderedFile.filePath,
-                        contentPreview: renderedFile.renderedContent.substring(0, 100) + '...',
-                        contentLength: renderedFile.renderedContent.length
-                      });
-                      
-                      // Force a completely new editor instance with direct content
+                      // Get the rendered content
                       const renderedContent = renderedFile.renderedContent || "";
                       
                       // Use a unique key to force the CodeEditor to fully remount with new content

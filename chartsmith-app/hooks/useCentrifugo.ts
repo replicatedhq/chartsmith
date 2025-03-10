@@ -134,19 +134,14 @@ export function useCentrifugo({
   const handleArtifactReceived = useCallback((artifact: { path: string, content: string, pendingPatch?: string }) => {
     if (!setSelectedFile) return;
 
-    console.log("Artifact received:", artifact);
-
     // Generate a consistent file ID once to use in both places
     const fileId = `file-${Date.now()}`;
 
     setWorkspace(workspace => {
       if (!workspace) return workspace;
 
-      console.log("Current workspace:", workspace);
-
       // First check for the file in the top-level files array
       const existingWorkspaceFile = workspace.files?.find(f => f.filePath === artifact.path);
-      console.log("Existing workspace file:", existingWorkspaceFile);
 
       // Then check if the file exists in any chart
       let chartWithFile = null;
@@ -163,20 +158,13 @@ export function useCentrifugo({
         }
       }
 
-      console.log("Chart with file:", chartWithFile);
-      console.log("File in chart:", fileInChart);
-
       // Check if it's a new file patch
       const isNewFile = !existingWorkspaceFile && !fileInChart;
       const isNewFileFromPatch = isNewFilePatch(artifact.pendingPatch);
 
-      console.log("Is new file:", isNewFile, "Is new file from patch:", isNewFileFromPatch);
-
       // Fix for new files - ensure proper initialization for diff to work
       // If the file doesn't exist anywhere, create a new file and add it to both places
       if (isNewFile) {
-        console.log("Creating new file:", artifact.path);
-
         // For new files that have a pending patch but no content, initialize content to empty string
         // This matches backend behavior where new files have content="" and pendingPatch with the full content
         const newFile = {
@@ -191,11 +179,8 @@ export function useCentrifugo({
         // Add to both the first chart AND to the top-level files array
         // Make sure we have at least one chart
         if (!workspace.charts || workspace.charts.length === 0) {
-          console.error("No charts in workspace to add file to");
           return workspace;
         }
-
-        console.log("Adding new file to workspace and first chart with empty content and patch:", newFile);
 
         return {
           ...workspace,
@@ -212,11 +197,8 @@ export function useCentrifugo({
 
       // If the file exists and has a pending patch, track the pre-patch state
       if (chartWithFile && artifact.pendingPatch) {
-        console.log("Tracking chart before applying pending patch");
         setChartsBeforeApplyingPendingPatches(prev => [...prev, chartWithFile]);
       }
-
-      console.log("Updating existing file in workspace");
 
       // Determine content for existing files based on the patch type
       const existingContent = existingWorkspaceFile?.content || fileInChart?.content;
@@ -250,7 +232,6 @@ export function useCentrifugo({
     });
 
     // Create a representation of the file for the editor with appropriate content
-    // This is a key change: We now deep clone the file to ensure React triggers proper re-renders
     const file = {
       id: fileId, // Use the same ID created above
       filePath: artifact.path,
@@ -260,9 +241,6 @@ export function useCentrifugo({
       pendingPatch: artifact.pendingPatch || artifact.content || ""
     };
 
-    // Removed excessive logging
-
-    // Set the selected file without excessive logging
     setSelectedFile(file);
   }, [setSelectedFile, setChartsBeforeApplyingPendingPatches]);
 
@@ -313,21 +291,11 @@ export function useCentrifugo({
   const handleRenderFileEvent = useCallback((data: CentrifugoMessageData) => {
     if (!data.renderId || !data.renderChartId || !data.renderedFile) return;
 
-    console.log("Render file event received:", data);
 
     const render = data.renderId;
     const renderChartId = data.renderChartId;
     const renderedFile = data.renderedFile;
 
-    // Important: Make sure we properly set the filePath on the renderedFile object
-    if (!renderedFile.filePath && renderedFile.id) {
-      console.log("Rendered file missing filePath, attempting to extract from id", renderedFile);
-      // If filePath is missing, we need to infer it from other data
-      // This might be needed depending on the backend's response format
-    }
-
-    console.log("Render:", render);
-    console.log("Rendered file:", renderedFile);
 
     setRenders(prev => {
       const newRenders = [...prev];
@@ -357,7 +325,6 @@ export function useCentrifugo({
           // Update the render in the list
           newRenders[index] = updatedRender;
           
-          console.log("Updated renders with new file:", renderedFile.filePath);
         }
       }
       
@@ -418,11 +385,8 @@ export function useCentrifugo({
 
     const artifact = message.data.artifact;
     if (artifact) {
-      console.log("Raw artifact from message:", artifact);
-
       // Check if path and content exist, even if content is empty string
       if (artifact.path) {
-        console.log("Calling handleArtifactReceived with path:", artifact.path);
         handleArtifactReceived(artifact);
       } else {
         console.error("Artifact missing required path:", artifact);
