@@ -146,9 +146,11 @@ func renderChart(ctx context.Context, renderedChart *workspacetypes.RenderedChar
 
 			for _, file := range updatedRenderedFiles {
 				if file.ID != "" {
-					e := realtimetypes.RenderUpdatedEvent{
-						WorkspaceID:  w.ID,
-						RenderedFile: file,
+					e := realtimetypes.RenderFileEvent{
+						WorkspaceID:       w.ID,
+						RenderWorkspaceID: renderedWorkspace.ID,
+						RenderChartID:     renderedChart.ID,
+						RenderedFile:      file,
 					}
 
 					if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
@@ -278,9 +280,11 @@ func renderChart(ctx context.Context, renderedChart *workspacetypes.RenderedChar
 
 			for _, file := range updatedRenderedFiles {
 				if file.ID != "" {
-					e := realtimetypes.RenderUpdatedEvent{
-						WorkspaceID:  w.ID,
-						RenderedFile: file,
+					e := realtimetypes.RenderFileEvent{
+						WorkspaceID:       w.ID,
+						RenderWorkspaceID: renderedWorkspace.ID,
+						RenderChartID:     renderedChart.ID,
+						RenderedFile:      file,
 					}
 
 					if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {

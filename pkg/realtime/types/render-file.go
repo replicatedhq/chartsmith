@@ -4,23 +4,23 @@ import (
 	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 )
 
-type RenderUpdatedEvent struct {
+type RenderFileEvent struct {
 	WorkspaceID       string                      `json:"workspaceId"`
 	RenderWorkspaceID string                      `json:"renderWorkspaceId"`
 	RenderChartID     string                      `json:"renderChartId"`
 	RenderedFile      workspacetypes.RenderedFile `json:"renderedFile"`
 }
 
-func (e RenderUpdatedEvent) GetMessageData() (map[string]interface{}, error) {
+func (e RenderFileEvent) GetMessageData() (map[string]interface{}, error) {
 	return map[string]interface{}{
 		"workspaceId":       e.WorkspaceID,
-		"eventType":         "render-updated",
+		"eventType":         "render-file",
 		"renderWorkspaceId": e.RenderWorkspaceID,
 		"renderChartId":     e.RenderChartID,
 		"renderedFile":      e.RenderedFile,
 	}, nil
 }
 
-func (e RenderUpdatedEvent) GetChannelName() string {
+func (e RenderFileEvent) GetChannelName() string {
 	return e.WorkspaceID
 }
