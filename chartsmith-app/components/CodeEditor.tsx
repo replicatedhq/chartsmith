@@ -10,7 +10,7 @@ import { allFilesBeforeApplyingPendingPatchesAtom, allFilesWithPendingPatchesAto
 
 // types
 import type { editor } from "monaco-editor";
-import Editor from "@monaco-editor/react";
+import Editor, { DiffEditor } from "@monaco-editor/react";
 import type { WorkspaceFile } from "@/lib/types/workspace";
 import type { Session } from "@/lib/types/session";
 
@@ -594,24 +594,63 @@ export const CodeEditor = React.memo(function CodeEditor({
 
   const headerElement = showDiffHeader ? renderDiffHeader() : null;
 
-  // The final rendered component with a single editor instance
+  // The final rendered component with conditional rendering based on diff mode
   return (
     <div className="flex-1 h-full flex flex-col">
       {/* Always render header if it exists */}
       {headerElement}
 
-      {/* Single editor container that's handled by our hook */}
-      <div ref={editorContainerRef} className="flex-1 h-full">
-        <Editor
-          height="100%"
-          defaultLanguage={language}
-          language={language}
-          value={selectedFile?.content || ""}
-          onChange={handleContentChange}
-          theme={theme === "light" ? "vs" : "vs-dark"}
-          options={editorOptions}
-          onMount={handleEditorMount}
-        />
+      {/* Conditionally render the appropriate editor */}
+      <div className="flex-1 h-full">
+        {selectedFile?.pendingPatch ? (
+          // Import DiffEditor dynamically
+          <div ref={editorContainerRef} className="h-full">
+            <DiffEditor
+              height="100%"
+              language={language}
+              original={original}
+              modified={modifiedContent}
+              theme={theme === "light" ? "vs" : "vs-dark"}
+              options={{
+                ...editorOptions,
+                renderSideBySide: false,
+                originalEditable: false,
+                diffCodeLens: false,
+                readOnly: true
+              }}
+              onMount={(editor, monaco) => {
+                // We need to handle the diff editor mount differently
+                editorRef.current = editor.getModifiedEditor(); // Store modified editor for consistency
+                monacoRef.current = monaco;
+                
+                // Add command palette to both editors
+                const commandId = 'chartsmith.openCommandPalette';
+                [editor.getModifiedEditor(), editor.getOriginalEditor()].forEach(ed => {
+                  ed.addAction({
+                    id: commandId,
+                    label: 'Open Command Palette',
+                    keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK],
+                    run: () => onCommandK?.()
+                  });
+                });
+              }}
+            />
+          </div>
+        ) : (
+          // Regular editor for normal mode
+          <div ref={editorContainerRef} className="h-full">
+            <Editor
+              height="100%"
+              defaultLanguage={language}
+              language={language}
+              value={selectedFile?.content || ""}
+              onChange={handleContentChange}
+              theme={theme === "light" ? "vs" : "vs-dark"}
+              options={editorOptions}
+              onMount={handleEditorMount}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

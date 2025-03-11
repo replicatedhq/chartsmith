@@ -194,7 +194,7 @@ export function useMonacoSingleInstance(
     }
   }, [selectedFile?.content, selectedFile?.pendingPatch]);
 
-  // Add effect to update models when file or diff mode changes
+  // Simplified effect now that we don't manage editor mode switching in the hook
   useEffect(() => {
     if (!editorRef.current || !monacoRef.current || !selectedFile) return;
     
@@ -208,101 +208,39 @@ export function useMonacoSingleInstance(
     // Set the diff mode state
     setInDiffMode(isDiffMode);
     
-    // Get or create a text model for this file
-    let model = window.__monacoModels?.[fileKey];
-    if (!model) {
-      const uri = monaco.Uri.parse(`file:///${fileKey}`);
-      model = monaco.editor.createModel(
-        selectedFile.content || '', 
-        language, 
-        uri
-      );
-      if (window.__monacoModels) {
-        window.__monacoModels[fileKey] = model;
-      }
-    } else {
-      // Update existing model if content changed
-      if (model.getValue() !== selectedFile.content) {
-        model.setValue(selectedFile.content || '');
-      }
-    }
-    
-    // Handle diff mode or regular mode
-    if (isDiffMode) {
-      // Create a modified model for the diff
-      const modifiedKey = `${fileKey}-modified`;
-      let modifiedModel = window.__monacoModels?.[modifiedKey];
-      
-      if (!modifiedModel) {
-        const uri = monaco.Uri.parse(`file:///${modifiedKey}`);
-        modifiedModel = monaco.editor.createModel(
-          modifiedContent, 
+    // Track models in global registry for reuse
+    if (!isDiffMode) {
+      // For regular editor, create/update the model
+      let model = window.__monacoModels?.[fileKey];
+      if (!model) {
+        const uri = monaco.Uri.parse(`file:///${fileKey}`);
+        model = monaco.editor.createModel(
+          selectedFile.content || '', 
           language, 
           uri
         );
         if (window.__monacoModels) {
-          window.__monacoModels[modifiedKey] = modifiedModel;
+          window.__monacoModels[fileKey] = model;
         }
       } else {
-        modifiedModel.setValue(modifiedContent);
-      }
-      
-      // If we have a container, create a diff editor
-      if (editorContainerRef.current) {
-        // Set up diff editor config
-        const diffOptions = {
-          ...editorOptions,
-          readOnly: true,
-          renderSideBySide: false,
-          originalEditable: false,
-          modifiedEditable: false
-        };
-        
-        try {
-          // Use editor API to create diff view with our models
-          monaco.editor.createDiffEditor(
-            editorContainerRef.current, 
-            diffOptions
-          ).setModel({
-            original: model,
-            modified: modifiedModel
-          });
-        } catch (e) {
-          console.error("Error creating diff editor:", e);
+        // Update existing model if content changed
+        if (model.getValue() !== selectedFile.content) {
+          model.setValue(selectedFile.content || '');
         }
       }
-    } else {
-      // Regular editor mode - just update the model
+      
+      // For regular editor, set the model directly
       editor.setModel(model);
-      
-      // Update editor options
-      editor.updateOptions({
-        ...editorOptions,
-        readOnly: readOnly
-      });
-      
-      // Setup change handler for regular mode
-      const changeDisposable = model.onDidChangeContent(() => {
-        onContentChange(model.getValue());
-      });
-      
-      // Cleanup
-      return () => {
-        changeDisposable.dispose();
-      };
     }
+    // Note: We don't need to handle diff mode here anymore as
+    // it's handled by the DiffEditor component in the parent
   }, [
     selectedFile?.id, 
     selectedFile?.content, 
     selectedFile?.pendingPatch, 
-    readOnly, 
     language, 
-    modifiedContent, 
     editorRef, 
-    monacoRef, 
-    editorContainerRef,
-    editorOptions,
-    onContentChange
+    monacoRef
   ]);
 
   // Keep previous content in sync with current selection
