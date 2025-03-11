@@ -331,7 +331,7 @@ export const CodeEditor = React.memo(function CodeEditor({
   useEffect(() => {
     // Don't show loading state if we already have an editor reference
     if (selectedFile && (editorRef.current || diffEditorRef.current)) {
-      setIsEditorLoading(false);
+      // No loading state to manage
     }
   }, [selectedFile]);
 
@@ -444,13 +444,9 @@ export const CodeEditor = React.memo(function CodeEditor({
   }
 
   const handleEditorMount = (editor: editor.IStandaloneCodeEditor, monaco: typeof import("monaco-editor")) => {
-    // Store the editor reference and mark loading as complete
+    // Store the editor reference
     editorRef.current = editor;
     handleEditorInit(editor, monaco);
-    setIsEditorLoading(false);
-
-    // Add cleanup handling for editor disposal
-    // Using onDidDispose isn't available, so we'll rely on our global cleanup
 
     const commandId = 'chartsmith.openCommandPalette';
     editor.addAction({
@@ -473,9 +469,8 @@ export const CodeEditor = React.memo(function CodeEditor({
   };
 
   const handleDiffEditorMount = (editor: editor.IStandaloneDiffEditor, monaco: typeof import("monaco-editor")) => {
-    // Store the editor reference and mark loading as complete
+    // Store the editor reference
     diffEditorRef.current = editor;
-    setIsEditorLoading(false);
 
     // Get the embedded editors
     const modifiedEditor = editor.getModifiedEditor();
@@ -549,6 +544,8 @@ export const CodeEditor = React.memo(function CodeEditor({
     overviewRulerLanes: 2,
     hideCursorInOverviewRuler: true,
     renderWhitespace: "all" as const,
+    // Add a loading indicator option if it exists
+    // loading: { delay: 0 }, // Set delay to 0 to disable loading indicator
   };
 
   const showDiffHeader = allFilesWithPendingPatches.length > 0;
@@ -1168,6 +1165,7 @@ export const CodeEditor = React.memo(function CodeEditor({
       original={original}
       modified={modifiedContent}
       theme={theme === "light" ? "vs" : "vs-dark"}
+      loading={null}
       onMount={(editor, monaco) => {
         // Store the reference
         diffEditorRef.current = editor;
@@ -1208,6 +1206,7 @@ export const CodeEditor = React.memo(function CodeEditor({
       defaultLanguage={language}
       language={language}
       value={selectedFile?.content ?? prevContentRef.current ?? ""}
+      loading={null}
       onChange={(newValue) => {
         if (selectedFile && newValue !== undefined && !readOnly) {
           updateFileContent({
@@ -1239,6 +1238,10 @@ export const CodeEditor = React.memo(function CodeEditor({
     </div>
   );
 }, (prevProps, nextProps) => {
-  // This custom equality check prevents remounts when only readOnly or theme changes
-  return prevProps.session?.id === nextProps.session?.id;
+  // Simplified memoization check - only use props actually passed to component
+  return (
+    prevProps.session?.id === nextProps.session?.id &&
+    prevProps.theme === nextProps.theme &&
+    prevProps.readOnly === nextProps.readOnly
+  );
 });
