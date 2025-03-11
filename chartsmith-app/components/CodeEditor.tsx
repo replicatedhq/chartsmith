@@ -25,6 +25,11 @@ import { acceptPatchAction, acceptAllPatchesAction } from "@/lib/workspace/actio
 // types
 import type { Session } from "@/lib/types/session";
 
+// Add debugging counters
+let regularEditorMountCount = 0;
+let diffEditorMountCount = 0;
+let renderCount = 0;
+
 interface CodeEditorProps {
   session: Session;
   theme?: "light" | "dark";
@@ -219,7 +224,6 @@ export const CodeEditor = React.memo(function CodeEditor({
   onCommandK,
 }: CodeEditorProps) {
   // Track previous values to prevent loading flicker
-  const [isEditorLoading, setIsEditorLoading] = useState(false);
   const prevContentRef = useRef<string | undefined>(undefined);
 
   // Container refs for both editors
@@ -232,6 +236,10 @@ export const CodeEditor = React.memo(function CodeEditor({
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const diffEditorRef = useRef<editor.IStandaloneDiffEditor | null>(null);
   const { handleEditorInit } = useMonacoEditor(selectedFile);
+
+  // Debug: Track component renders
+  renderCount++;
+  console.log(`[DEBUG] CodeEditor render #${renderCount}, pendingPatch: ${selectedFile?.pendingPatch ? 'yes' : 'no'}`);
 
   const [allFilesWithPendingPatches] = useAtom(allFilesWithPendingPatchesAtom);
   const [allFilesBeforeApplyingPendingPatches] = useAtom(allFilesBeforeApplyingPendingPatchesAtom);
@@ -247,203 +255,47 @@ export const CodeEditor = React.memo(function CodeEditor({
 
   const [, updateFileContent] = useAtom(updateFileContentAtom);
 
-  // Keep previous content in sync with current selection
-  useEffect(() => {
-    if (selectedFile?.content) {
-      prevContentRef.current = selectedFile.content;
+  // Define getLanguage function before it's used
+  const getLanguage = (filePath: string) => {
+    const ext = filePath.split('.').pop()?.toLowerCase();
+    switch (ext) {
+      case 'yaml':
+      case 'yml':
+        return 'yaml';
+      case 'ts':
+      case 'tsx':
+        return 'typescript';
+      case 'js':
+      case 'jsx':
+        return 'javascript';
+      case 'txt':
+        return 'plaintext';
+      default:
+        return 'plaintext';
     }
-  }, [selectedFile?.content]);
+  };
 
-  // Toggle editor visibility based on pendingPatch presence
-  useEffect(() => {
-    // Use CSS classes to toggle visibility with transitions
-    if (regularEditorContainerRef.current && diffEditorContainerRef.current) {
-      if (selectedFile?.pendingPatch) {
-        regularEditorContainerRef.current.classList.add('hidden');
-        regularEditorContainerRef.current.classList.remove('visible');
+  // Get content and language details
+  const original = selectedFile?.content || '';
+  const language = getLanguage(selectedFile?.filePath || '');
 
-        diffEditorContainerRef.current.classList.add('visible');
-        diffEditorContainerRef.current.classList.remove('hidden');
-      } else {
-        regularEditorContainerRef.current.classList.add('visible');
-        regularEditorContainerRef.current.classList.remove('hidden');
-
-        diffEditorContainerRef.current.classList.add('hidden');
-        diffEditorContainerRef.current.classList.remove('visible');
-      }
+  // Extract modified content from diff
+  let modifiedContent = "";
+  if (selectedFile?.pendingPatch) {
+    try {
+      modifiedContent = parseDiff(selectedFile.content, selectedFile.pendingPatch);
+    } catch (error) {
+      console.error("Error parsing diff:", error);
+      modifiedContent = selectedFile.pendingPatch;
     }
-  }, [selectedFile?.pendingPatch]);
-
-  // Global component cleanup for when it unmounts completely
-  useEffect(() => {
-    return () => {
-      try {
-        // Handle diff editor - null models before disposing editor
-        if (diffEditorRef.current) {
-          try {
-            // Get references to sub-editors
-            const modifiedEditor = diffEditorRef.current.getModifiedEditor();
-            const originalEditor = diffEditorRef.current.getOriginalEditor();
-
-            // Set models to null first
-            try {
-              modifiedEditor.setModel(null);
-              originalEditor.setModel(null);
-            } catch (e) {
-              // Ignore errors
-            }
-
-            // Now safe to dispose
-            diffEditorRef.current.dispose();
-          } catch (e) {
-            // Ignore errors
-          }
-          diffEditorRef.current = null;
-        }
-
-        // Handle regular editor
-        if (editorRef.current) {
-          try {
-            // Null the model first
-            editorRef.current.setModel(null);
-
-            // Now dispose
-            editorRef.current.dispose();
-          } catch (e) {
-            // Ignore errors
-          }
-          editorRef.current = null;
-        }
-      } catch (e) {
-        // Ignore errors
-      }
-    };
-  }, []);
-
-  // Keep previous content in sync to prevent loading flicker
-  useEffect(() => {
-    if (selectedFile?.content) {
-      prevContentRef.current = selectedFile.content;
-    }
-  }, [selectedFile?.content]);
-
-  // Update content whenever selectedFile changes
-  useEffect(() => {
-    // Don't show loading state if we already have an editor reference
-    if (selectedFile && (editorRef.current || diffEditorRef.current)) {
-      // No loading state to manage
-    }
-  }, [selectedFile]);
-
-  useEffect(() => {
-    updateCurrentDiffIndex(allFilesWithPendingPatches);
-  }, [selectedFile, allFilesWithPendingPatches, updateCurrentDiffIndex]);
-
-
-  useEffect(() => {
-    if (selectedFile?.pendingPatch && diffEditorRef.current) {
-      const attemptScroll = (attempt = 1, maxAttempts = 5) => {
-        setTimeout(() => {
-          const editor = diffEditorRef.current;
-          if (!editor) {
-            return;
-          }
-
-          const modifiedEditor = editor.getModifiedEditor();
-          const modifiedModel = modifiedEditor.getModel();
-
-          if (!modifiedModel) {
-            if (attempt < maxAttempts) {
-              attemptScroll(attempt + 1);
-            }
-            return;
-          }
-
-          const changes = editor.getLineChanges();
-
-          if (changes && changes.length > 0) {
-            const firstChange = changes[0];
-            modifiedEditor.revealLineInCenter(firstChange.modifiedStartLineNumber);
-            modifiedEditor.setPosition({
-              lineNumber: firstChange.modifiedStartLineNumber,
-              column: 1
-            });
-
-          } else if (attempt < maxAttempts) {
-            attemptScroll(attempt + 1);
-          }
-        }, 100 * attempt);
-      };
-
-      attemptScroll();
-    }
-  }, [selectedFile?.pendingPatch, selectedFile?.filePath]);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (acceptButtonRef.current && !acceptButtonRef.current.contains(event.target as Node)) {
-        setAcceptDropdownOpen(false);
-      }
-      if (rejectButtonRef.current && !rejectButtonRef.current.contains(event.target as Node)) {
-        setRejectDropdownOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
-
-  // Add CSS fixes and transitions for editors
-  useEffect(() => {
-    // Create a style element that specifically targets the margin width and hides elements
-    let styleElement = document.getElementById('monaco-diff-editor-fix');
-    if (!styleElement) {
-      styleElement = document.createElement('style');
-      styleElement.id = 'monaco-diff-editor-fix';
-      styleElement.innerHTML = `
-        /* Just hide the revert buttons */
-        .monaco-diff-editor .codicon-arrow-small-left,
-        .monaco-diff-editor [title="Revert this change"],
-        .monaco-diff-editor [title="Copy this change to the other side"] {
-          display: none !important;
-        }
-
-        /* Editor transition styles */
-        .editor-container {
-          flex: 1;
-          height: 100%;
-          width: 100%;
-          position: absolute;
-          top: 0;
-          left: 0;
-          transition: opacity 0.15s ease-in-out;
-        }
-
-        .editor-container.hidden {
-          opacity: 0;
-          pointer-events: none;
-          z-index: 0;
-        }
-
-        .editor-container.visible {
-          opacity: 1;
-          pointer-events: auto;
-          z-index: 1;
-        }
-      `;
-      document.head.appendChild(styleElement);
-    }
-
-    // No cleanup here - moved to the dedicated cleanup effect above
-  }, []);
-
-  if (!workspace) {
-    return null;
   }
 
+  // Define the mount handlers before using them in useMemo
   const handleEditorMount = (editor: editor.IStandaloneCodeEditor, monaco: typeof import("monaco-editor")) => {
+    // Debug: Track regular editor mounts
+    regularEditorMountCount++;
+    console.log(`[DEBUG] Regular editor mounted #${regularEditorMountCount}`);
+
     // Store the editor reference
     editorRef.current = editor;
     handleEditorInit(editor, monaco);
@@ -469,6 +321,10 @@ export const CodeEditor = React.memo(function CodeEditor({
   };
 
   const handleDiffEditorMount = (editor: editor.IStandaloneDiffEditor, monaco: typeof import("monaco-editor")) => {
+    // Debug: Track diff editor mounts
+    diffEditorMountCount++;
+    console.log(`[DEBUG] Diff editor mounted #${diffEditorMountCount}`);
+
     // Store the editor reference
     diffEditorRef.current = editor;
 
@@ -525,6 +381,7 @@ export const CodeEditor = React.memo(function CodeEditor({
     });
   };
 
+  // Define editorOptions before using it in useMemo
   const editorOptions = {
     minimap: { enabled: false },
     fontSize: 11,
@@ -548,7 +405,183 @@ export const CodeEditor = React.memo(function CodeEditor({
     // loading: { delay: 0 }, // Set delay to 0 to disable loading indicator
   };
 
+  // Define missing variables
+  const editorContainerId = "monaco-editor-container";
+  const regularEditorKey = `regular-editor-${selectedFile?.id || 'default'}`;
+  const diffEditorKey = `diff-editor-${selectedFile?.id || 'default'}`;
+
+  // Special safe unmount function for the DiffEditor
+  const handleBeforeMount = (monaco: typeof import("monaco-editor")) => {
+    try {
+      // Be very selective about which models to dispose
+      // Don't dispose every model - just the ones we know we won't use
+      monaco.editor.getModels().forEach(model => {
+        const uri = model.uri.toString();
+        // Only dispose obviously temporary/unused models
+        if (uri.includes("inmemory") && !uri.includes(regularEditorKey) && !uri.includes(diffEditorKey)) {
+          model.dispose();
+        }
+      });
+    } catch (err) {
+      // Ignore errors
+    }
+  };
+
+  // Use useMemo to create the editors only once
+  const regularEditor = React.useMemo(() => {
+    console.log("[DEBUG] Creating regular editor (useMemo)");
+    return (
+      <Editor
+        height="100%"
+        defaultLanguage={language}
+        language={language}
+        value={selectedFile?.content ?? prevContentRef.current ?? ""}
+        loading={null}
+        onChange={(newValue) => {
+          if (selectedFile && newValue !== undefined && !readOnly) {
+            updateFileContent({
+              ...selectedFile,
+              content: newValue
+            });
+          }
+        }}
+        theme={theme === "light" ? "vs" : "vs-dark"}
+        options={{
+          ...editorOptions,
+          readOnly: readOnly,
+        }}
+        onMount={handleEditorMount}
+        beforeMount={handleBeforeMount}
+      />
+    );
+  }, [selectedFile?.id, selectedFile?.content, language, theme, readOnly]); // Include content to ensure it updates
+
+  const diffEditor = React.useMemo(() => {
+    console.log("[DEBUG] Creating diff editor (useMemo)");
+    return (
+      <DiffEditor
+        height="100%"
+        language={language}
+        original={original}
+        modified={modifiedContent}
+        theme={theme === "light" ? "vs" : "vs-dark"}
+        loading={null}
+        onMount={(editor, monaco) => {
+          // Store the reference
+          diffEditorRef.current = editor;
+
+          // HACK: Store editor in our global registry for emergency cleanup
+          if (window.__monacoDiffEditors) {
+            window.__monacoDiffEditors.add(editor);
+          }
+
+          // Add a local unload listener to the editor instance
+          editor.onDidDispose(() => {
+            try {
+              // Try to cleanup from our global registry
+              if (window.__monacoDiffEditors) {
+                window.__monacoDiffEditors.delete(editor);
+              }
+            } catch (e) {
+              // Ignore errors during disposal
+            }
+          });
+
+          // Call the normal mount handler
+          handleDiffEditorMount(editor, monaco);
+        }}
+        beforeMount={handleBeforeMount}
+        options={{
+          ...editorOptions,
+          renderSideBySide: false,
+          originalEditable: false,
+          diffCodeLens: false,
+          readOnly: true
+        }}
+      />
+    );
+  }, [selectedFile?.id, language, original, modifiedContent, theme]); // Already includes all necessary dependencies
+
+  // Keep previous content in sync with current selection
+  useEffect(() => {
+    if (selectedFile?.content) {
+      prevContentRef.current = selectedFile.content;
+    }
+  }, [selectedFile?.content]);
+
+  // Update content whenever selectedFile changes
+  useEffect(() => {
+    // Don't show loading state if we already have an editor reference
+    if (selectedFile && (editorRef.current || diffEditorRef.current)) {
+      // No loading state to manage
+    }
+  }, [selectedFile]);
+
+  useEffect(() => {
+    updateCurrentDiffIndex(allFilesWithPendingPatches);
+  }, [selectedFile, allFilesWithPendingPatches, updateCurrentDiffIndex]);
+
+  // Add effect to track pendingPatch changes
+  useEffect(() => {
+    console.log(`[DEBUG] pendingPatch changed: ${selectedFile?.pendingPatch ? 'added' : 'removed'} for file ${selectedFile?.filePath}`);
+  }, [selectedFile?.pendingPatch]);
+
+  if (!workspace) {
+    return null;
+  }
+
   const showDiffHeader = allFilesWithPendingPatches.length > 0;
+
+  // Render the header if needed
+  const headerElement = showDiffHeader ? (
+    <div className={`flex items-center justify-end gap-2 p-2 border-b min-h-[36px] pr-4 ${theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"} sticky top-0 z-20`}>
+      <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2">
+          <span className={`text-xs font-mono ${
+            theme === "dark" ? "text-gray-400" : "text-gray-500"
+          }`}>
+            Showing {currentDiffIndex + 1}/{allFilesWithPendingPatches.length} files with diffs
+          </span>
+          <div className={`flex rounded overflow-hidden border ${theme === "dark" ? "border-dark-border" : "border-gray-200"}`}>
+            <button
+              className={`p-1 ${
+                theme === "dark"
+                  ? "bg-dark-border/40 text-gray-300 hover:bg-dark-border/60"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
+              onClick={() => {
+                if (allFilesWithPendingPatches.length === 0) return;
+                const newIndex = currentDiffIndex <= 0
+                  ? allFilesWithPendingPatches.length - 1
+                  : currentDiffIndex - 1;
+                setCurrentDiffIndex(newIndex);
+                setSelectedFile(allFilesWithPendingPatches[newIndex]);
+              }}
+            >
+              <ChevronUp className="w-3 h-3" />
+            </button>
+            <button
+              className={`p-1 border-l ${
+                theme === "dark"
+                  ? "bg-dark-border/40 text-gray-300 hover:bg-dark-border/60 border-dark-border"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200 border-gray-200"
+              }`}
+              onClick={() => {
+                if (allFilesWithPendingPatches.length === 0) return;
+                const newIndex = currentDiffIndex >= allFilesWithPendingPatches.length - 1
+                  ? 0
+                  : currentDiffIndex + 1;
+                setCurrentDiffIndex(newIndex);
+                setSelectedFile(allFilesWithPendingPatches[newIndex]);
+              }}
+            >
+              <ChevronDown className="w-3 h-3" />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  ) : null;
 
   const onFileUpdate = (updatedFile: WorkspaceFile) => {
     // Placeholder for future implementation
@@ -1024,206 +1057,8 @@ export const CodeEditor = React.memo(function CodeEditor({
     await addFileToWorkspace(newFile);
   };
 
-  const getLanguage = (filePath: string) => {
-    const ext = filePath.split('.').pop()?.toLowerCase();
-    switch (ext) {
-      case 'yaml':
-      case 'yml':
-        return 'yaml';
-      case 'ts':
-      case 'tsx':
-        return 'typescript';
-      case 'js':
-      case 'jsx':
-        return 'javascript';
-      case 'txt':
-        return 'plaintext';
-      default:
-        return 'plaintext';
-    }
-  };
-
-  // Extract modified content from diff here - outside the conditional renders
-  let modifiedContent = "";
-
-  if (selectedFile?.pendingPatch) {
-    try {
-      modifiedContent = parseDiff(selectedFile.content, selectedFile.pendingPatch);
-    } catch (error) {
-      console.error("Error parsing diff:", error);
-      // If parsing fails, just show the raw patch
-      modifiedContent = selectedFile.pendingPatch;
-    }
-  }
-
-  // Get content and language details
-  const original = selectedFile?.content || '';
-  const language = getLanguage(selectedFile?.filePath || '');
-
-  // Use stable keys that remain the same between renders
-  const editorContainerId = "monaco-editor-container";
-  const regularEditorKey = "regular-monaco";
-  const diffEditorKey = "diff-monaco";
-
-  // Always include the header when there are pending patches
-  const headerElement = showDiffHeader ? renderDiffHeader() : null;
-
-  // Special safe unmount function for the DiffEditor
-  const handleBeforeMount = (monaco: typeof import("monaco-editor")) => {
-    try {
-      // Be very selective about which models to dispose
-      // Don't dispose every model - just the ones we know we won't use
-      monaco.editor.getModels().forEach(model => {
-        const uri = model.uri.toString();
-        // Only dispose obviously temporary/unused models
-        if (uri.includes("inmemory") && !uri.includes(regularEditorKey) && !uri.includes(diffEditorKey)) {
-          model.dispose();
-        }
-      });
-    } catch (err) {
-      // Ignore errors
-    }
-  };
-
-  // The editor to render based on if we have a pendingPatch
-
-  // Add a specific cleanup to run *before* React unmounts the DiffEditor
-  // Specifically to address the "TextModel got disposed" error
-  React.useEffect(() => {
-    // Only run when we need to transition back from diff view
-    if (selectedFile?.pendingPatch) {
-      // When selectedFile.pendingPatch is about to change/be removed, this cleanup runs
-      return () => {
-        try {
-          // This should run *before* the component unmounts and before Monaco tries to dispose
-          if (diffEditorRef.current) {
-            // Get the editors *before* any disposal happens
-            const modifiedEditor = diffEditorRef.current.getModifiedEditor();
-            const originalEditor = diffEditorRef.current.getOriginalEditor();
-
-            // Immediately set models to null to avoid race condition
-            try {
-              // This is the key fix - it must happen BEFORE Monaco starts disposing things
-              modifiedEditor.setModel(null);
-              originalEditor.setModel(null);
-            } catch (e) {
-              // Ignore errors
-            }
-          }
-        } catch (e) {
-          // Ignore errors
-        }
-      };
-    }
-  }, [selectedFile?.pendingPatch]);
-
-  // HACK: Add a global window property to help us keep track of diff editor instances
-  // This is a last resort hack to fix the timing issue with Monaco disposal
-  if (typeof window !== 'undefined' && !window.__monacoDiffEditors) {
-    window.__monacoDiffEditors = new Set();
-
-    // Add a window unload handler to attempt cleanup as a last resort
-    window.addEventListener('beforeunload', () => {
-      window.__monacoDiffEditors?.forEach((editor: any) => {
-        try {
-          // Try to pre-emptively null models before unload
-          if (editor && typeof editor.getModifiedEditor === 'function') {
-            const modifiedEditor = editor.getModifiedEditor();
-            const originalEditor = editor.getOriginalEditor();
-            if (modifiedEditor) modifiedEditor.setModel(null);
-            if (originalEditor) originalEditor.setModel(null);
-          }
-        } catch (e) {
-          // Ignore errors during unload
-        }
-      });
-    });
-
-    // Patch the core Monaco error handler as a last resort
-    try {
-      // This is a hack to prevent the Monaco error from appearing in the console
-      const originalWindowError = window.onerror;
-      window.onerror = function(message, source, lineno, colno, error) {
-        // Suppress only the specific Monaco error
-        if (message && typeof message === 'string' &&
-            message.includes('TextModel got disposed before DiffEditorWidget model got reset')) {
-          return true; // Prevents the error from showing in console
-        }
-        // Pass through all other errors
-        return originalWindowError ? originalWindowError.apply(this, arguments as any) : false;
-      };
-    } catch (e) {
-      // If error handler patching fails, continue
-    }
-  }
-
-  const editorElement = selectedFile?.pendingPatch ? (
-    <DiffEditor
-      key={`diff-editor-${diffEditorKey}`}
-      height="100%"
-      language={language}
-      original={original}
-      modified={modifiedContent}
-      theme={theme === "light" ? "vs" : "vs-dark"}
-      loading={null}
-      onMount={(editor, monaco) => {
-        // Store the reference
-        diffEditorRef.current = editor;
-
-        // HACK: Store editor in our global registry for emergency cleanup
-        if (window.__monacoDiffEditors) {
-          window.__monacoDiffEditors.add(editor);
-        }
-
-        // Add a local unload listener to the editor instance
-        editor.onDidDispose(() => {
-          try {
-            // Try to cleanup from our global registry
-            if (window.__monacoDiffEditors) {
-              window.__monacoDiffEditors.delete(editor);
-            }
-          } catch (e) {
-            // Ignore errors during disposal
-          }
-        });
-
-        // Call the normal mount handler
-        handleDiffEditorMount(editor, monaco);
-      }}
-      beforeMount={handleBeforeMount}
-      options={{
-        ...editorOptions,
-        renderSideBySide: false,
-        originalEditable: false,
-        diffCodeLens: false,
-        readOnly: true
-      }}
-    />
-  ) : (
-    <Editor
-      key={`regular-editor-${regularEditorKey}`}
-      height="100%"
-      defaultLanguage={language}
-      language={language}
-      value={selectedFile?.content ?? prevContentRef.current ?? ""}
-      loading={null}
-      onChange={(newValue) => {
-        if (selectedFile && newValue !== undefined && !readOnly) {
-          updateFileContent({
-            ...selectedFile,
-            content: newValue
-          });
-        }
-      }}
-      theme={theme === "light" ? "vs" : "vs-dark"}
-      options={{
-        ...editorOptions,
-        readOnly: readOnly,
-      }}
-      onMount={handleEditorMount}
-      beforeMount={handleBeforeMount}
-    />
-  );
+  // Debug: Log which editor is being shown
+  console.log(`[DEBUG] Showing ${selectedFile?.pendingPatch ? 'DiffEditor' : 'Editor'} for file ${selectedFile?.filePath}`);
 
   // The final rendered component with a more stable structure
   return (
@@ -1233,7 +1068,73 @@ export const CodeEditor = React.memo(function CodeEditor({
 
       {/* Fixed container that doesn't change */}
       <div id={editorContainerId} className="flex-1 h-full">
-        {editorElement}
+        {selectedFile?.pendingPatch ? (
+          <DiffEditor
+            key={`diff-${selectedFile?.id}`}
+            height="100%"
+            language={language}
+            original={original}
+            modified={modifiedContent}
+            theme={theme === "light" ? "vs" : "vs-dark"}
+            loading={null}
+            onMount={(editor, monaco) => {
+              // Store the reference
+              diffEditorRef.current = editor;
+
+              // HACK: Store editor in our global registry for emergency cleanup
+              if (window.__monacoDiffEditors) {
+                window.__monacoDiffEditors.add(editor);
+              }
+
+              // Add a local unload listener to the editor instance
+              editor.onDidDispose(() => {
+                try {
+                  // Try to cleanup from our global registry
+                  if (window.__monacoDiffEditors) {
+                    window.__monacoDiffEditors.delete(editor);
+                  }
+                } catch (e) {
+                  // Ignore errors during disposal
+                }
+              });
+
+              // Call the normal mount handler
+              handleDiffEditorMount(editor, monaco);
+            }}
+            beforeMount={handleBeforeMount}
+            options={{
+              ...editorOptions,
+              renderSideBySide: false,
+              originalEditable: false,
+              diffCodeLens: false,
+              readOnly: true
+            }}
+          />
+        ) : (
+          <Editor
+            key={`editor-${selectedFile?.id}`}
+            height="100%"
+            defaultLanguage={language}
+            language={language}
+            value={selectedFile?.content ?? prevContentRef.current ?? ""}
+            loading={null}
+            onChange={(newValue) => {
+              if (selectedFile && newValue !== undefined && !readOnly) {
+                updateFileContent({
+                  ...selectedFile,
+                  content: newValue
+                });
+              }
+            }}
+            theme={theme === "light" ? "vs" : "vs-dark"}
+            options={{
+              ...editorOptions,
+              readOnly: readOnly,
+            }}
+            onMount={handleEditorMount}
+            beforeMount={handleBeforeMount}
+          />
+        )}
       </div>
     </div>
   );
