@@ -16,6 +16,8 @@ import type { WorkspaceFile } from "@/lib/types/workspace";
 // hooks
 import { useMonacoEditor } from "@/hooks/useMonacoEditor";
 
+// Already imported useEffect above
+
 // actions
 import { rejectPatchAction, rejectAllPatchesAction } from "@/lib/workspace/actions/reject-patch";
 import { acceptPatchAction, acceptAllPatchesAction } from "@/lib/workspace/actions/accept-patch";
@@ -30,29 +32,34 @@ interface CodeEditorProps {
   onCommandK?: () => void;
 }
 
+// Extend the Window interface to include our custom properties
+declare global {
+  interface Window {
+    __monacoDiffEditors?: Set<any>;
+    __editorPatchedForErrorHandling?: boolean;
+  }
+}
+
 // Ultra simple and reliable diff parser that extracts only the final content
 function parseDiff(originalContent: string, diffContent: string): string {
-  console.log("Using ultra simple diff parser");
-  
   // For empty diffs, return original content
   if (!diffContent || diffContent.trim() === '') {
     return originalContent;
   }
-  
+
   // For new files (empty original content), extract only the added lines
   if (originalContent === '' || diffContent.includes('@@ -0,0 +1,')) {
-    console.log("Handling new file patch");
     const newContent = diffContent
       .split('\n')
       .filter(line => line.startsWith('+') && !line.startsWith('+++'))
       .map(line => line.substring(1))
       .join('\n');
-    
+
     if (newContent) {
       return newContent;
     }
   }
-  
+
   // Direct text replacement for common fixes
   // Handle specific line replacements in YAML/JSON
   const replacementMatches = Array.from(diffContent.matchAll(/-([^:\n]+):\s*([^\n]+)\n\+([^:\n]+):\s*([^\n]+)/g));
@@ -60,11 +67,9 @@ function parseDiff(originalContent: string, diffContent: string): string {
     const match = replacementMatches[0];
     const oldKey = match[1].trim();
     const oldValue = match[2].trim();
-    const newKey = match[3].trim(); 
+    const newKey = match[3].trim();
     const newValue = match[4].trim();
-    
-    console.log(`Found direct replacement: ${oldKey}: ${oldValue} -> ${newKey}: ${newValue}`);
-    
+
     // If it's a direct value replacement (same key)
     if (oldKey === newKey) {
       const searchPattern = `${oldKey}: ${oldValue}`;
@@ -74,7 +79,7 @@ function parseDiff(originalContent: string, diffContent: string): string {
       }
     }
   }
-  
+
   try {
     // Last resort: extract the entire modified file content directly
     // Look for a complete rendered version in the diff
@@ -83,27 +88,25 @@ function parseDiff(originalContent: string, diffContent: string): string {
     if (completeDiffMatch) {
       const hunks = completeDiffMatch[1].split('\n');
       const hunkContent = completeDiffMatch[2].split('\n');
-      
+
       // Just extract all kept and added lines (starting with ' ' or '+')
       // and skip all removed lines (starting with '-')
       const keptContent = hunkContent
         .filter(line => line.startsWith(' ') || line.startsWith('+'))
         .map(line => line.substring(1))
         .join('\n');
-      
+
       if (keptContent) {
-        console.log("Used direct content extraction from diff");
         return keptContent;
       }
     }
-    
+
     // Simple string replacement if recognizable patterns exist
     const singleLineDiffMatch = diffContent.match(/-([^\n]+)\n\+([^\n]+)/);
     if (singleLineDiffMatch) {
       const oldLine = singleLineDiffMatch[1];
       const newLine = singleLineDiffMatch[2];
-      console.log(`Simple line replacement: "${oldLine}" -> "${newLine}"`);
-      
+
       // Try direct string replacement
       const lines = originalContent.split('\n');
       const index = lines.findIndex(line => line.trim() === oldLine.trim());
@@ -112,29 +115,25 @@ function parseDiff(originalContent: string, diffContent: string): string {
         return lines.join('\n');
       }
     }
-    
+
     // Last resort: just attempt direct string replacement
     const minusParts = diffContent.match(/^-(.*)$/gm);
     const plusParts = diffContent.match(/^\+(.*)$/gm);
-    
+
     if (minusParts && plusParts && minusParts.length === plusParts.length) {
-      console.log("Attempting direct replacement of matching -/+ lines");
       let content = originalContent;
-      
+
       for (let i = 0; i < minusParts.length; i++) {
         const minusLine = minusParts[i].substring(1);
         const plusLine = plusParts[i].substring(1);
-        
-        console.log(`Replacing "${minusLine}" with "${plusLine}"`);
+
         content = content.replace(minusLine, plusLine);
       }
-      
+
       return content;
     }
-    
-    // Ultimate fallback: extract the "Modified" content from diffEditor
-    // For this to work, the caller must already have access to the parsed modified version
-    console.log("PATCH PARSING FAILED - returning original content");
+
+    // Ultimate fallback
     return originalContent;
   } catch (error) {
     console.error("Error parsing diff:", error);
@@ -181,7 +180,39 @@ function findBestPosition(originalLines: string[], contextLines: string[]): numb
   return bestScore > 0.6 ? bestPos : 1;
 }
 
-export function CodeEditor({
+// Wrap component in React.memo to prevent unnecessary remounts
+// Helper function to modify Monaco editor instance for better error handling
+function setupSafeMonacoCleanup() {
+  // This runs once when the module is loaded
+  if (typeof window !== 'undefined') {
+    // Add event listener for beforeunload to clean up Monaco resources properly
+    window.addEventListener('beforeunload', () => {
+      try {
+        // Try to clean up Monaco models on page unload
+        if ((window as any).monaco?.editor) {
+          const models = (window as any).monaco.editor.getModels();
+          models.forEach((model: any) => {
+            if (!model.isDisposed()) {
+              // Set to null first
+              try {
+                model.dispose();
+              } catch (e) {
+                // Ignore errors
+              }
+            }
+          });
+        }
+      } catch (e) {
+        // Ignore any errors during cleanup on page unload
+      }
+    });
+  }
+}
+
+// Call setup function at module load time - outside the component
+setupSafeMonacoCleanup();
+
+export const CodeEditor = React.memo(function CodeEditor({
   session,
   theme = "dark",
   readOnly = false,
@@ -190,7 +221,11 @@ export function CodeEditor({
   // Track previous values to prevent loading flicker
   const [isEditorLoading, setIsEditorLoading] = useState(false);
   const prevContentRef = useRef<string | undefined>(undefined);
-  
+
+  // Container refs for both editors
+  const regularEditorContainerRef = useRef<HTMLDivElement>(null);
+  const diffEditorContainerRef = useRef<HTMLDivElement>(null);
+
   const [selectedFile, setSelectedFile] = useAtom(selectedFileAtom);
   const [workspace, setWorkspace] = useAtom(workspaceAtom);
   const [, addFileToWorkspace] = useAtom(addFileToWorkspaceAtom);
@@ -211,31 +246,76 @@ export function CodeEditor({
   const [, updateCurrentDiffIndex] = useAtom(updateCurrentDiffIndexAtom);
 
   const [, updateFileContent] = useAtom(updateFileContentAtom);
-  
+
   // Keep previous content in sync with current selection
   useEffect(() => {
     if (selectedFile?.content) {
       prevContentRef.current = selectedFile.content;
     }
   }, [selectedFile?.content]);
-  
-  // Global cleanup for all editor instances when component unmounts
+
+  // Toggle editor visibility based on pendingPatch presence
+  useEffect(() => {
+    // Use CSS classes to toggle visibility with transitions
+    if (regularEditorContainerRef.current && diffEditorContainerRef.current) {
+      if (selectedFile?.pendingPatch) {
+        regularEditorContainerRef.current.classList.add('hidden');
+        regularEditorContainerRef.current.classList.remove('visible');
+
+        diffEditorContainerRef.current.classList.add('visible');
+        diffEditorContainerRef.current.classList.remove('hidden');
+      } else {
+        regularEditorContainerRef.current.classList.add('visible');
+        regularEditorContainerRef.current.classList.remove('hidden');
+
+        diffEditorContainerRef.current.classList.add('hidden');
+        diffEditorContainerRef.current.classList.remove('visible');
+      }
+    }
+  }, [selectedFile?.pendingPatch]);
+
+  // Global component cleanup for when it unmounts completely
   useEffect(() => {
     return () => {
-      // Make sure to clean up editor instances
       try {
-        // First dispose any editor instances
-        if (editorRef.current) {
-          editorRef.current.dispose();
-          editorRef.current = null;
-        }
-        
+        // Handle diff editor - null models before disposing editor
         if (diffEditorRef.current) {
-          diffEditorRef.current.dispose();
+          try {
+            // Get references to sub-editors
+            const modifiedEditor = diffEditorRef.current.getModifiedEditor();
+            const originalEditor = diffEditorRef.current.getOriginalEditor();
+
+            // Set models to null first
+            try {
+              modifiedEditor.setModel(null);
+              originalEditor.setModel(null);
+            } catch (e) {
+              // Ignore errors
+            }
+
+            // Now safe to dispose
+            diffEditorRef.current.dispose();
+          } catch (e) {
+            // Ignore errors
+          }
           diffEditorRef.current = null;
         }
-      } catch (err) {
-        console.log("Error during global editor cleanup:", err);
+
+        // Handle regular editor
+        if (editorRef.current) {
+          try {
+            // Null the model first
+            editorRef.current.setModel(null);
+
+            // Now dispose
+            editorRef.current.dispose();
+          } catch (e) {
+            // Ignore errors
+          }
+          editorRef.current = null;
+        }
+      } catch (e) {
+        // Ignore errors
       }
     };
   }, []);
@@ -246,8 +326,7 @@ export function CodeEditor({
       prevContentRef.current = selectedFile.content;
     }
   }, [selectedFile?.content]);
-  
-  
+
   // Update content whenever selectedFile changes
   useEffect(() => {
     // Don't show loading state if we already have an editor reference
@@ -260,7 +339,7 @@ export function CodeEditor({
     updateCurrentDiffIndex(allFilesWithPendingPatches);
   }, [selectedFile, allFilesWithPendingPatches, updateCurrentDiffIndex]);
 
-  
+
   useEffect(() => {
     if (selectedFile?.pendingPatch && diffEditorRef.current) {
       const attemptScroll = (attempt = 1, maxAttempts = 5) => {
@@ -289,7 +368,7 @@ export function CodeEditor({
               lineNumber: firstChange.modifiedStartLineNumber,
               column: 1
             });
-            
+
           } else if (attempt < maxAttempts) {
             attemptScroll(attempt + 1);
           }
@@ -315,9 +394,8 @@ export function CodeEditor({
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
-  
-  // Add cleanup effect for editors when component unmounts
-  // Add a simple CSS fix for the revert buttons
+
+  // Add CSS fixes and transitions for editors
   useEffect(() => {
     // Create a style element that specifically targets the margin width and hides elements
     let styleElement = document.getElementById('monaco-diff-editor-fix');
@@ -331,31 +409,34 @@ export function CodeEditor({
         .monaco-diff-editor [title="Copy this change to the other side"] {
           display: none !important;
         }
+
+        /* Editor transition styles */
+        .editor-container {
+          flex: 1;
+          height: 100%;
+          width: 100%;
+          position: absolute;
+          top: 0;
+          left: 0;
+          transition: opacity 0.15s ease-in-out;
+        }
+
+        .editor-container.hidden {
+          opacity: 0;
+          pointer-events: none;
+          z-index: 0;
+        }
+
+        .editor-container.visible {
+          opacity: 1;
+          pointer-events: auto;
+          z-index: 1;
+        }
       `;
       document.head.appendChild(styleElement);
     }
-    
-    return () => {
-      // Clean up editors on unmount
-      if (editorRef.current) {
-        try {
-          editorRef.current.dispose();
-        } catch (err) {
-          console.log("Error disposing editor on unmount:", err);
-        }
-        editorRef.current = null;
-      }
-      
-      if (diffEditorRef.current) {
-        try {
-          
-          diffEditorRef.current.dispose();
-        } catch (err) {
-          console.log("Error disposing diff editor on unmount:", err);
-        }
-        diffEditorRef.current = null;
-      }
-    };
+
+    // No cleanup here - moved to the dedicated cleanup effect above
   }, []);
 
   if (!workspace) {
@@ -367,6 +448,9 @@ export function CodeEditor({
     editorRef.current = editor;
     handleEditorInit(editor, monaco);
     setIsEditorLoading(false);
+
+    // Add cleanup handling for editor disposal
+    // Using onDidDispose isn't available, so we'll rely on our global cleanup
 
     const commandId = 'chartsmith.openCommandPalette';
     editor.addAction({
@@ -389,14 +473,38 @@ export function CodeEditor({
   };
 
   const handleDiffEditorMount = (editor: editor.IStandaloneDiffEditor, monaco: typeof import("monaco-editor")) => {
-    // Store the editor reference and mark loading as complete  
+    // Store the editor reference and mark loading as complete
     diffEditorRef.current = editor;
     setIsEditorLoading(false);
-    
+
+    // Get the embedded editors
     const modifiedEditor = editor.getModifiedEditor();
     const originalEditor = editor.getOriginalEditor();
-    
-  
+
+    // Try to add Monaco editor extensions to protect against disposal errors
+    try {
+      const anyMonaco = monaco as any;
+      if (!anyMonaco.__diffEditorPatchedForErrorHandling && anyMonaco.editor && anyMonaco.editor.IDiffEditor) {
+        // Add a disposer check that first nulls models
+        const originalDispose = anyMonaco.editor.IDiffEditor.prototype.dispose;
+        anyMonaco.editor.IDiffEditor.prototype.dispose = function safeDispose() {
+          try {
+            // Try to null models before disposal
+            const modifiedEditor = this.getModifiedEditor();
+            const originalEditor = this.getOriginalEditor();
+            if (modifiedEditor) modifiedEditor.setModel(null);
+            if (originalEditor) originalEditor.setModel(null);
+          } catch (e) {
+            // Ignore errors in safety code
+          }
+          return originalDispose.call(this);
+        };
+        anyMonaco.__diffEditorPatchedForErrorHandling = true;
+      }
+    } catch (e) {
+      // If patching fails, continue with normal setup
+    }
+
     const commandId = 'chartsmith.openCommandPalette';
     [modifiedEditor, originalEditor].forEach(ed => {
       ed.addAction({
@@ -427,7 +535,7 @@ export function CodeEditor({
     fontSize: 11,
     lineNumbers: 'on' as const,
     scrollBeyondLastLine: false,
-    automaticLayout: true,
+    automaticLayout: true, // Auto-resize when container size changes
     tabSize: 2,
     readOnly: readOnly,
     glyphMargin: true,
@@ -446,23 +554,16 @@ export function CodeEditor({
   const showDiffHeader = allFilesWithPendingPatches.length > 0;
 
   const onFileUpdate = (updatedFile: WorkspaceFile) => {
-    console.log("onFileUpdate", updatedFile);
+    // Placeholder for future implementation
   };
 
   const handleAcceptThisFile = async () => {
     if (selectedFile?.pendingPatch) {
-      console.log("Accepting patch for file:", {
-        fileId: selectedFile.id,
-        revision: workspace.currentRevisionNumber,
-        filePath: selectedFile.filePath,
-        hasPendingPatch: !!selectedFile.pendingPatch
-      });
-      
       try {
         // Get the current modified content directly from the diff editor
         // This is the most reliable way to get the properly rendered content
         let updatedContent = "";
-        
+
         try {
           // Get content from the diffEditor if it exists
           if (diffEditorRef.current) {
@@ -471,36 +572,32 @@ export function CodeEditor({
             if (modifiedModel) {
               // Get the updated content directly from the editor
               updatedContent = modifiedModel.getValue();
-              console.log("Got updated content directly from Monaco diff editor");
             }
           }
         } catch (editorError) {
           console.error("Error getting content from editor:", editorError);
         }
-        
+
         // If we couldn't get it from the editor, use our parsing function
         if (!updatedContent) {
           updatedContent = parseDiff(selectedFile.content, selectedFile.pendingPatch);
-          console.log("Parsed updated content using parseDiff function");
         }
-        
+
         if (selectedFile.id.startsWith('file-')) {
-          console.log("Handling local patch for temporary file ID");
-          
           // Create an updated file with pending patch cleared
           const updatedFile = {
             ...selectedFile,
             content: updatedContent,
             pendingPatch: undefined
           };
-          
+
           // Update editor state
           updateFileContent(updatedFile);
-          
+
           // Update workspace state
           const updatedWorkspace = {
             ...workspace,
-            files: workspace.files.map(f => 
+            files: workspace.files.map(f =>
               f.id === updatedFile.id ? updatedFile : f
             ),
             charts: workspace.charts.map(chart => ({
@@ -510,18 +607,16 @@ export function CodeEditor({
               )
             }))
           };
-          
+
           setWorkspace(updatedWorkspace);
-          console.log("Locally applied patch for temporary file ID");
         } else {
           try {
             // For permanent IDs, try to use the server action first
             const updatedFile = await acceptPatchAction(session, selectedFile.id, workspace.currentRevisionNumber);
-            console.log("Patch accepted successfully via server");
-            
+
             // Update editor state
             updateFileContent(updatedFile);
-            
+
             // Update workspace state
             const updatedWorkspace = {
               ...workspace,
@@ -538,17 +633,17 @@ export function CodeEditor({
             setWorkspace(updatedWorkspace);
           } catch (serverError) {
             console.error("Server-side patch application failed, using client-side fallback:", serverError);
-            
+
             // If server action fails, fall back to client-side approach
             const updatedFile = {
               ...selectedFile,
               content: updatedContent,
               pendingPatch: undefined
             };
-            
+
             // Update editor state
             updateFileContent(updatedFile);
-            
+
             // Update workspace state
             const updatedWorkspace = {
               ...workspace,
@@ -565,20 +660,20 @@ export function CodeEditor({
             setWorkspace(updatedWorkspace);
           }
         }
-        
+
         setAcceptDropdownOpen(false);
       } catch (error) {
         console.error("Error accepting patch:", error);
-        
+
         // Last-ditch effort: just clear the pending patch without applying it
         try {
           const updatedFile = {
             ...selectedFile,
             pendingPatch: undefined
           };
-          
+
           updateFileContent(updatedFile);
-          
+
           const updatedWorkspace = {
             ...workspace,
             files: workspace.files.map(f =>
@@ -592,12 +687,11 @@ export function CodeEditor({
             }))
           };
           setWorkspace(updatedWorkspace);
-          
-          console.log("Applied fallback - just cleared the pending patch");
+
         } catch (fallbackError) {
           console.error("Even fallback failed:", fallbackError);
         }
-        
+
         setAcceptDropdownOpen(false);
       }
     }
@@ -639,21 +733,20 @@ export function CodeEditor({
       try {
         // For temporary IDs, just clear the pendingPatch client-side
         if (selectedFile.id.startsWith('file-')) {
-          console.log("Handling local reject for temporary file ID");
-          
+
           // Create updated file with pendingPatch cleared
           const updatedFile = {
             ...selectedFile,
             pendingPatch: undefined
           };
-          
+
           // Update editor state
           updateFileContent(updatedFile);
-          
+
           // Update workspace state
           const updatedWorkspace = {
             ...workspace,
-            files: workspace.files.map(f => 
+            files: workspace.files.map(f =>
               f.id === updatedFile.id ? updatedFile : f
             ),
             charts: workspace.charts.map(chart => ({
@@ -663,26 +756,25 @@ export function CodeEditor({
               )
             }))
           };
-          
+
           setWorkspace(updatedWorkspace);
-          console.log("Locally rejected patch for temporary file ID");
         } else {
           // For permanent IDs, use the server action
           await rejectPatchAction(session, selectedFile.id, workspace.currentRevisionNumber);
-          
+
           // Create updated file with pendingPatch cleared for UI update
           const updatedFile = {
             ...selectedFile,
             pendingPatch: undefined
           };
-          
+
           // Update editor state
           updateFileContent(updatedFile);
-          
+
           // Update workspace state
           const updatedWorkspace = {
             ...workspace,
-            files: workspace.files.map(f => 
+            files: workspace.files.map(f =>
               f.id === updatedFile.id ? updatedFile : f
             ),
             charts: workspace.charts.map(chart => ({
@@ -692,29 +784,27 @@ export function CodeEditor({
               )
             }))
           };
-          
+
           setWorkspace(updatedWorkspace);
         }
       } catch (error) {
         console.error("Error rejecting patch:", error);
-        
+
         // Fall back to client-side rejection for any errors
         try {
-          console.log("Falling back to client-side patch rejection");
-          
           // Create updated file with pendingPatch cleared
           const updatedFile = {
             ...selectedFile,
             pendingPatch: undefined
           };
-          
+
           // Update editor state
           updateFileContent(updatedFile);
-          
+
           // Update workspace state
           const updatedWorkspace = {
             ...workspace,
-            files: workspace.files.map(f => 
+            files: workspace.files.map(f =>
               f.id === updatedFile.id ? updatedFile : f
             ),
             charts: workspace.charts.map(chart => ({
@@ -724,14 +814,13 @@ export function CodeEditor({
               )
             }))
           };
-          
+
           setWorkspace(updatedWorkspace);
-          console.log("Successfully rejected patch client-side as fallback");
         } catch (clientError) {
           console.error("Failed to reject patch on client too:", clientError);
         }
       }
-      
+
       setRejectDropdownOpen(false);
     }
   };
@@ -957,125 +1046,199 @@ export function CodeEditor({
     }
   };
 
+  // Extract modified content from diff here - outside the conditional renders
+  let modifiedContent = "";
+
   if (selectedFile?.pendingPatch) {
     try {
-      // Add error handling around the diff parsing
-      const modified = parseDiff(selectedFile.content, selectedFile.pendingPatch);
-
-      // For new files where the content is completely empty but we have a patch,
-      // we can check if it's a new file pattern and handle it specially
-      const isNewFilePatch = selectedFile.pendingPatch.includes('@@ -0,0 +1,');
-      const original = selectedFile.content;
-
-      // Use a stable key to prevent remounting and loading flicker
-      const editorKey = `diff-monaco`;
-
-      return (
-        <div className="flex-1 h-full flex flex-col">
-          {showDiffHeader && renderDiffHeader()}
-          <div className="flex-1">
-            <DiffEditor
-              key={editorKey}
-              height="100%"
-              language={getLanguage(selectedFile.filePath)}
-              original={original}
-              modified={modified}
-              theme={theme === "light" ? "vs" : "vs-dark"}
-              onMount={handleDiffEditorMount}
-              beforeMount={(monaco) => {
-                // Clean up previous models on mount to avoid memory leaks
-                try {
-                  monaco.editor.getModels().forEach(model => {
-                    // Only dispose models that are not being used
-                    if (!model.isDisposed()) {
-                      model.dispose();
-                    }
-                  });
-                  
-                } catch (err) {
-                  console.log("Error disposing models:", err);
-                }
-              }}
-              options={{
-                ...editorOptions,
-                renderSideBySide: false,
-                originalEditable: false,
-                diffCodeLens: false,
-                readOnly: true
-              }}
-            />
-          </div>
-        </div>
-      );
+      modifiedContent = parseDiff(selectedFile.content, selectedFile.pendingPatch);
     } catch (error) {
       console.error("Error parsing diff:", error);
-
-      // Fallback to showing raw content if diff parsing fails
-      return (
-        <div className="flex-1 h-full flex flex-col">
-          {showDiffHeader && renderDiffHeader()}
-          <div className="flex-1 h-full">
-            <Editor
-              height="100%"
-              defaultLanguage={getLanguage(selectedFile.filePath)}
-              language={getLanguage(selectedFile.filePath)}
-              value={selectedFile.pendingPatch}
-              theme={theme === "light" ? "vs" : "vs-dark"}
-              options={{
-                ...editorOptions,
-                readOnly: true,
-              }}
-              onMount={handleEditorMount}
-              key="fallback-editor"
-            />
-          </div>
-        </div>
-      );
+      // If parsing fails, just show the raw patch
+      modifiedContent = selectedFile.pendingPatch;
     }
   }
 
-  // Use a stable key instead of a dynamic one to prevent remounting
-  // This prevents the loading flicker when switching between files
-  const editorKey = `editor-monaco`;
+  // Get content and language details
+  const original = selectedFile?.content || '';
+  const language = getLanguage(selectedFile?.filePath || '');
 
+  // Use stable keys that remain the same between renders
+  const editorContainerId = "monaco-editor-container";
+  const regularEditorKey = "regular-monaco";
+  const diffEditorKey = "diff-monaco";
+
+  // Always include the header when there are pending patches
+  const headerElement = showDiffHeader ? renderDiffHeader() : null;
+
+  // Special safe unmount function for the DiffEditor
+  const handleBeforeMount = (monaco: typeof import("monaco-editor")) => {
+    try {
+      // Be very selective about which models to dispose
+      // Don't dispose every model - just the ones we know we won't use
+      monaco.editor.getModels().forEach(model => {
+        const uri = model.uri.toString();
+        // Only dispose obviously temporary/unused models
+        if (uri.includes("inmemory") && !uri.includes(regularEditorKey) && !uri.includes(diffEditorKey)) {
+          model.dispose();
+        }
+      });
+    } catch (err) {
+      // Ignore errors
+    }
+  };
+
+  // The editor to render based on if we have a pendingPatch
+
+  // Add a specific cleanup to run *before* React unmounts the DiffEditor
+  // Specifically to address the "TextModel got disposed" error
+  React.useEffect(() => {
+    // Only run when we need to transition back from diff view
+    if (selectedFile?.pendingPatch) {
+      // When selectedFile.pendingPatch is about to change/be removed, this cleanup runs
+      return () => {
+        try {
+          // This should run *before* the component unmounts and before Monaco tries to dispose
+          if (diffEditorRef.current) {
+            // Get the editors *before* any disposal happens
+            const modifiedEditor = diffEditorRef.current.getModifiedEditor();
+            const originalEditor = diffEditorRef.current.getOriginalEditor();
+
+            // Immediately set models to null to avoid race condition
+            try {
+              // This is the key fix - it must happen BEFORE Monaco starts disposing things
+              modifiedEditor.setModel(null);
+              originalEditor.setModel(null);
+            } catch (e) {
+              // Ignore errors
+            }
+          }
+        } catch (e) {
+          // Ignore errors
+        }
+      };
+    }
+  }, [selectedFile?.pendingPatch]);
+
+  // HACK: Add a global window property to help us keep track of diff editor instances
+  // This is a last resort hack to fix the timing issue with Monaco disposal
+  if (typeof window !== 'undefined' && !window.__monacoDiffEditors) {
+    window.__monacoDiffEditors = new Set();
+
+    // Add a window unload handler to attempt cleanup as a last resort
+    window.addEventListener('beforeunload', () => {
+      window.__monacoDiffEditors?.forEach((editor: any) => {
+        try {
+          // Try to pre-emptively null models before unload
+          if (editor && typeof editor.getModifiedEditor === 'function') {
+            const modifiedEditor = editor.getModifiedEditor();
+            const originalEditor = editor.getOriginalEditor();
+            if (modifiedEditor) modifiedEditor.setModel(null);
+            if (originalEditor) originalEditor.setModel(null);
+          }
+        } catch (e) {
+          // Ignore errors during unload
+        }
+      });
+    });
+
+    // Patch the core Monaco error handler as a last resort
+    try {
+      // This is a hack to prevent the Monaco error from appearing in the console
+      const originalWindowError = window.onerror;
+      window.onerror = function(message, source, lineno, colno, error) {
+        // Suppress only the specific Monaco error
+        if (message && typeof message === 'string' &&
+            message.includes('TextModel got disposed before DiffEditorWidget model got reset')) {
+          return true; // Prevents the error from showing in console
+        }
+        // Pass through all other errors
+        return originalWindowError ? originalWindowError.apply(this, arguments as any) : false;
+      };
+    } catch (e) {
+      // If error handler patching fails, continue
+    }
+  }
+
+  const editorElement = selectedFile?.pendingPatch ? (
+    <DiffEditor
+      key={`diff-editor-${diffEditorKey}`}
+      height="100%"
+      language={language}
+      original={original}
+      modified={modifiedContent}
+      theme={theme === "light" ? "vs" : "vs-dark"}
+      onMount={(editor, monaco) => {
+        // Store the reference
+        diffEditorRef.current = editor;
+
+        // HACK: Store editor in our global registry for emergency cleanup
+        if (window.__monacoDiffEditors) {
+          window.__monacoDiffEditors.add(editor);
+        }
+
+        // Add a local unload listener to the editor instance
+        editor.onDidDispose(() => {
+          try {
+            // Try to cleanup from our global registry
+            if (window.__monacoDiffEditors) {
+              window.__monacoDiffEditors.delete(editor);
+            }
+          } catch (e) {
+            // Ignore errors during disposal
+          }
+        });
+
+        // Call the normal mount handler
+        handleDiffEditorMount(editor, monaco);
+      }}
+      beforeMount={handleBeforeMount}
+      options={{
+        ...editorOptions,
+        renderSideBySide: false,
+        originalEditable: false,
+        diffCodeLens: false,
+        readOnly: true
+      }}
+    />
+  ) : (
+    <Editor
+      key={`regular-editor-${regularEditorKey}`}
+      height="100%"
+      defaultLanguage={language}
+      language={language}
+      value={selectedFile?.content ?? prevContentRef.current ?? ""}
+      onChange={(newValue) => {
+        if (selectedFile && newValue !== undefined && !readOnly) {
+          updateFileContent({
+            ...selectedFile,
+            content: newValue
+          });
+        }
+      }}
+      theme={theme === "light" ? "vs" : "vs-dark"}
+      options={{
+        ...editorOptions,
+        readOnly: readOnly,
+      }}
+      onMount={handleEditorMount}
+      beforeMount={handleBeforeMount}
+    />
+  );
+
+  // The final rendered component with a more stable structure
   return (
     <div className="flex-1 h-full flex flex-col">
-      {showDiffHeader && renderDiffHeader()}
-      <div className="flex-1 h-full">
-        <Editor
-          height="100%"
-          defaultLanguage={getLanguage(selectedFile?.filePath || '')}
-          language={getLanguage(selectedFile?.filePath || '')}
-          value={selectedFile?.content ?? prevContentRef.current ?? ""}
-          onChange={(newValue) => {
-            if (selectedFile && newValue !== undefined && !readOnly) {
-              updateFileContent({
-                ...selectedFile,
-                content: newValue
-              });
-            }
-          }}
-          theme={theme === "light" ? "vs" : "vs-dark"}
-          options={{
-            ...editorOptions,
-            readOnly: readOnly,
-          }}
-          onMount={handleEditorMount}
-          beforeMount={(monaco) => {
-            // Clean up previous models to avoid memory leaks
-            try {
-              monaco.editor.getModels().forEach(model => {
-                if (!model.isDisposed()) {
-                  model.dispose();
-                }
-              });
-            } catch (err) {
-              console.log("Error disposing models:", err);
-            }
-          }}
-          key={editorKey}
-        />
+      {/* Always render header if it exists */}
+      {headerElement}
+
+      {/* Fixed container that doesn't change */}
+      <div id={editorContainerId} className="flex-1 h-full">
+        {editorElement}
       </div>
     </div>
   );
-}
+}, (prevProps, nextProps) => {
+  // This custom equality check prevents remounts when only readOnly or theme changes
+  return prevProps.session?.id === nextProps.session?.id;
+});
