@@ -26,8 +26,7 @@ import type { Session } from "@/lib/types/session";
 interface CodeEditorProps {
   session: Session;
   theme?: "light" | "dark";
-  value?: string;
-  onChange?: (value: string | undefined) => void;
+  readOnly?: boolean;
   onCommandK?: () => void;
 }
 
@@ -185,8 +184,7 @@ function findBestPosition(originalLines: string[], contextLines: string[]): numb
 export function CodeEditor({
   session,
   theme = "dark",
-  value,
-  onChange,
+  readOnly = false,
   onCommandK,
 }: CodeEditorProps) {
   // Track previous values to prevent loading flicker
@@ -242,12 +240,12 @@ export function CodeEditor({
     };
   }, []);
 
-  // When selectedFile changes, make sure we don't flash loading state
+  // Keep previous content in sync to prevent loading flicker
   useEffect(() => {
-    if (selectedFile && onChange) {
-      onChange(selectedFile.content);
+    if (selectedFile?.content) {
+      prevContentRef.current = selectedFile.content;
     }
-  }, [selectedFile, onChange]);
+  }, [selectedFile?.content]);
   
   
   // Update content whenever selectedFile changes
@@ -300,7 +298,7 @@ export function CodeEditor({
 
       attemptScroll();
     }
-  }, [selectedFile?.pendingPatch, selectedFile?.filePath, value]);
+  }, [selectedFile?.pendingPatch, selectedFile?.filePath]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -431,7 +429,7 @@ export function CodeEditor({
     scrollBeyondLastLine: false,
     automaticLayout: true,
     tabSize: 2,
-    readOnly: !onChange,
+    readOnly: readOnly,
     glyphMargin: true,
     lineDecorationsWidth: 5,
     renderLineHighlight: "all" as const,
@@ -1048,12 +1046,19 @@ export function CodeEditor({
           height="100%"
           defaultLanguage={getLanguage(selectedFile?.filePath || '')}
           language={getLanguage(selectedFile?.filePath || '')}
-          value={selectedFile?.content ?? prevContentRef.current ?? value ?? ""}
-          onChange={onChange}
+          value={selectedFile?.content ?? prevContentRef.current ?? ""}
+          onChange={(newValue) => {
+            if (selectedFile && newValue !== undefined && !readOnly) {
+              updateFileContent({
+                ...selectedFile,
+                content: newValue
+              });
+            }
+          }}
           theme={theme === "light" ? "vs" : "vs-dark"}
           options={{
             ...editorOptions,
-            readOnly: !onChange,
+            readOnly: readOnly,
           }}
           onMount={handleEditorMount}
           beforeMount={(monaco) => {
