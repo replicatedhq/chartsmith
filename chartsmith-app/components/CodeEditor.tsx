@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect, useState, useMemo } from "react";
 import { useAtom } from "jotai";
 import { Check, X, ChevronUp, ChevronDown, CheckCheck, ChevronRight } from "lucide-react";
 
@@ -10,7 +10,7 @@ import { allFilesBeforeApplyingPendingPatchesAtom, allFilesWithPendingPatchesAto
 
 // types
 import type { editor } from "monaco-editor";
-import Editor, { DiffEditor } from "@monaco-editor/react";
+import Editor from "@monaco-editor/react";
 import type { WorkspaceFile } from "@/lib/types/workspace";
 
 // hooks
@@ -25,11 +25,6 @@ import { acceptPatchAction, acceptAllPatchesAction } from "@/lib/workspace/actio
 // types
 import type { Session } from "@/lib/types/session";
 
-// Add debugging counters
-let regularEditorMountCount = 0;
-let diffEditorMountCount = 0;
-let renderCount = 0;
-
 interface CodeEditorProps {
   session: Session;
   theme?: "light" | "dark";
@@ -40,8 +35,11 @@ interface CodeEditorProps {
 // Extend the Window interface to include our custom properties
 declare global {
   interface Window {
-    __monacoDiffEditors?: Set<any>;
-    __editorPatchedForErrorHandling?: boolean;
+    __monaco?: any;
+    __monacoEditor?: editor.IStandaloneCodeEditor;
+    __monacoModels?: {
+      [key: string]: editor.ITextModel;
+    };
   }
 }
 
@@ -226,20 +224,21 @@ export const CodeEditor = React.memo(function CodeEditor({
   // Track previous values to prevent loading flicker
   const prevContentRef = useRef<string | undefined>(undefined);
 
-  // Container refs for both editors
-  const regularEditorContainerRef = useRef<HTMLDivElement>(null);
-  const diffEditorContainerRef = useRef<HTMLDivElement>(null);
+  // Container ref for the single editor
+  const editorContainerRef = useRef<HTMLDivElement>(null);
 
   const [selectedFile, setSelectedFile] = useAtom(selectedFileAtom);
   const [workspace, setWorkspace] = useAtom(workspaceAtom);
   const [, addFileToWorkspace] = useAtom(addFileToWorkspaceAtom);
+  
+  // Keep single references to the editor and monaco
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
-  const diffEditorRef = useRef<editor.IStandaloneDiffEditor | null>(null);
+  const monacoRef = useRef<typeof import("monaco-editor") | null>(null);
+  
+  // Track if we're in diff mode
+  const [inDiffMode, setInDiffMode] = useState(false);
+  
   const { handleEditorInit } = useMonacoEditor(selectedFile);
-
-  // Debug: Track component renders
-  renderCount++;
-  console.log(`[DEBUG] CodeEditor render #${renderCount}, pendingPatch: ${selectedFile?.pendingPatch ? 'yes' : 'no'}`);
 
   const [allFilesWithPendingPatches] = useAtom(allFilesWithPendingPatchesAtom);
   const [allFilesBeforeApplyingPendingPatches] = useAtom(allFilesBeforeApplyingPendingPatchesAtom);
@@ -290,16 +289,21 @@ export const CodeEditor = React.memo(function CodeEditor({
     }
   }
 
-  // Define the mount handlers before using them in useMemo
+  // Define a mount handler that sets up our single editor instance
   const handleEditorMount = (editor: editor.IStandaloneCodeEditor, monaco: typeof import("monaco-editor")) => {
-    // Debug: Track regular editor mounts
-    regularEditorMountCount++;
-    console.log(`[DEBUG] Regular editor mounted #${regularEditorMountCount}`);
-
-    // Store the editor reference
+    // Store references
     editorRef.current = editor;
+    monacoRef.current = monaco;
+    
+    // Store in global window for emergency recovery
+    window.__monacoEditor = editor;
+    window.__monaco = monaco;
+    window.__monacoModels = window.__monacoModels || {};
+    
+    // Initialize the editor
     handleEditorInit(editor, monaco);
 
+    // Add keyboard shortcuts
     const commandId = 'chartsmith.openCommandPalette';
     editor.addAction({
       id: commandId,
@@ -320,68 +324,93 @@ export const CodeEditor = React.memo(function CodeEditor({
     });
   };
 
-  const handleDiffEditorMount = (editor: editor.IStandaloneDiffEditor, monaco: typeof import("monaco-editor")) => {
-    // Debug: Track diff editor mounts
-    diffEditorMountCount++;
-    console.log(`[DEBUG] Diff editor mounted #${diffEditorMountCount}`);
-
-    // Store the editor reference
-    diffEditorRef.current = editor;
-
-    // Get the embedded editors
-    const modifiedEditor = editor.getModifiedEditor();
-    const originalEditor = editor.getOriginalEditor();
-
-    // Try to add Monaco editor extensions to protect against disposal errors
-    try {
-      const anyMonaco = monaco as any;
-      if (!anyMonaco.__diffEditorPatchedForErrorHandling && anyMonaco.editor && anyMonaco.editor.IDiffEditor) {
-        // Add a disposer check that first nulls models
-        const originalDispose = anyMonaco.editor.IDiffEditor.prototype.dispose;
-        anyMonaco.editor.IDiffEditor.prototype.dispose = function safeDispose() {
-          try {
-            // Try to null models before disposal
-            const modifiedEditor = this.getModifiedEditor();
-            const originalEditor = this.getOriginalEditor();
-            if (modifiedEditor) modifiedEditor.setModel(null);
-            if (originalEditor) originalEditor.setModel(null);
-          } catch (e) {
-            // Ignore errors in safety code
-          }
-          return originalDispose.call(this);
-        };
-        anyMonaco.__diffEditorPatchedForErrorHandling = true;
+  // Add effect to update models when file or diff mode changes
+  useEffect(() => {
+    if (!editorRef.current || !monacoRef.current || !selectedFile) return;
+    
+    const monaco = monacoRef.current;
+    const editor = editorRef.current;
+    
+    // Get file info
+    const fileKey = selectedFile.id || selectedFile.filePath || 'unknown';
+    const isDiffMode = !!selectedFile.pendingPatch;
+    
+    // Set the diff mode state
+    setInDiffMode(isDiffMode);
+    
+    // Get or create a text model for this file
+    let model = window.__monacoModels?.[fileKey];
+    if (!model) {
+      const uri = monaco.Uri.parse(`file:///${fileKey}`);
+      model = monaco.editor.createModel(
+        selectedFile.content || '', 
+        language, 
+        uri
+      );
+      if (window.__monacoModels) {
+        window.__monacoModels[fileKey] = model;
       }
-    } catch (e) {
-      // If patching fails, continue with normal setup
+    } else {
+      // Update existing model if content changed
+      if (model.getValue() !== selectedFile.content) {
+        model.setValue(selectedFile.content || '');
+      }
     }
-
-    const commandId = 'chartsmith.openCommandPalette';
-    [modifiedEditor, originalEditor].forEach(ed => {
-      ed.addAction({
-        id: commandId,
-        label: 'Open Command Palette',
-        keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK],
-        run: () => onCommandK?.()
+    
+    // Handle diff mode or regular mode
+    if (isDiffMode) {
+      // Create a modified model for the diff
+      const modifiedKey = `${fileKey}-modified`;
+      let modifiedModel = window.__monacoModels?.[modifiedKey];
+      
+      if (!modifiedModel) {
+        const uri = monaco.Uri.parse(`file:///${modifiedKey}`);
+        modifiedModel = monaco.editor.createModel(
+          modifiedContent, 
+          language, 
+          uri
+        );
+        if (window.__monacoModels) {
+          window.__monacoModels[modifiedKey] = modifiedModel;
+        }
+      } else {
+        modifiedModel.setValue(modifiedContent);
+      }
+      
+      // Set up diff editor config
+      const diffOptions = {
+        ...editor.getOptions(),
+        readOnly: true,
+        renderSideBySide: false,
+        originalEditable: false,
+        modifiedEditable: false
+      };
+      
+      // Use editor API to create diff view with our models
+      monaco.editor.createDiffEditor(
+        editorContainerRef.current as HTMLElement, 
+        diffOptions
+      ).setModel({
+        original: model,
+        modified: modifiedModel
       });
-    });
+    } else {
+      // Regular editor mode - just update the model
+      editor.setModel(model);
+      
+      // Update editor options
+      editor.updateOptions({
+        readOnly: readOnly
+      });
+    }
+    
+    // Cleanup function
+    return () => {
+      // Don't dispose models as we're reusing them
+    };
+  }, [selectedFile?.id, selectedFile?.content, selectedFile?.pendingPatch, readOnly, language, modifiedContent]);
 
-    modifiedEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK, () => {
-      if (onCommandK) {
-        onCommandK();
-        return null;
-      }
-    });
-
-    originalEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK, () => {
-      if (onCommandK) {
-        onCommandK();
-        return null;
-      }
-    });
-  };
-
-  // Define editorOptions before using it in useMemo
+  // Define editorOptions before using them
   const editorOptions = {
     minimap: { enabled: false },
     fontSize: 11,
@@ -401,44 +430,18 @@ export const CodeEditor = React.memo(function CodeEditor({
     overviewRulerLanes: 2,
     hideCursorInOverviewRuler: true,
     renderWhitespace: "all" as const,
-    // Add a loading indicator option if it exists
-    // loading: { delay: 0 }, // Set delay to 0 to disable loading indicator
   };
 
-  // Define missing variables
-  const editorContainerId = "monaco-editor-container";
-  const regularEditorKey = `regular-editor-${selectedFile?.id || 'default'}`;
-  const diffEditorKey = `diff-editor-${selectedFile?.id || 'default'}`;
-
-  // Special safe unmount function for the DiffEditor
-  const handleBeforeMount = (monaco: typeof import("monaco-editor")) => {
-    try {
-      // Be very selective about which models to dispose
-      // Don't dispose every model - just the ones we know we won't use
-      monaco.editor.getModels().forEach(model => {
-        const uri = model.uri.toString();
-        // Only dispose obviously temporary/unused models
-        if (uri.includes("inmemory") && !uri.includes(regularEditorKey) && !uri.includes(diffEditorKey)) {
-          model.dispose();
-        }
-      });
-    } catch (err) {
-      // Ignore errors
-    }
-  };
-
-  // Use useMemo to create the editors only once
-  const regularEditor = React.useMemo(() => {
-    console.log("[DEBUG] Creating regular editor (useMemo)");
+  // We only create one editor instance now
+  const monacoEditor = React.useMemo(() => {
     return (
       <Editor
         height="100%"
         defaultLanguage={language}
         language={language}
         value={selectedFile?.content ?? prevContentRef.current ?? ""}
-        loading={null}
         onChange={(newValue) => {
-          if (selectedFile && newValue !== undefined && !readOnly) {
+          if (selectedFile && newValue !== undefined && !readOnly && !inDiffMode) {
             updateFileContent({
               ...selectedFile,
               content: newValue
@@ -446,61 +449,11 @@ export const CodeEditor = React.memo(function CodeEditor({
           }
         }}
         theme={theme === "light" ? "vs" : "vs-dark"}
-        options={{
-          ...editorOptions,
-          readOnly: readOnly,
-        }}
+        options={editorOptions}
         onMount={handleEditorMount}
-        beforeMount={handleBeforeMount}
       />
     );
-  }, [selectedFile?.id, selectedFile?.content, language, theme, readOnly]); // Include content to ensure it updates
-
-  const diffEditor = React.useMemo(() => {
-    console.log("[DEBUG] Creating diff editor (useMemo)");
-    return (
-      <DiffEditor
-        height="100%"
-        language={language}
-        original={original}
-        modified={modifiedContent}
-        theme={theme === "light" ? "vs" : "vs-dark"}
-        loading={null}
-        onMount={(editor, monaco) => {
-          // Store the reference
-          diffEditorRef.current = editor;
-
-          // HACK: Store editor in our global registry for emergency cleanup
-          if (window.__monacoDiffEditors) {
-            window.__monacoDiffEditors.add(editor);
-          }
-
-          // Add a local unload listener to the editor instance
-          editor.onDidDispose(() => {
-            try {
-              // Try to cleanup from our global registry
-              if (window.__monacoDiffEditors) {
-                window.__monacoDiffEditors.delete(editor);
-              }
-            } catch (e) {
-              // Ignore errors during disposal
-            }
-          });
-
-          // Call the normal mount handler
-          handleDiffEditorMount(editor, monaco);
-        }}
-        beforeMount={handleBeforeMount}
-        options={{
-          ...editorOptions,
-          renderSideBySide: false,
-          originalEditable: false,
-          diffCodeLens: false,
-          readOnly: true
-        }}
-      />
-    );
-  }, [selectedFile?.id, language, original, modifiedContent, theme]); // Already includes all necessary dependencies
+  }, []); // Empty dependency array because we handle updates in useEffect
 
   // Keep previous content in sync with current selection
   useEffect(() => {
@@ -512,7 +465,7 @@ export const CodeEditor = React.memo(function CodeEditor({
   // Update content whenever selectedFile changes
   useEffect(() => {
     // Don't show loading state if we already have an editor reference
-    if (selectedFile && (editorRef.current || diffEditorRef.current)) {
+    if (selectedFile && editorRef.current) {
       // No loading state to manage
     }
   }, [selectedFile]);
@@ -590,25 +543,10 @@ export const CodeEditor = React.memo(function CodeEditor({
   const handleAcceptThisFile = async () => {
     if (selectedFile?.pendingPatch) {
       try {
-        // Get the current modified content directly from the diff editor
-        // This is the most reliable way to get the properly rendered content
-        let updatedContent = "";
-
-        try {
-          // Get content from the diffEditor if it exists
-          if (diffEditorRef.current) {
-            const modifiedEditor = diffEditorRef.current.getModifiedEditor();
-            const modifiedModel = modifiedEditor.getModel();
-            if (modifiedModel) {
-              // Get the updated content directly from the editor
-              updatedContent = modifiedModel.getValue();
-            }
-          }
-        } catch (editorError) {
-          console.error("Error getting content from editor:", editorError);
-        }
-
-        // If we couldn't get it from the editor, use our parsing function
+        // Get the modified content from our pre-computed value or parsing function
+        let updatedContent = modifiedContent;
+        
+        // Ensure we have content
         if (!updatedContent) {
           updatedContent = parseDiff(selectedFile.content, selectedFile.pendingPatch);
         }
@@ -1057,92 +995,19 @@ export const CodeEditor = React.memo(function CodeEditor({
     await addFileToWorkspace(newFile);
   };
 
-  // Debug: Log which editor is being shown
-  console.log(`[DEBUG] Showing ${selectedFile?.pendingPatch ? 'DiffEditor' : 'Editor'} for file ${selectedFile?.filePath}`);
-
-  // The final rendered component with a more stable structure
+  // The final rendered component with a more stable structure - single editor instance
   return (
     <div className="flex-1 h-full flex flex-col">
       {/* Always render header if it exists */}
       {headerElement}
 
-      {/* Fixed container that doesn't change */}
-      <div id={editorContainerId} className="flex-1 h-full">
-        {selectedFile?.pendingPatch ? (
-          <DiffEditor
-            key={`diff-${selectedFile?.id}`}
-            height="100%"
-            language={language}
-            original={original}
-            modified={modifiedContent}
-            theme={theme === "light" ? "vs" : "vs-dark"}
-            loading={null}
-            onMount={(editor, monaco) => {
-              // Store the reference
-              diffEditorRef.current = editor;
-
-              // HACK: Store editor in our global registry for emergency cleanup
-              if (window.__monacoDiffEditors) {
-                window.__monacoDiffEditors.add(editor);
-              }
-
-              // Add a local unload listener to the editor instance
-              editor.onDidDispose(() => {
-                try {
-                  // Try to cleanup from our global registry
-                  if (window.__monacoDiffEditors) {
-                    window.__monacoDiffEditors.delete(editor);
-                  }
-                } catch (e) {
-                  // Ignore errors during disposal
-                }
-              });
-
-              // Call the normal mount handler
-              handleDiffEditorMount(editor, monaco);
-            }}
-            beforeMount={handleBeforeMount}
-            options={{
-              ...editorOptions,
-              renderSideBySide: false,
-              originalEditable: false,
-              diffCodeLens: false,
-              readOnly: true
-            }}
-          />
-        ) : (
-          <Editor
-            key={`editor-${selectedFile?.id}`}
-            height="100%"
-            defaultLanguage={language}
-            language={language}
-            value={selectedFile?.content ?? prevContentRef.current ?? ""}
-            loading={null}
-            onChange={(newValue) => {
-              if (selectedFile && newValue !== undefined && !readOnly) {
-                updateFileContent({
-                  ...selectedFile,
-                  content: newValue
-                });
-              }
-            }}
-            theme={theme === "light" ? "vs" : "vs-dark"}
-            options={{
-              ...editorOptions,
-              readOnly: readOnly,
-            }}
-            onMount={handleEditorMount}
-            beforeMount={handleBeforeMount}
-          />
-        )}
+      {/* Fixed container that doesn't change - only one editor */}
+      <div ref={editorContainerRef} className="flex-1 h-full">
+        {monacoEditor}
       </div>
     </div>
   );
 }, (prevProps, nextProps) => {
-  // Simplified memoization check - only use props actually passed to component
-  return (
-    prevProps.session?.id === nextProps.session?.id &&
-    prevProps.theme === nextProps.theme &&
-    prevProps.readOnly === nextProps.readOnly
-  );
+  // We don't need to re-render for these prop changes since we handle updates in useEffect
+  return true;
 });
