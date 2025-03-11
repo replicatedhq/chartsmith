@@ -90,7 +90,7 @@ export function WorkspaceContent({
 
   const { openCommandMenu } = useCommandMenu();
 
-  const [editorContent, setEditorContent] = useAtom(editorContentAtom)
+  const [editorContent] = useAtom(editorContentAtom)
 
   useCentrifugo({
     session,
@@ -127,9 +127,6 @@ export function WorkspaceContent({
               <WorkspaceContainer
                 session={session}
                 editorContent={editorContent}
-                onEditorChange={(value) => {
-                  setEditorContent(value ?? "");
-                }}
                 onCommandK={openCommandMenu}
               />
             </div>
