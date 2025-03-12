@@ -27,14 +27,12 @@ import { createChatMessageAction } from "@/lib/workspace/actions/create-chat-mes
 interface WorkspaceContainerClientProps {
   session: Session;
   editorContent: string;
-  onEditorChange: (value: string | undefined) => void;
   onCommandK?: () => void;
 }
 
 export function WorkspaceContainerClient({
   session,
   editorContent,
-  onEditorChange,
   onCommandK,
 }: WorkspaceContainerClientProps) {
   const { resolvedTheme } = useTheme();
@@ -99,10 +97,10 @@ export function WorkspaceContainerClient({
                   // Try to find a rendered version of the selected file
                   (() => {
                     let renderedFile = null;
-                    
+
                     // Try exact match first
                     renderedFile = renderedFiles.find(rf => rf.filePath === selectedFile.filePath);
-                    
+
                     // If no exact match, look for a rendered file with a matching name
                     if (!renderedFile) {
                       const selectedFileName = selectedFile.filePath.split('/').pop() || '';
@@ -111,24 +109,24 @@ export function WorkspaceContainerClient({
                         return renderedFileName === selectedFileName;
                       });
                     }
-                    
+
                     // Special handling for templates
                     if (!renderedFile && selectedFile.filePath.includes('/templates/')) {
                       // For template files, look for a corresponding YAML file in the rendered output
                       const baseFileName = selectedFile.filePath.split('/').pop()?.replace('.yaml.tpl', '.yaml').replace('.tpl', '') || '';
-                      
+
                       renderedFile = renderedFiles.find(rf => {
                         const renderedFileName = rf.filePath.split('/').pop() || '';
                         return renderedFileName === baseFileName;
                       });
-                      
+
                     }
-                    
+
                     // If we find a rendered version, show it
                     if (renderedFile) {
                       // Get the rendered content
                       const renderedContent = renderedFile.renderedContent || "";
-                      
+
                       // Use a unique key to force the CodeEditor to fully remount with new content
                       // This prevents old content from persisting in Monaco Editor
                       // Use direct Monaco Editor instance instead of CodeEditor component
@@ -186,7 +184,6 @@ export function WorkspaceContainerClient({
                       session={session}
                       theme={resolvedTheme}
                       value={editorContent}
-                      onChange={onEditorChange}
                       onCommandK={onCommandK}
                     />
                   </div>

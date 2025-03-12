@@ -6,7 +6,6 @@ import { WorkspaceContainerClient } from "@/components/WorkspaceContainerClient"
 interface WorkspaceContainerProps {
   session: Session;
   editorContent: string;
-  onEditorChange: (value: string | undefined) => void;
   onCommandK?: () => void;
 }
 

@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect, useState, useMemo } from "react";
 import { useAtom } from "jotai";
-import { Check, X, ChevronUp, ChevronDown, CheckCheck, ChevronRight } from "lucide-react";
+import { Check, X, ChevronUp, ChevronDown } from "lucide-react";
 
 // atoms
 import { selectedFileAtom, currentDiffIndexAtom, updateCurrentDiffIndexAtom, updateFileContentAtom } from "@/atoms/workspace";
@@ -12,194 +12,48 @@ import { allFilesBeforeApplyingPendingPatchesAtom, allFilesWithPendingPatchesAto
 import type { editor } from "monaco-editor";
 import Editor, { DiffEditor } from "@monaco-editor/react";
 import type { WorkspaceFile } from "@/lib/types/workspace";
+import type { Session } from "@/lib/types/session";
 
 // hooks
 import { useMonacoEditor } from "@/hooks/useMonacoEditor";
+import { 
+  useMonacoSingleInstance, 
+  parseDiff,
+  setupSafeMonacoCleanup,
+  getLanguage
+} from "@/hooks/useMonacoSingleInstance";
 
 // actions
 import { rejectPatchAction, rejectAllPatchesAction } from "@/lib/workspace/actions/reject-patch";
 import { acceptPatchAction, acceptAllPatchesAction } from "@/lib/workspace/actions/accept-patch";
 
-// types
-import type { Session } from "@/lib/types/session";
-
 interface CodeEditorProps {
   session: Session;
   theme?: "light" | "dark";
-  value?: string;
-  onChange?: (value: string | undefined) => void;
+  readOnly?: boolean;
   onCommandK?: () => void;
 }
 
-// Ultra simple and reliable diff parser that extracts only the final content
-function parseDiff(originalContent: string, diffContent: string): string {
-  console.log("Using ultra simple diff parser");
-  
-  // For empty diffs, return original content
-  if (!diffContent || diffContent.trim() === '') {
-    return originalContent;
-  }
-  
-  // For new files (empty original content), extract only the added lines
-  if (originalContent === '' || diffContent.includes('@@ -0,0 +1,')) {
-    console.log("Handling new file patch");
-    const newContent = diffContent
-      .split('\n')
-      .filter(line => line.startsWith('+') && !line.startsWith('+++'))
-      .map(line => line.substring(1))
-      .join('\n');
-    
-    if (newContent) {
-      return newContent;
-    }
-  }
-  
-  // Direct text replacement for common fixes
-  // Handle specific line replacements in YAML/JSON
-  const replacementMatches = Array.from(diffContent.matchAll(/-([^:\n]+):\s*([^\n]+)\n\+([^:\n]+):\s*([^\n]+)/g));
-  if (replacementMatches.length === 1) {
-    const match = replacementMatches[0];
-    const oldKey = match[1].trim();
-    const oldValue = match[2].trim();
-    const newKey = match[3].trim(); 
-    const newValue = match[4].trim();
-    
-    console.log(`Found direct replacement: ${oldKey}: ${oldValue} -> ${newKey}: ${newValue}`);
-    
-    // If it's a direct value replacement (same key)
-    if (oldKey === newKey) {
-      const searchPattern = `${oldKey}: ${oldValue}`;
-      const replacement = `${newKey}: ${newValue}`;
-      if (originalContent.includes(searchPattern)) {
-        return originalContent.replace(searchPattern, replacement);
-      }
-    }
-  }
-  
-  try {
-    // Last resort: extract the entire modified file content directly
-    // Look for a complete rendered version in the diff
-    // Using multiline flag (.*)+ pattern instead of dotAll flag (s) for compatibility
-    const completeDiffMatch = diffContent.match(/\n--- [\s\S]*?\n\+\+\+ [\s\S]*?\n((?:@@ [\s\S]*? @@[\s\S]*?\n)+)((?: [\s\S]*\n|\+[\s\S]*\n|-[\s\S]*\n)*)/);
-    if (completeDiffMatch) {
-      const hunks = completeDiffMatch[1].split('\n');
-      const hunkContent = completeDiffMatch[2].split('\n');
-      
-      // Just extract all kept and added lines (starting with ' ' or '+')
-      // and skip all removed lines (starting with '-')
-      const keptContent = hunkContent
-        .filter(line => line.startsWith(' ') || line.startsWith('+'))
-        .map(line => line.substring(1))
-        .join('\n');
-      
-      if (keptContent) {
-        console.log("Used direct content extraction from diff");
-        return keptContent;
-      }
-    }
-    
-    // Simple string replacement if recognizable patterns exist
-    const singleLineDiffMatch = diffContent.match(/-([^\n]+)\n\+([^\n]+)/);
-    if (singleLineDiffMatch) {
-      const oldLine = singleLineDiffMatch[1];
-      const newLine = singleLineDiffMatch[2];
-      console.log(`Simple line replacement: "${oldLine}" -> "${newLine}"`);
-      
-      // Try direct string replacement
-      const lines = originalContent.split('\n');
-      const index = lines.findIndex(line => line.trim() === oldLine.trim());
-      if (index !== -1) {
-        lines[index] = newLine;
-        return lines.join('\n');
-      }
-    }
-    
-    // Last resort: just attempt direct string replacement
-    const minusParts = diffContent.match(/^-(.*)$/gm);
-    const plusParts = diffContent.match(/^\+(.*)$/gm);
-    
-    if (minusParts && plusParts && minusParts.length === plusParts.length) {
-      console.log("Attempting direct replacement of matching -/+ lines");
-      let content = originalContent;
-      
-      for (let i = 0; i < minusParts.length; i++) {
-        const minusLine = minusParts[i].substring(1);
-        const plusLine = plusParts[i].substring(1);
-        
-        console.log(`Replacing "${minusLine}" with "${plusLine}"`);
-        content = content.replace(minusLine, plusLine);
-      }
-      
-      return content;
-    }
-    
-    // Ultimate fallback: extract the "Modified" content from diffEditor
-    // For this to work, the caller must already have access to the parsed modified version
-    console.log("PATCH PARSING FAILED - returning original content");
-    return originalContent;
-  } catch (error) {
-    console.error("Error parsing diff:", error);
-    return originalContent;
-  }
-}
+// Initialize Monaco environment
+setupSafeMonacoCleanup();
 
-// Helper function to find best position for context lines in original content
-function findBestPosition(originalLines: string[], contextLines: string[]): number {
-  if (contextLines.length === 0) return 1;
-
-  let bestPos = 1;
-  let bestScore = 0;
-
-  for (let pos = 0; pos <= originalLines.length - contextLines.length; pos++) {
-    let score = 0;
-
-    for (let i = 0; i < contextLines.length; i++) {
-      // Compare line by line, ignoring whitespace
-      const contextNorm = contextLines[i].trim();
-      const originalNorm = originalLines[pos + i].trim();
-
-      if (contextNorm === originalNorm) {
-        score += 1;
-      } else if (contextNorm.replace(/\s+/g, '') === originalNorm.replace(/\s+/g, '')) {
-        // Same content but different whitespace
-        score += 0.8;
-      } else if (originalNorm.includes(contextNorm) || contextNorm.includes(originalNorm)) {
-        // Partial match
-        score += 0.5;
-      }
-    }
-
-    // Normalize score based on number of context lines
-    const normalizedScore = score / contextLines.length;
-
-    if (normalizedScore > bestScore) {
-      bestScore = normalizedScore;
-      bestPos = pos + 1; // Convert to 1-based indexing
-    }
-  }
-
-  // Only return position if we have a good match
-  return bestScore > 0.6 ? bestPos : 1;
-}
-
-export function CodeEditor({
+export const CodeEditor = React.memo(function CodeEditor({
   session,
   theme = "dark",
-  value,
-  onChange,
+  readOnly = false,
   onCommandK,
 }: CodeEditorProps) {
-  // Track previous values to prevent loading flicker
-  const [isEditorLoading, setIsEditorLoading] = useState(false);
-  const prevContentRef = useRef<string | undefined>(undefined);
-  
+  // Container ref for the single editor
+  const editorContainerRef = useRef<HTMLDivElement>(null);
+
   const [selectedFile, setSelectedFile] = useAtom(selectedFileAtom);
   const [workspace, setWorkspace] = useAtom(workspaceAtom);
   const [, addFileToWorkspace] = useAtom(addFileToWorkspaceAtom);
+  
+  // References for Monaco
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
-  const diffEditorRef = useRef<editor.IStandaloneDiffEditor | null>(null);
-  const { handleEditorInit } = useMonacoEditor(selectedFile);
-
+  const monacoRef = useRef<typeof import("monaco-editor") | null>(null);
+  
   const [allFilesWithPendingPatches] = useAtom(allFilesWithPendingPatchesAtom);
   const [allFilesBeforeApplyingPendingPatches] = useAtom(allFilesBeforeApplyingPendingPatchesAtom);
 
@@ -214,94 +68,81 @@ export function CodeEditor({
 
   const [, updateFileContent] = useAtom(updateFileContentAtom);
   
-  // Keep previous content in sync with current selection
-  useEffect(() => {
-    if (selectedFile?.content) {
-      prevContentRef.current = selectedFile.content;
-    }
-  }, [selectedFile?.content]);
+  // Define editor options
+  const editorOptions = {
+    minimap: { enabled: false },
+    fontSize: 11,
+    lineNumbers: 'on' as const,
+    scrollBeyondLastLine: false,
+    automaticLayout: true,
+    tabSize: 2,
+    readOnly: readOnly,
+    glyphMargin: true,
+    lineDecorationsWidth: 5,
+    renderLineHighlight: "all" as const,
+    folding: true,
+    wordWrap: 'off' as const,
+    wrappingIndent: "indent" as const,
+    fixedOverflowWidgets: true,
+    overviewRulerBorder: false,
+    overviewRulerLanes: 2,
+    hideCursorInOverviewRuler: true,
+    renderWhitespace: "all" as const,
+  };
   
-  // Global cleanup for all editor instances when component unmounts
-  useEffect(() => {
-    return () => {
-      // Make sure to clean up editor instances
-      try {
-        // First dispose any editor instances
-        if (editorRef.current) {
-          editorRef.current.dispose();
-          editorRef.current = null;
+  // Handler when content changes
+  const handleContentChange = (content: string) => {
+    if (selectedFile) {
+      updateFileContent({
+        ...selectedFile,
+        content
+      });
+    }
+  };
+  
+  // Use our custom hook for monaco single instance
+  const { 
+    original, 
+    language, 
+    modifiedContent,
+    inDiffMode,
+    setInDiffMode
+  } = useMonacoSingleInstance(
+    selectedFile,
+    editorRef,
+    monacoRef,
+    editorOptions,
+    handleContentChange,
+    theme,
+    readOnly,
+    editorContainerRef
+  );
+  
+  // Setup editor init handler
+  const handleEditorMount = (editor: editor.IStandaloneCodeEditor, monaco: typeof import("monaco-editor")) => {
+    editorRef.current = editor;
+    monacoRef.current = monaco;
+    
+    // Add command palette shortcut
+    const commandId = 'chartsmith.openCommandPalette';
+    editor.addAction({
+      id: commandId,
+      label: 'Open Command Palette',
+      keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK],
+      run: () => {
+        if (onCommandK) {
+          onCommandK();
         }
-        
-        if (diffEditorRef.current) {
-          diffEditorRef.current.dispose();
-          diffEditorRef.current = null;
-        }
-      } catch (err) {
-        console.log("Error during global editor cleanup:", err);
       }
-    };
-  }, []);
-
-  // When selectedFile changes, make sure we don't flash loading state
-  useEffect(() => {
-    if (selectedFile && onChange) {
-      onChange(selectedFile.content);
-    }
-  }, [selectedFile, onChange]);
+    });
+  };
   
-  
-  // Update content whenever selectedFile changes
-  useEffect(() => {
-    // Don't show loading state if we already have an editor reference
-    if (selectedFile && (editorRef.current || diffEditorRef.current)) {
-      setIsEditorLoading(false);
-    }
-  }, [selectedFile]);
-
+  // Update diff index when files change
   useEffect(() => {
     updateCurrentDiffIndex(allFilesWithPendingPatches);
   }, [selectedFile, allFilesWithPendingPatches, updateCurrentDiffIndex]);
-
   
-  useEffect(() => {
-    if (selectedFile?.pendingPatch && diffEditorRef.current) {
-      const attemptScroll = (attempt = 1, maxAttempts = 5) => {
-        setTimeout(() => {
-          const editor = diffEditorRef.current;
-          if (!editor) {
-            return;
-          }
-
-          const modifiedEditor = editor.getModifiedEditor();
-          const modifiedModel = modifiedEditor.getModel();
-
-          if (!modifiedModel) {
-            if (attempt < maxAttempts) {
-              attemptScroll(attempt + 1);
-            }
-            return;
-          }
-
-          const changes = editor.getLineChanges();
-
-          if (changes && changes.length > 0) {
-            const firstChange = changes[0];
-            modifiedEditor.revealLineInCenter(firstChange.modifiedStartLineNumber);
-            modifiedEditor.setPosition({
-              lineNumber: firstChange.modifiedStartLineNumber,
-              column: 1
-            });
-            
-          } else if (attempt < maxAttempts) {
-            attemptScroll(attempt + 1);
-          }
-        }, 100 * attempt);
-      };
-
-      attemptScroll();
-    }
-  }, [selectedFile?.pendingPatch, selectedFile?.filePath, value]);
-
+  // Handle outside clicks for dropdowns
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (acceptButtonRef.current && !acceptButtonRef.current.contains(event.target as Node)) {
@@ -318,177 +159,19 @@ export function CodeEditor({
     };
   }, []);
   
-  // Add cleanup effect for editors when component unmounts
-  // Add a simple CSS fix for the revert buttons
-  useEffect(() => {
-    // Create a style element that specifically targets the margin width and hides elements
-    let styleElement = document.getElementById('monaco-diff-editor-fix');
-    if (!styleElement) {
-      styleElement = document.createElement('style');
-      styleElement.id = 'monaco-diff-editor-fix';
-      styleElement.innerHTML = `
-        /* Just hide the revert buttons */
-        .monaco-diff-editor .codicon-arrow-small-left,
-        .monaco-diff-editor [title="Revert this change"],
-        .monaco-diff-editor [title="Copy this change to the other side"] {
-          display: none !important;
-        }
-      `;
-      document.head.appendChild(styleElement);
-    }
-    
-    return () => {
-      // Clean up editors on unmount
-      if (editorRef.current) {
-        try {
-          editorRef.current.dispose();
-        } catch (err) {
-          console.log("Error disposing editor on unmount:", err);
-        }
-        editorRef.current = null;
-      }
-      
-      if (diffEditorRef.current) {
-        try {
-          
-          diffEditorRef.current.dispose();
-        } catch (err) {
-          console.log("Error disposing diff editor on unmount:", err);
-        }
-        diffEditorRef.current = null;
-      }
-    };
-  }, []);
-
   if (!workspace) {
     return null;
   }
 
-  const handleEditorMount = (editor: editor.IStandaloneCodeEditor, monaco: typeof import("monaco-editor")) => {
-    // Store the editor reference and mark loading as complete
-    editorRef.current = editor;
-    handleEditorInit(editor, monaco);
-    setIsEditorLoading(false);
-
-    const commandId = 'chartsmith.openCommandPalette';
-    editor.addAction({
-      id: commandId,
-      label: 'Open Command Palette',
-      keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK],
-      run: () => {
-        if (onCommandK) {
-          onCommandK();
-        }
-      }
-    });
-
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK, () => {
-      if (onCommandK) {
-        onCommandK();
-        return null;
-      }
-    });
-  };
-
-  const handleDiffEditorMount = (editor: editor.IStandaloneDiffEditor, monaco: typeof import("monaco-editor")) => {
-    // Store the editor reference and mark loading as complete  
-    diffEditorRef.current = editor;
-    setIsEditorLoading(false);
-    
-    const modifiedEditor = editor.getModifiedEditor();
-    const originalEditor = editor.getOriginalEditor();
-    
-  
-    const commandId = 'chartsmith.openCommandPalette';
-    [modifiedEditor, originalEditor].forEach(ed => {
-      ed.addAction({
-        id: commandId,
-        label: 'Open Command Palette',
-        keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK],
-        run: () => onCommandK?.()
-      });
-    });
-
-    modifiedEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK, () => {
-      if (onCommandK) {
-        onCommandK();
-        return null;
-      }
-    });
-
-    originalEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK, () => {
-      if (onCommandK) {
-        onCommandK();
-        return null;
-      }
-    });
-  };
-
-  const editorOptions = {
-    minimap: { enabled: false },
-    fontSize: 11,
-    lineNumbers: 'on' as const,
-    scrollBeyondLastLine: false,
-    automaticLayout: true,
-    tabSize: 2,
-    readOnly: !onChange,
-    glyphMargin: true,
-    lineDecorationsWidth: 5,
-    renderLineHighlight: "all" as const,
-    folding: true,
-    wordWrap: 'off' as const,
-    wrappingIndent: "indent" as const,
-    fixedOverflowWidgets: true,
-    overviewRulerBorder: false,
-    overviewRulerLanes: 2,
-    hideCursorInOverviewRuler: true,
-    renderWhitespace: "all" as const,
-  };
-
   const showDiffHeader = allFilesWithPendingPatches.length > 0;
-
-  const onFileUpdate = (updatedFile: WorkspaceFile) => {
-    console.log("onFileUpdate", updatedFile);
-  };
-
+  
   const handleAcceptThisFile = async () => {
     if (selectedFile?.pendingPatch) {
-      console.log("Accepting patch for file:", {
-        fileId: selectedFile.id,
-        revision: workspace.currentRevisionNumber,
-        filePath: selectedFile.filePath,
-        hasPendingPatch: !!selectedFile.pendingPatch
-      });
-      
       try {
-        // Get the current modified content directly from the diff editor
-        // This is the most reliable way to get the properly rendered content
-        let updatedContent = "";
-        
-        try {
-          // Get content from the diffEditor if it exists
-          if (diffEditorRef.current) {
-            const modifiedEditor = diffEditorRef.current.getModifiedEditor();
-            const modifiedModel = modifiedEditor.getModel();
-            if (modifiedModel) {
-              // Get the updated content directly from the editor
-              updatedContent = modifiedModel.getValue();
-              console.log("Got updated content directly from Monaco diff editor");
-            }
-          }
-        } catch (editorError) {
-          console.error("Error getting content from editor:", editorError);
-        }
-        
-        // If we couldn't get it from the editor, use our parsing function
-        if (!updatedContent) {
-          updatedContent = parseDiff(selectedFile.content, selectedFile.pendingPatch);
-          console.log("Parsed updated content using parseDiff function");
-        }
+        // Get the modified content from our pre-computed value
+        let updatedContent = modifiedContent;
         
         if (selectedFile.id.startsWith('file-')) {
-          console.log("Handling local patch for temporary file ID");
-          
           // Create an updated file with pending patch cleared
           const updatedFile = {
             ...selectedFile,
@@ -514,12 +197,10 @@ export function CodeEditor({
           };
           
           setWorkspace(updatedWorkspace);
-          console.log("Locally applied patch for temporary file ID");
         } else {
           try {
             // For permanent IDs, try to use the server action first
             const updatedFile = await acceptPatchAction(session, selectedFile.id, workspace.currentRevisionNumber);
-            console.log("Patch accepted successfully via server");
             
             // Update editor state
             updateFileContent(updatedFile);
@@ -594,8 +275,6 @@ export function CodeEditor({
             }))
           };
           setWorkspace(updatedWorkspace);
-          
-          console.log("Applied fallback - just cleared the pending patch");
         } catch (fallbackError) {
           console.error("Even fallback failed:", fallbackError);
         }
@@ -641,8 +320,6 @@ export function CodeEditor({
       try {
         // For temporary IDs, just clear the pendingPatch client-side
         if (selectedFile.id.startsWith('file-')) {
-          console.log("Handling local reject for temporary file ID");
-          
           // Create updated file with pendingPatch cleared
           const updatedFile = {
             ...selectedFile,
@@ -667,7 +344,6 @@ export function CodeEditor({
           };
           
           setWorkspace(updatedWorkspace);
-          console.log("Locally rejected patch for temporary file ID");
         } else {
           // For permanent IDs, use the server action
           await rejectPatchAction(session, selectedFile.id, workspace.currentRevisionNumber);
@@ -702,8 +378,6 @@ export function CodeEditor({
         
         // Fall back to client-side rejection for any errors
         try {
-          console.log("Falling back to client-side patch rejection");
-          
           // Create updated file with pendingPatch cleared
           const updatedFile = {
             ...selectedFile,
@@ -728,7 +402,6 @@ export function CodeEditor({
           };
           
           setWorkspace(updatedWorkspace);
-          console.log("Successfully rejected patch client-side as fallback");
         } catch (clientError) {
           console.error("Failed to reject patch on client too:", clientError);
         }
@@ -915,89 +588,29 @@ export function CodeEditor({
             </div>
           </div>
         )}
-
-
       </div>
     </div>
   );
 
-  const handleNewFile = async (filePath: string, content: string) => {
-    if (!workspace) return;
+  const headerElement = showDiffHeader ? renderDiffHeader() : null;
 
-    // Create a new WorkspaceFile object
-    const newFile = {
-      id: `${workspace.id}:${filePath}`, // Format matches backend ID generation
-      workspaceId: workspace.id,
-      filePath: filePath,
-      content: content,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      pendingPatch: undefined,
-      isDeleted: false
-    };
+  // The final rendered component with conditional rendering based on diff mode
+  return (
+    <div className="flex-1 h-full flex flex-col">
+      {/* Always render header if it exists */}
+      {headerElement}
 
-    // Add the new file to workspace state
-    await addFileToWorkspace(newFile);
-  };
-
-  const getLanguage = (filePath: string) => {
-    const ext = filePath.split('.').pop()?.toLowerCase();
-    switch (ext) {
-      case 'yaml':
-      case 'yml':
-        return 'yaml';
-      case 'ts':
-      case 'tsx':
-        return 'typescript';
-      case 'js':
-      case 'jsx':
-        return 'javascript';
-      case 'txt':
-        return 'plaintext';
-      default:
-        return 'plaintext';
-    }
-  };
-
-  if (selectedFile?.pendingPatch) {
-    try {
-      // Add error handling around the diff parsing
-      const modified = parseDiff(selectedFile.content, selectedFile.pendingPatch);
-
-      // For new files where the content is completely empty but we have a patch,
-      // we can check if it's a new file pattern and handle it specially
-      const isNewFilePatch = selectedFile.pendingPatch.includes('@@ -0,0 +1,');
-      const original = selectedFile.content;
-
-      // Use a stable key to prevent remounting and loading flicker
-      const editorKey = `diff-monaco`;
-
-      return (
-        <div className="flex-1 h-full flex flex-col">
-          {showDiffHeader && renderDiffHeader()}
-          <div className="flex-1">
+      {/* Conditionally render the appropriate editor */}
+      <div className="flex-1 h-full">
+        {selectedFile?.pendingPatch ? (
+          // Import DiffEditor dynamically
+          <div ref={editorContainerRef} className="h-full">
             <DiffEditor
-              key={editorKey}
               height="100%"
-              language={getLanguage(selectedFile.filePath)}
+              language={language}
               original={original}
-              modified={modified}
+              modified={modifiedContent}
               theme={theme === "light" ? "vs" : "vs-dark"}
-              onMount={handleDiffEditorMount}
-              beforeMount={(monaco) => {
-                // Clean up previous models on mount to avoid memory leaks
-                try {
-                  monaco.editor.getModels().forEach(model => {
-                    // Only dispose models that are not being used
-                    if (!model.isDisposed()) {
-                      model.dispose();
-                    }
-                  });
-                  
-                } catch (err) {
-                  console.log("Error disposing models:", err);
-                }
-              }}
               options={{
                 ...editorOptions,
                 renderSideBySide: false,
@@ -1005,72 +618,43 @@ export function CodeEditor({
                 diffCodeLens: false,
                 readOnly: true
               }}
+              onMount={(editor, monaco) => {
+                // We need to handle the diff editor mount differently
+                editorRef.current = editor.getModifiedEditor(); // Store modified editor for consistency
+                monacoRef.current = monaco;
+                
+                // Add command palette to both editors
+                const commandId = 'chartsmith.openCommandPalette';
+                [editor.getModifiedEditor(), editor.getOriginalEditor()].forEach(ed => {
+                  ed.addAction({
+                    id: commandId,
+                    label: 'Open Command Palette',
+                    keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK],
+                    run: () => onCommandK?.()
+                  });
+                });
+              }}
             />
           </div>
-        </div>
-      );
-    } catch (error) {
-      console.error("Error parsing diff:", error);
-
-      // Fallback to showing raw content if diff parsing fails
-      return (
-        <div className="flex-1 h-full flex flex-col">
-          {showDiffHeader && renderDiffHeader()}
-          <div className="flex-1 h-full">
+        ) : (
+          // Regular editor for normal mode
+          <div ref={editorContainerRef} className="h-full">
             <Editor
               height="100%"
-              defaultLanguage={getLanguage(selectedFile.filePath)}
-              language={getLanguage(selectedFile.filePath)}
-              value={selectedFile.pendingPatch}
+              defaultLanguage={language}
+              language={language}
+              value={selectedFile?.content || ""}
+              onChange={handleContentChange}
               theme={theme === "light" ? "vs" : "vs-dark"}
-              options={{
-                ...editorOptions,
-                readOnly: true,
-              }}
+              options={editorOptions}
               onMount={handleEditorMount}
-              key="fallback-editor"
             />
           </div>
-        </div>
-      );
-    }
-  }
-
-  // Use a stable key instead of a dynamic one to prevent remounting
-  // This prevents the loading flicker when switching between files
-  const editorKey = `editor-monaco`;
-
-  return (
-    <div className="flex-1 h-full flex flex-col">
-      {showDiffHeader && renderDiffHeader()}
-      <div className="flex-1 h-full">
-        <Editor
-          height="100%"
-          defaultLanguage={getLanguage(selectedFile?.filePath || '')}
-          language={getLanguage(selectedFile?.filePath || '')}
-          value={selectedFile?.content ?? prevContentRef.current ?? value ?? ""}
-          onChange={onChange}
-          theme={theme === "light" ? "vs" : "vs-dark"}
-          options={{
-            ...editorOptions,
-            readOnly: !onChange,
-          }}
-          onMount={handleEditorMount}
-          beforeMount={(monaco) => {
-            // Clean up previous models to avoid memory leaks
-            try {
-              monaco.editor.getModels().forEach(model => {
-                if (!model.isDisposed()) {
-                  model.dispose();
-                }
-              });
-            } catch (err) {
-              console.log("Error disposing models:", err);
-            }
-          }}
-          key={editorKey}
-        />
+        )}
       </div>
     </div>
   );
-}
+}, (prevProps, nextProps) => {
+  // We don't need to re-render for these prop changes since we handle updates in useEffect
+  return true;
+});
