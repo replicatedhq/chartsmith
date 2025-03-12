@@ -47,19 +47,7 @@ export function PlanContent({ session }: PlanContentProps) {
                     // No longer need to track updates - ScrollingContent will handle it
                   }}
                 />
-                {item.responsePlanId && (
-                  <PlanChatMessage
-                    data-testid="plan-message"
-                    planId={item.responsePlanId}
-                    session={session}
-                    workspaceId={workspace.id}
-                    messageId={item.id}
-                    showActions={index === messages.length - 1}
-                    onContentUpdate={() => {
-                      // No longer need to track updates - ScrollingContent will handle it
-                    }}
-                  />
-                )}
+                {/* Remove duplicate plan rendering since ChatMessage already renders the plan */}
               </div>
             ))}
           </Card>

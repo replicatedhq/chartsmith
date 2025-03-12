@@ -183,7 +183,6 @@ export function WorkspaceContainerClient({
                     <CodeEditor
                       session={session}
                       theme={resolvedTheme}
-                      value={editorContent}
                       onCommandK={onCommandK}
                     />
                   </div>

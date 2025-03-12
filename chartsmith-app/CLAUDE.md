@@ -37,3 +37,8 @@
 - We aren't using Next.JS API routes, except when absolutely necessary.
 - Front end should call server actions, which call lib/* functions.
 - Database queries are not allowed in the server action. Server actions are just wrappers for which lib functions we expose.
+
+## Workers
+- The go code is where we put all workers. 
+- Jobs for workers are enqueued and scheduled using postgres notify and a work_queue table.
+- Status from the workers is communicated via Centrifugo messages to the client.

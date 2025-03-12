@@ -210,3 +210,24 @@ is_intent_chart_operator, is_intent_proceed FROM workspace_chat WHERE workspace_
 
 	return chats, nil
 }
+
+// SetChatMessageIntent updates the intent flags for a chat message
+func SetChatMessageIntent(ctx context.Context, chatMessageID string, isIntentComplete bool, isConversational bool, isPlan bool, isOffTopic bool, isProceed bool) error {
+	conn := persistence.MustGetPooledPostgresSession()
+	defer conn.Release()
+
+	query := `UPDATE workspace_chat SET 
+		is_intent_complete = $1, 
+		is_intent_conversational = $2, 
+		is_intent_plan = $3, 
+		is_intent_off_topic = $4,
+		is_intent_proceed = $5
+	WHERE id = $6`
+	
+	_, err := conn.Exec(ctx, query, isIntentComplete, isConversational, isPlan, isOffTopic, isProceed, chatMessageID)
+	if err != nil {
+		return fmt.Errorf("failed to update chat message intent: %w", err)
+	}
+	
+	return nil
+}

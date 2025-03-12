@@ -8,13 +8,8 @@ import { enqueueWork } from "../utils/queue";
 
 /**
  * Creates a new workspace with initialized files, charts, and content
- *
- * @param createdType - The creation method (currently only "prompt" is supported)
- * @param userId - ID of the user creating the workspace
- * @returns A Workspace object containing the new workspace's basic info
- * @throws Will throw an error if database operations fail
  */
-export async function createWorkspace(createdType: string, userId: string, baseChart?: Chart, looseFiles?: WorkspaceFile[]): Promise<Workspace> {
+export async function createWorkspace(createdType: string, userId: string, createChartMessageParams: CreateChatMessageParams, baseChart?: Chart, looseFiles?: WorkspaceFile[]): Promise<Workspace> {
   logger.info("Creating new workspace", { createdType, userId });
   try {
     const id = srs.default({ length: 12, alphanumeric: true });
@@ -40,6 +35,9 @@ export async function createWorkspace(createdType: string, userId: string, baseC
 
       await client.query(`INSERT INTO workspace_revision (workspace_id, revision_number, created_at, created_by_user_id, created_type, is_complete, is_rendered) VALUES ($1, $2, now(), $3, $4, true, false)`, [
         id, initialRevisionNumber, userId, createdType]);
+
+      // We'll enqueue rendering after the commit completes
+      const shouldEnqueueRender = true;
 
       if (baseChart) {
         // Use the provided baseChart
@@ -96,6 +94,9 @@ export async function createWorkspace(createdType: string, userId: string, baseC
 
       await client.query("COMMIT");
 
+      // create the chat message
+      const chatMessage = await createChatMessage(userId, id, createChartMessageParams);
+
       // now that that's commited, let's get all of the file ids, and notify the worker so that we capture embeddings
       const files = await listFilesForWorkspace(id, initialRevisionNumber);
       for (const file of files) {
@@ -103,6 +104,12 @@ export async function createWorkspace(createdType: string, userId: string, baseC
           fileId: file.id,
           revision: initialRevisionNumber,
         });
+      }
+
+      // Enqueue a render job for the initial revision
+      if (shouldEnqueueRender) {
+        // Enqueue the render and associate it with the system chat message
+        await renderWorkspace(id, chatMessage.id, initialRevisionNumber);
       }
     } catch (err) {
       // Rollback transaction on error
@@ -147,6 +154,18 @@ export async function createChatMessage(userId: string, workspaceId: string, par
     const client = getDB(await getParam("DB_URI"));
     const chatMessageId = srs.default({ length: 12, alphanumeric: true });
 
+    // Get the current revision number for this workspace
+    const workspaceResult = await client.query(
+      `SELECT current_revision_number FROM workspace WHERE id = $1`,
+      [workspaceId]
+    );
+
+    if (workspaceResult.rows.length === 0) {
+      throw new Error(`Workspace not found: ${workspaceId}`);
+    }
+
+    const currentRevisionNumber = workspaceResult.rows[0].current_revision_number;
+
     const query = `
       INSERT INTO workspace_chat (
         id,
@@ -171,8 +190,8 @@ export async function createChatMessage(userId: string, workspaceId: string, par
         response_rollback_to_revision_number
       )
       VALUES (
-        $1, $2, now(), $3, $4, $5, 0, false,
-        $6, $7, $8, false, false, false, $9, $10, null, null, null, $11
+        $1, $2, now(), $3, $4, $5, $6, false,
+        $7, $8, $9, false, false, false, $10, $11, null, null, null, $12
       )`;
 
     const values = [
@@ -181,6 +200,7 @@ export async function createChatMessage(userId: string, workspaceId: string, par
       userId,
       params.prompt,
       params.response,
+      currentRevisionNumber, // Use the current revision number instead of hardcoded 0
       params.knownIntent ? true : false,
       params.knownIntent === ChatMessageIntent.NON_PLAN,
       params.knownIntent === ChatMessageIntent.PLAN,
@@ -850,6 +870,26 @@ export async function rollbackToRevision(workspaceId: string, revisionNumber: nu
 
 
     await db.query('COMMIT');
+
+    // Find the chat message that initiated the rollback to associate it with the render
+    const chatMessages = await db.query(`
+      SELECT id FROM workspace_chat
+      WHERE workspace_id = $1 AND response_rollback_to_revision_number = $2
+      ORDER BY created_at DESC LIMIT 1`,
+      [workspaceId, revisionNumber]
+    );
+
+    let chatMessageId = "";
+    if (chatMessages?.rowCount && chatMessages.rowCount > 0) {
+      chatMessageId = chatMessages.rows[0].id;
+    }
+
+    // After successful rollback, enqueue a render job for the revision we rolled back to
+    await enqueueWork("render_workspace", {
+      workspaceId: workspaceId,
+      revisionNumber: revisionNumber,
+      chatMessageId: chatMessageId // Associate with the rollback chat message
+    });
   } catch (err) {
     await db.query('ROLLBACK');
     throw err;

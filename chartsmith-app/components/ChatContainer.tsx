@@ -56,19 +56,6 @@ export function ChatContainer({ session }: ChatContainerProps) {
                     // No need to update state - ScrollingContent will handle scrolling
                   }}
                 />
-                {item.responsePlanId ? (
-                  <PlanChatMessage
-                    planId={item.responsePlanId}
-                    session={session}
-                    workspaceId={workspace.id}
-                    messageId={item.id}
-                    showActions={index === messages.length - 1}
-                    showChatInput={false}
-                    onContentUpdate={() => {
-                      // No need to update state - ScrollingContent will handle scrolling
-                    }}
-                  />
-                ) : null}
               </div>
             ))}
           </div>
