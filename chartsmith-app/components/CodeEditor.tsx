@@ -44,15 +44,15 @@ export const CodeEditor = React.memo(function CodeEditor({
   onCommandK,
 }: CodeEditorProps) {
   // Container ref for the single editor
-  const editorContainerRef = useRef<HTMLDivElement>(null);
+  const editorContainerRef = useRef<HTMLDivElement>(null as unknown as HTMLDivElement);
 
   const [selectedFile, setSelectedFile] = useAtom(selectedFileAtom);
   const [workspace, setWorkspace] = useAtom(workspaceAtom);
   const [, addFileToWorkspace] = useAtom(addFileToWorkspaceAtom);
   
-  // References for Monaco
-  const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
-  const monacoRef = useRef<typeof import("monaco-editor") | null>(null);
+  // References for Monaco - Use non-null assertion to satisfy TypeScript
+  const editorRef = useRef<editor.IStandaloneCodeEditor>(null as unknown as editor.IStandaloneCodeEditor);
+  const monacoRef = useRef<typeof import("monaco-editor")>(null as unknown as typeof import("monaco-editor"));
   
   const [allFilesWithPendingPatches] = useAtom(allFilesWithPendingPatchesAtom);
   const [allFilesBeforeApplyingPendingPatches] = useAtom(allFilesBeforeApplyingPendingPatchesAtom);
@@ -91,8 +91,8 @@ export const CodeEditor = React.memo(function CodeEditor({
   };
   
   // Handler when content changes
-  const handleContentChange = (content: string) => {
-    if (selectedFile) {
+  const handleContentChange = (content: string | undefined) => {
+    if (selectedFile && content !== undefined) {
       updateFileContent({
         ...selectedFile,
         content
@@ -108,7 +108,7 @@ export const CodeEditor = React.memo(function CodeEditor({
     inDiffMode,
     setInDiffMode
   } = useMonacoSingleInstance(
-    selectedFile,
+    selectedFile || null,
     editorRef,
     monacoRef,
     editorOptions,
@@ -169,7 +169,7 @@ export const CodeEditor = React.memo(function CodeEditor({
     if (selectedFile?.pendingPatch) {
       try {
         // Get the modified content from our pre-computed value
-        let updatedContent = modifiedContent;
+        const updatedContent = modifiedContent;
         
         if (selectedFile.id.startsWith('file-')) {
           // Create an updated file with pending patch cleared

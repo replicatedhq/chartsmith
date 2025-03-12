@@ -229,7 +229,7 @@ export function ChatMessage({
         )}
         
         {/* FALLBACK LOADING */}
-        {!message.response && !message.responsePlanId && !message.responseRenderId && !message.responseConversionId && (
+        {message && !message.response && !message.responsePlanId && !message.responseRenderId && !message.responseConversionId && (
           <LoadingSpinner message="generating response..." />
         )}
       </>

@@ -37,7 +37,7 @@ export async function createWorkspace(createdType: string, userId: string, creat
         id, initialRevisionNumber, userId, createdType]);
 
       // We'll enqueue rendering after the commit completes
-      let shouldEnqueueRender = true;
+      const shouldEnqueueRender = true;
 
       if (baseChart) {
         // Use the provided baseChart
@@ -880,7 +880,7 @@ export async function rollbackToRevision(workspaceId: string, revisionNumber: nu
     );
 
     let chatMessageId = "";
-    if (chatMessages.rowCount > 0) {
+    if (chatMessages?.rowCount && chatMessages.rowCount > 0) {
       chatMessageId = chatMessages.rows[0].id;
     }
 
