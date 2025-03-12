@@ -213,6 +213,27 @@ func EnqueueRenderWorkspaceForRevision(ctx context.Context, workspaceID string, 
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
 
+	// First check if we already have a render job associated with this chat message
+	// This prevents duplicate renders for the same chat message
+	if chatMessageID != "" {
+		query := `SELECT COUNT(*) FROM workspace_chat 
+			WHERE id = $1 AND response_render_id IS NOT NULL`
+		var chatCount int
+		err = conn.QueryRow(ctx, query, chatMessageID).Scan(&chatCount)
+		if err != nil {
+			return fmt.Errorf("failed to check for existing render job on chat message: %w", err)
+		}
+
+		// Skip if this chat message already has a render job
+		if chatCount > 0 {
+			logger.Info("Chat message already has a render job, skipping",
+				zap.String("chatMessageID", chatMessageID),
+				zap.String("workspaceID", workspaceID),
+				zap.Int("revisionNumber", revisionNumber))
+			return nil
+		}
+	}
+
 	// Check if there's already a render job in progress for this revision
 	query := `SELECT COUNT(*) FROM workspace_rendered
 	         WHERE workspace_id = $1 AND revision_number = $2 AND completed_at IS NULL`
@@ -224,6 +245,9 @@ func EnqueueRenderWorkspaceForRevision(ctx context.Context, workspaceID string, 
 
 	// Skip if there's already a render job in progress
 	if count > 0 {
+		logger.Info("Render job already in progress for this revision, skipping",
+			zap.String("workspaceID", workspaceID),
+			zap.Int("revisionNumber", revisionNumber))
 		return nil
 	}
 
