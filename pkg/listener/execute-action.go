@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/replicatedhq/chartsmith/pkg/llm"
@@ -236,6 +235,11 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 				return fmt.Errorf("failed to set plan status: %w", err)
 			}
 
+			// Mark the revision as complete
+			if err := workspace.SetRevisionComplete(ctx, finalUpdatePlan.WorkspaceID, w.CurrentRevision); err != nil {
+				return fmt.Errorf("failed to mark revision as complete: %w", err)
+			}
+
 			if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
 				return fmt.Errorf("failed to send plan update: %w", err)
 			}
@@ -244,24 +248,29 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 			if err := workspace.NotifyWorkerToCaptureEmbeddings(ctx, finalUpdatePlan.WorkspaceID, w.CurrentRevision); err != nil {
 				return fmt.Errorf("failed to notify worker to capture embeddings: %w", err)
 			}
-			
-			// Get the chat message associated with this plan
-			chatMessageID := finalUpdatePlan.ChatMessageIDs[len(finalUpdatePlan.ChatMessageIDs)-1] // Last message in the plan
-			
-			// Create a render job for the completed revision and associate it with the chat message
-			if err := workspace.EnqueueRenderWorkspaceForRevision(ctx, finalUpdatePlan.WorkspaceID, w.CurrentRevision, chatMessageID); err != nil {
-				return fmt.Errorf("failed to create render job for completed plan: %w", err)
+
+			// Get the LAST chat message associated with this plan
+			// This ensures we're associating the render with the most recent message
+			var chatMessageID string
+			if len(finalUpdatePlan.ChatMessageIDs) > 0 {
+				chatMessageID = finalUpdatePlan.ChatMessageIDs[len(finalUpdatePlan.ChatMessageIDs)-1]
+				
+				// Log the chat message we're associating the render job with
+				logger.Info("Associating render job with chat message", 
+					zap.String("chatMessageID", chatMessageID),
+					zap.String("planID", finalUpdatePlan.ID),
+					zap.Int("currentRevision", w.CurrentRevision))
+				
+				// Create a render job for the completed revision and associate it with the chat message
+				if err := workspace.EnqueueRenderWorkspaceForRevision(ctx, finalUpdatePlan.WorkspaceID, w.CurrentRevision, chatMessageID); err != nil {
+					return fmt.Errorf("failed to create render job for completed plan: %w", err)
+				}
+			} else {
+				logger.Warn("No chat messages found for plan, skipping render association",
+					zap.String("planID", finalUpdatePlan.ID))
 			}
 		}
 	}
 
 	return nil
-}
-
-func (l *Listener) handleCreateWorkspaceFromArchive(ctx context.Context, action *llm.CreateWorkspaceFromArchiveAction) error {
-	// Update to handle both types of archives
-	log.Printf("Creating workspace from archive: %s (type: %s)", action.ArchivePath, action.ArchiveType)
-
-	// Rest of the existing handling code...
-	return action.Execute(ctx)
 }

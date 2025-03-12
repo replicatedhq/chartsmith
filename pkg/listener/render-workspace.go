@@ -20,6 +20,7 @@ type renderWorkspacePayload struct {
 	ID            string `json:"id"`
 	WorkspaceID   string `json:"workspaceId"`
 	RevisionNumber int    `json:"revisionNumber"`
+	ChatMessageID string `json:"chatMessageId"` // Added to associate render with chat message
 }
 
 func handleRenderWorkspaceNotification(ctx context.Context, payload string) error {
@@ -35,8 +36,13 @@ func handleRenderWorkspaceNotification(ctx context.Context, payload string) erro
 	// Handle request from TypeScript side with workspaceId and revisionNumber
 	if p.ID == "" && p.WorkspaceID != "" && p.RevisionNumber > 0 {
 		// Create a new render job for this workspace/revision
-		emptyChat := "" // No chat message associated
-		if err := workspace.EnqueueRenderWorkspaceForRevision(ctx, p.WorkspaceID, p.RevisionNumber, emptyChat); err != nil {
+		chatMessageID := p.ChatMessageID // Use the provided chat message ID
+		logger.Info("Handling render request from TypeScript",
+			zap.String("workspaceID", p.WorkspaceID),
+			zap.Int("revisionNumber", p.RevisionNumber),
+			zap.String("chatMessageID", chatMessageID))
+		
+		if err := workspace.EnqueueRenderWorkspaceForRevision(ctx, p.WorkspaceID, p.RevisionNumber, chatMessageID); err != nil {
 			return fmt.Errorf("failed to enqueue render job from TS request: %w", err)
 		}
 		return nil

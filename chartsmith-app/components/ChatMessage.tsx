@@ -12,6 +12,7 @@ import { Terminal } from "@/components/Terminal";
 import { FeedbackModal } from "@/components/FeedbackModal";
 import { ConversionProgress } from "@/components/ConversionProgress";
 import { RollbackModal } from "@/components/RollbackModal";
+import { PlanChatMessage } from "@/components/PlanChatMessage";
 
 // Types
 import { Message } from "@/components/types";
@@ -147,83 +148,92 @@ export function ChatMessage({
     console.log("handleApplyChanges");
   }
 
-  const renderAssistantContent = () => {
-    if (!message) return null;
-
-    // Create an array of content elements to display
-    const contentElements = [];
-    
-    // Add markdown response if available
-    if (message.response) {
-      contentElements.push(
-        <div key="response" className="mb-4">
-          <ReactMarkdown>{message.response}</ReactMarkdown>
-        </div>
-      );
-    }
-
-    // Add rendered charts if available
-    if (message.responseRenderId) {
-      if (!render || !render.charts) {
-        contentElements.push(
-          <LoadingSpinner key="render-loading" message="Loading rendered content..." />
-        );
-      } else {
-        contentElements.push(
-          <div key="render" className="space-y-4 mt-4">
-            {contentElements.length > 0 && (
+  // Debug message IDs
+  console.log("Message IDs:", {
+    messageId,
+    responsePlanId: message?.responsePlanId,
+    responseRenderId: message?.responseRenderId
+  });
+  
+  // Create a pure sorted content component
+  // This ensures the order is always correct by hard-coding it
+  const SortedContent = () => {
+    return (
+      <>
+        {/* TEXT FIRST */}
+        {message?.response && (
+          <div className="mb-4">
+            <ReactMarkdown>{message.response}</ReactMarkdown>
+          </div>
+        )}
+        
+        {/* PLAN SECOND */}
+        {message?.responsePlanId && (
+          <div className="w-full mb-4">
+            {message.response && (
+              <div className="border-t border-gray-200 dark:border-dark-border/30 pt-4 mb-2">
+                <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">Plan:</div>
+              </div>
+            )}
+            <PlanChatMessage 
+              planId={message.responsePlanId} 
+              showActions={true}
+              showChatInput={false}
+              session={session}
+              messageId={messageId}
+            />
+          </div>
+        )}
+        
+        {/* RENDER THIRD */}
+        {message?.responseRenderId && (
+          <div className="space-y-4 mt-4">
+            {(message.response || message.responsePlanId) && (
               <div className="border-t border-gray-200 dark:border-dark-border/30 pt-4 mb-2">
                 <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">Rendered Charts:</div>
               </div>
             )}
-            {render.charts.map((chart, index) => (
-              <Terminal
-                key={`${messageId}-${render.id}-${chart.id}-${index}`}
-                data-testid="chart-terminal"
-                chart={chart}
-                depUpdateCommandStreamed={chart.depUpdateCommand}
-                depUpdateStderrStreamed={chart.depUpdateStderr}
-                depUpdateStdoutStreamed={chart.depUpdateStdout}
-                helmTemplateCommandStreamed={chart.helmTemplateCommand}
-                helmTemplateStderrStreamed={chart.helmTemplateStderr}
-              />
-            ))}
+            {render?.charts ? (
+              render.charts.map((chart, index) => (
+                <Terminal
+                  key={`${messageId}-${render.id}-${chart.id}-${index}`}
+                  data-testid="chart-terminal"
+                  chart={chart}
+                  depUpdateCommandStreamed={chart.depUpdateCommand}
+                  depUpdateStderrStreamed={chart.depUpdateStderr}
+                  depUpdateStdoutStreamed={chart.depUpdateStdout}
+                  helmTemplateCommandStreamed={chart.helmTemplateCommand}
+                  helmTemplateStderrStreamed={chart.helmTemplateStderr}
+                />
+              ))
+            ) : (
+              <LoadingSpinner message="Loading rendered content..." />
+            )}
           </div>
-        );
-      }
-    }
-
-    // Add conversion status if available
-    if (message.responseConversionId) {
-      if (!conversion) {
-        contentElements.push(
-          <LoadingSpinner key="conversion-loading" message="Loading conversion status..." />
-        );
-      } else {
-        contentElements.push(
-          <div key="conversion" className="mt-4">
-            {contentElements.length > 0 && (
+        )}
+        
+        {/* CONVERSION FOURTH */}
+        {message?.responseConversionId && (
+          <div className="mt-4">
+            {(message.response || message.responsePlanId || message.responseRenderId) && (
               <div className="border-t border-gray-200 dark:border-dark-border/30 pt-4 mb-2">
                 <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">Conversion Progress:</div>
               </div>
             )}
-            <ConversionProgress conversionId={message.responseConversionId} />
+            {conversion ? (
+              <ConversionProgress conversionId={message.responseConversionId} />
+            ) : (
+              <LoadingSpinner message="Loading conversion status..." />
+            )}
           </div>
-        );
-      }
-    }
-
-    // If we have content, return it
-    if (contentElements.length > 0) {
-      return <>{contentElements}</>;
-    }
-
-    // Show generating response status if there's no content yet
-    if (!message.responsePlanId) {
-      return <LoadingSpinner message="generating response..." />;
-    }
-
-    return null;
+        )}
+        
+        {/* FALLBACK LOADING */}
+        {!message.response && !message.responsePlanId && !message.responseRenderId && !message.responseConversionId && (
+          <LoadingSpinner message="generating response..." />
+        )}
+      </>
+    );
   };
 
   if (!message || !workspace) return null;
@@ -273,12 +283,13 @@ export function ChatMessage({
       </div>
 
       {/* Assistant Message */}
-      {(message.response || (message.isIntentComplete && !message.responsePlanId)) && (
+      {(message.response || message.responsePlanId || message.responseRenderId || message.responseConversionId || (message.isIntentComplete && !message.responsePlanId)) && (
         <div className="px-2 py-1" data-testid="assistant-message">
           <div className={`p-3 rounded-lg ${theme === "dark" ? "bg-dark-border/40" : "bg-gray-100"} rounded-tl-sm w-full`}>
             <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"} mb-1`}>ChartSmith</div>
             <div className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} ${message.isIgnored ? "opacity-50 line-through" : ""} text-[12px] markdown-content`}>
-              {renderAssistantContent()}
+              {/* Use our custom component that enforces order */}
+              <SortedContent />
 
               {/* Rollback link - only show if:
                  1. It has a rollback revision number

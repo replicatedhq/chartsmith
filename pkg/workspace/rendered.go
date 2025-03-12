@@ -6,9 +6,11 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/replicatedhq/chartsmith/pkg/logger"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 	"github.com/replicatedhq/chartsmith/pkg/workspace/types"
 	"github.com/tuvistavie/securerandom"
+	"go.uber.org/zap"
 )
 
 func FinishRendered(ctx context.Context, id string) error {
@@ -196,6 +198,12 @@ func SetRenderedChartHelmTemplateStderr(ctx context.Context, renderedChartID str
 }
 
 func EnqueueRenderWorkspaceForRevision(ctx context.Context, workspaceID string, revisionNumber int, chatMessageID string) error {
+	logger.Info("EnqueueRenderWorkspaceForRevision",
+		zap.String("workspaceID", workspaceID),
+		zap.Int("revisionNumber", revisionNumber),
+		zap.String("chatMessageID", chatMessageID),
+	)
+
 	// Get workspace to retrieve charts
 	w, err := GetWorkspace(ctx, workspaceID)
 	if err != nil {
@@ -206,7 +214,7 @@ func EnqueueRenderWorkspaceForRevision(ctx context.Context, workspaceID string, 
 	defer conn.Release()
 
 	// Check if there's already a render job in progress for this revision
-	query := `SELECT COUNT(*) FROM workspace_rendered 
+	query := `SELECT COUNT(*) FROM workspace_rendered
 	         WHERE workspace_id = $1 AND revision_number = $2 AND completed_at IS NULL`
 	var count int
 	err = conn.QueryRow(ctx, query, workspaceID, revisionNumber).Scan(&count)

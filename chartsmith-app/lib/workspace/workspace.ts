@@ -108,7 +108,18 @@ export async function createWorkspace(createdType: string, userId: string, creat
 
       // Enqueue a render job for the initial revision
       if (shouldEnqueueRender) {
-        await renderWorkspace(id, chatMessage.id, initialRevisionNumber);
+        // Create a system chat message to associate with the render
+        const systemChatMessageId = srs.default({ length: 12, alphanumeric: true });
+        await client.query(`
+          INSERT INTO workspace_chat (
+            id, workspace_id, created_at, sent_by, prompt, response,
+            revision_number, is_canceled, is_intent_complete
+          ) VALUES ($1, $2, now(), $3, $4, $5, $6, false, true)`,
+          [systemChatMessageId, id, userId, "Initialize workspace", "Workspace initialized", initialRevisionNumber]
+        );
+        
+        // Enqueue the render and associate it with the system chat message
+        await renderWorkspace(id, systemChatMessageId, initialRevisionNumber);
       }
     } catch (err) {
       // Rollback transaction on error
@@ -153,6 +164,18 @@ export async function createChatMessage(userId: string, workspaceId: string, par
     const client = getDB(await getParam("DB_URI"));
     const chatMessageId = srs.default({ length: 12, alphanumeric: true });
 
+    // Get the current revision number for this workspace
+    const workspaceResult = await client.query(
+      `SELECT current_revision_number FROM workspace WHERE id = $1`,
+      [workspaceId]
+    );
+    
+    if (workspaceResult.rows.length === 0) {
+      throw new Error(`Workspace not found: ${workspaceId}`);
+    }
+    
+    const currentRevisionNumber = workspaceResult.rows[0].current_revision_number;
+    
     const query = `
       INSERT INTO workspace_chat (
         id,
@@ -177,8 +200,8 @@ export async function createChatMessage(userId: string, workspaceId: string, par
         response_rollback_to_revision_number
       )
       VALUES (
-        $1, $2, now(), $3, $4, $5, 0, false,
-        $6, $7, $8, false, false, false, $9, $10, null, null, null, $11
+        $1, $2, now(), $3, $4, $5, $6, false,
+        $7, $8, $9, false, false, false, $10, $11, null, null, null, $12
       )`;
 
     const values = [
@@ -187,6 +210,7 @@ export async function createChatMessage(userId: string, workspaceId: string, par
       userId,
       params.prompt,
       params.response,
+      currentRevisionNumber, // Use the current revision number instead of hardcoded 0
       params.knownIntent ? true : false,
       params.knownIntent === ChatMessageIntent.NON_PLAN,
       params.knownIntent === ChatMessageIntent.PLAN,
@@ -857,10 +881,24 @@ export async function rollbackToRevision(workspaceId: string, revisionNumber: nu
 
     await db.query('COMMIT');
 
+    // Find the chat message that initiated the rollback to associate it with the render
+    const chatMessages = await db.query(`
+      SELECT id FROM workspace_chat 
+      WHERE workspace_id = $1 AND response_rollback_to_revision_number = $2
+      ORDER BY created_at DESC LIMIT 1`,
+      [workspaceId, revisionNumber]
+    );
+    
+    let chatMessageId = "";
+    if (chatMessages.rowCount > 0) {
+      chatMessageId = chatMessages.rows[0].id;
+    }
+    
     // After successful rollback, enqueue a render job for the revision we rolled back to
-    await enqueueWork("render_workspace", {
+    await enqueueWork("render_workspace", { 
       workspaceId: workspaceId,
-      revisionNumber: revisionNumber
+      revisionNumber: revisionNumber,
+      chatMessageId: chatMessageId // Associate with the rollback chat message
     });
   } catch (err) {
     await db.query('ROLLBACK');
@@ -973,6 +1011,20 @@ export async function createRevision(plan: Plan, userID: string): Promise<number
         ]
       );
     }
+
+    // Update any chat messages that were created under the previous revision to be associated with the new revision
+    // This ensures that chat messages created while a plan was executing are properly associated with the revision being created
+    await db.query(`
+      UPDATE workspace_chat 
+      SET revision_number = $1
+      WHERE workspace_id = $2 
+        AND revision_number = $3
+        AND created_at > (
+          SELECT created_at 
+          FROM workspace_revision 
+          WHERE workspace_id = $2 AND revision_number = $3
+        )
+    `, [newRevisionNumber, plan.workspaceId, previousRevisionNumber]);
 
     // update the workspace to make this the current revision
     await db.query(`UPDATE workspace SET current_revision_number = $1 WHERE id = $2`, [newRevisionNumber, plan.workspaceId]);

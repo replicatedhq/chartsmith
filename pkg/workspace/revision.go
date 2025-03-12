@@ -189,9 +189,15 @@ func SetRevisionComplete(ctx context.Context, workspaceID string, revisionNumber
 		return err
 	}
 
+	// get the last chat message id for this revision
+	chatMessageID := ""
+	err = conn.QueryRow(ctx, `SELECT id FROM workspace_chat WHERE workspace_id = $1 AND revision_number = $2 ORDER BY created_at DESC LIMIT 1`,
+		workspaceID, revisionNumber).Scan(&chatMessageID)
+	if err != nil {
+		return err
+	}
 	// Create a render job for the revision
-	chatID := "" // Empty chat ID as this is triggered by system, not a chat message
-	if err := EnqueueRenderWorkspaceForRevision(ctx, workspaceID, revisionNumber, chatID); err != nil {
+	if err := EnqueueRenderWorkspaceForRevision(ctx, workspaceID, revisionNumber, chatMessageID); err != nil {
 		return err
 	}
 
