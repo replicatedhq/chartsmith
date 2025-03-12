@@ -244,6 +244,14 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 			if err := workspace.NotifyWorkerToCaptureEmbeddings(ctx, finalUpdatePlan.WorkspaceID, w.CurrentRevision); err != nil {
 				return fmt.Errorf("failed to notify worker to capture embeddings: %w", err)
 			}
+			
+			// Get the chat message associated with this plan
+			chatMessageID := finalUpdatePlan.ChatMessageIDs[len(finalUpdatePlan.ChatMessageIDs)-1] // Last message in the plan
+			
+			// Create a render job for the completed revision and associate it with the chat message
+			if err := workspace.EnqueueRenderWorkspaceForRevision(ctx, finalUpdatePlan.WorkspaceID, w.CurrentRevision, chatMessageID); err != nil {
+				return fmt.Errorf("failed to create render job for completed plan: %w", err)
+			}
 		}
 	}
 

@@ -352,6 +352,12 @@ func SetCurrentRevision(ctx context.Context, tx pgx.Tx, workspace *types.Workspa
 		return nil, fmt.Errorf("error notifying worker to capture embeddings: %w", err)
 	}
 
+	// Create a render job for the revision that was just marked as complete and current
+	chatID := "" // Empty chat ID as this is triggered by system, not a chat message
+	if err := EnqueueRenderWorkspaceForRevision(ctx, workspace.ID, revision, chatID); err != nil {
+		return nil, fmt.Errorf("error creating render job for completed revision: %w", err)
+	}
+
 	return GetWorkspace(ctx, workspace.ID)
 }
 

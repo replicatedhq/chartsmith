@@ -150,44 +150,75 @@ export function ChatMessage({
   const renderAssistantContent = () => {
     if (!message) return null;
 
-    // Show rendered charts
-    if (message.responseRenderId) {
-      if (!render || !render.charts) {
-        return <LoadingSpinner message="Loading rendered content..." />;
-      }
-      
-      return (
-        <div className="space-y-4">
-          {render.charts.map((chart, index) => (
-            <Terminal
-              key={`${messageId}-${render.id}-${chart.id}-${index}`}
-              data-testid="chart-terminal"
-              chart={chart}
-              depUpdateCommandStreamed={chart.depUpdateCommand}
-              depUpdateStderrStreamed={chart.depUpdateStderr}
-              depUpdateStdoutStreamed={chart.depUpdateStdout}
-              helmTemplateCommandStreamed={chart.helmTemplateCommand}
-              helmTemplateStderrStreamed={chart.helmTemplateStderr}
-            />
-          ))}
+    // Create an array of content elements to display
+    const contentElements = [];
+    
+    // Add markdown response if available
+    if (message.response) {
+      contentElements.push(
+        <div key="response" className="mb-4">
+          <ReactMarkdown>{message.response}</ReactMarkdown>
         </div>
       );
     }
 
-    // Show conversion status
+    // Add rendered charts if available
+    if (message.responseRenderId) {
+      if (!render || !render.charts) {
+        contentElements.push(
+          <LoadingSpinner key="render-loading" message="Loading rendered content..." />
+        );
+      } else {
+        contentElements.push(
+          <div key="render" className="space-y-4 mt-4">
+            {contentElements.length > 0 && (
+              <div className="border-t border-gray-200 dark:border-dark-border/30 pt-4 mb-2">
+                <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">Rendered Charts:</div>
+              </div>
+            )}
+            {render.charts.map((chart, index) => (
+              <Terminal
+                key={`${messageId}-${render.id}-${chart.id}-${index}`}
+                data-testid="chart-terminal"
+                chart={chart}
+                depUpdateCommandStreamed={chart.depUpdateCommand}
+                depUpdateStderrStreamed={chart.depUpdateStderr}
+                depUpdateStdoutStreamed={chart.depUpdateStdout}
+                helmTemplateCommandStreamed={chart.helmTemplateCommand}
+                helmTemplateStderrStreamed={chart.helmTemplateStderr}
+              />
+            ))}
+          </div>
+        );
+      }
+    }
+
+    // Add conversion status if available
     if (message.responseConversionId) {
       if (!conversion) {
-        return <LoadingSpinner message="Loading conversion status..." />;
+        contentElements.push(
+          <LoadingSpinner key="conversion-loading" message="Loading conversion status..." />
+        );
+      } else {
+        contentElements.push(
+          <div key="conversion" className="mt-4">
+            {contentElements.length > 0 && (
+              <div className="border-t border-gray-200 dark:border-dark-border/30 pt-4 mb-2">
+                <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">Conversion Progress:</div>
+              </div>
+            )}
+            <ConversionProgress conversionId={message.responseConversionId} />
+          </div>
+        );
       }
-      return <ConversionProgress conversionId={message.responseConversionId} />;
     }
 
-    // Show markdown response
-    if (message.response) {
-      return <ReactMarkdown>{message.response}</ReactMarkdown>;
+    // If we have content, return it
+    if (contentElements.length > 0) {
+      return <>{contentElements}</>;
     }
 
-    // Show generating response status
+    // Show generating response status if there's no content yet
     if (!message.responsePlanId) {
       return <LoadingSpinner message="generating response..." />;
     }

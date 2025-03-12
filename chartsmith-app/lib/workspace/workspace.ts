@@ -8,13 +8,8 @@ import { enqueueWork } from "../utils/queue";
 
 /**
  * Creates a new workspace with initialized files, charts, and content
- *
- * @param createdType - The creation method (currently only "prompt" is supported)
- * @param userId - ID of the user creating the workspace
- * @returns A Workspace object containing the new workspace's basic info
- * @throws Will throw an error if database operations fail
  */
-export async function createWorkspace(createdType: string, userId: string, baseChart?: Chart, looseFiles?: WorkspaceFile[]): Promise<Workspace> {
+export async function createWorkspace(createdType: string, userId: string, createChartMessageParams: CreateChatMessageParams, baseChart?: Chart, looseFiles?: WorkspaceFile[]): Promise<Workspace> {
   logger.info("Creating new workspace", { createdType, userId });
   try {
     const id = srs.default({ length: 12, alphanumeric: true });
@@ -40,6 +35,9 @@ export async function createWorkspace(createdType: string, userId: string, baseC
 
       await client.query(`INSERT INTO workspace_revision (workspace_id, revision_number, created_at, created_by_user_id, created_type, is_complete, is_rendered) VALUES ($1, $2, now(), $3, $4, true, false)`, [
         id, initialRevisionNumber, userId, createdType]);
+
+      // We'll enqueue rendering after the commit completes
+      let shouldEnqueueRender = true;
 
       if (baseChart) {
         // Use the provided baseChart
@@ -96,6 +94,9 @@ export async function createWorkspace(createdType: string, userId: string, baseC
 
       await client.query("COMMIT");
 
+      // create the chat message
+      const chatMessage = await createChatMessage(userId, id, createChartMessageParams);
+
       // now that that's commited, let's get all of the file ids, and notify the worker so that we capture embeddings
       const files = await listFilesForWorkspace(id, initialRevisionNumber);
       for (const file of files) {
@@ -103,6 +104,11 @@ export async function createWorkspace(createdType: string, userId: string, baseC
           fileId: file.id,
           revision: initialRevisionNumber,
         });
+      }
+
+      // Enqueue a render job for the initial revision
+      if (shouldEnqueueRender) {
+        await renderWorkspace(id, chatMessage.id, initialRevisionNumber);
       }
     } catch (err) {
       // Rollback transaction on error
@@ -850,6 +856,12 @@ export async function rollbackToRevision(workspaceId: string, revisionNumber: nu
 
 
     await db.query('COMMIT');
+
+    // After successful rollback, enqueue a render job for the revision we rolled back to
+    await enqueueWork("render_workspace", {
+      workspaceId: workspaceId,
+      revisionNumber: revisionNumber
+    });
   } catch (err) {
     await db.query('ROLLBACK');
     throw err;

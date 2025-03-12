@@ -195,7 +195,8 @@ func SetRenderedChartHelmTemplateStderr(ctx context.Context, renderedChartID str
 	return nil
 }
 
-func EnqueueRenderWorkspace(ctx context.Context, workspaceID string, chatMessageID string) error {
+func EnqueueRenderWorkspaceForRevision(ctx context.Context, workspaceID string, revisionNumber int, chatMessageID string) error {
+	// Get workspace to retrieve charts
 	w, err := GetWorkspace(ctx, workspaceID)
 	if err != nil {
 		return fmt.Errorf("failed to get workspace: %w", err)
@@ -203,6 +204,20 @@ func EnqueueRenderWorkspace(ctx context.Context, workspaceID string, chatMessage
 
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
+
+	// Check if there's already a render job in progress for this revision
+	query := `SELECT COUNT(*) FROM workspace_rendered 
+	         WHERE workspace_id = $1 AND revision_number = $2 AND completed_at IS NULL`
+	var count int
+	err = conn.QueryRow(ctx, query, workspaceID, revisionNumber).Scan(&count)
+	if err != nil {
+		return fmt.Errorf("failed to check for existing render jobs: %w", err)
+	}
+
+	// Skip if there's already a render job in progress
+	if count > 0 {
+		return nil
+	}
 
 	id, err := securerandom.Hex(6)
 	if err != nil {
@@ -215,8 +230,8 @@ func EnqueueRenderWorkspace(ctx context.Context, workspaceID string, chatMessage
 	}
 	defer tx.Rollback(ctx)
 
-	query := `INSERT INTO workspace_rendered (id, workspace_id, revision_number, created_at) VALUES ($1, $2, $3, now())`
-	_, err = tx.Exec(ctx, query, id, workspaceID, w.CurrentRevision)
+	query = `INSERT INTO workspace_rendered (id, workspace_id, revision_number, created_at) VALUES ($1, $2, $3, now())`
+	_, err = tx.Exec(ctx, query, id, workspaceID, revisionNumber)
 	if err != nil {
 		return fmt.Errorf("failed to enqueue render workspace: %w", err)
 	}
@@ -238,10 +253,13 @@ func EnqueueRenderWorkspace(ctx context.Context, workspaceID string, chatMessage
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	query = `UPDATE workspace_chat SET response_render_id = $1 WHERE id = $2`
-	_, err = conn.Exec(ctx, query, id, chatMessageID)
-	if err != nil {
-		return fmt.Errorf("failed to update chat message: %w", err)
+	// Only update chat message if an ID was provided (not system-triggered)
+	if chatMessageID != "" {
+		query = `UPDATE workspace_chat SET response_render_id = $1 WHERE id = $2`
+		_, err = conn.Exec(ctx, query, id, chatMessageID)
+		if err != nil {
+			return fmt.Errorf("failed to update chat message: %w", err)
+		}
 	}
 
 	if err := persistence.EnqueueWork(ctx, "render_workspace", map[string]interface{}{
@@ -251,4 +269,13 @@ func EnqueueRenderWorkspace(ctx context.Context, workspaceID string, chatMessage
 	}
 
 	return nil
+}
+
+func EnqueueRenderWorkspace(ctx context.Context, workspaceID string, chatMessageID string) error {
+	w, err := GetWorkspace(ctx, workspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to get workspace: %w", err)
+	}
+
+	return EnqueueRenderWorkspaceForRevision(ctx, workspaceID, w.CurrentRevision, chatMessageID)
 }

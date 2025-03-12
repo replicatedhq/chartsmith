@@ -3,7 +3,7 @@
 import { Session } from "@/lib/types/session";
 import { Workspace } from "@/lib/types/workspace";
 import { logger } from "@/lib/utils/logger";
-import { ChatMessageIntent, createChatMessage, createWorkspace } from "../workspace";
+import { ChatMessageIntent, createChatMessage, CreateChatMessageParams, createWorkspace } from "../workspace";
 import { getChartFromBytes, getFilesFromBytes } from "../archive";
 
 export async function createWorkspaceFromArchiveAction(session: Session, formData: FormData, archiveType: 'helm' | 'k8s'): Promise<Workspace> {
@@ -19,27 +19,26 @@ export async function createWorkspaceFromArchiveAction(session: Session, formDat
   if (archiveType === 'helm') {
     const baseChart = await getChartFromBytes(bytes, file.name);
 
-    const w: Workspace = await createWorkspace("archive", session.user.id, baseChart);
-
-    await createChatMessage(session.user.id, w.id, {
+    const createChartMessageParams: CreateChatMessageParams = {
       prompt: `Import the Helm chart from the uploaded file named ${file.name}`,
       response: `Got it. I found a ${baseChart.name} chart in the ${file.name} file. What's next?`,
       knownIntent: ChatMessageIntent.NON_PLAN,
       responseRollbackToRevisionNumber: 1,
-    });
+    }
+    const w: Workspace = await createWorkspace("archive", session.user.id, createChartMessageParams, baseChart);
 
     return w;
   } else if (archiveType === 'k8s') {
     const looseFiles = await getFilesFromBytes(bytes, file.name);
-    const w: Workspace = await createWorkspace("archive", session.user.id);
 
-    await createChatMessage(session.user.id, w.id, {
+    const createChartMessageParams: CreateChatMessageParams = {
       prompt: `Create a Helm chart from the Kubernetes manifests in the uploaded file named ${file.name}`,
       response: `I'll create a Helm chart from the Kubernetes manifests in the uploaded file named ${file.name}`,
       knownIntent: ChatMessageIntent.CONVERT_K8S_TO_HELM,
       additionalFiles: looseFiles,
       responseRollbackToRevisionNumber: 1,
-    });
+    }
+    const w: Workspace = await createWorkspace("archive", session.user.id, createChartMessageParams);
 
     return w;
   }

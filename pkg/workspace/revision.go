@@ -153,3 +153,47 @@ func CreateRevision(ctx context.Context, workspaceID string, planID *string, use
 	}
 	return *revision, nil
 }
+
+func SetRevisionComplete(ctx context.Context, workspaceID string, revisionNumber int) error {
+	logger.Info("Setting revision complete",
+		zap.String("workspace_id", workspaceID),
+		zap.Int("revision_number", revisionNumber))
+
+	conn := persistence.MustGetPooledPostgresSession()
+	defer conn.Release()
+
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	// Check if revision is already complete
+	var isComplete bool
+	err = tx.QueryRow(ctx, `SELECT is_complete FROM workspace_revision WHERE workspace_id = $1 AND revision_number = $2`,
+		workspaceID, revisionNumber).Scan(&isComplete)
+	if err != nil {
+		return err
+	}
+
+	if !isComplete {
+		// Update the revision to be complete
+		_, err = tx.Exec(ctx, `UPDATE workspace_revision SET is_complete = true WHERE workspace_id = $1 AND revision_number = $2`,
+			workspaceID, revisionNumber)
+		if err != nil {
+			return err
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+
+	// Create a render job for the revision
+	chatID := "" // Empty chat ID as this is triggered by system, not a chat message
+	if err := EnqueueRenderWorkspaceForRevision(ctx, workspaceID, revisionNumber, chatID); err != nil {
+		return err
+	}
+
+	return nil
+}
