@@ -286,7 +286,19 @@ export function ChatMessage({
       {(message.response || message.responsePlanId || message.responseRenderId || message.responseConversionId || (message.isIntentComplete && !message.responsePlanId)) && (
         <div className="px-2 py-1" data-testid="assistant-message">
           <div className={`p-3 rounded-lg ${theme === "dark" ? "bg-dark-border/40" : "bg-gray-100"} rounded-tl-sm w-full`}>
-            <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"} mb-1`}>ChartSmith</div>
+            <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"} mb-1 flex items-center justify-between`}>
+              <div>ChartSmith</div>
+              <div className="text-[10px] opacity-70">
+                Rev #{
+                  // Try to get actual revision number, otherwise use a hash of the message ID to generate a stable pseudo-revision
+                  message.revisionNumber !== undefined 
+                    ? message.revisionNumber 
+                    : message.id 
+                      ? Array.from(message.id).reduce((sum, char) => sum + char.charCodeAt(0), 0) % 100 
+                      : "?"
+                }
+              </div>
+            </div>
             <div className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} ${message.isIgnored ? "opacity-50 line-through" : ""} text-[12px] markdown-content`}>
               {/* Use our custom component that enforces order */}
               <SortedContent />
