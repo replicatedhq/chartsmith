@@ -743,6 +743,7 @@ export const CodeEditor = React.memo(function CodeEditor({
               language={language}
               original={original}
               modified={modifiedContent}
+              loading={null} // Disable the loading message
               theme={theme === "light" ? "vs" : "vs-dark"}
               options={{
                 ...editorOptions,
@@ -777,6 +778,7 @@ export const CodeEditor = React.memo(function CodeEditor({
               defaultLanguage={language}
               language={language}
               value={selectedFile?.content || ""}
+              loading={null} // Disable the loading message
               onChange={handleContentChange}
               theme={theme === "light" ? "vs" : "vs-dark"}
               options={editorOptions}

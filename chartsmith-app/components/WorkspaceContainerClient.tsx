@@ -160,6 +160,7 @@ export function WorkspaceContainerClient({
                             defaultLanguage="yaml"
                             language="yaml"
                             value={renderedContent}
+                            loading={null} // Disable the loading message
                             theme={resolvedTheme === "dark" ? "vs-dark" : "vs"}
                             options={{
                               readOnly: true,
