@@ -73,6 +73,7 @@ export function useCentrifugo({
     if (!data.chatMessage) return;
 
     const chatMessage = data.chatMessage;
+    console.log("Received chat message update:", chatMessage);
     setMessages(prev => {
       const newMessages = [...prev];
       const index = newMessages.findIndex(m => m.id === chatMessage.id);
@@ -94,6 +95,7 @@ export function useCentrifugo({
         responseRenderId: chatMessage.responseRenderId,
         responsePlanId: chatMessage.responsePlanId,
         responseRollbackToRevisionNumber: chatMessage.responseRollbackToRevisionNumber,
+        revisionNumber: chatMessage.revisionNumber,
       };
 
       if (index >= 0) {

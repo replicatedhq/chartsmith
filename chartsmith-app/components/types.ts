@@ -40,6 +40,7 @@ export interface Message {
   responseConversionId?: string;
   responseRollbackToRevisionNumber?: number;
   planId?: string;
+  revisionNumber?: number;
 }
 
 // Interface for raw message from server before normalization
@@ -128,6 +129,7 @@ export interface RawChatMessage {
   planId: string;
   userId: string;
   followupActions: RawFollowupAction[];
+  revisionNumber?: number;
 }
 
 export interface RawArtifact {
