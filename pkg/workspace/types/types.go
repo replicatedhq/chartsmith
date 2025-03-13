@@ -98,6 +98,7 @@ type Chat struct {
 	ResponsePlanID                   string           `json:"responsePlanId"`
 	ResponseConversionID             string           `json:"responseConversionId"`
 	ResponseRollbackToRevisionNumber *int             `json:"responseRollbackToRevisionNumber"`
+	RevisionNumber                   int              `json:"revisionNumber"`
 }
 
 type FollowupAction struct {

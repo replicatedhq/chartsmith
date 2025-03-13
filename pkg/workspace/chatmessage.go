@@ -30,7 +30,8 @@ func GetChatMessage(ctx context.Context, chatMessageId string) (*types.Chat, err
 		workspace_chat.response_render_id,
 		workspace_chat.response_plan_id,
 		workspace_chat.response_conversion_id,
-		workspace_chat.response_rollback_to_revision_number
+		workspace_chat.response_rollback_to_revision_number,
+		workspace_chat.revision_number
 	FROM
 		workspace_chat
 	WHERE
@@ -67,6 +68,7 @@ func GetChatMessage(ctx context.Context, chatMessageId string) (*types.Chat, err
 		&responsePlanID,
 		&responseConversionID,
 		&responseRollbackToRevisionNumber,
+		&chat.RevisionNumber,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to scan chat message: %w", err)
@@ -103,7 +105,7 @@ func ListChatMessagesForWorkspace(ctx context.Context, workspaceID string) ([]ty
 
 	query := `SELECT
 id, prompt, response, created_at,
-is_intent_complete, is_intent_conversational, is_intent_plan, is_intent_off_topic, is_intent_chart_developer, is_intent_chart_operator, is_intent_proceed
+is_intent_complete, is_intent_conversational, is_intent_plan, is_intent_off_topic, is_intent_chart_developer, is_intent_chart_operator, is_intent_proceed, revision_number
 FROM workspace_chat
 WHERE workspace_id = $1
 ORDER BY created_at DESC`

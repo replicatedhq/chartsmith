@@ -469,7 +469,8 @@ export async function getChatMessage(chatMessageId: string): Promise<ChatMessage
         response_render_id,
         response_plan_id,
         response_conversion_id,
-        response_rollback_to_revision_number
+        response_rollback_to_revision_number,
+        revision_number
       FROM workspace_chat
       WHERE id = $1`;
 
@@ -487,6 +488,7 @@ export async function getChatMessage(chatMessageId: string): Promise<ChatMessage
       responsePlanId: result.rows[0].response_plan_id,
       responseConversionId: result.rows[0].response_conversion_id,
       responseRollbackToRevisionNumber: result.rows[0].response_rollback_to_revision_number,
+      revisionNumber: result.rows[0].revision_number,
       isComplete: true
     };
 
