@@ -168,21 +168,45 @@ export const CodeEditor = React.memo(function CodeEditor({
   const handleAcceptThisFile = async () => {
     if (selectedFile?.pendingPatch) {
       try {
-        // Get the modified content from our pre-computed value
+        // Get the modified content from our pre-computed value and store it locally
+        // This ensures we have the value even if the editor is disposed during state updates
         const updatedContent = modifiedContent;
         
+        // First, immediately close the dropdown to prevent double-clicks
+        setAcceptDropdownOpen(false);
+        
+        // Safely dispose current model if it's a DiffEditor to prevent errors
+        try {
+          // Clear references to prevent attempts to use disposed objects
+          if (editorRef.current && monacoRef.current) {
+            const monaco = monacoRef.current;
+            const currentModel = editorRef.current.getModel();
+            
+            // If we're in diff mode, we need special handling
+            // We'll clear the editor but preserve our file data
+            if (selectedFile.pendingPatch) {
+              // Clear editor reference first to prevent UI interactions during update
+              editorRef.current = null as any;
+              
+              // Don't try to dispose the model here - it will happen during component re-render
+              // This avoids the InstantiationService errors
+            }
+          }
+        } catch (disposalError) {
+          console.warn("Ignoring Monaco disposal error:", disposalError);
+          // Continue with the update regardless - we'll recreate everything
+        }
+        
+        // Now handle the actual update logic
         if (selectedFile.id.startsWith('file-')) {
-          // Create an updated file with pending patch cleared
+          // For temporary files, handle update client-side
           const updatedFile = {
             ...selectedFile,
             content: updatedContent,
             pendingPatch: undefined
           };
           
-          // Update editor state
-          updateFileContent(updatedFile);
-          
-          // Update workspace state
+          // Update workspace state first, editor state will follow
           const updatedWorkspace = {
             ...workspace,
             files: workspace.files.map(f => 
@@ -197,15 +221,18 @@ export const CodeEditor = React.memo(function CodeEditor({
           };
           
           setWorkspace(updatedWorkspace);
+          
+          // Now update editor state, after workspace is updated
+          // This order matters to avoid race conditions
+          setTimeout(() => {
+            updateFileContent(updatedFile);
+          }, 0);
         } else {
           try {
-            // For permanent IDs, try to use the server action first
+            // For permanent IDs, use the server action
             const updatedFile = await acceptPatchAction(session, selectedFile.id, workspace.currentRevisionNumber);
             
-            // Update editor state
-            updateFileContent(updatedFile);
-            
-            // Update workspace state
+            // Update workspace state first
             const updatedWorkspace = {
               ...workspace,
               files: workspace.files.map(f =>
@@ -218,21 +245,24 @@ export const CodeEditor = React.memo(function CodeEditor({
                 )
               }))
             };
+            
             setWorkspace(updatedWorkspace);
+            
+            // Then update editor state with a delay to avoid race conditions
+            setTimeout(() => {
+              updateFileContent(updatedFile);
+            }, 0);
           } catch (serverError) {
             console.error("Server-side patch application failed, using client-side fallback:", serverError);
             
-            // If server action fails, fall back to client-side approach
+            // If server action fails, use client-side fallback
             const updatedFile = {
               ...selectedFile,
               content: updatedContent,
               pendingPatch: undefined
             };
             
-            // Update editor state
-            updateFileContent(updatedFile);
-            
-            // Update workspace state
+            // Update workspace state first
             const updatedWorkspace = {
               ...workspace,
               files: workspace.files.map(f =>
@@ -245,11 +275,15 @@ export const CodeEditor = React.memo(function CodeEditor({
                 )
               }))
             };
+            
             setWorkspace(updatedWorkspace);
+            
+            // Then update editor state with a delay
+            setTimeout(() => {
+              updateFileContent(updatedFile);
+            }, 0);
           }
         }
-        
-        setAcceptDropdownOpen(false);
       } catch (error) {
         console.error("Error accepting patch:", error);
         
@@ -260,8 +294,7 @@ export const CodeEditor = React.memo(function CodeEditor({
             pendingPatch: undefined
           };
           
-          updateFileContent(updatedFile);
-          
+          // Update workspace state first
           const updatedWorkspace = {
             ...workspace,
             files: workspace.files.map(f =>
@@ -274,62 +307,101 @@ export const CodeEditor = React.memo(function CodeEditor({
               )
             }))
           };
+          
           setWorkspace(updatedWorkspace);
+          
+          // Then update editor state with a delay
+          setTimeout(() => {
+            updateFileContent(updatedFile);
+          }, 0);
         } catch (fallbackError) {
           console.error("Even fallback failed:", fallbackError);
         }
         
+        // Make sure dropdown is closed
         setAcceptDropdownOpen(false);
       }
     }
   };
 
   const handleAcceptAllFiles = async () => {
-    const updatedFiles = await acceptAllPatchesAction(session, workspace.id, workspace.currentRevisionNumber);
-
-    // Update editor state for currently selected file if it was updated
-    if (selectedFile && updatedFiles.some(f => f.id === selectedFile.id)) {
-      const updatedFile = updatedFiles.find(f => f.id === selectedFile.id);
-      if (updatedFile) {
-        updateFileContent(updatedFile);
+    try {
+      // First, immediately close the dropdown to prevent double-clicks
+      setAcceptDropdownOpen(false);
+      
+      // Safely dispose the editor if in diff mode to prevent errors
+      try {
+        // Clear references to prevent attempts to use disposed objects
+        if (editorRef.current && selectedFile?.pendingPatch) {
+          // Clear editor reference first to prevent UI interactions during update
+          editorRef.current = null as any;
+        }
+      } catch (disposalError) {
+        console.warn("Ignoring Monaco disposal error:", disposalError);
       }
-    }
+      
+      // Now call the server action
+      const updatedFiles = await acceptAllPatchesAction(session, workspace.id, workspace.currentRevisionNumber);
 
-    // Update workspace state
-    const updatedWorkspace = {
-      ...workspace,
-      files: workspace.files.map(f => {
-        const updatedFile = updatedFiles.find(uf => uf.id === f.id);
-        return updatedFile || f;
-      }),
-      charts: workspace.charts.map(chart => ({
-        ...chart,
-        files: chart.files.map(f => {
+      // Update workspace state first
+      const updatedWorkspace = {
+        ...workspace,
+        files: workspace.files.map(f => {
           const updatedFile = updatedFiles.find(uf => uf.id === f.id);
           return updatedFile || f;
-        })
-      }))
-    };
-    setWorkspace(updatedWorkspace);
+        }),
+        charts: workspace.charts.map(chart => ({
+          ...chart,
+          files: chart.files.map(f => {
+            const updatedFile = updatedFiles.find(uf => uf.id === f.id);
+            return updatedFile || f;
+          })
+        }))
+      };
+      setWorkspace(updatedWorkspace);
 
-    setAcceptDropdownOpen(false);
+      // Update editor state with a slight delay to avoid race conditions
+      setTimeout(() => {
+        // Update editor state for currently selected file if it was updated
+        if (selectedFile && updatedFiles.some(f => f.id === selectedFile.id)) {
+          const updatedFile = updatedFiles.find(f => f.id === selectedFile.id);
+          if (updatedFile) {
+            updateFileContent(updatedFile);
+          }
+        }
+      }, 10);
+    } catch (error) {
+      console.error("Error accepting all patches:", error);
+      // Make sure dropdown is closed in case of error
+      setAcceptDropdownOpen(false);
+    }
   };
 
   const handleRejectThisFile = async () => {
     if (selectedFile?.pendingPatch) {
       try {
-        // For temporary IDs, just clear the pendingPatch client-side
+        // First, immediately close the dropdown to prevent double-clicks
+        setRejectDropdownOpen(false);
+        
+        // Safely dispose current model if it's a DiffEditor to prevent errors
+        try {
+          if (editorRef.current && selectedFile.pendingPatch) {
+            // Clear editor reference first to prevent UI interactions during update
+            editorRef.current = null as any;
+          }
+        } catch (disposalError) {
+          console.warn("Ignoring Monaco disposal error:", disposalError);
+        }
+        
+        // Now handle the actual rejection logic
         if (selectedFile.id.startsWith('file-')) {
-          // Create updated file with pendingPatch cleared
+          // For temporary IDs, just clear the pendingPatch client-side
           const updatedFile = {
             ...selectedFile,
             pendingPatch: undefined
           };
           
-          // Update editor state
-          updateFileContent(updatedFile);
-          
-          // Update workspace state
+          // Update workspace state first
           const updatedWorkspace = {
             ...workspace,
             files: workspace.files.map(f => 
@@ -344,6 +416,11 @@ export const CodeEditor = React.memo(function CodeEditor({
           };
           
           setWorkspace(updatedWorkspace);
+          
+          // Then update editor state with a delay
+          setTimeout(() => {
+            updateFileContent(updatedFile);
+          }, 10);
         } else {
           // For permanent IDs, use the server action
           await rejectPatchAction(session, selectedFile.id, workspace.currentRevisionNumber);
@@ -354,10 +431,7 @@ export const CodeEditor = React.memo(function CodeEditor({
             pendingPatch: undefined
           };
           
-          // Update editor state
-          updateFileContent(updatedFile);
-          
-          // Update workspace state
+          // Update workspace state first
           const updatedWorkspace = {
             ...workspace,
             files: workspace.files.map(f => 
@@ -372,6 +446,11 @@ export const CodeEditor = React.memo(function CodeEditor({
           };
           
           setWorkspace(updatedWorkspace);
+          
+          // Then update editor state with a delay
+          setTimeout(() => {
+            updateFileContent(updatedFile);
+          }, 10);
         }
       } catch (error) {
         console.error("Error rejecting patch:", error);
@@ -384,10 +463,7 @@ export const CodeEditor = React.memo(function CodeEditor({
             pendingPatch: undefined
           };
           
-          // Update editor state
-          updateFileContent(updatedFile);
-          
-          // Update workspace state
+          // Update workspace state first
           const updatedWorkspace = {
             ...workspace,
             files: workspace.files.map(f => 
@@ -402,18 +478,68 @@ export const CodeEditor = React.memo(function CodeEditor({
           };
           
           setWorkspace(updatedWorkspace);
+          
+          // Then update editor state with a delay
+          setTimeout(() => {
+            updateFileContent(updatedFile);
+          }, 10);
         } catch (clientError) {
           console.error("Failed to reject patch on client too:", clientError);
         }
       }
-      
-      setRejectDropdownOpen(false);
     }
   };
 
   const handleRejectAllFiles = async () => {
-    await rejectAllPatchesAction(session, workspace.id, workspace.currentRevisionNumber);
-    setRejectDropdownOpen(false);
+    try {
+      // First, immediately close the dropdown to prevent double-clicks
+      setRejectDropdownOpen(false);
+      
+      // Safely clear editor reference if in diff mode
+      try {
+        if (editorRef.current && selectedFile?.pendingPatch) {
+          editorRef.current = null as any;
+        }
+      } catch (disposalError) {
+        console.warn("Ignoring Monaco disposal error:", disposalError);
+      }
+      
+      // Now perform the server action
+      await rejectAllPatchesAction(session, workspace.id, workspace.currentRevisionNumber);
+      
+      // Update workspace with patches cleared - client-side update for responsive UI
+      if (workspace) {
+        const updatedWorkspace = {
+          ...workspace,
+          files: workspace.files.map(f => ({
+            ...f,
+            pendingPatch: undefined
+          })),
+          charts: workspace.charts.map(chart => ({
+            ...chart,
+            files: chart.files.map(f => ({
+              ...f,
+              pendingPatch: undefined
+            }))
+          }))
+        };
+        
+        // Update workspace state first
+        setWorkspace(updatedWorkspace);
+        
+        // Then update editor state if needed
+        if (selectedFile?.pendingPatch) {
+          setTimeout(() => {
+            updateFileContent({
+              ...selectedFile,
+              pendingPatch: undefined
+            });
+          }, 10);
+        }
+      }
+    } catch (error) {
+      console.error("Error rejecting all patches:", error);
+    }
   };
 
   const handlePrevDiff = () => {
