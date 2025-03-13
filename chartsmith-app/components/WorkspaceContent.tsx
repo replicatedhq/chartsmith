@@ -11,7 +11,6 @@ import { useCentrifugo } from "@/hooks/useCentrifugo";
 import { useCommandMenu } from '@/contexts/CommandMenuContext';
 
 // components
-import { PlanContent } from "@/components/PlanContent";
 import { EditorLayout } from "@/components/layout/EditorLayout";
 import { WorkspaceContainer } from "@/components/WorkspaceContainer";
 import { CommandMenuWrapper } from "@/components/CommandMenuWrapper";
@@ -100,7 +99,6 @@ export function WorkspaceContent({
 
   if (!session || !workspace) return null;
 
-  const isPlanOnlyView = !workspace?.currentRevisionNumber && !workspace?.incompleteRevisionNumber;
   return (
     <EditorLayout>
       <div className="flex w-full overflow-hidden relative">
@@ -109,15 +107,9 @@ export function WorkspaceContent({
           }`}>
           <div className={`${(!workspace?.currentRevisionNumber && !workspace?.incompleteRevisionNumber) || (workspace.currentRevisionNumber === 0 && !workspace.incompleteRevisionNumber) ? 'w-full max-w-3xl px-4' : 'w-[480px] h-full flex flex-col'}`}>
             <div className="flex-1 overflow-y-auto">
-              {isPlanOnlyView ? (
-                <PlanContent
-                  session={session}
-                />
-              ) : (
-                <ChatContainer
-                  session={session}
-                />
-              )}
+              <ChatContainer
+                session={session}
+              />
             </div>
           </div>
         </div>

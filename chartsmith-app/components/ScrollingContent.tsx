@@ -68,18 +68,15 @@ export function ScrollingContent({ children, forceScroll = false }: ScrollingCon
       // Scroll immediately
       scrollToBottom();
       
-      // Also try scrolling after a short delay to catch any content that's still loading
-      setTimeout(() => {
-        if (!isUserScrollingRef.current) {
-          scrollToBottom();
-        }
-      }, 50);
-      
-      setTimeout(() => {
-        if (!isUserScrollingRef.current) {
-          scrollToBottom();
-        }
-      }, 300);
+      // Try scrolling with multiple delays to handle dynamic content
+      // This helps ensure content is fully rendered before scrolling
+      [50, 200, 500, 1000].forEach(delay => {
+        setTimeout(() => {
+          if (!isUserScrollingRef.current) {
+            scrollToBottom();
+          }
+        }, delay);
+      });
     }
   }, [children, shouldAutoScroll, forceScroll]);
 

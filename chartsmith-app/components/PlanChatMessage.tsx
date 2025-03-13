@@ -32,6 +32,7 @@ interface PlanChatMessageProps {
   session?: Session;
   workspaceId?: string;
   messageId?: string;
+  messages?: Message[]; // Add messages prop
 }
 
 export function PlanChatMessage({
@@ -43,12 +44,21 @@ export function PlanChatMessage({
   onContentUpdate,
   session,
   messageId,
+  messages,
+  workspaceId,
 }: PlanChatMessageProps) {
   const { theme } = useTheme();
 
-  const [workspace, setWorkspace] = useAtom(workspaceAtom);
-  const [messages, setMessages] = useAtom(messagesAtom);
+  const [workspaceFromAtom, setWorkspace] = useAtom(workspaceAtom);
+  const [messagesFromAtom, setMessages] = useAtom(messagesAtom);
   const [, handlePlanUpdated] = useAtom(handlePlanUpdatedAtom);
+
+  // If workspaceId is provided, try to find the workspace in atom state
+  const workspaceToUse = workspaceId
+    ? workspaceFromAtom?.id === workspaceId ? workspaceFromAtom : undefined
+    : workspaceFromAtom;
+  // Use messages from props if provided, otherwise use from atom
+  const messagesToUse = messages || messagesFromAtom;
 
   // Fix: Use useAtom directly with planByIdAtom
   const [planGetter] = useAtom(planByIdAtom);
@@ -63,32 +73,23 @@ export function PlanChatMessage({
   const actionsRef = useRef<HTMLDivElement>(null);
   const proceedButtonRef = useRef<HTMLButtonElement>(null);
 
-  // Scroll when new actions are added or when expanded
-  useLayoutEffect(() => {
+  // Notify parent whenever important plan data changes
+  useEffect(() => {
     if (!plan) return;
-    if (plan.status === 'applying' && plan.actionFiles) {
-      // Immediate scroll for new actions
-      actionsRef.current?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'start'
-      });
-      // Notify parent that content has updated for global scrolling
-      onContentUpdate?.();
-    } else if (actionFilesExpanded) {
-      // Multiple delayed scrolls to ensure content is visible as it expands
-      const delays = [100, 200, 300];
-      delays.forEach(delay => {
-        setTimeout(() => {
-          actionsRef.current?.scrollIntoView({
-            behavior: 'smooth',
-            block: 'start'
-          });
-          // Notify parent that content has updated for global scrolling
-          onContentUpdate?.();
-        }, delay);
-      });
+
+    // Notify parent that content has updated for global scrolling
+    if (onContentUpdate) {
+      // Use a timeout to ensure the DOM has updated
+      setTimeout(() => {
+        onContentUpdate();
+      }, 100);
     }
-  }, [plan, actionFilesExpanded, onContentUpdate]);
+  }, [
+    plan?.status,
+    plan?.actionFiles?.length,
+    actionFilesExpanded,
+    onContentUpdate
+  ]);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -103,65 +104,48 @@ export function PlanChatMessage({
   useEffect(() => {
     adjustTextareaHeight();
   }, [chatInput]);
-  
+
   // We need to memoize this to avoid creating a new function on every render
   const callContentUpdate = useCallback(() => {
     if (onContentUpdate) onContentUpdate();
   }, [onContentUpdate]);
-  
+
   // Trigger scroll to bottom when plan updates - specifically for streaming content
   useEffect(() => {
     if (!plan) return;
-    
+
     // Only need to call once as this effect will re-run when the plan properties change
     // Let ScrollingContent handle the actual scrolling
     callContentUpdate();
-    
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    plan?.description, 
-    plan?.status, 
+    plan?.description,
+    plan?.status,
     plan?.actionFiles?.length,
     callContentUpdate,
     // Include plan in the deps array to fix the warning
     plan
   ]);
-  
-  // Special effect just for ensuring Proceed button is visible once plan is in review
-  useEffect(() => {
-    if (!plan || plan.status !== 'review') return;
-    
-    // Ensure proceed button is visible with multiple attempts
-    const delays = [500, 1000, 1500, 2000];
-    
-    delays.forEach(delay => {
-      setTimeout(() => {
-        // Check if proceed button is available (only in review status)
-        if (proceedButtonRef.current && plan.status === 'review') {
-          // Scroll the button into view
-          proceedButtonRef.current.scrollIntoView({
-            behavior: 'smooth',
-            block: 'center'
-          });
-          
-          // Notify parent that content has updated
-          callContentUpdate();
-        }
-      }, delay);
-    });
-    
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plan?.status === 'review']);
+
+  // We've consolidated all scroll notifications into a single useEffect above
+  // This effect is no longer needed and can be removed
 
   const handleIgnore = async () => {
     if (session && plan) {
-      await ignorePlanAction(session, plan.workspaceId, "");
-      onIgnore?.();
+      const wsId = workspaceId || plan.workspaceId;
+      if (wsId) {
+        await ignorePlanAction(session, wsId, "");
+        onIgnore?.();
+      }
     }
   };
 
   const handleProceed = async () => {
     if (!session || !plan) return;
+
+    const wsId = workspaceId || plan.workspaceId;
+    if (!wsId) return;
 
     const updatedWorkspace = await createRevisionAction(session, plan.id);
     if (updatedWorkspace && setWorkspace) {
@@ -176,9 +160,11 @@ export function PlanChatMessage({
 
     setIsSubmitting(true);
     try {
-      if (!session || !workspace) return;
+      // Use workspaceId from props or fallback to workspace from atom
+      const wsId = workspaceId || workspaceToUse?.id;
+      if (!session || !wsId) return;
 
-      const chatMessage = await createChatMessageAction(session, workspace.id, chatInput.trim());
+      const chatMessage = await createChatMessageAction(session, wsId, chatInput.trim());
 
       setMessages(prev => [...prev, chatMessage]);
       setChatInput("");
@@ -266,7 +252,7 @@ export function PlanChatMessage({
                 {(plan.actionFiles?.length || 0) > 0 && (
                   <div
                     className={`flex flex-col items-center gap-2 overflow-hidden transition-all duration-300 ${
-                      actionFilesExpanded ? 'max-h-[500px]' : 'max-h-0'
+                      actionFilesExpanded ? 'max-h-none' : 'max-h-0'
                     }`}
                   >
                     {plan.actionFiles?.map((action, index) => (
@@ -306,112 +292,98 @@ export function PlanChatMessage({
               </div>
             )}
           </div>
-          {showActions && (
-            (!workspace?.currentRevisionNumber && plan.status === 'review' && (!messages || (() => {
-              // If any message is newer than this plan (including messages with null dates), don't show input
-              const planDate = plan.createdAt ? new Date(plan.createdAt) : null;
-              const hasNewerMessage = messages.some(m => {
-                // Temp messages are always newer
-                if (m.id.startsWith('msg-temp-')) return true;
-                // Messages without dates are newer
-                if (!m.createdAt) return true;
-                // Compare dates if both exist
-                return planDate && new Date(m.createdAt) > planDate;
-              });
-              return !hasNewerMessage;
-            })())) || // Plan-only view - show in review if no newer messages
-            (workspace?.currentRevisionNumber && plan.status === 'review') // Editor view - only show in review
-          ) ? (
-            <div className="mt-6 border-t border-dark-border/20">
-              <div className="flex items-center justify-between pt-4 pb-3">
-                <div className="flex gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowFeedback(true)}
-                    className={`p-2 ${theme === "dark" ? "hover:bg-dark-border/40 text-gray-400 hover:text-gray-200" : "hover:bg-gray-100 text-gray-500 hover:text-gray-700"}`}
-                  >
-                    <ThumbsUp className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleIgnore}
-                    className={`p-2 ${theme === "dark" ? "hover:bg-dark-border/40 text-gray-400 hover:text-gray-200" : "hover:bg-gray-100 text-gray-500 hover:text-gray-700"}`}
-                  >
-                    <ThumbsDown className="h-4 w-4" />
-                  </Button>
-                </div>
-                <Button
-                  ref={proceedButtonRef}
-                  variant="default"
-                  size="sm"
-                  onClick={handleProceed}
-                  data-testid="plan-message-proceed-button"
-                  className="min-w-[100px] bg-primary hover:bg-primary/80 text-white"
-                >
-                  Proceed
-                </Button>
-              </div>
-              {showChatInput && plan.status === 'review' && !workspace?.currentRevisionNumber && (
-                <div className="pt-2 border-t border-dark-border/10">
-                  <form onSubmit={handleSubmitChat} className="relative">
-                    <textarea
-                      ref={textareaRef}
-                      value={chatInput}
-                      onChange={(e) => {
-                        setChatInput(e.target.value);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault();
-                          handleSubmitChat(e);
-                        }
-                      }}
-                      placeholder={isSubmitting ? "Submitting..." : "Ask a question or suggest changes..."}
-                      disabled={isSubmitting}
-                      rows={1}
-                      style={{ height: 'auto', minHeight: '34px', maxHeight: '150px' }}
-                      className={`w-full px-3 py-1.5 pr-10 text-sm rounded-md border resize-none overflow-hidden ${
-                        theme === "dark"
-                          ? "bg-dark border-dark-border/60 text-white placeholder-gray-500"
-                          : "bg-white border-gray-200 text-gray-900 placeholder-gray-400"
-                      } focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50`}
-                    />
-                    <button
-                      type="submit"
-                      disabled={isSubmitting}
-                      className={`absolute right-2 top-[5px] p-1.5 rounded-full ${
-                        !isSubmitting ? 'hover:bg-gray-100 dark:hover:bg-dark-border/40' : ''
-                      } ${
-                        theme === "dark" ? "text-gray-400 hover:text-gray-200" : "text-gray-500 hover:text-gray-700"
-                      }`}
+          {showActions && plan.status === 'review' && (
+              <div className="mt-6 border-t border-dark-border/20">
+                <div className="flex items-center justify-between pt-4 pb-3">
+                  <div className="flex gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowFeedback(true)}
+                      className={`p-2 ${theme === "dark" ? "hover:bg-dark-border/40 text-gray-400 hover:text-gray-200" : "hover:bg-gray-100 text-gray-500 hover:text-gray-700"}`}
                     >
-                      {isSubmitting ? (
-                        <div
-                          className="rounded-full h-4 w-4 border border-current border-t-transparent"
-                          style={{
-                            animation: 'spin 1s linear infinite'
-                          }}
-                        />
-                      ) : (
-                        <Send className="w-4 h-4" />
-                      )}
-                    </button>
-                  </form>
+                      <ThumbsUp className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleIgnore}
+                      className={`p-2 ${theme === "dark" ? "hover:bg-dark-border/40 text-gray-400 hover:text-gray-200" : "hover:bg-gray-100 text-gray-500 hover:text-gray-700"}`}
+                    >
+                      <ThumbsDown className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <Button
+                    ref={proceedButtonRef}
+                    variant="default"
+                    size="sm"
+                    onClick={handleProceed}
+                    data-testid="plan-message-proceed-button"
+                    className="min-w-[100px] bg-primary hover:bg-primary/80 text-white"
+                  >
+                    Proceed
+                  </Button>
                 </div>
-              )}
-            </div>
-          ) : null}
+                {showChatInput && plan.status === 'review' && !workspaceToUse?.currentRevisionNumber && (
+                  <div className="pt-2 border-t border-dark-border/10">
+                    <form onSubmit={handleSubmitChat} className="relative">
+                      <textarea
+                        ref={textareaRef}
+                        value={chatInput}
+                        onChange={(e) => {
+                          setChatInput(e.target.value);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            handleSubmitChat(e);
+                          }
+                        }}
+                        placeholder={isSubmitting ? "Submitting..." : "Ask a question or suggest changes..."}
+                        disabled={isSubmitting}
+                        rows={1}
+                        style={{ height: 'auto', minHeight: '34px', maxHeight: '150px' }}
+                        className={`w-full px-3 py-1.5 pr-10 text-sm rounded-md border resize-none overflow-hidden ${
+                          theme === "dark"
+                            ? "bg-dark border-dark-border/60 text-white placeholder-gray-500"
+                            : "bg-white border-gray-200 text-gray-900 placeholder-gray-400"
+                        } focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50`}
+                      />
+                      <button
+                        type="submit"
+                        disabled={isSubmitting}
+                        className={`absolute right-2 top-[5px] p-1.5 rounded-full ${
+                          !isSubmitting ? 'hover:bg-gray-100 dark:hover:bg-dark-border/40' : ''
+                        } ${
+                          theme === "dark" ? "text-gray-400 hover:text-gray-200" : "text-gray-500 hover:text-gray-700"
+                        }`}
+                      >
+                        {isSubmitting ? (
+                          <div
+                            className="rounded-full h-4 w-4 border border-current border-t-transparent"
+                            style={{
+                              animation: 'spin 1s linear infinite'
+                            }}
+                          />
+                        ) : (
+                          <Send className="w-4 h-4" />
+                        )}
+                      </button>
+                    </form>
+                  </div>
+                )}
+              </div>
+            )
+          }
         </div>
       </div>
-      {showFeedback && session && plan.workspaceId && (
+      {showFeedback && session && (
         <FeedbackModal
           isOpen={showFeedback}
           onClose={() => setShowFeedback(false)}
           message={{ id: messageId } as Message}
           chatId={plan.id}
-          workspaceId={plan.workspaceId}
+          workspaceId={workspaceId || plan.workspaceId}
           session={session}
         />
       )}

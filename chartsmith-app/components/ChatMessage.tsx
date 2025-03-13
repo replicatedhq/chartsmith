@@ -181,6 +181,8 @@ export function ChatMessage({
               showChatInput={false}
               session={session}
               messageId={messageId}
+              workspaceId={workspace?.id}
+              messages={messages} // Pass messages to resolve the reference error
             />
           </div>
         )}
