@@ -668,6 +668,10 @@ export async function renderWorkspace(workspaceId: string, chatMessageId: string
         revisionNumber = workspace.currentRevisionNumber;
       }
 
+      if (!chartId && workspace.charts.length === 0) {
+        return;
+      }
+
       if (!chartId) {
         chartId = workspace.charts[0].id;
       }
