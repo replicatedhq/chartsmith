@@ -47,17 +47,14 @@ function LoadingSpinner({ message }: { message: string }) {
   );
 }
 
-// Helper atom to track which messages we've seen for each revision
-const seenRevisionMessagesAtom = atom<Record<number, string>>({});
-
 // Helper function to determine if a message is the first one for its revision number
 function isFirstMessageForRevision(message: Message, messageId: string, allMessages: Message[]): boolean {
   if (!message.responseRollbackToRevisionNumber) {
     return false; // No revision number to check
   }
-  
+
   const revisionNumber = message.responseRollbackToRevisionNumber;
-  
+
   // Find all messages that have this revision number and sort by creation date
   const messagesWithRevision = allMessages
     .filter(m => m.responseRollbackToRevisionNumber === revisionNumber)
@@ -66,9 +63,9 @@ function isFirstMessageForRevision(message: Message, messageId: string, allMessa
       const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
       return aTime - bTime;
     });
-  
+
   // Check if this message is the first one with this revision
-  return messagesWithRevision.length > 0 && 
+  return messagesWithRevision.length > 0 &&
          messagesWithRevision[0].id === messageId;
 }
 
@@ -97,7 +94,7 @@ export function ChatMessage({
   const [conversionGetter] = useAtom(conversionByIdAtom);
   // Only call the getter if responseConversionId exists
   const conversion = message?.responseConversionId ? conversionGetter(message.responseConversionId) : undefined;
-  
+
   // Check if this is the first message for its revision
   const isFirstForRevision = React.useMemo(() => {
     if (!message || !message.responseRollbackToRevisionNumber) return false;
@@ -154,7 +151,7 @@ export function ChatMessage({
     responsePlanId: message?.responsePlanId,
     responseRenderId: message?.responseRenderId
   });
-  
+
   // Create a pure sorted content component
   // This ensures the order is always correct by hard-coding it
   const SortedContent = () => {
@@ -166,7 +163,7 @@ export function ChatMessage({
             <ReactMarkdown>{message.response}</ReactMarkdown>
           </div>
         )}
-        
+
         {/* PLAN SECOND */}
         {message?.responsePlanId && (
           <div className="w-full mb-4">
@@ -175,10 +172,10 @@ export function ChatMessage({
                 <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">Plan:</div>
               </div>
             )}
-            <PlanChatMessage 
-              planId={message.responsePlanId} 
+            <PlanChatMessage
+              planId={message.responsePlanId}
               showActions={true}
-              showChatInput={false}
+              showChatInput={workspace?.currentRevisionNumber === 0}
               session={session}
               messageId={messageId}
               workspaceId={workspace?.id}
@@ -186,7 +183,7 @@ export function ChatMessage({
             />
           </div>
         )}
-        
+
         {/* RENDER THIRD */}
         {message?.responseRenderId && (
           <div className="space-y-4 mt-4">
@@ -213,7 +210,7 @@ export function ChatMessage({
             )}
           </div>
         )}
-        
+
         {/* CONVERSION FOURTH */}
         {message?.responseConversionId && (
           <div className="mt-4">
@@ -229,7 +226,7 @@ export function ChatMessage({
             )}
           </div>
         )}
-        
+
         {/* FALLBACK LOADING */}
         {message && !message.response && !message.responsePlanId && !message.responseRenderId && !message.responseConversionId && (
           <LoadingSpinner message="generating response..." />
@@ -293,10 +290,10 @@ export function ChatMessage({
               <div className="text-[10px] opacity-70">
                 Rev #{
                   // Try to get actual revision number, otherwise use a hash of the message ID to generate a stable pseudo-revision
-                  message.revisionNumber !== undefined 
-                    ? message.revisionNumber 
-                    : message.id 
-                      ? Array.from(message.id).reduce((sum, char) => sum + char.charCodeAt(0), 0) % 100 
+                  message.revisionNumber !== undefined
+                    ? message.revisionNumber
+                    : message.id
+                      ? Array.from(message.id).reduce((sum, char) => sum + char.charCodeAt(0), 0) % 100
                       : "?"
                 }
               </div>
