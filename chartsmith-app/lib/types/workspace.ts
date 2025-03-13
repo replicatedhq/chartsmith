@@ -121,6 +121,7 @@ export interface ChatMessage {
   responsePlanId?: string;
   responseConversionId?: string;
   responseRollbackToRevisionNumber?: number;
+  revisionNumber?: number; // Added missing field
   isComplete: boolean;  // Add required Message properties
   workspaceId?: string;
   userId?: string;

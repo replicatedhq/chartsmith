@@ -85,6 +85,7 @@ export function PlanChatMessage({
       }, 100);
     }
   }, [
+    plan,
     plan?.status,
     plan?.actionFiles?.length,
     actionFilesExpanded,
