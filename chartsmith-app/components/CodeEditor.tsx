@@ -11,16 +11,12 @@ import { allFilesBeforeApplyingPendingPatchesAtom, allFilesWithPendingPatchesAto
 // types
 import type { editor } from "monaco-editor";
 import Editor, { DiffEditor } from "@monaco-editor/react";
-import type { WorkspaceFile } from "@/lib/types/workspace";
 import type { Session } from "@/lib/types/session";
 
 // hooks
-import { useMonacoEditor } from "@/hooks/useMonacoEditor";
-import { 
-  useMonacoSingleInstance, 
-  parseDiff,
+import {
+  useMonacoSingleInstance,
   setupSafeMonacoCleanup,
-  getLanguage
 } from "@/hooks/useMonacoSingleInstance";
 
 // actions
@@ -49,11 +45,11 @@ export const CodeEditor = React.memo(function CodeEditor({
   const [selectedFile, setSelectedFile] = useAtom(selectedFileAtom);
   const [workspace, setWorkspace] = useAtom(workspaceAtom);
   const [, addFileToWorkspace] = useAtom(addFileToWorkspaceAtom);
-  
+
   // References for Monaco - Use non-null assertion to satisfy TypeScript
   const editorRef = useRef<editor.IStandaloneCodeEditor>(null as unknown as editor.IStandaloneCodeEditor);
   const monacoRef = useRef<typeof import("monaco-editor")>(null as unknown as typeof import("monaco-editor"));
-  
+
   const [allFilesWithPendingPatches] = useAtom(allFilesWithPendingPatchesAtom);
   const [allFilesBeforeApplyingPendingPatches] = useAtom(allFilesBeforeApplyingPendingPatchesAtom);
 
@@ -67,7 +63,7 @@ export const CodeEditor = React.memo(function CodeEditor({
   const [, updateCurrentDiffIndex] = useAtom(updateCurrentDiffIndexAtom);
 
   const [, updateFileContent] = useAtom(updateFileContentAtom);
-  
+
   // Define editor options
   const editorOptions = {
     minimap: { enabled: false },
@@ -89,7 +85,7 @@ export const CodeEditor = React.memo(function CodeEditor({
     hideCursorInOverviewRuler: true,
     renderWhitespace: "all" as const,
   };
-  
+
   // Handler when content changes
   const handleContentChange = (content: string | undefined) => {
     if (selectedFile && content !== undefined) {
@@ -99,11 +95,11 @@ export const CodeEditor = React.memo(function CodeEditor({
       });
     }
   };
-  
+
   // Use our custom hook for monaco single instance
-  const { 
-    original, 
-    language, 
+  const {
+    original,
+    language,
     modifiedContent,
     inDiffMode,
     setInDiffMode
@@ -117,12 +113,12 @@ export const CodeEditor = React.memo(function CodeEditor({
     readOnly,
     editorContainerRef
   );
-  
+
   // Setup editor init handler
   const handleEditorMount = (editor: editor.IStandaloneCodeEditor, monaco: typeof import("monaco-editor")) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
-    
+
     // Add command palette shortcut
     const commandId = 'chartsmith.openCommandPalette';
     editor.addAction({
@@ -136,12 +132,23 @@ export const CodeEditor = React.memo(function CodeEditor({
       }
     });
   };
-  
-  // Update diff index when files change
+
+  // Update diff index when files change and handle editor cleanup
   useEffect(() => {
+    // Clean up previous editor instance when switching files or patch status changes
+    if (editorRef.current) {
+      try {
+        // Set editor reference to null to prevent interaction during transitions
+        editorRef.current = null as any;
+      } catch (e) {
+        console.warn("Error cleaning up editor:", e);
+      }
+    }
+
+    // Now update diff index
     updateCurrentDiffIndex(allFilesWithPendingPatches);
   }, [selectedFile, allFilesWithPendingPatches, updateCurrentDiffIndex]);
-  
+
   // Handle outside clicks for dropdowns
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -158,36 +165,36 @@ export const CodeEditor = React.memo(function CodeEditor({
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
-  
+
   if (!workspace) {
     return null;
   }
 
   const showDiffHeader = allFilesWithPendingPatches.length > 0;
-  
+
   const handleAcceptThisFile = async () => {
     if (selectedFile?.pendingPatch) {
       try {
         // Get the modified content from our pre-computed value and store it locally
         // This ensures we have the value even if the editor is disposed during state updates
         const updatedContent = modifiedContent;
-        
+
         // First, immediately close the dropdown to prevent double-clicks
         setAcceptDropdownOpen(false);
-        
+
         // Safely dispose current model if it's a DiffEditor to prevent errors
         try {
           // Clear references to prevent attempts to use disposed objects
           if (editorRef.current && monacoRef.current) {
             const monaco = monacoRef.current;
             const currentModel = editorRef.current.getModel();
-            
+
             // If we're in diff mode, we need special handling
             // We'll clear the editor but preserve our file data
             if (selectedFile.pendingPatch) {
               // Clear editor reference first to prevent UI interactions during update
               editorRef.current = null as any;
-              
+
               // Don't try to dispose the model here - it will happen during component re-render
               // This avoids the InstantiationService errors
             }
@@ -196,7 +203,7 @@ export const CodeEditor = React.memo(function CodeEditor({
           console.warn("Ignoring Monaco disposal error:", disposalError);
           // Continue with the update regardless - we'll recreate everything
         }
-        
+
         // Now handle the actual update logic
         if (selectedFile.id.startsWith('file-')) {
           // For temporary files, handle update client-side
@@ -205,11 +212,11 @@ export const CodeEditor = React.memo(function CodeEditor({
             content: updatedContent,
             pendingPatch: undefined
           };
-          
+
           // Update workspace state first, editor state will follow
           const updatedWorkspace = {
             ...workspace,
-            files: workspace.files.map(f => 
+            files: workspace.files.map(f =>
               f.id === updatedFile.id ? updatedFile : f
             ),
             charts: workspace.charts.map(chart => ({
@@ -219,9 +226,9 @@ export const CodeEditor = React.memo(function CodeEditor({
               )
             }))
           };
-          
+
           setWorkspace(updatedWorkspace);
-          
+
           // Now update editor state, after workspace is updated
           // This order matters to avoid race conditions
           setTimeout(() => {
@@ -231,7 +238,7 @@ export const CodeEditor = React.memo(function CodeEditor({
           try {
             // For permanent IDs, use the server action
             const updatedFile = await acceptPatchAction(session, selectedFile.id, workspace.currentRevisionNumber);
-            
+
             // Update workspace state first
             const updatedWorkspace = {
               ...workspace,
@@ -245,23 +252,23 @@ export const CodeEditor = React.memo(function CodeEditor({
                 )
               }))
             };
-            
+
             setWorkspace(updatedWorkspace);
-            
+
             // Then update editor state with a delay to avoid race conditions
             setTimeout(() => {
               updateFileContent(updatedFile);
             }, 0);
           } catch (serverError) {
             console.error("Server-side patch application failed, using client-side fallback:", serverError);
-            
+
             // If server action fails, use client-side fallback
             const updatedFile = {
               ...selectedFile,
               content: updatedContent,
               pendingPatch: undefined
             };
-            
+
             // Update workspace state first
             const updatedWorkspace = {
               ...workspace,
@@ -275,9 +282,9 @@ export const CodeEditor = React.memo(function CodeEditor({
                 )
               }))
             };
-            
+
             setWorkspace(updatedWorkspace);
-            
+
             // Then update editor state with a delay
             setTimeout(() => {
               updateFileContent(updatedFile);
@@ -286,14 +293,14 @@ export const CodeEditor = React.memo(function CodeEditor({
         }
       } catch (error) {
         console.error("Error accepting patch:", error);
-        
+
         // Last-ditch effort: just clear the pending patch without applying it
         try {
           const updatedFile = {
             ...selectedFile,
             pendingPatch: undefined
           };
-          
+
           // Update workspace state first
           const updatedWorkspace = {
             ...workspace,
@@ -307,9 +314,9 @@ export const CodeEditor = React.memo(function CodeEditor({
               )
             }))
           };
-          
+
           setWorkspace(updatedWorkspace);
-          
+
           // Then update editor state with a delay
           setTimeout(() => {
             updateFileContent(updatedFile);
@@ -317,7 +324,7 @@ export const CodeEditor = React.memo(function CodeEditor({
         } catch (fallbackError) {
           console.error("Even fallback failed:", fallbackError);
         }
-        
+
         // Make sure dropdown is closed
         setAcceptDropdownOpen(false);
       }
@@ -328,7 +335,7 @@ export const CodeEditor = React.memo(function CodeEditor({
     try {
       // First, immediately close the dropdown to prevent double-clicks
       setAcceptDropdownOpen(false);
-      
+
       // Safely dispose the editor if in diff mode to prevent errors
       try {
         // Clear references to prevent attempts to use disposed objects
@@ -339,7 +346,7 @@ export const CodeEditor = React.memo(function CodeEditor({
       } catch (disposalError) {
         console.warn("Ignoring Monaco disposal error:", disposalError);
       }
-      
+
       // Now call the server action
       const updatedFiles = await acceptAllPatchesAction(session, workspace.id, workspace.currentRevisionNumber);
 
@@ -382,7 +389,7 @@ export const CodeEditor = React.memo(function CodeEditor({
       try {
         // First, immediately close the dropdown to prevent double-clicks
         setRejectDropdownOpen(false);
-        
+
         // Safely dispose current model if it's a DiffEditor to prevent errors
         try {
           if (editorRef.current && selectedFile.pendingPatch) {
@@ -392,7 +399,7 @@ export const CodeEditor = React.memo(function CodeEditor({
         } catch (disposalError) {
           console.warn("Ignoring Monaco disposal error:", disposalError);
         }
-        
+
         // Now handle the actual rejection logic
         if (selectedFile.id.startsWith('file-')) {
           // For temporary IDs, just clear the pendingPatch client-side
@@ -400,11 +407,11 @@ export const CodeEditor = React.memo(function CodeEditor({
             ...selectedFile,
             pendingPatch: undefined
           };
-          
+
           // Update workspace state first
           const updatedWorkspace = {
             ...workspace,
-            files: workspace.files.map(f => 
+            files: workspace.files.map(f =>
               f.id === updatedFile.id ? updatedFile : f
             ),
             charts: workspace.charts.map(chart => ({
@@ -414,9 +421,9 @@ export const CodeEditor = React.memo(function CodeEditor({
               )
             }))
           };
-          
+
           setWorkspace(updatedWorkspace);
-          
+
           // Then update editor state with a delay
           setTimeout(() => {
             updateFileContent(updatedFile);
@@ -424,17 +431,17 @@ export const CodeEditor = React.memo(function CodeEditor({
         } else {
           // For permanent IDs, use the server action
           await rejectPatchAction(session, selectedFile.id, workspace.currentRevisionNumber);
-          
+
           // Create updated file with pendingPatch cleared for UI update
           const updatedFile = {
             ...selectedFile,
             pendingPatch: undefined
           };
-          
+
           // Update workspace state first
           const updatedWorkspace = {
             ...workspace,
-            files: workspace.files.map(f => 
+            files: workspace.files.map(f =>
               f.id === updatedFile.id ? updatedFile : f
             ),
             charts: workspace.charts.map(chart => ({
@@ -444,9 +451,9 @@ export const CodeEditor = React.memo(function CodeEditor({
               )
             }))
           };
-          
+
           setWorkspace(updatedWorkspace);
-          
+
           // Then update editor state with a delay
           setTimeout(() => {
             updateFileContent(updatedFile);
@@ -454,7 +461,7 @@ export const CodeEditor = React.memo(function CodeEditor({
         }
       } catch (error) {
         console.error("Error rejecting patch:", error);
-        
+
         // Fall back to client-side rejection for any errors
         try {
           // Create updated file with pendingPatch cleared
@@ -462,11 +469,11 @@ export const CodeEditor = React.memo(function CodeEditor({
             ...selectedFile,
             pendingPatch: undefined
           };
-          
+
           // Update workspace state first
           const updatedWorkspace = {
             ...workspace,
-            files: workspace.files.map(f => 
+            files: workspace.files.map(f =>
               f.id === updatedFile.id ? updatedFile : f
             ),
             charts: workspace.charts.map(chart => ({
@@ -476,9 +483,9 @@ export const CodeEditor = React.memo(function CodeEditor({
               )
             }))
           };
-          
+
           setWorkspace(updatedWorkspace);
-          
+
           // Then update editor state with a delay
           setTimeout(() => {
             updateFileContent(updatedFile);
@@ -494,7 +501,7 @@ export const CodeEditor = React.memo(function CodeEditor({
     try {
       // First, immediately close the dropdown to prevent double-clicks
       setRejectDropdownOpen(false);
-      
+
       // Safely clear editor reference if in diff mode
       try {
         if (editorRef.current && selectedFile?.pendingPatch) {
@@ -503,10 +510,10 @@ export const CodeEditor = React.memo(function CodeEditor({
       } catch (disposalError) {
         console.warn("Ignoring Monaco disposal error:", disposalError);
       }
-      
+
       // Now perform the server action
       await rejectAllPatchesAction(session, workspace.id, workspace.currentRevisionNumber);
-      
+
       // Update workspace with patches cleared - client-side update for responsive UI
       if (workspace) {
         const updatedWorkspace = {
@@ -523,10 +530,10 @@ export const CodeEditor = React.memo(function CodeEditor({
             }))
           }))
         };
-        
+
         // Update workspace state first
         setWorkspace(updatedWorkspace);
-        
+
         // Then update editor state if needed
         if (selectedFile?.pendingPatch) {
           setTimeout(() => {
@@ -748,7 +755,7 @@ export const CodeEditor = React.memo(function CodeEditor({
                 // We need to handle the diff editor mount differently
                 editorRef.current = editor.getModifiedEditor(); // Store modified editor for consistency
                 monacoRef.current = monaco;
-                
+
                 // Add command palette to both editors
                 const commandId = 'chartsmith.openCommandPalette';
                 [editor.getModifiedEditor(), editor.getOriginalEditor()].forEach(ed => {

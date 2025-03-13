@@ -2,7 +2,6 @@
 
 import React from "react";
 import { useAtom } from "jotai";
-import { FileText } from "lucide-react";
 import Editor from "@monaco-editor/react";
 
 // atoms
@@ -19,7 +18,6 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { useCommandMenu } from "@/contexts/CommandMenuContext";
 
 // types
-import { RenderedFile } from "@/lib/types/workspace";
 import { Session } from "@/lib/types/session";
 import { Button } from "@/components/ui/Button";
 import { createChatMessageAction } from "@/lib/workspace/actions/create-chat-message";
@@ -42,6 +40,30 @@ export function WorkspaceContainerClient({
   const [looseFiles] = useAtom(looseFilesAtom);
   const [view, setView] = useAtom(editorViewAtom);
   const [renderedFiles] = useAtom(renderedFilesAtom);
+  
+  // Create a ref to track the Monaco editor instance in the rendered view
+  const renderedEditorRef = React.useRef<any>(null);
+
+  // Clear editor reference when view changes to prevent issues with Monaco
+  React.useEffect(() => {
+    // When view changes, clear the Monaco editor reference
+    if (renderedEditorRef.current) {
+      try {
+        renderedEditorRef.current = null;
+      } catch (e) {
+        console.warn("Error cleaning up rendered editor:", e);
+      }
+    }
+
+    // Also clear global Monaco models when switching views
+    if (typeof window !== 'undefined' && window.__monacoEditor) {
+      try {
+        window.__monacoEditor = undefined;
+      } catch (e) {
+        console.warn("Error cleaning up global Monaco reference:", e);
+      }
+    }
+  }, [view, selectedFile]);
 
 
 
@@ -147,6 +169,19 @@ export function WorkspaceContainerClient({
                               scrollBeyondLastLine: false,
                               automaticLayout: true,
                               tabSize: 2
+                            }}
+                            onMount={(editor, monaco) => {
+                              // Store reference to the editor
+                              renderedEditorRef.current = editor;
+                              
+                              // Add command palette to this editor too
+                              const commandId = 'chartsmith.openCommandPalette.rendered';
+                              editor.addAction({
+                                id: commandId,
+                                label: 'Open Command Palette',
+                                keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK],
+                                run: () => onCommandK?.()
+                              });
                             }}
                           />
                         </div>

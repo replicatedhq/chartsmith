@@ -196,10 +196,9 @@ export function useMonacoSingleInstance(
 
   // Simplified effect now that we don't manage editor mode switching in the hook
   useEffect(() => {
-    if (!editorRef.current || !monacoRef.current || !selectedFile) return;
+    if (!monacoRef.current || !selectedFile) return;
     
     const monaco = monacoRef.current;
-    const editor = editorRef.current;
     
     // Get file info
     const fileKey = selectedFile.id || selectedFile.filePath || 'unknown';
@@ -208,32 +207,47 @@ export function useMonacoSingleInstance(
     // Set the diff mode state
     setInDiffMode(isDiffMode);
     
-    // Track models in global registry for reuse
-    if (!isDiffMode) {
-      // For regular editor, create/update the model
-      let model = window.__monacoModels?.[fileKey];
-      if (!model) {
-        const uri = monaco.Uri.parse(`file:///${fileKey}`);
-        model = monaco.editor.createModel(
-          selectedFile.content || '', 
-          language, 
-          uri
-        );
-        if (window.__monacoModels) {
-          window.__monacoModels[fileKey] = model;
-        }
-      } else {
-        // Update existing model if content changed
-        if (model.getValue() !== selectedFile.content) {
-          model.setValue(selectedFile.content || '');
-        }
-      }
-      
-      // For regular editor, set the model directly
-      editor.setModel(model);
+    // Check if editor is available - it might have been nulled for cleanup
+    if (!editorRef.current) {
+      console.log("Editor reference not available, skipping model update");
+      return;
     }
-    // Note: We don't need to handle diff mode here anymore as
-    // it's handled by the DiffEditor component in the parent
+    
+    const editor = editorRef.current;
+    
+    try {
+      // Track models in global registry for reuse
+      if (!isDiffMode) {
+        // For regular editor, create/update the model
+        let model = window.__monacoModels?.[fileKey];
+        if (!model) {
+          const uri = monaco.Uri.parse(`file:///${fileKey}`);
+          model = monaco.editor.createModel(
+            selectedFile.content || '', 
+            language, 
+            uri
+          );
+          if (window.__monacoModels) {
+            window.__monacoModels[fileKey] = model;
+          }
+        } else {
+          // Update existing model if content changed
+          if (model.getValue() !== selectedFile.content) {
+            model.setValue(selectedFile.content || '');
+          }
+        }
+        
+        // For regular editor, set the model directly
+        editor.setModel(model);
+      }
+      // Note: We don't need to handle diff mode here anymore as
+      // it's handled by the DiffEditor component in the parent
+    } catch (error) {
+      console.warn("Error updating Monaco editor model:", error);
+      // If we hit an error here, the editor might be in an invalid state
+      // Clear the reference to force a remount
+      editorRef.current = null as any;
+    }
   }, [
     selectedFile?.id, 
     selectedFile?.content, 
@@ -259,6 +273,18 @@ export function useMonacoSingleInstance(
     if (typeof window !== 'undefined' && !window.__monacoModels) {
       window.__monacoModels = {};
     }
+    
+    // Cleanup function to run when component unmounts
+    return () => {
+      // Clear editor reference to prevent memory leaks
+      if (editorRef.current) {
+        try {
+          editorRef.current = null as any;
+        } catch (e) {
+          console.warn("Error cleaning up editor ref:", e);
+        }
+      }
+    };
   }, []);
 
   return {
