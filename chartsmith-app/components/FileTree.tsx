@@ -193,7 +193,6 @@ export function FileTree({ files = [], charts = [] }: FileTreeProps) {
 
     // For new files, count every non-header line as an addition
     if (isNewFile) {
-      console.log("Counting additions for new file");
       for (const line of lines) {
         // Skip headers
         if (line.startsWith('---') || line.startsWith('+++') || line.startsWith('@@')) {

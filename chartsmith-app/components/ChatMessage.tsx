@@ -145,13 +145,6 @@ export function ChatMessage({
     console.log("handleApplyChanges");
   }
 
-  // Debug message IDs
-  console.log("Message IDs:", {
-    messageId,
-    responsePlanId: message?.responsePlanId,
-    responseRenderId: message?.responseRenderId
-  });
-
   // Create a pure sorted content component
   // This ensures the order is always correct by hard-coding it
   const SortedContent = () => {
