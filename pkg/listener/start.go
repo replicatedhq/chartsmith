@@ -126,12 +126,10 @@ func executeActionLockKeyExtractor(payload []byte) (string, error) {
 	if err := json.Unmarshal(payload, &payloadMap); err != nil {
 		return "", fmt.Errorf("failed to unmarshal payload: %w", err)
 	}
-
 	planID, ok := payloadMap["planId"].(string)
 	if !ok || planID == "" {
 		return "", fmt.Errorf("planId not found in payload or is not a string: %v", payloadMap)
 	}
-
 	return planID, nil
 }
 

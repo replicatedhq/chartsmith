@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/replicatedhq/chartsmith/pkg/diff"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 	"github.com/replicatedhq/chartsmith/pkg/workspace/types"
 	"github.com/tuvistavie/securerandom"
@@ -84,16 +85,13 @@ func CreateOrPatchFile(ctx context.Context, workspaceID string, revisionNumber i
 		}
 	} else {
 		// For existing files, create a patch showing the differences
-		oldLines := strings.Split(existingContent, "\n")
-		newLines := strings.Split(content, "\n")
-
-		generatedPatch := fmt.Sprintf(`--- %[1]s
-+++ %[1]s
-@@ -1,%d +1,%d @@
-%s`, filePath, len(oldLines), len(newLines), content)
+		generatedPatch, err := diff.GeneratePatch(existingContent, content, filePath)
+		if err != nil {
+			return fmt.Errorf("error generating patch: %w", err)
+		}
 
 		query := `UPDATE workspace_file SET pending_patch = $1 WHERE chart_id = $2 AND file_path = $3 AND workspace_id = $4 AND revision_number = $5`
-		_, err := conn.Exec(ctx, query, generatedPatch, chartID, filePath, workspaceID, revisionNumber)
+		_, err = conn.Exec(ctx, query, generatedPatch, chartID, filePath, workspaceID, revisionNumber)
 		if err != nil {
 			return fmt.Errorf("error updating file in workspace: %w", err)
 		}

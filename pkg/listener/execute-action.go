@@ -48,7 +48,8 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 	for i, item := range plan.ActionFiles {
 		if item.Path == p.Path {
 			if item.Status != string(llmtypes.ActionPlanStatusPending) {
-				return fmt.Errorf("action is not pending: %s", item.Status)
+				logger.Info("Skipping non-pending action", zap.String("path", p.Path), zap.String("status", item.Status), zap.String("planId", p.PlanID))
+				return nil
 			}
 
 			// update the action to creating
@@ -131,12 +132,13 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 			Path: p.Path,
 		}
 
-		updatedContent, err := llm.ExecuteAction(ctx, apwp, plan, currentContent)
+		updatedContent, err := llm.ExecuteAction(ctx, apwp, plan, currentContent, patchCh)
 		if err != nil {
 			errCh <- fmt.Errorf("failed to execute action: %w", err)
 		}
 
 		patchCh <- updatedContent
+		errCh <- nil
 	}()
 
 	done := false
@@ -149,10 +151,11 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 			fmt.Printf("Timeout reached for path: %s\n", p.Path)
 			return fmt.Errorf("timeout waiting for action execution")
 		case err := <-errCh:
-			return err
-		case finalContent = <-patchCh:
 			done = true
-
+			if err != nil {
+				return err
+			}
+		case finalContent = <-patchCh:
 			// send the final content to the realtime server
 			e := realtimetypes.ArtifactUpdatedEvent{
 				WorkspaceID: updatedPlan.WorkspaceID,

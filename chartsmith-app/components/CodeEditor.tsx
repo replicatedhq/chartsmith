@@ -133,19 +133,10 @@ export const CodeEditor = React.memo(function CodeEditor({
     });
   };
 
-  // Update diff index when files change and handle editor cleanup
+  // Update diff index when files change
   useEffect(() => {
-    // Clean up previous editor instance when switching files or patch status changes
-    if (editorRef.current) {
-      try {
-        // Set editor reference to null to prevent interaction during transitions
-        editorRef.current = null as any;
-      } catch (e) {
-        console.warn("Error cleaning up editor:", e);
-      }
-    }
-
-    // Now update diff index
+    // Just update diff index - don't manually clear editor reference
+    // This prevents the TextModel disposed error by letting React handle component lifecycle
     updateCurrentDiffIndex(allFilesWithPendingPatches);
   }, [selectedFile, allFilesWithPendingPatches, updateCurrentDiffIndex]);
 
@@ -182,27 +173,9 @@ export const CodeEditor = React.memo(function CodeEditor({
         // First, immediately close the dropdown to prevent double-clicks
         setAcceptDropdownOpen(false);
 
-        // Safely dispose current model if it's a DiffEditor to prevent errors
-        try {
-          // Clear references to prevent attempts to use disposed objects
-          if (editorRef.current && monacoRef.current) {
-            const monaco = monacoRef.current;
-            const currentModel = editorRef.current.getModel();
-
-            // If we're in diff mode, we need special handling
-            // We'll clear the editor but preserve our file data
-            if (selectedFile.pendingPatch) {
-              // Clear editor reference first to prevent UI interactions during update
-              editorRef.current = null as any;
-
-              // Don't try to dispose the model here - it will happen during component re-render
-              // This avoids the InstantiationService errors
-            }
-          }
-        } catch (disposalError) {
-          console.warn("Ignoring Monaco disposal error:", disposalError);
-          // Continue with the update regardless - we'll recreate everything
-        }
+        // Don't modify editor reference here - this is what causes the "disposed before reset" error
+        // Let React's normal component lifecycle handle the editor disposal
+        // We'll update state first, which will trigger a re-render with the new content
 
         // Now handle the actual update logic
         if (selectedFile.id.startsWith('file-')) {
@@ -336,16 +309,8 @@ export const CodeEditor = React.memo(function CodeEditor({
       // First, immediately close the dropdown to prevent double-clicks
       setAcceptDropdownOpen(false);
 
-      // Safely dispose the editor if in diff mode to prevent errors
-      try {
-        // Clear references to prevent attempts to use disposed objects
-        if (editorRef.current && selectedFile?.pendingPatch) {
-          // Clear editor reference first to prevent UI interactions during update
-          editorRef.current = null as any;
-        }
-      } catch (disposalError) {
-        console.warn("Ignoring Monaco disposal error:", disposalError);
-      }
+      // Don't clear editor references here, let React handle cleanup
+      // Just update the state which will trigger proper re-renders
 
       // Now call the server action
       const updatedFiles = await acceptAllPatchesAction(session, workspace.id, workspace.currentRevisionNumber);
@@ -390,15 +355,8 @@ export const CodeEditor = React.memo(function CodeEditor({
         // First, immediately close the dropdown to prevent double-clicks
         setRejectDropdownOpen(false);
 
-        // Safely dispose current model if it's a DiffEditor to prevent errors
-        try {
-          if (editorRef.current && selectedFile.pendingPatch) {
-            // Clear editor reference first to prevent UI interactions during update
-            editorRef.current = null as any;
-          }
-        } catch (disposalError) {
-          console.warn("Ignoring Monaco disposal error:", disposalError);
-        }
+        // Don't modify editor reference here - just update state
+        // Let React's normal component lifecycle handle the editor disposal
 
         // Now handle the actual rejection logic
         if (selectedFile.id.startsWith('file-')) {
@@ -502,14 +460,8 @@ export const CodeEditor = React.memo(function CodeEditor({
       // First, immediately close the dropdown to prevent double-clicks
       setRejectDropdownOpen(false);
 
-      // Safely clear editor reference if in diff mode
-      try {
-        if (editorRef.current && selectedFile?.pendingPatch) {
-          editorRef.current = null as any;
-        }
-      } catch (disposalError) {
-        console.warn("Ignoring Monaco disposal error:", disposalError);
-      }
+      // Don't clear editor references manually - let React handle it
+      // Just proceed with state updates
 
       // Now perform the server action
       await rejectAllPatchesAction(session, workspace.id, workspace.currentRevisionNumber);
@@ -727,17 +679,67 @@ export const CodeEditor = React.memo(function CodeEditor({
 
   const headerElement = showDiffHeader ? renderDiffHeader() : null;
 
-  // The final rendered component with conditional rendering based on diff mode
+  // Simple debugging output to help identify issues
+  console.log(
+    "Selected file:", selectedFile?.filePath, 
+    "has pending patch:", !!selectedFile?.pendingPatch
+  );
+  
+  // Define mount handlers for both editor types
+  const handleRegularEditorMount = (editor: editor.IStandaloneCodeEditor, monaco: typeof import("monaco-editor")) => {
+    editorRef.current = editor;
+    monacoRef.current = monaco;
+
+    // Add command palette shortcut
+    const commandId = 'chartsmith.openCommandPalette';
+    editor.addAction({
+      id: commandId,
+      label: 'Open Command Palette',
+      keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK],
+      run: () => {
+        if (onCommandK) {
+          onCommandK();
+        }
+      }
+    });
+  };
+  
+  // Handle diff editor mount differently
+  const handleDiffEditorMount = (editor: any, monaco: typeof import("monaco-editor")) => {
+    // We need to handle the diff editor mount differently
+    editorRef.current = editor.getModifiedEditor(); // Store modified editor for consistency
+    monacoRef.current = monaco;
+
+    // Add command palette to both editors
+    const commandId = 'chartsmith.openCommandPalette';
+    [editor.getModifiedEditor(), editor.getOriginalEditor()].forEach(ed => {
+      ed.addAction({
+        id: commandId,
+        label: 'Open Command Palette',
+        keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK],
+        run: () => onCommandK?.()
+      });
+    });
+  };
+  
+  // We need a completely unique key each time the editor type changes
+  // This forces React to create entirely new components instead of updating in place
+  const editorStateKey = useMemo(() => {
+    // Include both file ID and whether it has a pending patch in the key
+    return `${selectedFile?.id || 'none'}-${selectedFile?.pendingPatch ? 'diff' : 'normal'}-${Date.now()}`;
+  }, [selectedFile?.id, !!selectedFile?.pendingPatch]);
+  
+  // Let's try a more conventional approach but with optimizations
   return (
     <div className="flex-1 h-full flex flex-col">
       {/* Always render header if it exists */}
       {headerElement}
 
-      {/* Conditionally render the appropriate editor */}
       <div className="flex-1 h-full">
-        {selectedFile?.pendingPatch ? (
-          // Import DiffEditor dynamically
-          <div ref={editorContainerRef} className="h-full">
+        {/* Using a stable key pattern for the outer container */}
+        <div key={editorStateKey} className="h-full">
+          {selectedFile?.pendingPatch ? (
+            // Import DiffEditor dynamically
             <DiffEditor
               height="100%"
               language={language}
@@ -752,27 +754,10 @@ export const CodeEditor = React.memo(function CodeEditor({
                 diffCodeLens: false,
                 readOnly: true
               }}
-              onMount={(editor, monaco) => {
-                // We need to handle the diff editor mount differently
-                editorRef.current = editor.getModifiedEditor(); // Store modified editor for consistency
-                monacoRef.current = monaco;
-
-                // Add command palette to both editors
-                const commandId = 'chartsmith.openCommandPalette';
-                [editor.getModifiedEditor(), editor.getOriginalEditor()].forEach(ed => {
-                  ed.addAction({
-                    id: commandId,
-                    label: 'Open Command Palette',
-                    keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK],
-                    run: () => onCommandK?.()
-                  });
-                });
-              }}
+              onMount={handleDiffEditorMount}
             />
-          </div>
-        ) : (
-          // Regular editor for normal mode
-          <div ref={editorContainerRef} className="h-full">
+          ) : (
+            // Regular editor for normal mode
             <Editor
               height="100%"
               defaultLanguage={language}
@@ -784,12 +769,12 @@ export const CodeEditor = React.memo(function CodeEditor({
               options={editorOptions}
               onMount={handleEditorMount}
             />
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
-}, (prevProps, nextProps) => {
-  // We don't need to re-render for these prop changes since we handle updates in useEffect
-  return true;
 });
+
+// Remove the custom shouldComponentUpdate implementation
+// This was preventing re-renders when pendingPatch changes

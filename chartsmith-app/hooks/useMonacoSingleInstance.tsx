@@ -194,7 +194,8 @@ export function useMonacoSingleInstance(
     }
   }, [selectedFile?.content, selectedFile?.pendingPatch]);
 
-  // Simplified effect now that we don't manage editor mode switching in the hook
+  // Simplified effect that handles model creation only
+  // We now rely on React's key mechanism to unmount/remount editors
   useEffect(() => {
     if (!monacoRef.current || !selectedFile) return;
     
@@ -204,50 +205,65 @@ export function useMonacoSingleInstance(
     const fileKey = selectedFile.id || selectedFile.filePath || 'unknown';
     const isDiffMode = !!selectedFile.pendingPatch;
     
-    // Set the diff mode state
+    // Set the diff mode state - this should happen before any model changes
     setInDiffMode(isDiffMode);
     
-    // Check if editor is available - it might have been nulled for cleanup
+    // Check if editor is available - might not be available during transitions
     if (!editorRef.current) {
       console.log("Editor reference not available, skipping model update");
       return;
     }
     
-    const editor = editorRef.current;
-    
-    try {
-      // Track models in global registry for reuse
-      if (!isDiffMode) {
-        // For regular editor, create/update the model
+    // For non-diff mode, setting up the editor model is simpler
+    if (!isDiffMode && editorRef.current) {
+      try {
+        // For regular editor, we still maintain the model for consistent history
+        const editor = editorRef.current;
+        
+        // We need to be careful with model management to avoid 'disposed before reset' errors
+        // Check if we already have a model for this file
         let model = window.__monacoModels?.[fileKey];
-        if (!model) {
-          const uri = monaco.Uri.parse(`file:///${fileKey}`);
-          model = monaco.editor.createModel(
-            selectedFile.content || '', 
-            language, 
-            uri
-          );
-          if (window.__monacoModels) {
-            window.__monacoModels[fileKey] = model;
+        
+        // If no model exists or it's been disposed, create a new one
+        if (!model || model.isDisposed()) {
+          try {
+            const uri = monaco.Uri.parse(`file:///${fileKey}`);
+            model = monaco.editor.createModel(
+              selectedFile.content || '', 
+              language, 
+              uri
+            );
+            if (window.__monacoModels) {
+              window.__monacoModels[fileKey] = model;
+            }
+          } catch (modelError) {
+            console.warn("Error creating model:", modelError);
           }
         } else {
           // Update existing model if content changed
-          if (model.getValue() !== selectedFile.content) {
-            model.setValue(selectedFile.content || '');
+          try {
+            if (model.getValue() !== selectedFile.content) {
+              model.setValue(selectedFile.content || '');
+            }
+          } catch (updateError) {
+            console.warn("Error updating model value:", updateError);
           }
         }
         
-        // For regular editor, set the model directly
-        editor.setModel(model);
+        // Only set the model if we have a valid one and the editor is still available
+        if (model && !model.isDisposed() && editor) {
+          try {
+            editor.setModel(model);
+          } catch (setModelError) {
+            console.warn("Error setting model on editor:", setModelError);
+          }
+        }
+      } catch (error) {
+        console.warn("Error in Monaco model management:", error);
+        // Just log errors, don't try to manipulate references
       }
-      // Note: We don't need to handle diff mode here anymore as
-      // it's handled by the DiffEditor component in the parent
-    } catch (error) {
-      console.warn("Error updating Monaco editor model:", error);
-      // If we hit an error here, the editor might be in an invalid state
-      // Clear the reference to force a remount
-      editorRef.current = null as any;
     }
+    // For diff mode, the DiffEditor component will handle model creation
   }, [
     selectedFile?.id, 
     selectedFile?.content, 
@@ -263,8 +279,16 @@ export function useMonacoSingleInstance(
       prevContentRef.current = selectedFile.content;
     }
   }, [selectedFile?.content]);
+  
+  // Force immediate diff mode update when pendingPatch changes
+  // This ensures we render the correct editor type instantly
+  useEffect(() => {
+    if (selectedFile) {
+      setInDiffMode(!!selectedFile.pendingPatch);
+    }
+  }, [selectedFile?.pendingPatch, setInDiffMode]);
 
-  // Initialize Monaco environment
+  // Initialize Monaco environment and create a safer cleanup process
   useEffect(() => {
     // Call setup function 
     setupSafeMonacoCleanup();
@@ -274,18 +298,52 @@ export function useMonacoSingleInstance(
       window.__monacoModels = {};
     }
     
-    // Cleanup function to run when component unmounts
-    return () => {
-      // Clear editor reference to prevent memory leaks
-      if (editorRef.current) {
-        try {
-          editorRef.current = null as any;
-        } catch (e) {
-          console.warn("Error cleaning up editor ref:", e);
-        }
+    // Define a safer model cleanup function
+    const cleanupModels = () => {
+      // We'll only cleanup models that no longer have an editor using them
+      if (typeof window !== 'undefined' && window.__monacoModels) {
+        Object.keys(window.__monacoModels).forEach(key => {
+          const model = window.__monacoModels?.[key];
+          if (model && !model.isDisposed()) {
+            try {
+              // Track all available editors
+              const allEditors = monacoRef.current?.editor.getEditors() || [];
+              const diffEditors = monacoRef.current?.editor.getDiffEditors() || [];
+              
+              // Check if any editor is using this model
+              const isModelInUse = allEditors.some(editor => 
+                editor.getModel() === model
+              ) || diffEditors.some(diffEditor => {
+                const original = diffEditor.getOriginalEditor().getModel();
+                const modified = diffEditor.getModifiedEditor().getModel();
+                return original === model || modified === model;
+              });
+              
+              // Only dispose if not in use
+              if (!isModelInUse) {
+                model.dispose();
+                delete window.__monacoModels[key];
+              }
+            } catch (e) {
+              console.warn("Error checking model usage:", e);
+            }
+          }
+        });
       }
     };
-  }, []);
+    
+    // Set up an interval to clean unused models periodically
+    const cleanupInterval = setInterval(cleanupModels, 30000); // Every 30 seconds
+    
+    // Cleanup function to run when component unmounts
+    return () => {
+      // Clear the cleanup interval
+      clearInterval(cleanupInterval);
+      
+      // Don't manually set editorRef to null here - let React handle it
+      // This prevents the "disposed before reset" error
+    };
+  }, [monacoRef]);
 
   return {
     original,

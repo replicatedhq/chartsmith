@@ -2,15 +2,55 @@ package llm
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"testing"
-	"time"
 
 	llmtypes "github.com/replicatedhq/chartsmith/pkg/llm/types"
 	"github.com/replicatedhq/chartsmith/pkg/param"
 	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 )
+
+// normalizeWhitespace removes extra spaces and normalizes line endings
+func normalizeWhitespace(s string) string {
+	// Replace all whitespace sequences with a single space
+	lines := strings.Split(s, "\n")
+	var normalized []string
+
+	for _, line := range lines {
+		// Skip empty lines
+		if strings.TrimSpace(line) == "" {
+			normalized = append(normalized, "")
+			continue
+		}
+
+		// For diff lines (starting with +, -, or space), preserve the prefix
+		if strings.HasPrefix(line, "+") || strings.HasPrefix(line, "-") || strings.HasPrefix(line, " ") {
+			prefix := line[0:1]
+			content := strings.TrimSpace(line[1:])
+			normalized = append(normalized, prefix+content)
+		} else {
+			normalized = append(normalized, strings.TrimSpace(line))
+		}
+	}
+
+	// Join lines and normalize newlines
+	result := strings.Join(normalized, "\n")
+
+	return result
+}
+
+// comparePatches compares two patches and returns true if they are equivalent
+func comparePatches(expected, actual string) bool {
+	// Normalize both patches
+	normalizedExpected := normalizeWhitespace(expected)
+	normalizedActual := normalizeWhitespace(actual)
+
+	// Trim trailing empty lines
+	normalizedExpected = strings.TrimRight(normalizedExpected, "\n")
+	normalizedActual = strings.TrimRight(normalizedActual, "\n")
+
+	return normalizedExpected == normalizedActual
+}
 
 func TestExecuteActionPatchFormat(t *testing.T) {
 	tests := []struct {
@@ -18,6 +58,7 @@ func TestExecuteActionPatchFormat(t *testing.T) {
 		currentContent string
 		plan           string
 		path           string
+		expectedPatch  string
 	}{
 		{
 			name: "simple replicaCount change",
@@ -33,6 +74,21 @@ image:
   pullPolicy: IfNotPresent`,
 			plan: "Update replicaCount to 3",
 			path: "values.yaml",
+			expectedPatch: `--- values.yaml
++++ values.yaml
+
+@@ -1,10 +1,10 @@
+ # Default values for empty-chart.
+ # This is a YAML-formatted file.
+ # Declare variables to be passed into your templates.
+
+ # This will set the replicaset count more information can be found here: https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/
++replicaCount: 3
+-replicaCount: 1
+
+ # This sets the container image more information can be found here: https://kubernetes.io/docs/concepts/containers/images/
+ image:
+   pullPolicy: IfNotPresent`,
 		},
 	}
 
@@ -40,84 +96,26 @@ image:
 		t.Run(tt.name, func(t *testing.T) {
 			param.Init(nil)
 			ctx := context.Background()
-			contentCh := make(chan string, 1)
-			doneCh := make(chan error, 1)
 
 			actionPlan := llmtypes.ActionPlanWithPath{
-				Path:       tt.path,
-				ActionPlan: llmtypes.ActionPlan{},
+				Path: tt.path,
+				ActionPlan: llmtypes.ActionPlan{
+					Action: "update",
+				},
 			}
 
 			plan := &workspacetypes.Plan{
 				Description: tt.plan,
 			}
 
-			go func() {
-				err := ExecuteAction(ctx, actionPlan, plan, tt.currentContent, contentCh, doneCh)
-				if err != nil {
-					t.Errorf("ExecuteAction failed: %v", err)
-				}
-			}()
-
-			// Collect the patch
-			var lastPatch string
-			go func() {
-				for {
-					select {
-					case patch := <-contentCh:
-						lastPatch = patch
-					case <-time.After(30 * time.Second):
-						doneCh <- errors.New("timeout waiting for patch")
-					}
-				}
-			}()
-
-			err := <-doneCh
+			patch, err := ExecuteAction(ctx, actionPlan, plan, tt.currentContent)
 			if err != nil {
-				t.Fatalf("ExecuteAction error: %v", err)
-			}
-			close(doneCh)
-
-			if lastPatch == "" {
-				t.Fatal("no patch received")
+				t.Errorf("ExecuteAction failed: %v", err)
 			}
 
-			// Validate the final patch format
-			lines := strings.Split(lastPatch, "\n")
-			if len(lines) < 4 {
-				t.Error("patch too short")
-				return
+			if !comparePatches(tt.expectedPatch, patch) {
+				t.Errorf("Expected patch:\n%s\nbut got:\n%s", tt.expectedPatch, patch)
 			}
-
-			// Check headers
-			if !strings.HasPrefix(lines[0], "--- "+tt.path) {
-				t.Errorf("invalid first header: %s", lines[0])
-			}
-			if !strings.HasPrefix(lines[1], "+++ "+tt.path) {
-				t.Errorf("invalid second header: %s", lines[1])
-			}
-
-			// Count headers and hunks
-			headerCount := 0
-			hunkCount := 0
-			for _, line := range lines {
-				trimmed := strings.TrimSpace(line)
-				if strings.HasPrefix(trimmed, "--- ") || strings.HasPrefix(trimmed, "+++ ") {
-					headerCount++
-				}
-				if strings.HasPrefix(trimmed, "@@") {
-					hunkCount++
-				}
-			}
-
-			if headerCount != 2 {
-				t.Errorf("wrong number of headers: got %d, want 2", headerCount)
-			}
-			if hunkCount != 1 {
-				t.Errorf("wrong number of hunks: got %d, want 1", hunkCount)
-			}
-
-			t.Logf("Generated patch:\n%s", lastPatch)
 		})
 	}
 }
