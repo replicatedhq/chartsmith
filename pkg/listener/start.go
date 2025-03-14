@@ -53,7 +53,7 @@ func StartListeners(ctx context.Context) error {
 	}, nil)
 
 	l.AddHandler(ctx, "execute_action", 10, time.Second*10, func(notification *pgconn.Notification) error {
-		if err := handleExecuteActionNotificationWithLock(ctx, notification.Payload); err != nil {
+		if err := handleExecuteActionNotification(ctx, notification.Payload); err != nil {
 			logger.Error(fmt.Errorf("failed to handle execute action notification: %w", err))
 			return fmt.Errorf("failed to handle execute action notification: %w", err)
 		}
@@ -141,8 +141,4 @@ func handleConversionNextFileNotificationWithLock(ctx context.Context, payload s
 
 func handleConversionSimplifyNotificationWithLock(ctx context.Context, payload string) error {
 	return handleConversionSimplifyNotification(ctx, payload)
-}
-
-func handleExecuteActionNotificationWithLock(ctx context.Context, payload string) error {
-	return handleExecuteActionNotification(ctx, payload)
 }

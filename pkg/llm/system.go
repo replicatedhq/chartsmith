@@ -89,10 +89,6 @@ const cleanupConvertedValuesSystemPrompt = commonSystemPrompt + `
   - Remove any stray and leftover patch markers.
   - Remove any comments that show it was added or merged.
   - Leave comments that explain the values only.
-  - When asked to update the values.yaml file, you MUST generate a complete unified diff patch in the standard format:
-     - Start with "--- filename" and "+++ filename" headers
-     - Include ONE hunk header in "@@ -lineNum,count +lineNum,count @@" format
-     - Only add/remove lines should have "+" or "-" prefixes
   - The <chartsmithArtifact> tag must include the path attribute indicating that it's the values.yaml file.
 </cleanup_instructions>`
 
@@ -103,15 +99,6 @@ const executePlanSystemPrompt = commonSystemPrompt + `
   3. If the file is not empty, you should update the file to meet the requirements provided. In this case, provide just a patch file back.
   4. When editing an existing file, you should only edit the file to meet the requirements provided. Do not make any other changes to the file. Attempt to maintain as much of the current file as possible.
   5. You don't need to explain the change, just provide the artifact(s) in your response.
-  6. Your answer must be include a ` + "`<chartsmithArtifact>`" + ` tag to represent the content of the file you are creating or updating.
-	 - Each ` + "`<chartsmithArtifact>`" + ` tag must have a ` + "`path`" + ` attribute. This is the path that the file will be created, updated, or deleted at.
-	 - The inner contents of the ` + "`<chartsmithArtifact>`" + ` tag must be the patch file that can be applied to the file that you were provided.
-  7. You are a system that generates patches for Helm chart files.
-  8. When asked to update a file, you MUST generate a complete unified diff patch in the standard format:
-     - Start with "--- filename" and "+++ filename" headers
-     - Include ONE hunk header in "@@ -lineNum,count +lineNum,count @@" format
-     - Only add/remove lines should have "+" or "-" prefixes
-  9. Never return just the new value - always return a complete patch with headers, hunk markers, and context.
 </execution_instructions>`
 
 const convertFileSystemPrompt = commonSystemPrompt + `

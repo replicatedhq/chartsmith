@@ -109,11 +109,10 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 		}
 	}
 
-	streamCh := make(chan string)
-	doneCh := make(chan error)
+	patchCh := make(chan string)
+	errCh := make(chan error)
 
 	go func() {
-		fmt.Printf("Starting ExecuteAction goroutine for path: %s\n", p.Path)
 		action := ""
 
 		for _, item := range plan.ActionFiles {
@@ -132,12 +131,14 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 			Path: p.Path,
 		}
 
-		if err := llm.ExecuteAction(ctx, apwp, plan, currentContent, streamCh, doneCh); err != nil {
-			logger.Error(fmt.Errorf("failed to execute action: %w", err))
+		updatedContent, err := llm.ExecuteAction(ctx, apwp, plan, currentContent)
+		if err != nil {
+			errCh <- fmt.Errorf("failed to execute action: %w", err)
 		}
+
+		patchCh <- updatedContent
 	}()
 
-	fmt.Printf("Starting channel select loop for path: %s\n", p.Path)
 	done := false
 	finalContent := ""
 	timeout := time.After(5 * time.Minute)
@@ -147,14 +148,10 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 		case <-timeout:
 			fmt.Printf("Timeout reached for path: %s\n", p.Path)
 			return fmt.Errorf("timeout waiting for action execution")
-		case err = <-doneCh:
-			fmt.Printf("Received from doneCh for path %s: %v\n", p.Path, err)
-			if err != nil {
-				logger.Error(fmt.Errorf("failed to execute action: %w", err))
-			}
+		case err := <-errCh:
+			return err
+		case finalContent = <-patchCh:
 			done = true
-		case stream := <-streamCh:
-			finalContent = stream
 
 			// send the final content to the realtime server
 			e := realtimetypes.ArtifactUpdatedEvent{
@@ -254,13 +251,13 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 			var chatMessageID string
 			if len(finalUpdatePlan.ChatMessageIDs) > 0 {
 				chatMessageID = finalUpdatePlan.ChatMessageIDs[len(finalUpdatePlan.ChatMessageIDs)-1]
-				
+
 				// Log the chat message we're associating the render job with
-				logger.Info("Associating render job with chat message", 
+				logger.Info("Associating render job with chat message",
 					zap.String("chatMessageID", chatMessageID),
 					zap.String("planID", finalUpdatePlan.ID),
 					zap.Int("currentRevision", w.CurrentRevision))
-				
+
 				// Create a render job for the completed revision and associate it with the chat message
 				if err := workspace.EnqueueRenderWorkspaceForRevision(ctx, finalUpdatePlan.WorkspaceID, w.CurrentRevision, chatMessageID); err != nil {
 					return fmt.Errorf("failed to create render job for completed plan: %w", err)
