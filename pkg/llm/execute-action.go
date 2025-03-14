@@ -117,12 +117,13 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 				if input.Command == "view" {
 					response = updatedContent
 				} else if input.Command == "str_replace" {
-					updatedContent = strings.ReplaceAll(updatedContent, input.OldStr, input.NewStr)
-					patch, err := diff.GeneratePatch(currentContent, updatedContent, actionPlanWithPath.Path)
+					patchedContent := strings.ReplaceAll(updatedContent, input.OldStr, input.NewStr)
+					patch, err := diff.GeneratePatch(updatedContent, patchedContent, actionPlanWithPath.Path)
 					if err != nil {
 						return "", err
 					}
 
+					updatedContent = patchedContent
 					patchStreamCh <- patch
 					response = "Updated"
 				}
@@ -157,7 +158,7 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 		patchStreamCh <- patch
 	}
 
-	return patch, nil
+	return updatedContent, nil
 }
 
 // Helper functions

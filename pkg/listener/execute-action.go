@@ -111,6 +111,7 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 	}
 
 	patchCh := make(chan string)
+	finalContentCh := make(chan string)
 	errCh := make(chan error)
 
 	go func() {
@@ -132,30 +133,32 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 			Path: p.Path,
 		}
 
-		updatedContent, err := llm.ExecuteAction(ctx, apwp, plan, currentContent, patchCh)
+		finalContent, err := llm.ExecuteAction(ctx, apwp, plan, currentContent, patchCh)
 		if err != nil {
 			errCh <- fmt.Errorf("failed to execute action: %w", err)
 		}
 
-		patchCh <- updatedContent
+		finalContentCh <- finalContent
 		errCh <- nil
 	}()
 
-	done := false
-	finalContent := ""
 	timeout := time.After(5 * time.Minute)
 
-	for !done {
+	for {
 		select {
 		case <-timeout:
 			fmt.Printf("Timeout reached for path: %s\n", p.Path)
 			return fmt.Errorf("timeout waiting for action execution")
 		case err := <-errCh:
-			done = true
 			if err != nil {
 				return err
 			}
-		case finalContent = <-patchCh:
+		case finalContent := <-finalContentCh:
+			if err := finalizeFile(ctx, finalContent, updatedPlan, p, w, c, realtimeRecipient); err != nil {
+				return err
+			}
+			return nil
+		case patchContent := <-patchCh:
 			// send the final content to the realtime server
 			e := realtimetypes.ArtifactUpdatedEvent{
 				WorkspaceID: updatedPlan.WorkspaceID,
@@ -163,7 +166,7 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 					RevisionNumber: w.CurrentRevision,
 					Path:           p.Path,
 					Content:        currentContent,
-					PendingPatch:   finalContent,
+					PendingPatch:   patchContent,
 				},
 			}
 
@@ -172,11 +175,14 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 			}
 		}
 	}
+}
 
+func finalizeFile(ctx context.Context, finalContent string, updatedPlan *workspacetypes.Plan, p executeActionPayload, w *workspacetypes.Workspace, c workspacetypes.Chart, realtimeRecipient realtimetypes.Recipient) error {
 	// update the action file to completed
-	conn2 := persistence.MustGeUunpooledPostgresSession()
-	defer conn2.Close(ctx)
-	finalUpdateTx, err := conn2.Begin(ctx)
+	conn := persistence.MustGeUunpooledPostgresSession()
+	defer conn.Close(ctx)
+
+	finalUpdateTx, err := conn.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
@@ -205,6 +211,11 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 	// save the content of the file
 	if err := workspace.CreateOrPatchFile(ctx, finalUpdatePlan.WorkspaceID, w.CurrentRevision, c.ID, p.Path, finalContent); err != nil {
 		return fmt.Errorf("failed to set file content in workspace: %w", err)
+	}
+
+	e := realtimetypes.PlanUpdatedEvent{
+		WorkspaceID: updatedPlan.WorkspaceID,
+		Plan:        updatedPlan,
 	}
 
 	// send the updated plan to the realtime server

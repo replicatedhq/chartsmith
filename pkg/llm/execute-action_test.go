@@ -108,7 +108,13 @@ image:
 				Description: tt.plan,
 			}
 
-			patch, err := ExecuteAction(ctx, actionPlan, plan, tt.currentContent)
+			patchCh := make(chan string)
+
+			go func() {
+				<-patchCh
+			}()
+
+			patch, err := ExecuteAction(ctx, actionPlan, plan, tt.currentContent, patchCh)
 			if err != nil {
 				t.Errorf("ExecuteAction failed: %v", err)
 			}
