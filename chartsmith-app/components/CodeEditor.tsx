@@ -689,19 +689,10 @@ export const CodeEditor = React.memo(function CodeEditor({
   const handleRegularEditorMount = (editor: editor.IStandaloneCodeEditor, monaco: typeof import("monaco-editor")) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
-
-    // Add command palette shortcut
-    const commandId = 'chartsmith.openCommandPalette';
-    editor.addAction({
-      id: commandId,
-      label: 'Open Command Palette',
-      keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK],
-      run: () => {
-        if (onCommandK) {
-          onCommandK();
-        }
-      }
-    });
+    
+    // No need to add command palette shortcut here
+    // The global hotkey from CommandMenuContext will handle this
+    // This prevents duplicate command palette triggers
   };
   
   // Handle diff editor mount differently
@@ -710,16 +701,9 @@ export const CodeEditor = React.memo(function CodeEditor({
     editorRef.current = editor.getModifiedEditor(); // Store modified editor for consistency
     monacoRef.current = monaco;
 
-    // Add command palette to both editors
-    const commandId = 'chartsmith.openCommandPalette';
-    [editor.getModifiedEditor(), editor.getOriginalEditor()].forEach(ed => {
-      ed.addAction({
-        id: commandId,
-        label: 'Open Command Palette',
-        keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK],
-        run: () => onCommandK?.()
-      });
-    });
+    // No need to add command palette actions here.
+    // The global hotkey from CommandMenuContext will handle this
+    // This prevents duplicate command palette triggers
   };
   
   // Create a stable key for editor rendering

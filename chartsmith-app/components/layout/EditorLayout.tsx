@@ -6,7 +6,6 @@ import { useTheme } from "@/contexts/ThemeContext";
 // components
 import { TopNav } from "@/components/TopNav";
 import { DebugPanel } from "@/components/DebugPanel";
-import CommandMenu from "@/components/CommandMenu";
 
 // contexts
 import { useCommandMenu } from "@/contexts/CommandMenuContext";
@@ -33,15 +32,7 @@ export function EditorLayout({ children }: EditorLayoutProps) {
         {children}
         <DebugPanel isVisible={isDebugVisible} />
       </div>
-      <CommandMenu
-        isOpen={isCommandMenuOpen}
-        onClose={() => setIsCommandMenuOpen(false)}
-        onToggleDebug={() => {
-          setIsDebugVisible(!isDebugVisible);
-          setIsCommandMenuOpen(false);
-        }}
-        isDebugVisible={isDebugVisible}
-      />
+      {/* CommandMenu is now managed by CommandMenuWrapper */}
     </div>
   );
 }
