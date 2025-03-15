@@ -53,7 +53,7 @@ describe('applyPatch', () => {
 @@ -3,2 +3,2 @@
 -line 3
 +new line 3
- line 4`
+ line 4`],
     };
 
     const result = await applyPatch(file);
@@ -75,7 +75,7 @@ describe('applyPatch', () => {
  line 1
 +new line
 +another new line
- line 2`
+ line 2`],
     };
 
     const result = await applyPatch(file);
@@ -96,7 +96,7 @@ describe('applyPatch', () => {
 @@ -1,3 +1,2 @@
  line 1
 -line to remove
- line 2`
+ line 2`],
     };
 
     const result = await applyPatch(file);
@@ -117,7 +117,7 @@ describe('applyPatch', () => {
  line 3
 -line 4
 +new line 4
- line 5`
+ line 5`],
     };
 
     const result = await applyPatch(file);
@@ -141,7 +141,7 @@ describe('applyPatch', () => {
       pendingPatches: [`--- test.txt
 +++ test.txt
 @@ invalid hunk header @@
-+new content`
++new content`],
     };
 
     // Our updated implementation tolerates invalid headers instead of throwing
@@ -162,7 +162,7 @@ describe('applyPatch', () => {
       pendingPatches: [`--- test.txt
 +++ test.txt
 @@ -0,0 +1,1 @@
-+new content`
++new content`],
     };
 
     const result = await applyPatch(file);
@@ -180,7 +180,7 @@ index 1234567..89abcdef 100644
 +++ b/test.txt
 @@ -1 +1 @@
 -original
-+modified`
++modified`],
     };
 
     const result = await applyPatch(file);
@@ -196,7 +196,7 @@ index 1234567..89abcdef 100644
 +++ test.txt
 @@ -1 +1 @@
 -test
-+modified`
++modified`],
     };
 
     await applyPatch(file);

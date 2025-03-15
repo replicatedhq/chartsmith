@@ -323,7 +323,9 @@ export function useMonacoSingleInstance(
               // Only dispose if not in use
               if (!isModelInUse) {
                 model.dispose();
-                delete window.__monacoModels[key];
+                if (window.__monacoModels) {
+                  delete window.__monacoModels[key];
+                }
               }
             } catch (e) {
               console.warn("Error checking model usage:", e);

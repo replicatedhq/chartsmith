@@ -722,13 +722,12 @@ export const CodeEditor = React.memo(function CodeEditor({
     });
   };
   
-  // We need a completely unique key each time the editor type changes
-  // This forces React to create entirely new components instead of updating in place
-  const editorStateKey = useMemo(() => {
-    // Include both file ID and whether it has pending patches in the key
-    const hasPendingPatches = !!selectedFile?.pendingPatches && selectedFile.pendingPatches.length > 0;
-    return `${selectedFile?.id || 'none'}-${hasPendingPatches ? 'diff' : 'normal'}-${Date.now()}`;
-  }, [selectedFile?.id, !!(selectedFile?.pendingPatches && selectedFile.pendingPatches.length > 0)]);
+  // Create a stable key for editor rendering
+  const editorKey = selectedFile?.id || 'none';
+  const hasPendingPatches = selectedFile?.pendingPatches && selectedFile.pendingPatches.length > 0;
+  
+  // Generate a unique key for the editor to force re-creation when needed
+  const editorStateKey = `${editorKey}-${hasPendingPatches ? 'diff' : 'normal'}-${Date.now()}`;
   
   // Let's try a more conventional approach but with optimizations
   return (

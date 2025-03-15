@@ -300,7 +300,27 @@ export function useCentrifugo({
             if (newWorkspaceRender.completedAt) {
               setActiveRenderIds(prev => prev.filter(id => id !== data.renderId));
             }
-            setRenders(prev => [...prev, newWorkspaceRender]);
+            
+            // Ensure dates are properly formatted
+            const formattedRender = {
+              ...newWorkspaceRender,
+              // Ensure createdAt is a Date
+              createdAt: new Date(newWorkspaceRender.createdAt),
+              // Ensure completedAt is a Date or undefined
+              completedAt: newWorkspaceRender.completedAt 
+                ? new Date(newWorkspaceRender.completedAt) 
+                : undefined,
+              // Format dates for each chart
+              charts: newWorkspaceRender.charts.map(chart => ({
+                ...chart,
+                createdAt: new Date(chart.createdAt),
+                completedAt: chart.completedAt 
+                  ? new Date(chart.completedAt) 
+                  : undefined
+              }))
+            };
+            
+            setRenders(prev => [...prev, formattedRender]);
           });
         }
         return newRenders;
@@ -319,11 +339,21 @@ export function useCentrifugo({
           setActiveRenderIds(prev => prev.filter(id => id !== data.renderId));
         }
 
+        // Make sure we convert string date to Date object if needed
+        const completedAtDate = data.completedAt 
+          ? new Date(data.completedAt) 
+          : render.completedAt;
+
         return {
           ...render,
-          completedAt: data.completedAt || render.completedAt,
+          completedAt: completedAtDate,
           charts: render.charts.map((chart: RenderedChart) => {
             if (chart.id !== data.renderChartId) return chart;
+
+            // Also convert chart completion date to Date object if needed
+            const chartCompletedAt = data.completedAt 
+              ? new Date(data.completedAt)
+              : chart.completedAt;
 
             return {
               ...chart,
@@ -333,7 +363,7 @@ export function useCentrifugo({
               depUpdateCommand: data.depUpdateCommand,
               depUpdateStderr: data.depUpdateStderr,
               depUpdateStdout: data.depUpdateStdout,
-              completedAt: data.completedAt || chart.completedAt,
+              completedAt: chartCompletedAt,
             };
           })
         };
