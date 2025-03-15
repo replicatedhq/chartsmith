@@ -52,33 +52,6 @@ export function WorkspaceContent({
   const [, setEditorView] = useAtom(editorViewAtom);
   const [, setSelectedFile] = useAtom(selectedFileAtom);
 
-  // Helper function to deduplicate renders with the same revision number
-  function deduplicateRendersByRevision(renders: RenderedWorkspace[]): RenderedWorkspace[] {
-    // Group renders by revision number
-    const rendersByRevision = new Map<number, RenderedWorkspace[]>();
-    
-    // First, group all renders by their revision number
-    renders.forEach(render => {
-      if (!rendersByRevision.has(render.revisionNumber)) {
-        rendersByRevision.set(render.revisionNumber, []);
-      }
-      rendersByRevision.get(render.revisionNumber)!.push(render);
-    });
-    
-    // For each revision, keep only the most recently created render
-    const deduplicatedRenders: RenderedWorkspace[] = [];
-    rendersByRevision.forEach(rendersForRevision => {
-      // Sort by createdAt (newest first)
-      rendersForRevision.sort((a, b) => 
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-      
-      // Keep only the first (most recent) render for each revision
-      deduplicatedRenders.push(rendersForRevision[0]);
-    });
-    
-    return deduplicatedRenders;
-  }
 
   // Hydrate atoms on mount and when initial values change
   useEffect(() => {
@@ -90,14 +63,9 @@ export function WorkspaceContent({
 
     setMessages(initialMessages);
     setPlans(initialPlans);
-    
-    // Deduplicate renders that are for the same revision
-    const dedupedRenders = deduplicateRendersByRevision(initialRenders);
-    console.debug(`Deduped renders: original=${initialRenders.length}, deduped=${dedupedRenders.length}`);
-    setRenders(dedupedRenders);
-    
+
     setConversions(initialConversions);
-    
+
     // Always reset to source view with no file selected when switching workspaces
     setEditorView("source");
     setSelectedFile(undefined);

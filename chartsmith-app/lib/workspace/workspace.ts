@@ -1094,6 +1094,7 @@ async function listFilesForChart(workspaceID: string, chartID: string, revisionN
       return [];
     }
 
+    console.log("result", result.rows);
     const files: WorkspaceFile[] = result.rows.map((row: { id: string; file_path: string; content: string; summary: string, pending_patches: string[] }) => {
       return {
         id: row.id,

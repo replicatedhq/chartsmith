@@ -7,9 +7,11 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/replicatedhq/chartsmith/pkg/logger"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 	"github.com/replicatedhq/chartsmith/pkg/workspace/types"
 	"github.com/tuvistavie/securerandom"
+	"go.uber.org/zap"
 )
 
 func GetFile(ctx context.Context, fileID string, revisionNumber int) (*types.File, error) {
@@ -67,6 +69,13 @@ func SetFileEmbeddings(ctx context.Context, fileID string, revisionNumber int, e
 }
 
 func AddPendingPatch(ctx context.Context, workspaceID string, revisionNumber int, chartID string, filePath string, pendingPatch string) error {
+	logger.Debug("Adding pending patch",
+		zap.String("workspaceID", workspaceID),
+		zap.Int("revisionNumber", revisionNumber),
+		zap.String("chartID", chartID),
+		zap.String("filePath", filePath),
+		zap.String("pendingPatch", pendingPatch),
+	)
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
 
@@ -88,14 +97,22 @@ func AddPendingPatch(ctx context.Context, workspaceID string, revisionNumber int
 			return fmt.Errorf("error inserting file in workspace: %w", err)
 		}
 	} else {
+		// Create a string slice for the patches
+		var patches []string
+
 		if existingPatches.Valid {
-			existingPatches.Elements = append(existingPatches.Elements, pendingPatch)
+			// Use the existing patches and append the new one
+			patches = append(existingPatches.Elements, pendingPatch)
 		} else {
-			existingPatches.Elements = []string{pendingPatch}
+			// Start with just the new patch
+			patches = []string{pendingPatch}
 		}
 
+		fmt.Printf("patches to save: %v\n", patches)
+		fmt.Printf("fileID: %v\n", fileID)
+
 		query := `UPDATE workspace_file SET pending_patches = $1 WHERE id = $2`
-		_, err = conn.Exec(ctx, query, existingPatches, fileID)
+		_, err = conn.Exec(ctx, query, patches, fileID)
 		if err != nil {
 			return fmt.Errorf("error updating file in workspace: %w", err)
 		}

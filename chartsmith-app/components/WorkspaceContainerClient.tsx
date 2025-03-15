@@ -30,17 +30,15 @@ interface WorkspaceContainerClientProps {
 
 export function WorkspaceContainerClient({
   session,
-  editorContent,
   onCommandK,
 }: WorkspaceContainerClientProps) {
   const { resolvedTheme } = useTheme();
   const { isDebugVisible } = useCommandMenu();
   const [selectedFile] = useAtom(selectedFileAtom);
   const [workspace] = useAtom(workspaceAtom);
-  const [looseFiles] = useAtom(looseFilesAtom);
   const [view, setView] = useAtom(editorViewAtom);
   const [renderedFiles] = useAtom(renderedFilesAtom);
-  
+
   // Create a ref to track the Monaco editor instance in the rendered view
   const renderedEditorRef = React.useRef<any>(null);
 
@@ -174,7 +172,7 @@ export function WorkspaceContainerClient({
                             onMount={(editor, monaco) => {
                               // Store reference to the editor
                               renderedEditorRef.current = editor;
-                              
+
                               // Add command palette to this editor too
                               const commandId = 'chartsmith.openCommandPalette.rendered';
                               editor.addAction({

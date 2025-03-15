@@ -504,14 +504,6 @@ export async function getFileByIdAndRevision(fileId: string, revision: number): 
       throw new Error(`File not found with id=${fileId} and revision=${revision}`);
     }
 
-    // Log the first row to help diagnose issues
-    logger.info(`File found: ${JSON.stringify({
-      id: result.rows[0].id,
-      filePath: result.rows[0].file_path,
-      contentLength: result.rows[0].content?.length || 0,
-      hasPendingPatches: !!result.rows[0].pending_patches
-    })}`);
-
     const file: WorkspaceFile = {
       id: result.rows[0].id,
       filePath: result.rows[0].file_path,
@@ -534,7 +526,7 @@ export async function applyPatch(file: WorkspaceFile): Promise<WorkspaceFile> {
   try {
     // Get the first patch to apply (in the future could be enhanced to apply multiple patches)
     const pendingPatch = file.pendingPatches[0];
-    
+
     logger.info('Starting patch application:', {
       fileId: file.id,
       patchLength: pendingPatch.length,

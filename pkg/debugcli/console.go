@@ -15,6 +15,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/pkg/errors"
+	"github.com/replicatedhq/chartsmith/pkg/logger"
 	"github.com/replicatedhq/chartsmith/pkg/realtime"
 	"github.com/replicatedhq/chartsmith/pkg/workspace"
 	"github.com/replicatedhq/chartsmith/pkg/workspace/types"
@@ -36,6 +37,7 @@ type DebugConsole struct {
 }
 
 func RunConsole() error {
+	logger.SetDebug()
 	ctx := context.Background()
 
 	// Get DB connection string from environment
