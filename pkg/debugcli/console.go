@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"os/user"
 	"path/filepath"
 	"strconv"
@@ -353,7 +354,7 @@ func (c *DebugConsole) showHelp() {
 	fmt.Println("  " + boldGreen("new-revision") + "          Create a new revision for the current workspace")
 	fmt.Println("  " + boldGreen("list-files") + "            List files in the current workspace")
 	fmt.Println("  " + boldGreen("render") + " <values-path>  Render workspace with values.yaml from file path")
-	fmt.Println("  " + boldGreen("patch-file") + " <file-path> [--count=N]  Generate N patches for file (requires incomplete revision)")
+	fmt.Println("  " + boldGreen("patch-file") + " <file-path> [--count=N] [--use-diff-u]  Generate N patches for file (requires incomplete revision)")
 	fmt.Println("  " + boldGreen("apply-patch") + " <patch-id> Apply a previously generated patch")
 	fmt.Println("  " + boldGreen("randomize-yaml") + " <file-path> [--complexity=low|medium|high] Generate random YAML for testing")
 	fmt.Println()
@@ -571,12 +572,13 @@ func (c *DebugConsole) generatePatch(args []string) error {
 	}
 
 	if len(args) < 1 {
-		return errors.New("usage: patch-file <file-path> [--count=N] [--output=<output-dir>]")
+		return errors.New("usage: patch-file <file-path> [--count=N] [--output=<output-dir>] [--use-diff-u]")
 	}
 
 	filePath := args[0]
 	count := 1
 	outputDir := ""
+	useDiffU := false
 
 	// Parse optional arguments
 	for i := 1; i < len(args); i++ {
@@ -589,6 +591,8 @@ func (c *DebugConsole) generatePatch(args []string) error {
 			}
 		} else if strings.HasPrefix(args[i], "--output=") {
 			outputDir = strings.TrimPrefix(args[i], "--output=")
+		} else if args[i] == "--use-diff-u" {
+			useDiffU = true
 		}
 	}
 
@@ -615,6 +619,73 @@ func (c *DebugConsole) generatePatch(args []string) error {
 
 		// Generate the patch
 		patchContent := patchGen.GeneratePatch()
+
+		// If requested, use Unix diff -u format
+		if useDiffU {
+			// Create temporary files for original and modified content
+			tmpDir, err := os.MkdirTemp("", "chartsmith-patch")
+			if err != nil {
+				return errors.Wrap(err, "failed to create temp directory")
+			}
+			defer os.RemoveAll(tmpDir)
+
+			// Parse the existing patch to determine what the modified content should be
+			originalFile := filepath.Join(tmpDir, "original")
+			modifiedFile := filepath.Join(tmpDir, "modified")
+
+			if err := os.WriteFile(originalFile, []byte(content), 0644); err != nil {
+				return errors.Wrap(err, "failed to write original content")
+			}
+
+			// Create a temp file for the patch
+			tempPatchFile := filepath.Join(tmpDir, "patch.txt")
+			if err := os.WriteFile(tempPatchFile, []byte(patchContent), 0644); err != nil {
+				return errors.Wrap(err, "failed to write temp patch file")
+			}
+
+			// Copy original content to the modified file initially
+			if err := os.WriteFile(modifiedFile, []byte(content), 0644); err != nil {
+				return errors.Wrap(err, "failed to write modified content")
+			}
+
+			// Apply the patch using GNU patch command
+			patchCmd := fmt.Sprintf("cd %s && patch -u %s < %s 2>/dev/null || true", 
+				tmpDir, filepath.Base(modifiedFile), filepath.Base(tempPatchFile))
+				
+			logger.Debug("Running patch command", logger.Any("cmd", patchCmd))
+			patchExec := exec.Command("bash", "-c", patchCmd)
+			if patchErr := patchExec.Run(); patchErr != nil {
+				logger.Debug("Patch command exited with error, continuing anyway", logger.Err(patchErr))
+			}
+
+			// Run diff -u to generate a proper unified diff
+			diffCmd := fmt.Sprintf("diff -u %s %s > %s 2>/dev/null || true", 
+				originalFile, modifiedFile, filepath.Join(tmpDir, "diff.patch"))
+			
+			cmd := exec.Command("bash", "-c", diffCmd)
+			if err := cmd.Run(); err != nil {
+				// Ignore diff exit code, it returns non-zero if files differ
+				logger.Debug("Diff command exited with error, this is normal", logger.Err(err))
+			}
+
+			// Read the generated diff
+			diffBytes, err := os.ReadFile(filepath.Join(tmpDir, "diff.patch"))
+			if err != nil {
+				return errors.Wrap(err, "failed to read diff output")
+			}
+
+			// Replace the original patch with the diff output
+			if len(diffBytes) > 0 {
+				logger.Debug("Using diff -u output for patch", logger.Any("length", len(diffBytes)))
+				patchContent = string(diffBytes)
+			} else {
+				logger.Debug("diff -u produced no output, using original patch")
+				
+				// Try to manually format the patch to make it more like a standard diff -u
+				// This is a simplistic approach, real-world patches need proper parsing
+				patchContent = formatAsDiffU(patchContent, filePath)
+			}
+		}
 
 		// Show the patch
 		fmt.Printf(boldGreen("\nPatch %d of %d (ID: %s):\n"), i, count, patchID)
@@ -953,4 +1024,25 @@ func (c *DebugConsole) isCurrentRevisionComplete() (bool, error) {
 	}
 
 	return isComplete, nil
+}
+
+// formatAsDiffU formats a patch to match standard diff -u format
+func formatAsDiffU(patch string, filePath string) string {
+	// If it already has --- and +++ headers, assume it's already in diff -u format
+	if strings.Contains(patch, "---") && strings.Contains(patch, "+++") {
+		return patch
+	}
+	
+	// Very simple reformatting - in a real implementation you would need
+	// to properly parse and reconstruct the patch
+	var sb strings.Builder
+	
+	// Add standard diff -u headers
+	sb.WriteString("--- " + filePath + "\n")
+	sb.WriteString("+++ " + filePath + "\n")
+	
+	// Add the original patch content, preserving any @@ headers
+	sb.WriteString(patch)
+	
+	return sb.String()
 }

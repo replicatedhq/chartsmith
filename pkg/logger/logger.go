@@ -140,3 +140,13 @@ func Debug(msg string, fields ...zap.Field) {
 func Debugf(template string, args ...interface{}) {
 	log.Sugar().Debugf(template, args...)
 }
+
+// Any creates a zap.Field for any value
+func Any(key string, value interface{}) zap.Field {
+	return zap.Any(key, value)
+}
+
+// Err creates a zap.Field for an error
+func Err(err error) zap.Field {
+	return zap.Error(err)
+}

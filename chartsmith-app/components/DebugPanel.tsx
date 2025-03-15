@@ -27,24 +27,33 @@ export function DebugPanel({ isVisible }: DebugPanelProps) {
         {selectedFile?.pendingPatches && selectedFile.pendingPatches.length > 0 ? (
           <div>
             <div className="mb-2 flex items-center">
-              <h3 className="text-md font-medium">Pending Patch</h3>
+              <h3 className="text-md font-medium">
+                Pending Patches ({selectedFile.pendingPatches.length})
+              </h3>
               <span className="ml-2 text-xs opacity-70 font-mono">
                 ({selectedFile.filePath?.split('/').pop()})
               </span>
             </div>
-            <pre
-              className={`p-3 rounded text-xs font-mono overflow-auto max-h-[calc(100vh-150px)] whitespace-pre ${
-                resolvedTheme === "dark"
-                  ? "bg-dark-border/40"
-                  : "bg-gray-100"
-              }`}
-            >
-              {selectedFile.pendingPatches[0]}
-            </pre>
+            {selectedFile.pendingPatches.map((patch, index) => (
+              <div key={index} className="mb-4">
+                <div className="text-xs font-medium mb-1 px-1 py-0.5 inline-block rounded bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200">
+                  Patch #{index + 1}
+                </div>
+                <pre
+                  className={`p-3 rounded text-xs font-mono overflow-auto max-h-[calc(100vh-250px)] whitespace-pre ${
+                    resolvedTheme === "dark"
+                      ? "bg-dark-border/40"
+                      : "bg-gray-100"
+                  }`}
+                >
+                  {patch}
+                </pre>
+              </div>
+            ))}
           </div>
         ) : (
           <p className="text-sm opacity-70">
-            No pending patch for the selected file.
+            No pending patches for the selected file.
           </p>
         )}
       </div>
