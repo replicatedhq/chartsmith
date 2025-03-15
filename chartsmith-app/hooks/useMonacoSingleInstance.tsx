@@ -182,15 +182,20 @@ export function useMonacoSingleInstance(
   const original = selectedFile?.content || '';
   const language = getLanguage(selectedFile?.filePath || '');
   
-  // Extract modified content from diff
+  // Extract modified content from all patches
   const modifiedContent = React.useMemo(() => {
     if (!selectedFile?.pendingPatches || selectedFile.pendingPatches.length === 0) return "";
     
     try {
-      // Use the first patch in the array
-      return parseDiff(selectedFile.content, selectedFile.pendingPatches[0]);
+      // Apply all patches in sequence
+      let currentContent = selectedFile.content;
+      for (const patch of selectedFile.pendingPatches) {
+        currentContent = parseDiff(currentContent, patch);
+      }
+      return currentContent;
     } catch (error) {
       console.error("Error parsing diff:", error);
+      // Fallback to just showing the first patch content
       return selectedFile.pendingPatches?.[0] || "";
     }
   }, [selectedFile?.content, selectedFile?.pendingPatches]);
