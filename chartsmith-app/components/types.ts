@@ -102,6 +102,7 @@ export interface CentrifugoMessageData {
   conversionFile?: ConversionFile;
   filePath?: string;
   status?: string;
+  completedAt?: string;
 }
 
 export interface RawRevision {

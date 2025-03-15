@@ -24,7 +24,8 @@ import {
   looseFilesBeforeApplyingPendingPatchesAtom,
   chartsBeforeApplyingPendingPatchesAtom,
   handleConversionUpdatedAtom,
-  handleConversionFileUpdatedAtom
+  handleConversionFileUpdatedAtom,
+  activeRenderIdsAtom
  } from "@/atoms/workspace";
 import { selectedFileAtom } from "@/atoms/workspace";
 
@@ -53,6 +54,7 @@ export function useCentrifugo({
   const [, handleConversionFileUpdated] = useAtom(handleConversionFileUpdatedAtom)
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [, handlePlanUpdated] = useAtom(handlePlanUpdatedAtom);
+  const [activeRenderIds, setActiveRenderIds] = useAtom(activeRenderIdsAtom);
 
   const handleRevisionCreated = useCallback(async (revision: any) => {
     if (!session || !revision.workspaceId) return;
@@ -74,6 +76,24 @@ export function useCentrifugo({
 
     const chatMessage = data.chatMessage;
     console.log("Received chat message update:", chatMessage);
+    
+    // If this message starts a render operation, track the render ID
+    if (chatMessage.responseRenderId) {
+      setActiveRenderIds(prev => {
+        // Only add if not already tracked
+        if (!prev.includes(chatMessage.responseRenderId!)) {
+          console.log("Tracking new render:", chatMessage.responseRenderId);
+          return [...prev, chatMessage.responseRenderId!];
+        }
+        return prev;
+      });
+    }
+    
+    // If the message is complete and had a render ID, we can remove the render from active
+    if (chatMessage.isComplete && chatMessage.responseRenderId) {
+      setActiveRenderIds(prev => prev.filter(id => id !== chatMessage.responseRenderId));
+    }
+    
     setMessages(prev => {
       const newMessages = [...prev];
       const index = newMessages.findIndex(m => m.id === chatMessage.id);
@@ -105,7 +125,7 @@ export function useCentrifugo({
       }
       return newMessages;
     });
-  }, [setMessages]);
+  }, [setMessages, setActiveRenderIds]);
 
   const handleWorkspaceUpdated = useCallback((workspace: any) => {
     // Implementation can be added based on requirements
@@ -253,6 +273,22 @@ export function useCentrifugo({
     }
 
     console.log(data);
+    
+    // If this is a completion event (has completedAt or similar marker)
+    if (data.completedAt) {
+      console.log("Render completed:", data.renderId);
+      setActiveRenderIds(prev => prev.filter(id => id !== data.renderId));
+    } else if (data.renderId) {
+      // Add to active renders if not already there
+      setActiveRenderIds(prev => {
+        if (!prev.includes(data.renderId!)) {
+          console.log("Tracking render from stream event:", data.renderId);
+          return [...prev, data.renderId!];
+        }
+        return prev;
+      });
+    }
+    
     let renders = await setRenders(prev => {
       const newRenders = [...prev];
 
@@ -260,6 +296,10 @@ export function useCentrifugo({
       if (!newRenders.find(render => render.id === data.renderId)) {
         if (data.renderId) {
           getWorkspaceRenderAction(session, data.renderId).then(newWorkspaceRender => {
+            // Check if render is complete and remove from active if it is
+            if (newWorkspaceRender.completedAt) {
+              setActiveRenderIds(prev => prev.filter(id => id !== data.renderId));
+            }
             setRenders(prev => [...prev, newWorkspaceRender]);
           });
         }
@@ -269,9 +309,19 @@ export function useCentrifugo({
       // Now update the renders with the new stream data
       return newRenders.map(render => {
         if (render.id !== data.renderId) return render;
+        
+        // Check if the render is now complete
+        const isComplete = data.completedAt ? true : render.completedAt ? true : false;
+        
+        if (isComplete && !render.completedAt) {
+          console.log("Marking render as complete:", data.renderId);
+          // Remove from active renders
+          setActiveRenderIds(prev => prev.filter(id => id !== data.renderId));
+        }
 
         return {
           ...render,
+          completedAt: data.completedAt || render.completedAt,
           charts: render.charts.map((chart: RenderedChart) => {
             if (chart.id !== data.renderChartId) return chart;
 
@@ -283,12 +333,13 @@ export function useCentrifugo({
               depUpdateCommand: data.depUpdateCommand,
               depUpdateStderr: data.depUpdateStderr,
               depUpdateStdout: data.depUpdateStdout,
+              completedAt: data.completedAt || chart.completedAt,
             };
           })
         };
       });
     });
-  }, [session, setRenders]);
+  }, [session, setRenders, setActiveRenderIds]);
 
   const handleRenderFileEvent = useCallback((data: CentrifugoMessageData) => {
     if (!data.renderId || !data.renderChartId || !data.renderedFile) return;
@@ -407,6 +458,14 @@ export function useCentrifugo({
     handleConversionFileUpdatedMessage,
     handleConversationUpdatedMessage
   ]);
+
+  // Clear active renders when component unmounts
+  useEffect(() => {
+    return () => {
+      // Reset active renders on unmount
+      setActiveRenderIds([]);
+    };
+  }, [setActiveRenderIds]);
 
   useEffect(() => {
     if (!session?.user?.id || !workspace?.id) return;

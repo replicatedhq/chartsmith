@@ -46,7 +46,7 @@ export function TopNav() {
           </div>
         </Link>
 
-        <div className="flex-1 flex justify-center">
+        {/* <div className="flex-1 flex justify-center">
           <div className="relative" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave} ref={dropdownRef}>
             <button className={`px-3 py-1.5 text-sm flex items-center gap-2 rounded hover:bg-opacity-40 ${resolvedTheme === "dark" ? "text-gray-300 hover:text-white hover:bg-dark-border" : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"}`}>
               workspace
@@ -72,7 +72,7 @@ export function TopNav() {
               </>
             )}
           </div>
-        </div>
+        </div> */}
 
         <div className="flex items-center space-x-2 min-w-[200px] justify-end">
           {/* <StatusDropdown label="Eval" items={evalItems} showStatus={true} theme={resolvedTheme} />

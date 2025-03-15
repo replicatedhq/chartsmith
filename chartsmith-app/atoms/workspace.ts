@@ -233,3 +233,11 @@ export const renderedFilesAtom = atom(get => {
     )
   );
 });
+
+// Atom to track active renders
+export const activeRenderIdsAtom = atom<string[]>([]);
+
+// Atom to track if rendering is in progress
+export const isRenderingAtom = atom(
+  get => get(activeRenderIdsAtom).length > 0
+);

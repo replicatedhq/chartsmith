@@ -21,6 +21,12 @@ It's made for both the developer working on it and for AI models to read and app
 - **File Organization**: Group related components in folders
 - **Editor**: Monaco editor instances should be carefully managed to prevent memory leaks
 
+## Key Architecture Principles
+- The Frontend is a NextJS application in chartsmith-app
+- The's a single worker, written in go, run with `make run-worker`.
+- We have a Postres/pgvector database and Centrifugo for realtime notifications.
+- The intent is to keep this system design and avoid new databases, queues, components. Simplicity matters.
+
 
 ## Monaco Editor Implementation
 - Avoid recreating editor instances
