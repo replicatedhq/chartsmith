@@ -320,7 +320,19 @@ export function useCentrifugo({
               }))
             };
             
-            setRenders(prev => [...prev, formattedRender]);
+            setRenders(prev => {
+              // Check if we already have a render for this revision to avoid duplicates
+              const alreadyHasRenderForRevision = prev.some(r => 
+                r.revisionNumber === formattedRender.revisionNumber && r.id !== formattedRender.id
+              );
+              
+              if (alreadyHasRenderForRevision) {
+                console.debug(`Skipping duplicate render for revision ${formattedRender.revisionNumber}`);
+                return prev;
+              }
+              
+              return [...prev, formattedRender];
+            });
           });
         }
         return newRenders;

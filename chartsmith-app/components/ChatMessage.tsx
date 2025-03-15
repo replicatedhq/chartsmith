@@ -150,14 +150,12 @@ export function ChatMessage({
   const SortedContent = () => {
     return (
       <>
-        {/* TEXT FIRST */}
         {message?.response && (
           <div className="mb-4">
             <ReactMarkdown>{message.response}</ReactMarkdown>
           </div>
         )}
 
-        {/* PLAN SECOND */}
         {message?.responsePlanId && (
           <div className="w-full mb-4">
             {message.response && (
@@ -177,14 +175,8 @@ export function ChatMessage({
           </div>
         )}
 
-        {/* RENDER THIRD */}
         {message?.responseRenderId && (
           <div className="space-y-4 mt-4">
-            {(message.response || message.responsePlanId) && (
-              <div className="border-t border-gray-200 dark:border-dark-border/30 pt-4 mb-2">
-                <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">Rendered Charts:</div>
-              </div>
-            )}
             {render?.charts ? (
               render.charts.map((chart, index) => (
                 <Terminal
@@ -204,7 +196,6 @@ export function ChatMessage({
           </div>
         )}
 
-        {/* CONVERSION FOURTH */}
         {message?.responseConversionId && (
           <div className="mt-4">
             {(message.response || message.responsePlanId || message.responseRenderId) && (
@@ -220,7 +211,6 @@ export function ChatMessage({
           </div>
         )}
 
-        {/* FALLBACK LOADING */}
         {message && !message.response && !message.responsePlanId && !message.responseRenderId && !message.responseConversionId && (
           <LoadingSpinner message="generating response..." />
         )}

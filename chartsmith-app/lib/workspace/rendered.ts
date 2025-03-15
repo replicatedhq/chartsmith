@@ -6,6 +6,7 @@ import { logger } from "../utils/logger";
 import { getWorkspace } from "./workspace";
 
 export async function listWorkspaceRenders(session: Session, workspaceId: string): Promise<RenderedWorkspace[]> {
+  logger.debug("Listing workspace renders", { workspaceId });
   try {
     const db = getDB(await getParam("DB_URI"));
     const query = `
@@ -46,6 +47,7 @@ export async function listWorkspaceRenders(session: Session, workspaceId: string
 }
 
 export async function getRenderedWorkspace(renderId: string): Promise<RenderedWorkspace> {
+  logger.debug("Getting rendered workspace", { renderId });
   try {
     const db = getDB(await getParam("DB_URI"));
     const query = `
@@ -80,28 +82,32 @@ export async function getRenderedWorkspace(renderId: string): Promise<RenderedWo
 }
 
 export async function listRenderedChartsForWorkspaceRender(renderId: string, workspaceId: string, revisionNumber: number): Promise<RenderedChart[]> {
+  logger.debug("Listing rendered charts for workspace render", { renderId, workspaceId, revisionNumber });
   try {
     const db = getDB(await getParam("DB_URI"));
     const query = `
       SELECT
         workspace_rendered_chart.id,
-        chart_id,
+        workspace_rendered_chart.chart_id,
         workspace_chart.name,
-        is_success,
-        dep_update_command,
-        dep_update_stdout,
-        dep_update_stderr,
-        helm_template_command,
-        helm_template_stdout,
-        helm_template_stderr,
-        created_at,
-        completed_at
+        workspace_rendered_chart.is_success,
+        workspace_rendered_chart.dep_update_command,
+        workspace_rendered_chart.dep_update_stdout,
+        workspace_rendered_chart.dep_update_stderr,
+        workspace_rendered_chart.helm_template_command,
+        workspace_rendered_chart.helm_template_stdout,
+        workspace_rendered_chart.helm_template_stderr,
+        workspace_rendered_chart.created_at,
+        workspace_rendered_chart.completed_at
       FROM workspace_rendered_chart
-      JOIN workspace_chart ON workspace_rendered_chart.chart_id = workspace_chart.id
-      WHERE workspace_render_id = $1
+      INNER JOIN workspace_chart ON workspace_rendered_chart.chart_id = workspace_chart.id
+      INNER JOIN workspace_rendered on workspace_rendered.id = workspace_rendered_chart.workspace_render_id
+      WHERE workspace_render_id = $1 
+        AND workspace_chart.revision_number = workspace_rendered.revision_number
     `;
 
     const result = await db.query(query, [renderId]);
+    logger.debug(`Found ${result.rows.length} rendered charts for render ${renderId}`);
     const renderedCharts: RenderedChart[] = [];
     for (const row of result.rows) {
       const renderedChart: RenderedChart = {
@@ -122,6 +128,7 @@ export async function listRenderedChartsForWorkspaceRender(renderId: string, wor
 
       const renderedFiles = await listRenderedFilesForChartRender(renderedChart.chartId, workspaceId, revisionNumber);
       renderedChart.renderedFiles = renderedFiles;
+      logger.debug(`Found ${renderedFiles.length} rendered files for chart ${renderedChart.id}`);
 
       renderedCharts.push(renderedChart);
     }
@@ -138,8 +145,10 @@ export async function listRenderedFilesForChartRender(chartId: string, workspace
     logger.debug("Listing rendered files for chart render", { chartId, workspaceId, revisionNumber });
     const db = getDB(await getParam("DB_URI"));
 
+    // Modified query to prevent duplicate rows by adding DISTINCT
+    // Also fixed missing id field by using file_id for the id
     const query = `
-      SELECT
+      SELECT DISTINCT
         workspace_rendered_file.file_id,
         workspace_rendered_file.workspace_id,
         workspace_rendered_file.revision_number,
@@ -157,7 +166,7 @@ export async function listRenderedFilesForChartRender(chartId: string, workspace
     const renderedFiles: RenderedFile[] = [];
     for (const row of result.rows) {
       const renderedFile: RenderedFile = {
-        id: row.id,
+        id: row.file_id, // Use file_id as the id
         filePath: row.file_path,
         renderedContent: row.content,
       };
@@ -165,6 +174,9 @@ export async function listRenderedFilesForChartRender(chartId: string, workspace
       renderedFiles.push(renderedFile);
     }
 
+    logger.debug(`Returning ${renderedFiles.length} rendered files for chart ${chartId}`, {
+      filePaths: renderedFiles.map(f => f.filePath)
+    });
     return renderedFiles;
   } catch (err) {
     logger.error("Failed to list rendered files for chart render", { err });

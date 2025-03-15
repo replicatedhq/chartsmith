@@ -25,6 +25,12 @@ export const renderByIdAtom = atom(get => {
   return (id: string) => renders.find(r => r.id === id)
 })
 
+// New atom to get renders for a specific revision number
+export const rendersByRevisionAtom = atom(get => {
+  const renders = get(rendersAtom)
+  return (revisionNumber: number) => renders.filter(r => r.revisionNumber === revisionNumber)
+})
+
 export const conversionsAtom = atom<Conversion[]>([])
 export const conversionByIdAtom = atom(get => {
   const conversions = get(conversionsAtom)
@@ -116,7 +122,7 @@ export const allFilesWithPendingPatchesAtom = atom(get => {
   const charts = get(chartsAtom)
   const chartsWithPendingPatches = charts.filter(c => c.files.some(f => f.pendingPatches && f.pendingPatches.length > 0))
   // get the files with pending patches from each of the charts with pending patches
-  const filesWithPendingPatchesFromCharts = chartsWithPendingPatches.flatMap(c => 
+  const filesWithPendingPatchesFromCharts = chartsWithPendingPatches.flatMap(c =>
     c.files.filter(f => f.pendingPatches && f.pendingPatches.length > 0))
 
   return [...filesWithPendingPatches, ...filesWithPendingPatchesFromCharts]
@@ -224,14 +230,38 @@ export const addFileToWorkspaceAtom = atom(
   }
 );
 
-// Derived atom for getting all rendered files
-export const renderedFilesAtom = atom(get => {
+// Atom for getting rendered files for a specific revision
+export const renderedFilesByRevisionAtom = atom(get => {
   const renders = get(rendersAtom);
-  return renders.flatMap(render => 
-    render.charts.flatMap(chart => 
-      chart.renderedFiles || []
-    )
+
+  return (revisionNumber: number) => {
+    // Filter renders by the specified revision
+    const revisionRenders = renders.filter(render => render.revisionNumber === revisionNumber);
+
+    return revisionRenders.flatMap(render =>
+      render.charts.flatMap(chart =>
+        chart.renderedFiles || []
+      )
+    );
+  };
+});
+
+// Derived atom for getting all rendered files for the current revision
+export const renderedFilesAtom = atom(get => {
+  const workspace = get(workspaceAtom);
+  const getRenderedFilesByRevision = get(renderedFilesByRevisionAtom);
+  const allRenders = get(rendersAtom);
+
+  if (!workspace) return [];
+
+  // Log debug info to help identify filtering
+  console.debug(
+    `Filtering ${allRenders.length} renders to only show revision ${workspace.currentRevisionNumber}. ` +
+    `Available revisions: ${[...new Set(allRenders.map(r => r.revisionNumber))].join(', ')}`
   );
+
+  // Get rendered files for the current revision
+  return getRenderedFilesByRevision(workspace.currentRevisionNumber);
 });
 
 // Atom to track active renders

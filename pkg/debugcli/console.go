@@ -86,6 +86,7 @@ func (c *DebugConsole) run() error {
 	// Just provide basic tab completion initially
 	workspaceItems := []readline.PrefixCompleterInterface{
 		readline.PcItem("/workspace"),
+		readline.PcItem("/new-revision"),
 	}
 
 	// Configure readline with enhanced history and key bindings
@@ -183,6 +184,15 @@ func (c *DebugConsole) run() error {
 						fmt.Println(boldRed("Error: Invalid workspace command format. Use '/workspace' or '/workspace <id>'"))
 					}
 					continue
+				case "new-revision":
+					if c.activeWorkspace == nil {
+						fmt.Println(boldRed("Error: No workspace selected. Use '/workspace <id>' to select a workspace"))
+					} else {
+						if err := c.createNewRevision(); err != nil {
+							fmt.Println(boldRed("Error:"), err)
+						}
+					}
+					continue
 				case "help":
 					c.showHelp()
 					continue
@@ -219,9 +229,19 @@ func (c *DebugConsole) executeCommand(cmd string, args []string) error {
 		c.showHelp()
 	case "workspace":
 		return c.listAvailableWorkspaces()
+	case "new-revision":
+		return c.createNewRevision()
 	case "render":
 		return c.renderWorkspace(args)
 	case "patch-file":
+		// Check if current revision is complete before allowing patches
+		isComplete, err := c.isCurrentRevisionComplete()
+		if err != nil {
+			return errors.Wrap(err, "failed to check if current revision is complete")
+		}
+		if isComplete {
+			return errors.New("cannot generate patches for completed revision. Use 'new-revision' command first")
+		}
 		return c.generatePatch(args)
 	case "apply-patch":
 		return c.applyPatch(args)
@@ -323,13 +343,15 @@ func (c *DebugConsole) showHelp() {
 	fmt.Println("  " + boldGreen("/help") + "                 Show this help")
 	fmt.Println("  " + boldGreen("/workspace") + "            List available workspaces")
 	fmt.Println("  " + boldGreen("/workspace") + " <id>       Select a workspace by ID")
+	fmt.Println("  " + boldGreen("/new-revision") + "         Create a new revision for the current workspace")
 	fmt.Println()
 
 	fmt.Println(boldBlue("Workspace Commands:"))
 	fmt.Println("  " + boldGreen("workspace") + "             List available workspaces")
+	fmt.Println("  " + boldGreen("new-revision") + "          Create a new revision for the current workspace")
 	fmt.Println("  " + boldGreen("list-files") + "            List files in the current workspace")
 	fmt.Println("  " + boldGreen("render") + " <values-path>  Render workspace with values.yaml from file path")
-	fmt.Println("  " + boldGreen("patch-file") + " <file-path> [--count=N]  Generate N patches for file")
+	fmt.Println("  " + boldGreen("patch-file") + " <file-path> [--count=N]  Generate N patches for file (requires incomplete revision)")
 	fmt.Println("  " + boldGreen("apply-patch") + " <patch-id> Apply a previously generated patch")
 	fmt.Println("  " + boldGreen("randomize-yaml") + " <file-path> [--complexity=low|medium|high] Generate random YAML for testing")
 	fmt.Println()
@@ -747,8 +769,10 @@ func (c *DebugConsole) updateWorkspaceCompletions(rl *readline.Instance) {
 	// Build the full completer with workspace and file completions
 	completer := readline.NewPrefixCompleter(
 		readline.PcItem("/workspace", wsCompletions...),
+		readline.PcItem("/new-revision"),
 		readline.PcItem("/help"),
 		readline.PcItem("help"),
+		readline.PcItem("new-revision"),
 		readline.PcItem("list-files"),
 		// Add file path completions to commands that use files
 		readline.PcItem("render"),
@@ -761,6 +785,118 @@ func (c *DebugConsole) updateWorkspaceCompletions(rl *readline.Instance) {
 
 	// Update the readline instance with the new completer
 	rl.Config.AutoComplete = completer
+}
+
+// createNewRevision creates a new workspace revision
+func (c *DebugConsole) createNewRevision() error {
+	if c.activeWorkspace == nil {
+		return errors.New("no workspace selected")
+	}
+
+	workspaceID := c.activeWorkspace.ID
+	var currentRevisionNumber int = c.activeWorkspace.CurrentRevision
+
+	fmt.Printf(boldBlue("Creating new revision for workspace %s (current revision: %d)\n"),
+		c.activeWorkspace.Name, currentRevisionNumber)
+
+	// Start transaction
+	tx, err := c.pgClient.Begin(c.ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to begin transaction")
+	}
+	defer tx.Rollback(c.ctx) // Will be ignored if tx.Commit() is called
+
+	// Get next revision number
+	var newRevisionNumber int
+	err = tx.QueryRow(c.ctx, `
+		WITH latest_revision AS (
+			SELECT * FROM workspace_revision
+			WHERE workspace_id = $1
+			ORDER BY revision_number DESC
+			LIMIT 1
+		),
+		next_revision AS (
+			SELECT COALESCE(MAX(revision_number), 0) + 1 as next_num
+			FROM workspace_revision
+			WHERE workspace_id = $1
+		)
+		INSERT INTO workspace_revision (
+			workspace_id, revision_number, created_at,
+			created_by_user_id, created_type, is_complete, is_rendered, plan_id
+		)
+		SELECT
+			$1,
+			next_num,
+			NOW(),
+			'debug-console', -- created by debug console
+			'manual',        -- manual creation
+			false,           -- not complete
+			false,           -- not rendered
+			NULL             -- no plan
+		FROM next_revision
+		LEFT JOIN latest_revision lr ON true
+		RETURNING revision_number
+	`, workspaceID).Scan(&newRevisionNumber)
+	if err != nil {
+		return errors.Wrap(err, "failed to create revision record")
+	}
+
+	previousRevisionNumber := newRevisionNumber - 1
+
+	// Copy workspace_chart records from previous revision
+	result, err := tx.Exec(c.ctx, `
+		INSERT INTO workspace_chart (id, revision_number, workspace_id, name)
+		SELECT id, $1, workspace_id, name
+		FROM workspace_chart
+		WHERE workspace_id = $2 AND revision_number = $3
+	`, newRevisionNumber, workspaceID, previousRevisionNumber)
+	if err != nil {
+		return errors.Wrap(err, "failed to copy chart records")
+	}
+	chartRowsAffected := result.RowsAffected()
+
+	// Copy workspace_file records from previous revision
+	result, err = tx.Exec(c.ctx, `
+		INSERT INTO workspace_file (
+			id, revision_number, chart_id, workspace_id, file_path,
+			content, embeddings
+		)
+		SELECT
+			id, $1, chart_id, workspace_id, file_path,
+			content, embeddings
+		FROM workspace_file
+		WHERE workspace_id = $2 AND revision_number = $3
+	`, newRevisionNumber, workspaceID, previousRevisionNumber)
+	if err != nil {
+		return errors.Wrap(err, "failed to copy file records")
+	}
+	fileRowsAffected := result.RowsAffected()
+
+	// Update workspace current revision
+	_, err = tx.Exec(c.ctx, `
+		UPDATE workspace
+		SET current_revision_number = $1
+		WHERE id = $2
+	`, newRevisionNumber, workspaceID)
+	if err != nil {
+		return errors.Wrap(err, "failed to update workspace revision number")
+	}
+
+	// Commit transaction
+	err = tx.Commit(c.ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to commit transaction")
+	}
+
+	// Update local workspace revision number
+	c.activeWorkspace.CurrentRevision = newRevisionNumber
+
+	fmt.Printf(boldGreen("Created new revision %d - copied %d charts and %d files\n"),
+		newRevisionNumber, chartRowsAffected, fileRowsAffected)
+	fmt.Println(dimText("Revision is not marked as complete, and will not be rendered."))
+	fmt.Println(dimText("Use normal UI or API to set revision complete and trigger rendering."))
+
+	return nil
 }
 
 // getWorkspaceFiles returns a list of file paths in the current workspace
@@ -792,4 +928,27 @@ func (c *DebugConsole) getWorkspaceFiles() ([]string, error) {
 	}
 
 	return filePaths, nil
+}
+
+// isCurrentRevisionComplete checks if the current revision is marked as complete
+func (c *DebugConsole) isCurrentRevisionComplete() (bool, error) {
+	if c.activeWorkspace == nil {
+		return false, errors.New("no workspace selected")
+	}
+
+	workspaceID := c.activeWorkspace.ID
+	revisionNumber := c.activeWorkspace.CurrentRevision
+
+	var isComplete bool
+	err := c.pgClient.QueryRow(c.ctx, `
+		SELECT is_complete
+		FROM workspace_revision
+		WHERE workspace_id = $1 AND revision_number = $2
+	`, workspaceID, revisionNumber).Scan(&isComplete)
+
+	if err != nil {
+		return false, errors.Wrapf(err, "failed to check if revision %d is complete", revisionNumber)
+	}
+
+	return isComplete, nil
 }
