@@ -4,11 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/replicatedhq/chartsmith/pkg/diff"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 	"github.com/replicatedhq/chartsmith/pkg/workspace/types"
 	"github.com/tuvistavie/securerandom"
@@ -34,10 +32,10 @@ func GetFile(ctx context.Context, fileID string, revisionNumber int) (*types.Fil
 	row := conn.QueryRow(ctx, query, fileID, revisionNumber)
 	var file types.File
 	var chartID sql.NullString
-	
+
 	// Use pgtype.Array which is designed to handle PostgreSQL arrays properly
 	var pendingPatches pgtype.Array[string]
-	
+
 	err := row.Scan(&file.ID, &file.RevisionNumber, &chartID, &file.WorkspaceID, &file.FilePath, &file.Content, &pendingPatches)
 	if err != nil {
 		return nil, fmt.Errorf("error scanning file: %w", err)
@@ -68,41 +66,36 @@ func SetFileEmbeddings(ctx context.Context, fileID string, revisionNumber int, e
 	return nil
 }
 
-func CreateOrPatchFile(ctx context.Context, workspaceID string, revisionNumber int, chartID string, filePath string, content string) error {
+func AddPendingPatch(ctx context.Context, workspaceID string, revisionNumber int, chartID string, filePath string, pendingPatch string) error {
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
 
-	query := `SELECT id, content FROM workspace_file WHERE chart_id = $1 AND file_path = $2 AND workspace_id = $3 AND revision_number = $4`
+	query := `SELECT id, pending_patches FROM workspace_file WHERE chart_id = $1 AND file_path = $2 AND workspace_id = $3 AND revision_number = $4`
 	row := conn.QueryRow(ctx, query, chartID, filePath, workspaceID, revisionNumber)
 	var fileID string
-	var existingContent string
-	err := row.Scan(&fileID, &existingContent)
+	var existingPatches pgtype.Array[string]
+	err := row.Scan(&fileID, &existingPatches)
 	if err == pgx.ErrNoRows {
 		id, err := securerandom.Hex(6)
 		if err != nil {
 			return fmt.Errorf("error generating file ID: %w", err)
 		}
 
-		// For new files, create a patch showing the entire file as new
-		generatedPatches := []string{fmt.Sprintf(`--- %[1]s
-+++ %[1]s
-@@ -0,0 +1,%d @@
-%s`, filePath, len(strings.Split(content, "\n")), content)}
-
+		// create the file with "" content and the pending patch
 		query := `INSERT INTO workspace_file (id, revision_number, chart_id, workspace_id, file_path, content, pending_patches) VALUES ($1, $2, $3, $4, $5, $6, $7)`
-		_, err = conn.Exec(ctx, query, id, revisionNumber, chartID, workspaceID, filePath, "", generatedPatches)
+		_, err = conn.Exec(ctx, query, id, revisionNumber, chartID, workspaceID, filePath, "", []string{pendingPatch})
 		if err != nil {
 			return fmt.Errorf("error inserting file in workspace: %w", err)
 		}
 	} else {
-		// For existing files, create a patch showing the differences
-		generatedPatch, err := diff.GeneratePatch(existingContent, content, filePath)
-		if err != nil {
-			return fmt.Errorf("error generating patch: %w", err)
+		if existingPatches.Valid {
+			existingPatches.Elements = append(existingPatches.Elements, pendingPatch)
+		} else {
+			existingPatches.Elements = []string{pendingPatch}
 		}
 
-		query := `UPDATE workspace_file SET pending_patches = $1 WHERE chart_id = $2 AND file_path = $3 AND workspace_id = $4 AND revision_number = $5`
-		_, err = conn.Exec(ctx, query, []string{generatedPatch}, chartID, filePath, workspaceID, revisionNumber)
+		query := `UPDATE workspace_file SET pending_patches = $1 WHERE id = $2`
+		_, err = conn.Exec(ctx, query, existingPatches, fileID)
 		if err != nil {
 			return fmt.Errorf("error updating file in workspace: %w", err)
 		}
@@ -126,15 +119,15 @@ func ListFiles(ctx context.Context, workspaceID string, revisionNumber int, char
 	for rows.Next() {
 		var file types.File
 		var chartID sql.NullString
-		
+
 		// Use pgtype.Array which is designed to handle PostgreSQL arrays properly
 		var pendingPatches pgtype.Array[string]
-		
+
 		err := rows.Scan(&file.ID, &file.RevisionNumber, &chartID, &file.WorkspaceID, &file.FilePath, &file.Content, &pendingPatches)
 		if err != nil {
 			return nil, fmt.Errorf("error scanning file row: %w", err)
 		}
-		
+
 		// Only set the PendingPatches if the array is not null
 		if pendingPatches.Valid {
 			file.PendingPatches = pendingPatches.Elements

@@ -59,7 +59,11 @@ validate:
 okteto-dev:
 	@go mod download -x
 	@make build
-	@printf "\n\n To build and run this project, run: \n\n   # make run-worker\n\n"
+	@printf "\n\n To build and run this project, run: \n\n   # make run-worker\n   # make run-debug-console\n\n"
+
+.PHONY: run-debug-console
+run-debug-console:
+	DB_URI="postgres://postgres:password@localhost:5432/chartsmith?sslmode=disable" go run main.go debug-console
 
 .PHONY: release
 release:

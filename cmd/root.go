@@ -16,6 +16,7 @@ func RootCmd() *cobra.Command {
 	rootCmd.AddCommand(IntegrationCmd())
 	rootCmd.AddCommand(TestData())
 	rootCmd.AddCommand(ArtifactHubCmd())
+	rootCmd.AddCommand(DebugConsoleCmd())
 
 	return rootCmd
 }
