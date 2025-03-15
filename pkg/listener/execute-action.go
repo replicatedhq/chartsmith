@@ -45,32 +45,81 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 	}
 
 	// find the action, confirm it's still pending for now
+	actionFound := false
+	actionIndex := -1
+	currentStatus := ""
+	
+	logger.Info("Looking for action in plan", 
+		zap.String("path", p.Path), 
+		zap.String("planId", p.PlanID),
+		zap.Int("actionFilesCount", len(plan.ActionFiles)))
+		
 	for i, item := range plan.ActionFiles {
 		if item.Path == p.Path {
+			actionFound = true
+			actionIndex = i
+			currentStatus = item.Status
+			
+			logger.Info("Found action in plan", 
+				zap.String("path", p.Path), 
+				zap.String("planId", p.PlanID),
+				zap.String("currentStatus", currentStatus),
+				zap.Int("actionIndex", i))
+				
 			if item.Status != string(llmtypes.ActionPlanStatusPending) {
-				logger.Info("Skipping non-pending action", zap.String("path", p.Path), zap.String("status", item.Status), zap.String("planId", p.PlanID))
-				return nil
+				logger.Info("Skipping non-pending action", 
+					zap.String("path", p.Path), 
+					zap.String("status", item.Status),
+					zap.String("planId", p.PlanID))
+				return nil // Skip instead of error
 			}
 
 			// update the action to creating
-
-			fmt.Printf("updating action file for path %s to creating\n", p.Path)
+			logger.Info("Updating action status to creating", 
+				zap.String("path", p.Path), 
+				zap.String("planId", p.PlanID),
+				zap.String("oldStatus", item.Status))
+				
 			item.Status = string(llmtypes.ActionPlanStatusCreating)
-
 			plan.ActionFiles[i] = item
-
 			break
 		}
 	}
+	
+	if !actionFound {
+		logger.Error(fmt.Errorf("action not found in plan"), 
+			zap.String("path", p.Path), 
+			zap.String("planId", p.PlanID))
+		return fmt.Errorf("action not found in plan for path %s", p.Path)
+	}
 
+	logger.Info("Updating plan action files in database", 
+		zap.String("path", p.Path), 
+		zap.String("planId", p.PlanID),
+		zap.Int("actionIndex", actionIndex))
+		
 	if err := workspace.UpdatePlanActionFiles(ctx, tx, plan.ID, plan.ActionFiles); err != nil {
+		logger.Error(fmt.Errorf("failed to update plan: %w", err),
+			zap.String("path", p.Path), 
+			zap.String("planId", p.PlanID))
 		return fmt.Errorf("failed to update plan: %w", err)
 	}
 
+	logger.Info("Committing transaction", 
+		zap.String("path", p.Path), 
+		zap.String("planId", p.PlanID))
+		
 	if err := tx.Commit(ctx); err != nil {
+		logger.Error(fmt.Errorf("failed to commit transaction: %w", err), 
+			zap.String("path", p.Path), 
+			zap.String("planId", p.PlanID))
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
+	logger.Info("Transaction committed successfully, closing connection", 
+		zap.String("path", p.Path), 
+		zap.String("planId", p.PlanID))
+		
 	conn.Close(ctx)
 
 	w, err := workspace.GetWorkspace(ctx, plan.WorkspaceID)
@@ -115,6 +164,10 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 	errCh := make(chan error)
 
 	go func() {
+		logger.Info("Starting execute action goroutine", 
+			zap.String("path", p.Path), 
+			zap.String("planId", p.PlanID))
+			
 		action := ""
 
 		for _, item := range plan.ActionFiles {
@@ -123,6 +176,12 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 				break
 			}
 		}
+
+		// Log the action we're about to execute
+		logger.Info("Executing action", 
+			zap.String("path", p.Path), 
+			zap.String("planId", p.PlanID),
+			zap.String("actionLength", fmt.Sprintf("%d", len(action))))
 
 		apwp := llmtypes.ActionPlanWithPath{
 			ActionPlan: llmtypes.ActionPlan{
@@ -135,31 +194,69 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 
 		finalContent, err := llm.ExecuteAction(ctx, apwp, plan, currentContent, patchCh)
 		if err != nil {
+			logger.Error(fmt.Errorf("failed to execute action: %w", err),
+				zap.String("path", p.Path), 
+				zap.String("planId", p.PlanID))
 			errCh <- fmt.Errorf("failed to execute action: %w", err)
+			return
 		}
 
+		logger.Info("Action execution successful", 
+			zap.String("path", p.Path), 
+			zap.String("planId", p.PlanID),
+			zap.String("contentLength", fmt.Sprintf("%d", len(finalContent))))
+			
 		finalContentCh <- finalContent
 		errCh <- nil
 	}()
 
 	timeout := time.After(5 * time.Minute)
+	logger.Info("Starting response processing loop", 
+		zap.String("path", p.Path), 
+		zap.String("planId", p.PlanID))
 
 	for {
 		select {
 		case <-timeout:
-			fmt.Printf("Timeout reached for path: %s\n", p.Path)
+			logger.Error(fmt.Errorf("timeout waiting for action execution"),
+				zap.String("path", p.Path), 
+				zap.String("planId", p.PlanID),
+				zap.String("timeout", "5m"))
 			return fmt.Errorf("timeout waiting for action execution")
+			
 		case err := <-errCh:
 			if err != nil {
+				logger.Error(fmt.Errorf("error received from action execution"), 
+					zap.Error(err),
+					zap.String("path", p.Path), 
+					zap.String("planId", p.PlanID))
 				return err
 			}
+			logger.Info("Received nil error signal", 
+				zap.String("path", p.Path), 
+				zap.String("planId", p.PlanID))
+				
 		case finalContent := <-finalContentCh:
+			logger.Info("Received final content", 
+				zap.String("path", p.Path), 
+				zap.String("planId", p.PlanID),
+				zap.String("contentLength", fmt.Sprintf("%d", len(finalContent))))
+				
 			if err := finalizeFile(ctx, finalContent, updatedPlan, p, w, c, realtimeRecipient); err != nil {
+				logger.Error(fmt.Errorf("failed to finalize file: %w", err),
+					zap.String("path", p.Path), 
+					zap.String("planId", p.PlanID))
 				return err
 			}
 			return nil
+			
 		case patchContent := <-patchCh:
-			// send the final content to the realtime server
+			logger.Info("Received patch update", 
+				zap.String("path", p.Path), 
+				zap.String("planId", p.PlanID),
+				zap.String("patchLength", fmt.Sprintf("%d", len(patchContent))))
+				
+			// send the content to the realtime server
 			e := realtimetypes.ArtifactUpdatedEvent{
 				WorkspaceID: updatedPlan.WorkspaceID,
 				Artifact: realtimetypes.Artifact{

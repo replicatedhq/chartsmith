@@ -136,7 +136,7 @@ export interface RawArtifact {
   revisionNumber: number;
   path: string;
   content: string;
-  pendingPatch?: string;
+  pendingPatches?: string[];
 }
 
 // Interface for raw message from server before normalization

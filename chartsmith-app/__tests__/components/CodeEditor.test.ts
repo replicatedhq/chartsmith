@@ -205,19 +205,19 @@ line3`;
 replicaCount: 1
 # Comment line after`;
 
-    const pendingPatch = `--- values.yaml
+    const pendingPatches = [`--- values.yaml
 +++ values.yaml
 @@ -1,3 +1,3 @@
  # Comment line before
 -replicaCount: 1
 +replicaCount: 3
- # Comment line after`;
+ # Comment line after`];
 
     const expectedResult = `# Comment line before
 replicaCount: 3
 # Comment line after`;
     
-    const result = parseDiff(originalContent, pendingPatch);
+    const result = parseDiff(originalContent, pendingPatches[0]);
     
     // The entire file should match the expected result
     expect(result).toBe(expectedResult);
@@ -236,7 +236,7 @@ replicaCount: 1
 # This sets the container image more information can be found here: https://kubernetes.io/docs/concepts/containers/images/
 image:`;
 
-    const pendingPatch = `--- values.yaml
+    const pendingPatches = [`--- values.yaml
 +++ values.yaml
 @@ -3,7 +3,7 @@
  # Declare variables to be passed into your templates.
@@ -246,9 +246,9 @@ image:`;
 +replicaCount: 3
 
  # This sets the container image more information can be found here: https://kubernetes.io/docs/concepts/containers/images/
- image:`;
+ image:`];
 
-    const result = parseDiff(originalContent, pendingPatch);
+    const result = parseDiff(originalContent, pendingPatches[0]);
     
     // For DiffEditor purposes, we only need to verify that:
     // 1. The new value has been added

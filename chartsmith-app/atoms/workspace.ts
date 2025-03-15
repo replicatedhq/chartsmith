@@ -103,20 +103,21 @@ export const looseFilesBeforeApplyingPendingPatchesAtom = atom<WorkspaceFile[]>(
 
 export const allFilesBeforeApplyingPendingPatchesAtom = atom(get => {
   const charts = get(chartsBeforeApplyingPendingPatchesAtom)
-  const chartFilesBeforeApplyingPendingPatches = charts.flatMap(c => c.files.filter(f => f.pendingPatch))
+  const chartFilesBeforeApplyingPendingPatches = charts.flatMap(c => c.files.filter(f => f.pendingPatches && f.pendingPatches.length > 0))
   const looseFilesBeforeApplyingPendingPatches = get(looseFilesBeforeApplyingPendingPatchesAtom)
   return [...chartFilesBeforeApplyingPendingPatches, ...looseFilesBeforeApplyingPendingPatches]
 })
 
 export const allFilesWithPendingPatchesAtom = atom(get => {
   const files = get(looseFilesAtom)
-  const filesWithPendingPatches = files.filter(f => f.pendingPatch)
+  const filesWithPendingPatches = files.filter(f => f.pendingPatches && f.pendingPatches.length > 0)
 
   // find files in charts with pending patches too
   const charts = get(chartsAtom)
-  const chartsWithPendingPatches = charts.filter(c => c.files.some(f => f.pendingPatch))
+  const chartsWithPendingPatches = charts.filter(c => c.files.some(f => f.pendingPatches && f.pendingPatches.length > 0))
   // get the files with pending patches from each of the charts with pending patches
-  const filesWithPendingPatchesFromCharts = chartsWithPendingPatches.flatMap(c => c.files.filter(f => f.pendingPatch))
+  const filesWithPendingPatchesFromCharts = chartsWithPendingPatches.flatMap(c => 
+    c.files.filter(f => f.pendingPatches && f.pendingPatches.length > 0))
 
   return [...filesWithPendingPatches, ...filesWithPendingPatchesFromCharts]
 })
@@ -216,7 +217,7 @@ export const addFileToWorkspaceAtom = atom(
     set(looseFilesBeforeApplyingPendingPatchesAtom, prev => [...prev, newFile]);
 
     // Update allFilesWithPendingPatches if needed
-    if (newFile.pendingPatch) {
+    if (newFile.pendingPatches && newFile.pendingPatches.length > 0) {
       // This is already a derived atom, so we don't need to update it directly
       // It will update based on the changes to looseFilesBeforeApplyingPendingPatchesAtom
     }

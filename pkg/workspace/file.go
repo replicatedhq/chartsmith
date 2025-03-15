@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/replicatedhq/chartsmith/pkg/diff"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 	"github.com/replicatedhq/chartsmith/pkg/workspace/types"
@@ -24,7 +25,7 @@ func GetFile(ctx context.Context, fileID string, revisionNumber int) (*types.Fil
 		workspace_id,
 		file_path,
 		content,
-		pending_patch
+		pending_patches
 	FROM
 		workspace_file
 	WHERE
@@ -32,14 +33,24 @@ func GetFile(ctx context.Context, fileID string, revisionNumber int) (*types.Fil
 
 	row := conn.QueryRow(ctx, query, fileID, revisionNumber)
 	var file types.File
-	var pendingPatch sql.NullString
 	var chartID sql.NullString
-	err := row.Scan(&file.ID, &file.RevisionNumber, &chartID, &file.WorkspaceID, &file.FilePath, &file.Content, &pendingPatch)
+	
+	// Use pgtype.Array which is designed to handle PostgreSQL arrays properly
+	var pendingPatches pgtype.Array[string]
+	
+	err := row.Scan(&file.ID, &file.RevisionNumber, &chartID, &file.WorkspaceID, &file.FilePath, &file.Content, &pendingPatches)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error scanning file: %w", err)
 	}
 
-	file.PendingPatch = pendingPatch.String
+	// Only set the PendingPatches if the array is not null
+	if pendingPatches.Valid {
+		file.PendingPatches = pendingPatches.Elements
+	} else {
+		// Initialize an empty slice if pending_patches is NULL
+		file.PendingPatches = []string{}
+	}
+
 	file.ChartID = chartID.String
 	return &file, nil
 }
@@ -73,13 +84,13 @@ func CreateOrPatchFile(ctx context.Context, workspaceID string, revisionNumber i
 		}
 
 		// For new files, create a patch showing the entire file as new
-		generatedPatch := fmt.Sprintf(`--- %[1]s
+		generatedPatches := []string{fmt.Sprintf(`--- %[1]s
 +++ %[1]s
 @@ -0,0 +1,%d @@
-%s`, filePath, len(strings.Split(content, "\n")), content)
+%s`, filePath, len(strings.Split(content, "\n")), content)}
 
-		query := `INSERT INTO workspace_file (id, revision_number, chart_id, workspace_id, file_path, content, pending_patch) VALUES ($1, $2, $3, $4, $5, $6, $7)`
-		_, err = conn.Exec(ctx, query, id, revisionNumber, chartID, workspaceID, filePath, "", generatedPatch)
+		query := `INSERT INTO workspace_file (id, revision_number, chart_id, workspace_id, file_path, content, pending_patches) VALUES ($1, $2, $3, $4, $5, $6, $7)`
+		_, err = conn.Exec(ctx, query, id, revisionNumber, chartID, workspaceID, filePath, "", generatedPatches)
 		if err != nil {
 			return fmt.Errorf("error inserting file in workspace: %w", err)
 		}
@@ -90,8 +101,8 @@ func CreateOrPatchFile(ctx context.Context, workspaceID string, revisionNumber i
 			return fmt.Errorf("error generating patch: %w", err)
 		}
 
-		query := `UPDATE workspace_file SET pending_patch = $1 WHERE chart_id = $2 AND file_path = $3 AND workspace_id = $4 AND revision_number = $5`
-		_, err = conn.Exec(ctx, query, generatedPatch, chartID, filePath, workspaceID, revisionNumber)
+		query := `UPDATE workspace_file SET pending_patches = $1 WHERE chart_id = $2 AND file_path = $3 AND workspace_id = $4 AND revision_number = $5`
+		_, err = conn.Exec(ctx, query, []string{generatedPatch}, chartID, filePath, workspaceID, revisionNumber)
 		if err != nil {
 			return fmt.Errorf("error updating file in workspace: %w", err)
 		}
@@ -104,7 +115,7 @@ func ListFiles(ctx context.Context, workspaceID string, revisionNumber int, char
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
 
-	query := `SELECT id, revision_number, chart_id, workspace_id, file_path, content, pending_patch FROM workspace_file WHERE chart_id = $1 AND workspace_id = $2 AND revision_number = $3`
+	query := `SELECT id, revision_number, chart_id, workspace_id, file_path, content, pending_patches FROM workspace_file WHERE chart_id = $1 AND workspace_id = $2 AND revision_number = $3`
 	rows, err := conn.Query(ctx, query, chartID, workspaceID, revisionNumber)
 	if err != nil {
 		return nil, err
@@ -114,15 +125,25 @@ func ListFiles(ctx context.Context, workspaceID string, revisionNumber int, char
 	files := []types.File{}
 	for rows.Next() {
 		var file types.File
-		var pendingPatch sql.NullString
 		var chartID sql.NullString
-		if err := rows.Scan(&file.ID, &file.RevisionNumber, &chartID, &file.WorkspaceID, &file.FilePath, &file.Content, &pendingPatch); err != nil {
-			return nil, err
+		
+		// Use pgtype.Array which is designed to handle PostgreSQL arrays properly
+		var pendingPatches pgtype.Array[string]
+		
+		err := rows.Scan(&file.ID, &file.RevisionNumber, &chartID, &file.WorkspaceID, &file.FilePath, &file.Content, &pendingPatches)
+		if err != nil {
+			return nil, fmt.Errorf("error scanning file row: %w", err)
+		}
+		
+		// Only set the PendingPatches if the array is not null
+		if pendingPatches.Valid {
+			file.PendingPatches = pendingPatches.Elements
+		} else {
+			// Initialize an empty slice if pending_patches is NULL
+			file.PendingPatches = []string{}
 		}
 
-		file.PendingPatch = pendingPatch.String
 		file.ChartID = chartID.String
-
 		files = append(files, file)
 	}
 

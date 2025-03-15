@@ -112,15 +112,15 @@ export function useCentrifugo({
   }, []);
 
   // Helper function to determine if a patch is for a new file
-  const isNewFilePatch = (patch?: string) => {
-    if (!patch) return false;
-    return patch.includes('@@ -0,0 +1,');
+  const isNewFilePatch = (patches?: string[]) => {
+    if (!patches || patches.length === 0) return false;
+    return patches[0].includes('@@ -0,0 +1,');
   };
 
   // Helper function to get the appropriate content for a file
-  const getFileContent = (existingContent: string | undefined, artifact: { path: string, content: string, pendingPatch?: string }) => {
+  const getFileContent = (existingContent: string | undefined, artifact: { path: string, content: string, pendingPatches?: string[] }) => {
     // If we have a pending patch for a new file, content should be empty string
-    if (isNewFilePatch(artifact.pendingPatch)) {
+    if (isNewFilePatch(artifact.pendingPatches)) {
       return "";
     }
 
@@ -133,7 +133,7 @@ export function useCentrifugo({
     return artifact.content || "";
   };
 
-  const handleArtifactReceived = useCallback((artifact: { path: string, content: string, pendingPatch?: string }) => {
+  const handleArtifactReceived = useCallback((artifact: { path: string, content: string, pendingPatches?: string[] }) => {
     if (!setSelectedFile) return;
 
     // Generate a consistent file ID once to use in both places
@@ -162,20 +162,20 @@ export function useCentrifugo({
 
       // Check if it's a new file patch
       const isNewFile = !existingWorkspaceFile && !fileInChart;
-      const isNewFileFromPatch = isNewFilePatch(artifact.pendingPatch);
+      const isNewFileFromPatch = isNewFilePatch(artifact.pendingPatches);
 
       // Fix for new files - ensure proper initialization for diff to work
       // If the file doesn't exist anywhere, create a new file and add it to both places
       if (isNewFile) {
         // For new files that have a pending patch but no content, initialize content to empty string
-        // This matches backend behavior where new files have content="" and pendingPatch with the full content
+        // This matches backend behavior where new files have content="" and pendingPatches with the full content
         const newFile = {
           id: fileId,
           filePath: artifact.path,
-          // For new files, use empty content and pendingPatch with the full content
+          // For new files, use empty content and pendingPatches with the full content
           content: "",
-          // Make sure pendingPatch always exists for new files
-          pendingPatch: artifact.pendingPatch || artifact.content || ""
+          // Make sure pendingPatches always exists for new files
+          pendingPatches: artifact.pendingPatches || (artifact.content ? [artifact.content] : [])
         };
 
         // Add to both the first chart AND to the top-level files array
@@ -197,8 +197,8 @@ export function useCentrifugo({
         };
       }
 
-      // If the file exists and has a pending patch, track the pre-patch state
-      if (chartWithFile && artifact.pendingPatch) {
+      // If the file exists and has pending patches, track the pre-patch state
+      if (chartWithFile && artifact.pendingPatches && artifact.pendingPatches.length > 0) {
         setChartsBeforeApplyingPendingPatches(prev => [...prev, chartWithFile]);
       }
 
@@ -210,7 +210,7 @@ export function useCentrifugo({
         file.filePath === artifact.path ? {
           ...file,
           content: getFileContent(file.content, artifact),
-          pendingPatch: artifact.pendingPatch
+          pendingPatches: artifact.pendingPatches
         } : file
       ) || [];
 
@@ -221,7 +221,7 @@ export function useCentrifugo({
           file.filePath === artifact.path ? {
             ...file,
             content: getFileContent(file.content, artifact),
-            pendingPatch: artifact.pendingPatch
+            pendingPatches: artifact.pendingPatches
           } : file
         )
       })) || [];
@@ -238,9 +238,9 @@ export function useCentrifugo({
       id: fileId, // Use the same ID created above
       filePath: artifact.path,
       // For new files, set empty content
-      content: isNewFilePatch(artifact.pendingPatch) ? "" : (artifact.content || ""),
-      // Make sure pendingPatch is always defined, even for empty patches
-      pendingPatch: artifact.pendingPatch || artifact.content || ""
+      content: isNewFilePatch(artifact.pendingPatches) ? "" : (artifact.content || ""),
+      // Make sure pendingPatches is always defined, even for empty patches
+      pendingPatches: artifact.pendingPatches || (artifact.content ? [artifact.content] : [])
     };
 
     setSelectedFile(file);

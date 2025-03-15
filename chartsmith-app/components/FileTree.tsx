@@ -13,7 +13,7 @@ interface TreeNode {
   type: "file" | "folder";
   children: TreeNode[];
   name: string;
-  pendingPatch?: string;
+  pendingPatches?: string[];
 }
 
 interface FileTreeProps {
@@ -177,8 +177,10 @@ export function FileTree({ files = [], charts = [] }: FileTreeProps) {
     }
   };
 
-  const getPatchStats = (patch?: string) => {
-    if (!patch) return null;
+  const getPatchStats = (patches?: string[]) => {
+    if (!patches || patches.length === 0) return null;
+    // Use the first patch in the array
+    const patch = patches[0];
     const lines = patch.split('\n');
     let additions = 0;
     let deletions = 0;
@@ -266,7 +268,7 @@ export function FileTree({ files = [], charts = [] }: FileTreeProps) {
   };
 
   const renderNode = (node: TreeNode, level: number) => {
-    const patchStats = node.type === "file" ? getPatchStats(node.pendingPatch) : null;
+    const patchStats = node.type === "file" ? getPatchStats(node.pendingPatches) : null;
 
     return (
     <div key={node.filePath}>
@@ -282,7 +284,7 @@ export function FileTree({ files = [], charts = [] }: FileTreeProps) {
               id: rest.id,
               filePath: rest.filePath,
               content: rest.content || '',
-              pendingPatch: rest.pendingPatch
+              pendingPatches: rest.pendingPatches
             });
           }
         }}

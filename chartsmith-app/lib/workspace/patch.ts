@@ -16,11 +16,11 @@ function parseUnifiedDiffHunk(hunkHeader: string, hunkContent: string[]): PatchH
   const match = hunkHeader.match(/@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@/);
   if (!match) {
     logger.warn('Failed to parse hunk header', { hunkHeader });
-    
+
     // Instead of throwing an error, try to reconstruct a basic hunk
     // This is a more fault-tolerant approach for LLM-generated diffs
     const calculatedInfo = calculateHunkInfo(hunkContent);
-    
+
     return {
       start: 0, // Default to the beginning of the file
       length: calculatedInfo.oldLines,
@@ -75,7 +75,7 @@ function processHunkContent(hunkContent: string[], oldLength: number): string[] 
   const originalLines: string[] = [];
   const removedLines: {index: number, content: string}[] = [];
   const contextIndentation: {[index: number]: string} = {};
-  
+
   // First pass: gather context and tracking removals to infer indentation
   hunkContent.forEach((line, idx) => {
     if (line.startsWith(' ')) {
@@ -91,13 +91,13 @@ function processHunkContent(hunkContent: string[], oldLength: number): string[] 
       originalLines.push(line.slice(1));
     }
   });
-  
+
   // Second pass: apply indentation to added lines based on context
   hunkContent.forEach((line, idx) => {
     if (line.startsWith('+')) {
       const content = line.slice(1);
       let indentation = '';
-      
+
       // Find the appropriate indentation to use
       // Check if previous line has indentation
       if (idx > 0) {
@@ -112,24 +112,24 @@ function processHunkContent(hunkContent: string[], oldLength: number): string[] 
           }
         }
       }
-      
+
       // If we couldn't find indentation from nearby context,
       // try to infer it from the content itself (for YAML-like files)
       if (!indentation && content.trim() && isYamlLike(content) && idx > 0) {
         // For YAML-like content, try to maintain proper indentation
-        const prevContent = idx > 0 ? 
+        const prevContent = idx > 0 ?
           (contextIndentation[idx-1] ? originalLines[idx-1] :
            (removedLines.find(r => r.index === idx-1)?.content || '')) : '';
-        
+
         if (prevContent) {
-          // If previous line ends with a colon, add 2 spaces 
+          // If previous line ends with a colon, add 2 spaces
           // (common YAML indentation pattern)
           if (prevContent.trim().endsWith(':')) {
             const baseIndent = extractIndentation(prevContent);
             indentation = baseIndent + '  ';
-          } 
+          }
           // If content looks like a YAML list item, align with previous items
-          else if (content.trim().startsWith('-') && 
+          else if (content.trim().startsWith('-') &&
                    prevContent.trim().startsWith('-')) {
             indentation = extractIndentation(prevContent);
           }
@@ -139,18 +139,18 @@ function processHunkContent(hunkContent: string[], oldLength: number): string[] 
           }
         }
       }
-      
+
       // Apply the indentation to the content
       const indentedContent = applyIndentation(content, indentation);
       contentLines.push(indentedContent);
     }
   });
-  
+
   // For empty hunks, don't return empty content
   if (contentLines.length === 0 && originalLines.length > 0) {
     return originalLines;
   }
-  
+
   return contentLines;
 }
 
@@ -172,8 +172,8 @@ function applyIndentation(line: string, indentation: string): string {
 // Check if content looks like YAML
 function isYamlLike(content: string): boolean {
   // Look for common YAML patterns
-  return content.includes(':') || 
-         content.trim().startsWith('-') || 
+  return content.includes(':') ||
+         content.trim().startsWith('-') ||
          content.trim().startsWith('#');
 }
 
@@ -191,30 +191,30 @@ function applyHunkToContent(content: string, hunk: PatchHunk): string {
   }
 
   const lines = content.split('\n');
-  
+
   // Validate hunk boundaries to avoid mangling the file
   if (hunk.start < 0 || hunk.start > lines.length) {
     logger.warn(`Hunk start line ${hunk.start} is out of bounds (file has ${lines.length} lines). Adjusting to line 0.`);
     hunk.start = 0;
   }
-  
+
   if (hunk.start + hunk.length > lines.length) {
     logger.warn(`Hunk extends beyond end of file (start=${hunk.start}, length=${hunk.length}, file lines=${lines.length}). Adjusting length.`);
     hunk.length = Math.max(0, lines.length - hunk.start);
   }
-  
+
   // Get content before the hunk position
   const before = lines.slice(0, hunk.start);
-  
+
   // Get content after the hunk position
   const after = lines.slice(hunk.start + hunk.length);
-  
+
   // Apply the hunk
   const result = [...before, ...hunk.content, ...after];
-  
+
   // Log the changes for debugging
   logger.info(`Applied hunk at line ${hunk.start}: removed ${hunk.length} lines, added ${hunk.content.length} lines`);
-  
+
   return result.join('\n');
 }
 
@@ -225,12 +225,12 @@ function findMatchingLine(content: string[], startLine: number, contextLines: st
 
   // First try strict matching
   let bestPosition = findExactMatchingLine(content, startLine, contextLines);
-  
+
   // If strict matching fails, try fuzzy matching
   if (bestPosition === startLine && contextLines.length > 0) {
     bestPosition = findFuzzyMatchingLine(content, startLine, contextLines);
   }
-  
+
   return bestPosition;
 }
 
@@ -240,10 +240,10 @@ function findExactMatchingLine(content: string[], startLine: number, contextLine
   if (startLine < content.length) {
     let matchesAtStartLine = true;
     for (let j = 0; j < Math.min(contextLines.length, content.length - startLine); j++) {
-      const contextLine = contextLines[j].startsWith(' ') 
-        ? contextLines[j].substring(1) 
+      const contextLine = contextLines[j].startsWith(' ')
+        ? contextLines[j].substring(1)
         : contextLines[j];
-      
+
       if (content[startLine + j] !== contextLine) {
         matchesAtStartLine = false;
         break;
@@ -260,16 +260,16 @@ function findExactMatchingLine(content: string[], startLine: number, contextLine
   const searchRadius = 15; // Increased search radius to find better matches
   const searchStart = Math.max(0, startLine - searchRadius);
   const searchEnd = Math.min(content.length - contextLines.length + 1, startLine + searchRadius);
-  
+
   for (let i = searchStart; i < searchEnd; i++) {
     if (i === startLine) continue; // Already checked above
-    
+
     let matches = true;
     for (let j = 0; j < contextLines.length; j++) {
-      const contextLine = contextLines[j].startsWith(' ') 
-        ? contextLines[j].substring(1) 
+      const contextLine = contextLines[j].startsWith(' ')
+        ? contextLines[j].substring(1)
         : contextLines[j];
-      
+
       if (content[i + j] !== contextLine) {
         matches = false;
         break;
@@ -280,18 +280,18 @@ function findExactMatchingLine(content: string[], startLine: number, contextLine
       return i;
     }
   }
-  
+
   // If still no match found near the start line, search the entire content
   for (let i = 0; i < content.length - contextLines.length + 1; i++) {
     // Skip the already checked area
     if (i >= searchStart && i < searchEnd) continue;
-    
+
     let matches = true;
     for (let j = 0; j < contextLines.length; j++) {
-      const contextLine = contextLines[j].startsWith(' ') 
-        ? contextLines[j].substring(1) 
+      const contextLine = contextLines[j].startsWith(' ')
+        ? contextLines[j].substring(1)
         : contextLines[j];
-      
+
       if (content[i + j] !== contextLine) {
         matches = false;
         break;
@@ -302,7 +302,7 @@ function findExactMatchingLine(content: string[], startLine: number, contextLine
       return i;
     }
   }
-  
+
   // Fall back to the original start line if no match is found
   logger.warn(`No exact match found for context lines, using original start line: ${startLine}`);
   return startLine;
@@ -311,114 +311,114 @@ function findExactMatchingLine(content: string[], startLine: number, contextLine
 function findFuzzyMatchingLine(content: string[], startLine: number, contextLines: string[]): number {
   let bestPos = startLine;
   let bestScore = 0;
-  
+
   // First prioritize searching near the start line
   const searchRadius = 15;
   const searchStart = Math.max(0, startLine - searchRadius);
   const searchEnd = Math.min(content.length - contextLines.length + 1, startLine + searchRadius);
-  
+
   // Try to match near the original line position first
   let nearestMatchPos = startLine;
   let nearestMatchScore = 0;
-  
+
   // Search near the start line
   for (let pos = searchStart; pos < searchEnd; pos++) {
     let score = 0;
     let matchCount = 0;
-    
+
     for (let i = 0; i < contextLines.length && pos + i < content.length; i++) {
-      const contextLine = contextLines[i].startsWith(' ') 
-        ? contextLines[i].substring(1) 
+      const contextLine = contextLines[i].startsWith(' ')
+        ? contextLines[i].substring(1)
         : contextLines[i];
       const contentLine = content[pos + i];
-      
+
       if (!contentLine) continue; // Skip if out of bounds
-      
+
       const similarity = calculateSimilarity(contentLine, contextLine);
       score += similarity;
-      
+
       if (similarity > 0.7) {
         matchCount++;
       }
     }
-    
+
     // Higher weight for matches near the start line
     // Normalize score based on context length
     const avgScore = score / Math.min(contextLines.length, content.length - pos);
-    
+
     // Bonus for consecutive matches
     if (matchCount > 1) {
       score += 0.25 * (matchCount / contextLines.length);
     }
-    
+
     // Stronger proximity bonus for positions close to the expected start line
     const proximity = 1 - Math.min(Math.abs(pos - startLine) / 10, 1);
     score += proximity * 0.3;
-    
+
     if (score > nearestMatchScore) {
       nearestMatchScore = score;
       nearestMatchPos = pos;
     }
   }
-  
+
   // If we found a good match near the start line, use it
   if (nearestMatchScore > 0.65) {
     logger.info(`Found good fuzzy match near start line: ${nearestMatchPos} with score ${nearestMatchScore.toFixed(2)}`);
     return nearestMatchPos;
   }
-  
+
   // If no good match found near start line, search the entire file
   for (let pos = 0; pos < content.length - contextLines.length + 1; pos++) {
     // Skip the already checked area
     if (pos >= searchStart && pos < searchEnd) continue;
-    
+
     let score = 0;
     let matchCount = 0;
-    
+
     for (let i = 0; i < contextLines.length && pos + i < content.length; i++) {
-      const contextLine = contextLines[i].startsWith(' ') 
-        ? contextLines[i].substring(1) 
+      const contextLine = contextLines[i].startsWith(' ')
+        ? contextLines[i].substring(1)
         : contextLines[i];
       const contentLine = content[pos + i];
-      
+
       if (!contentLine) continue; // Skip if out of bounds
-      
+
       const similarity = calculateSimilarity(contentLine, contextLine);
       score += similarity;
-      
+
       if (similarity > 0.7) {
         matchCount++;
       }
     }
-    
+
     // Normalize score based on context length
     const avgScore = score / Math.min(contextLines.length, content.length - pos);
-    
+
     // Bonus for consecutive matches
     if (matchCount > 1) {
       score += 0.25 * (matchCount / contextLines.length);
     }
-    
+
     // Small proximity bonus even for distant matches
     const proximity = 1 - Math.min(Math.abs(pos - startLine) / 50, 1);
     score += proximity * 0.1;
-    
+
     if (score > bestScore) {
       bestScore = score;
       bestPos = pos;
     }
   }
-  
+
   // Default confidence threshold
   const confidenceThreshold = 0.6;
-  
+
   // Log the best match information
   if (bestScore > confidenceThreshold) {
     logger.info(`Found fuzzy match at line ${bestPos} with score ${bestScore.toFixed(2)}`);
   } else {
     logger.warn(`No good fuzzy match found, using original start line ${startLine} (best score: ${bestScore.toFixed(2)})`);
   }
-  
+
   // Only use fuzzy match if it's reasonably confident
   return bestScore > confidenceThreshold ? bestPos : startLine;
 }
@@ -426,27 +426,27 @@ function findFuzzyMatchingLine(content: string[], startLine: number, contextLine
 function calculateSimilarity(str1: string, str2: string): number {
   if (!str1 && !str2) return 1.0;
   if (!str1 || !str2) return 0.0;
-  
+
   // Normalize strings
   const s1 = str1.trim();
   const s2 = str2.trim();
-  
+
   if (s1 === s2) return 1.0;
-  
+
   // Check if one is a substring of the other
   if (s1.includes(s2) || s2.includes(s1)) {
     return 0.8;
   }
-  
+
   // Check for whitespace-insensitive matches
   if (s1.replace(/\s+/g, '') === s2.replace(/\s+/g, '')) {
     return 0.9;
   }
-  
+
   // Count common tokens (words)
   const tokens1 = s1.split(/\s+/);
   const tokens2 = s2.split(/\s+/);
-  
+
   let matchCount = 0;
   for (const t1 of tokens1) {
     if (t1.length < 2) continue; // Skip very short tokens
@@ -457,10 +457,10 @@ function calculateSimilarity(str1: string, str2: string): number {
       }
     }
   }
-  
-  const tokenSimilarity = tokens1.length && tokens2.length ? 
+
+  const tokenSimilarity = tokens1.length && tokens2.length ?
     (2 * matchCount) / (tokens1.length + tokens2.length) : 0;
-  
+
   return tokenSimilarity;
 }
 
@@ -468,15 +468,15 @@ export async function updateFileAfterPatchOperation(
   fileId: string,
   revisionNumber: number,
   content: string,
-  pendingPatch: string | undefined
+  pendingPatches: string[] | undefined
 ): Promise<void> {
   try {
     const db = getDB(await getParam("DB_URI"));
     await db.query(
       `UPDATE workspace_file
-       SET content = $1, pending_patch = $2
+       SET content = $1, pending_patches = $2
        WHERE id = $3 AND revision_number = $4`,
-      [content, pendingPatch, fileId, revisionNumber]
+      [content, pendingPatches, fileId, revisionNumber]
     );
   } catch (error) {
     logger.error(`Error updating file content for file ${fileId}`, error);
@@ -488,35 +488,35 @@ export async function getFileByIdAndRevision(fileId: string, revision: number): 
   try {
     const db = getDB(await getParam("DB_URI"));
     logger.info(`Getting file by id=${fileId} and revision=${revision}`);
-    
+
     const result = await db.query(
-      `SELECT id, revision_number, chart_id, workspace_id, file_path, content, pending_patch
+      `SELECT id, revision_number, chart_id, workspace_id, file_path, content, pending_patches
        FROM workspace_file
        WHERE id = $1 AND revision_number = $2`,
       [fileId, revision]
     );
-    
+
     // Add debugging to check database results
     logger.info(`Query result rows: ${result.rows.length}`);
-    
+
     if (result.rows.length === 0) {
       logger.error(`No file found with id=${fileId} and revision=${revision}`);
       throw new Error(`File not found with id=${fileId} and revision=${revision}`);
     }
-    
+
     // Log the first row to help diagnose issues
     logger.info(`File found: ${JSON.stringify({
       id: result.rows[0].id,
       filePath: result.rows[0].file_path,
       contentLength: result.rows[0].content?.length || 0,
-      hasPendingPatch: !!result.rows[0].pending_patch
+      hasPendingPatches: !!result.rows[0].pending_patches
     })}`);
 
     const file: WorkspaceFile = {
       id: result.rows[0].id,
       filePath: result.rows[0].file_path,
       content: result.rows[0].content,
-      pendingPatch: result.rows[0].pending_patch
+      pendingPatches: result.rows[0].pending_patches
     }
 
     return file;
@@ -527,21 +527,25 @@ export async function getFileByIdAndRevision(fileId: string, revision: number): 
 }
 
 export async function applyPatch(file: WorkspaceFile): Promise<WorkspaceFile> {
-  if (!file.pendingPatch) {
+  if (!file.pendingPatches || file.pendingPatches.length === 0) {
     return file;
   }
 
   try {
+    // Get the first patch to apply (in the future could be enhanced to apply multiple patches)
+    const pendingPatch = file.pendingPatches[0];
+    
     logger.info('Starting patch application:', {
       fileId: file.id,
-      patchLength: file.pendingPatch.length,
-      contentLength: file.content.length
+      patchLength: pendingPatch.length,
+      contentLength: file.content.length,
+      totalPatches: file.pendingPatches.length
     });
 
-    logger.debug('Patch content:', { patch: file.pendingPatch });
+    logger.debug('Patch content:', { patch: pendingPatch });
 
     // Normalize line endings
-    const normalizedPatch = file.pendingPatch.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    const normalizedPatch = pendingPatch.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
     const lines = normalizedPatch.split('\n');
     logger.info('Split patch into lines:', { lineCount: lines.length });
 
@@ -621,7 +625,7 @@ export async function applyPatch(file: WorkspaceFile): Promise<WorkspaceFile> {
         return {
           ...file,
           content: patchContent.replace(/^\+/gm, ''),
-          pendingPatch: undefined
+          pendingPatches: undefined
         };
       }
     }
@@ -650,12 +654,12 @@ export async function applyPatch(file: WorkspaceFile): Promise<WorkspaceFile> {
         if (hunk) {
           // Find the actual line number where content matches
           const contentLines = content.split('\n');
-          
+
           // If we have context, use it to find the right position
           if (contextLines.length > 0) {
             hunk.start = findMatchingLine(contentLines, hunk.start, contextLines);
           }
-          
+
           // Apply the hunk
           content = applyHunkToContent(content, hunk);
         }
@@ -670,7 +674,7 @@ export async function applyPatch(file: WorkspaceFile): Promise<WorkspaceFile> {
     return {
       ...file,
       content,
-      pendingPatch: undefined
+      pendingPatches: undefined
     };
   } catch (error) {
     logger.error('Failed to apply patch:', error);

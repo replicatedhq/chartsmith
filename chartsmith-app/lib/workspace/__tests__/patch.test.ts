@@ -10,12 +10,12 @@ describe('applyPatch', () => {
     jest.clearAllMocks();
   });
 
-  it('should return file unchanged if no pending patch', async () => {
+  it('should return file unchanged if no pending patches', async () => {
     const file: WorkspaceFile = {
       id: '1',
       filePath: 'test.txt',
       content: 'original content',
-      pendingPatch: undefined
+      pendingPatches: undefined
     };
 
     const result = await applyPatch(file);
@@ -27,16 +27,16 @@ describe('applyPatch', () => {
       id: '1',
       filePath: 'test.txt',
       content: 'line 1\nline 2\nline 3',
-      pendingPatch: `--- test.txt
+      pendingPatches: [`--- test.txt
 +++ test.txt
 @@ -2,1 +2,1 @@
 -line 2
-+new line 2`
++new line 2`]
     };
 
     const result = await applyPatch(file);
     expect(result.content).toBe('line 1\nnew line 2\nline 3');
-    expect(result.pendingPatch).toBeUndefined();
+    expect(result.pendingPatches).toBeUndefined();
   });
 
   it('should apply multiple hunks in a patch', async () => {
@@ -44,7 +44,7 @@ describe('applyPatch', () => {
       id: '1',
       filePath: 'test.txt',
       content: 'line 1\nline 2\nline 3\nline 4',
-      pendingPatch: `--- test.txt
+      pendingPatches: [`--- test.txt
 +++ test.txt
 @@ -1,2 +1,2 @@
 -line 1
@@ -69,7 +69,7 @@ describe('applyPatch', () => {
       id: '1',
       filePath: 'test.txt',
       content: 'line 1\nline 2',
-      pendingPatch: `--- test.txt
+      pendingPatches: [`--- test.txt
 +++ test.txt
 @@ -1,2 +1,4 @@
  line 1
@@ -91,7 +91,7 @@ describe('applyPatch', () => {
       id: '1',
       filePath: 'test.txt',
       content: 'line 1\nline to remove\nline 2',
-      pendingPatch: `--- test.txt
+      pendingPatches: [`--- test.txt
 +++ test.txt
 @@ -1,3 +1,2 @@
  line 1
@@ -108,7 +108,7 @@ describe('applyPatch', () => {
       id: '1',
       filePath: 'test.txt',
       content: 'line 1\nline 2\nline 3\nline 4\nline 5',
-      pendingPatch: `--- test.txt
+      pendingPatches: [`--- test.txt
 +++ test.txt
 @@ -1,5 +1,5 @@
  line 1
@@ -138,7 +138,7 @@ describe('applyPatch', () => {
       id: '1',
       filePath: 'test.txt',
       content: 'original content',
-      pendingPatch: `--- test.txt
+      pendingPatches: [`--- test.txt
 +++ test.txt
 @@ invalid hunk header @@
 +new content`
@@ -159,7 +159,7 @@ describe('applyPatch', () => {
       id: '1',
       filePath: 'test.txt',
       content: '',
-      pendingPatch: `--- test.txt
+      pendingPatches: [`--- test.txt
 +++ test.txt
 @@ -0,0 +1,1 @@
 +new content`
@@ -174,7 +174,7 @@ describe('applyPatch', () => {
       id: '1',
       filePath: 'test.txt',
       content: 'original',
-      pendingPatch: `diff --git a/test.txt b/test.txt
+      pendingPatches: [`diff --git a/test.txt b/test.txt
 index 1234567..89abcdef 100644
 --- a/test.txt
 +++ b/test.txt
@@ -192,7 +192,7 @@ index 1234567..89abcdef 100644
       id: '1',
       filePath: 'test.txt',
       content: 'test',
-      pendingPatch: `--- test.txt
+      pendingPatches: [`--- test.txt
 +++ test.txt
 @@ -1 +1 @@
 -test

@@ -48,7 +48,12 @@ func ChooseRelevantFilesForChatMessage(
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
 
-	filesWithRelevance := map[types.File]float64{}
+	// Use file ID as the key instead of the File struct, since File contains a slice (PendingPatches)
+	// which makes it not comparable and unsuitable as a map key
+	fileMap := make(map[string]struct {
+		file       types.File
+		similarity float64
+	})
 
 	// get the chart.yaml
 	query := `SELECT id, revision_number, chart_id, workspace_id, file_path, content FROM workspace_file WHERE workspace_id = $1 AND revision_number = $2 AND file_path = 'Chart.yaml'`
@@ -58,7 +63,13 @@ func ChooseRelevantFilesForChatMessage(
 	if err != nil && err != pgx.ErrNoRows {
 		return nil, fmt.Errorf("error scanning chart.yaml: %w", err)
 	} else if err == nil {
-		filesWithRelevance[chartYAML] = 1
+		fileMap[chartYAML.ID] = struct {
+			file       types.File
+			similarity float64
+		}{
+			file:       chartYAML,
+			similarity: 1.0,
+		}
 	}
 
 	// get the values.yaml
@@ -69,7 +80,13 @@ func ChooseRelevantFilesForChatMessage(
 	if err != nil && err != pgx.ErrNoRows {
 		return nil, fmt.Errorf("error scanning values.yaml: %w", err)
 	} else if err == nil {
-		filesWithRelevance[valuesYAML] = 1
+		fileMap[valuesYAML.ID] = struct {
+			file       types.File
+			similarity float64
+		}{
+			file:       valuesYAML,
+			similarity: 1.0,
+		}
 	}
 
 	// Query files with embeddings and calculate cosine similarity
@@ -136,15 +153,26 @@ func ChooseRelevantFilesForChatMessage(
 			similarity = 1.0
 		}
 
-		filesWithRelevance[file] = similarity
+		fileMap[file.ID] = struct {
+			file       types.File
+			similarity float64
+		}{
+			file:       file,
+			similarity: similarity,
+		}
 	}
 
-	sorted := make([]RelevantFile, 0, len(filesWithRelevance))
-	for file := range filesWithRelevance {
-		sorted = append(sorted, RelevantFile{File: file, Similarity: filesWithRelevance[file]})
+	sorted := make([]RelevantFile, 0, len(fileMap))
+	for _, item := range fileMap {
+		sorted = append(sorted, RelevantFile{
+			File:       item.file,
+			Similarity: item.similarity,
+		})
 	}
+	
 	sort.Slice(sorted, func(i, j int) bool {
 		return sorted[i].Similarity > sorted[j].Similarity
 	})
+	
 	return sorted, nil
 }

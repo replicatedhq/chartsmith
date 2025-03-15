@@ -184,15 +184,16 @@ export function useMonacoSingleInstance(
   
   // Extract modified content from diff
   const modifiedContent = React.useMemo(() => {
-    if (!selectedFile?.pendingPatch) return "";
+    if (!selectedFile?.pendingPatches || selectedFile.pendingPatches.length === 0) return "";
     
     try {
-      return parseDiff(selectedFile.content, selectedFile.pendingPatch);
+      // Use the first patch in the array
+      return parseDiff(selectedFile.content, selectedFile.pendingPatches[0]);
     } catch (error) {
       console.error("Error parsing diff:", error);
-      return selectedFile.pendingPatch;
+      return selectedFile.pendingPatches?.[0] || "";
     }
-  }, [selectedFile?.content, selectedFile?.pendingPatch]);
+  }, [selectedFile?.content, selectedFile?.pendingPatches]);
 
   // Simplified effect that handles model creation only
   // We now rely on React's key mechanism to unmount/remount editors
@@ -203,7 +204,7 @@ export function useMonacoSingleInstance(
     
     // Get file info
     const fileKey = selectedFile.id || selectedFile.filePath || 'unknown';
-    const isDiffMode = !!selectedFile.pendingPatch;
+    const isDiffMode = !!selectedFile.pendingPatches && selectedFile.pendingPatches.length > 0;
     
     // Set the diff mode state - this should happen before any model changes
     setInDiffMode(isDiffMode);
@@ -267,7 +268,7 @@ export function useMonacoSingleInstance(
   }, [
     selectedFile?.id, 
     selectedFile?.content, 
-    selectedFile?.pendingPatch, 
+    selectedFile?.pendingPatches, 
     language, 
     editorRef, 
     monacoRef
@@ -280,13 +281,13 @@ export function useMonacoSingleInstance(
     }
   }, [selectedFile?.content]);
   
-  // Force immediate diff mode update when pendingPatch changes
+  // Force immediate diff mode update when pendingPatches changes
   // This ensures we render the correct editor type instantly
   useEffect(() => {
     if (selectedFile) {
-      setInDiffMode(!!selectedFile.pendingPatch);
+      setInDiffMode(!!selectedFile.pendingPatches && selectedFile.pendingPatches.length > 0);
     }
-  }, [selectedFile?.pendingPatch, setInDiffMode]);
+  }, [selectedFile?.pendingPatches, setInDiffMode]);
 
   // Initialize Monaco environment and create a safer cleanup process
   useEffect(() => {

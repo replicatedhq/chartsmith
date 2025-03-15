@@ -18,24 +18,24 @@ function preprocessPatchSync(patch: string, filePath?: string): string {
   const normalizedPatch = patch.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   const lines = normalizedPatch.split('\n');
   const formattedPatch: string[] = [];
-  
+
   // Track state
   let hasFileHeaders = false;
   let currentHunkHeader = '';
   let currentHunkLines: string[] = [];
   let inHunk = false;
-  
+
   // Determine if this is a YAML file for special handling
   const isYamlFile = filePath && /\.(yaml|yml)$/i.test(filePath);
   const isChartYaml = filePath === 'Chart.yaml' || patch.includes('--- Chart.yaml');
   const isHelmLike = isYamlFile || isChartYaml;
-  
+
   // Collect hunks for sorting
   const hunks: { header: string, lines: string[], position: number }[] = [];
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trimRight(); // Remove trailing whitespace
-    
+
     // Handle file headers
     if (line.startsWith('---')) {
       if (!hasFileHeaders) {
@@ -44,7 +44,7 @@ function preprocessPatchSync(patch: string, filePath?: string): string {
       }
       continue;
     }
-    
+
     if (line.startsWith('+++')) {
       if (hasFileHeaders && formattedPatch.length === 1) {
         formattedPatch.push(line);
@@ -62,7 +62,7 @@ function preprocessPatchSync(patch: string, filePath?: string): string {
           position: getHunkPosition(currentHunkHeader)
         });
       }
-      
+
       // Start a new hunk
       const match = line.match(/@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@/);
       if (!match) {
@@ -73,7 +73,7 @@ function preprocessPatchSync(patch: string, filePath?: string): string {
       } else {
         currentHunkHeader = line;
       }
-      
+
       currentHunkLines = [];
       inHunk = true;
       continue;
@@ -96,7 +96,7 @@ function preprocessPatchSync(patch: string, filePath?: string): string {
       formattedPatch.push('+++ b/file');
       currentHunkHeader = '@@ -1,1 +1,1 @@';
       inHunk = true;
-      
+
       // Process this line as content
       if (line.startsWith('+') || line.startsWith('-') || line.startsWith(' ')) {
         currentHunkLines.push(line);
@@ -127,7 +127,7 @@ function preprocessPatchSync(patch: string, filePath?: string): string {
   // Add all hunks in order
   for (const hunk of hunks) {
     formattedPatch.push(hunk.header);
-    
+
     // For YAML files, ensure proper indentation
     if (isHelmLike) {
       const processedLines = fixYamlIndentation(hunk.lines);
@@ -147,48 +147,48 @@ function fixYamlIndentation(lines: string[]): string[] {
   let inList = false;
   let lastItemIndent = '';
   let lastItemLevel = 0;
-  
+
   // First pass: get context lines to understand indentation structure
   const contextLines: {line: string, index: number, indent: string, isListItem: boolean}[] = [];
   const listItemIndents: string[] = [];
-  
+
   lines.forEach((line, idx) => {
     if (line.startsWith(' ')) {
       const content = line.slice(1);
       const indent = extractIndentation(content);
       const isListItem = content.trim().startsWith('-');
-      
+
       if (isListItem) {
         listItemIndents.push(indent);
       }
-      
+
       contextLines.push({
-        line: content, 
-        index: idx, 
+        line: content,
+        index: idx,
         indent,
         isListItem
       });
     }
   });
-  
+
   // Identify the base indentation for list items
   let baseListIndent = '';
   if (listItemIndents.length > 0) {
     baseListIndent = listItemIndents[0];
   }
-  
+
   // Second pass: process all lines
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    
+
     if (line.startsWith(' ')) {
       // Context line - preserve as is
       result.push(line);
-      
+
       // Update indentation state
       const content = line.slice(1);
       lastIndent = extractIndentation(content);
-      
+
       // Track list item state
       if (content.trim().startsWith('-')) {
         inList = true;
@@ -203,20 +203,20 @@ function fixYamlIndentation(lines: string[]): string[] {
           inList = false;
         }
       }
-      
+
     } else if (line.startsWith('+')) {
       // Added line - fix indentation if needed
       const content = line.slice(1).trim();
       let fixedLine = '+';
-      
+
       // Special case for YAML list items with dependencies
       if (content === 'name:' && inList) {
         // This is likely a property under a list item
         fixedLine += lastItemIndent + '  ' + content;
       }
       // Repository, version, and alias are often properties under list items
-      else if ((content === 'repository:' || content === 'version:' || content === 'alias:' || 
-                content.startsWith('repository:') || content.startsWith('version:') || 
+      else if ((content === 'repository:' || content === 'version:' || content === 'alias:' ||
+                content.startsWith('repository:') || content.startsWith('version:') ||
                 content.startsWith('alias:')) && inList) {
         fixedLine += lastItemIndent + '  ' + content;
       }
@@ -240,9 +240,9 @@ function fixYamlIndentation(lines: string[]): string[] {
       else {
         fixedLine += content;
       }
-      
+
       result.push(fixedLine);
-      
+
       // Update the state if this was a list item we added
       if (content.trim().startsWith('-')) {
         inList = true;
@@ -251,7 +251,7 @@ function fixYamlIndentation(lines: string[]): string[] {
           baseListIndent = lastIndent;
         }
       }
-      
+
     } else if (line.startsWith('-')) {
       // Removed line - keep as is
       result.push(line);
@@ -260,7 +260,7 @@ function fixYamlIndentation(lines: string[]): string[] {
       result.push(line);
     }
   }
-  
+
   return result;
 }
 
@@ -289,7 +289,7 @@ function calculateHunkInfo(lines: string[]) {
   // Default to position 1
   const oldStart = 1;
   const newStart = 1;
-  
+
   // Calculate line counts
   let oldLines = 0;
   let newLines = 0;
@@ -297,7 +297,7 @@ function calculateHunkInfo(lines: string[]) {
 
   lines.forEach(line => {
     if (!line.trim()) return;
-    
+
     hasContent = true;
     if (line.startsWith('+')) {
       newLines++;
@@ -330,15 +330,15 @@ export async function acceptPatchAction(session: Session, fileId: string, revisi
     }
 
     logger.info(`Accepting patch for file ${fileId} at revision ${revision}`);
-    
+
     let file;
     try {
       // Try to get the file from the database first
       file = await getFileByIdAndRevision(fileId, revision);
     } catch (err) {
       logger.warn(`File not found in database with id=${fileId}. This may be a temporary frontend ID.`);
-      
-      // If this is a frontend-generated ID (e.g., file-1234567890), 
+
+      // If this is a frontend-generated ID (e.g., file-1234567890),
       // we need to handle this gracefully for the user experience
       if (fileId.startsWith('file-')) {
         // Create a placeholder file object that just wraps the pending patches
@@ -347,7 +347,7 @@ export async function acceptPatchAction(session: Session, fileId: string, revisi
           id: fileId,
           filePath: "unknown", // This will be populated by the client
           content: "",
-          pendingPatch: undefined // Clear the pending patch so UI resets
+          pendingPatches: undefined // Clear the pending patches so UI resets
         };
       } else {
         // For other types of IDs, rethrow the error
@@ -355,15 +355,18 @@ export async function acceptPatchAction(session: Session, fileId: string, revisi
       }
     }
 
-    // Skip if no pending patch
-    if (!file.pendingPatch) {
-      logger.info(`No pending patch found for file ${fileId}`);
+    // Skip if no pending patches
+    if (!file.pendingPatches || file.pendingPatches.length === 0) {
+      logger.info(`No pending patches found for file ${fileId}`);
       return file;
     }
 
-    // Preprocess the patch to ensure it's well-formed, passing the file path for YAML handling
+    // Preprocess the first patch to ensure it's well-formed, passing the file path for YAML handling
     try {
-      file.pendingPatch = preprocessPatchSync(file.pendingPatch, file.filePath);
+      if (file.pendingPatches.length > 0) {
+        // For now, just process the first patch - future enhancement could process all
+        file.pendingPatches[0] = preprocessPatchSync(file.pendingPatches[0], file.filePath);
+      }
     } catch (err) {
       logger.warn(`Error preprocessing patch: ${err}`, { fileId });
       // Continue with the original patch
@@ -374,14 +377,14 @@ export async function acceptPatchAction(session: Session, fileId: string, revisi
 
     // If the patch application failed, the original file is returned
     // Check if content changed
-    if (updatedFile.content === file.content && file.pendingPatch) {
+    if (updatedFile.content === file.content && file.pendingPatches && file.pendingPatches.length > 0) {
       logger.warn(`Patch application didn't change content for file ${fileId}`);
     }
 
     // Clear all patch-related metadata regardless
     const clearedFile = {
       ...updatedFile,
-      pendingPatch: undefined,
+      pendingPatches: undefined,
       diffStats: undefined,
       addedLines: 0,
       removedLines: 0
@@ -404,16 +407,16 @@ export async function acceptPatchAction(session: Session, fileId: string, revisi
         id: fileId,
         filePath: "unknown", // This will be populated by the client
         content: "",
-        pendingPatch: undefined // Clear the pending patch so UI resets
+        pendingPatches: undefined // Clear the pending patches so UI resets
       };
     }
-    
+
     // In case of error for real database IDs, try to return the original file
     try {
       const originalFile = await getFileByIdAndRevision(fileId, revision);
       return {
         ...originalFile,
-        pendingPatch: undefined // Clear the patch even if we failed
+        pendingPatches: undefined // Clear the patches even if we failed
       };
     } catch {
       // If we can't get the original file, re-throw
@@ -436,7 +439,7 @@ export async function acceptAllPatchesAction(session: Session, workspaceId: stri
     // Find all files with pending patches
     const result = await db.query(
       `SELECT id, revision_number FROM workspace_file
-       WHERE workspace_id = $1 AND revision_number = $2 AND pending_patch IS NOT NULL`,
+       WHERE workspace_id = $1 AND revision_number = $2 AND pending_patches IS NOT NULL`,
       [workspaceId, revision]
     );
 
@@ -448,7 +451,7 @@ export async function acceptAllPatchesAction(session: Session, workspaceId: stri
     // Accept each patch
     const updatedFiles: WorkspaceFile[] = [];
     const failures: {id: string, error: string}[] = [];
-    
+
     // Process each file's patch
     for (const row of result.rows) {
       try {

@@ -23,13 +23,13 @@ func init() {
 		MessageKey:       "msg",
 		LevelKey:         "lvl",
 		NameKey:          zapcore.OmitKey,
-		TimeKey:          zapcore.OmitKey,
+		TimeKey:          "time", // Enable timestamp
 		CallerKey:        zapcore.OmitKey,
 		FunctionKey:      zapcore.OmitKey,
 		StacktraceKey:    zapcore.OmitKey,
 		LineEnding:       zapcore.DefaultLineEnding,
 		EncodeLevel:      zapcore.CapitalLevelEncoder,
-		EncodeTime:       zapcore.ISO8601TimeEncoder,
+		EncodeTime:       zapcore.ISO8601TimeEncoder, // ISO8601 format with milliseconds
 		EncodeName:       zapcore.FullNameEncoder,
 		EncodeDuration:   zapcore.StringDurationEncoder,
 		ConsoleSeparator: " ",
@@ -58,6 +58,11 @@ func NewKVEncoder(cfg zapcore.EncoderConfig) zapcore.Encoder {
 
 func (e *kvEncoder) EncodeEntry(ent zapcore.Entry, fields []zapcore.Field) (*buffer.Buffer, error) {
 	line := bufferPool.Get()
+
+	// Format time manually since we can't use EncodeTime directly with buffer
+	formattedTime := ent.Time.Format("2006-01-02T15:04:05.000Z07:00") // ISO8601 format
+	line.AppendString(formattedTime)
+	line.AppendString(" ")
 
 	line.AppendString(ent.Level.CapitalString())
 	line.AppendString("    ")
@@ -103,8 +108,9 @@ func GetLogger() *zap.Logger {
 	return log
 }
 
-func Error(err error) {
-	log.Error("error", zap.Error(err))
+func Error(err error, fields ...zap.Field) {
+	allFields := append([]zap.Field{zap.Error(err)}, fields...)
+	log.Error("error", allFields...)
 }
 
 func Errorf(template string, args ...interface{}) {

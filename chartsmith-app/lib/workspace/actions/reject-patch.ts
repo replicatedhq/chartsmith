@@ -24,12 +24,12 @@ export async function rejectPatchAction(session: Session, fileId: string, revisi
 
   try {
     const file = await getFileByIdAndRevision(fileId, revision);
-    
+
     // To reject a patch, we just clear the pending patch without applying it
     await updateFileAfterPatchOperation(fileId, revision, file.content, undefined);
   } catch (error) {
     logger.error(`Error rejecting patch for file ${fileId}:`, { error });
-    
+
     // If we can't find the file in the database but it's not a frontend ID,
     // it's a real error that should bubble up
     if (!fileId.startsWith('file-')) {
@@ -51,8 +51,8 @@ export async function rejectAllPatchesAction(session: Session, workspaceId: stri
 
   // Find all files with pending patches
   const result = await db.query(
-    `SELECT id, revision_number FROM workspace_file 
-     WHERE workspace_id = $1 AND revision_number = $2 AND pending_patch IS NOT NULL`,
+    `SELECT id, revision_number FROM workspace_file
+     WHERE workspace_id = $1 AND revision_number = $2 AND pending_patches IS NOT NULL`,
     [workspaceId, revision]
   );
 

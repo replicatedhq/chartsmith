@@ -24,7 +24,7 @@ export function DebugPanel({ isVisible }: DebugPanelProps) {
       <div className="p-4">
         <h2 className="text-lg font-semibold mb-4">Debug Panel</h2>
 
-        {selectedFile?.pendingPatch ? (
+        {selectedFile?.pendingPatches && selectedFile.pendingPatches.length > 0 ? (
           <div>
             <div className="mb-2 flex items-center">
               <h3 className="text-md font-medium">Pending Patch</h3>
@@ -39,7 +39,7 @@ export function DebugPanel({ isVisible }: DebugPanelProps) {
                   : "bg-gray-100"
               }`}
             >
-              {selectedFile.pendingPatch}
+              {selectedFile.pendingPatches[0]}
             </pre>
           </div>
         ) : (
