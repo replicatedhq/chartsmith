@@ -16,10 +16,11 @@ import (
 	"github.com/fatih/color"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/pkg/errors"
+	"github.com/replicatedhq/chartsmith/pkg/llm"
 	"github.com/replicatedhq/chartsmith/pkg/logger"
 	"github.com/replicatedhq/chartsmith/pkg/realtime"
 	"github.com/replicatedhq/chartsmith/pkg/workspace"
-	"github.com/replicatedhq/chartsmith/pkg/workspace/types"
+	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 )
 
 var (
@@ -44,7 +45,7 @@ type ConsoleOptions struct {
 type DebugConsole struct {
 	ctx             context.Context
 	pgClient        *pgxpool.Pool
-	activeWorkspace *types.Workspace
+	activeWorkspace *workspacetypes.Workspace
 	readline        *readline.Instance
 	options         ConsoleOptions
 }
@@ -149,6 +150,7 @@ func (c *DebugConsole) run() error {
 				readline.PcItem("patch-file"),
 				readline.PcItem("apply-patch"),
 				readline.PcItem("randomize-yaml"),
+				readline.PcItem("create-plan"),
 				readline.PcItem("exit"),
 				readline.PcItem("quit"),
 			)...,
@@ -330,6 +332,8 @@ func (c *DebugConsole) executeCommand(cmd string, args []string) error {
 		return c.listFiles()
 	case "randomize-yaml":
 		return c.randomizeYaml(args)
+	case "create-plan":
+		return c.createPlan(args)
 	default:
 		return fmt.Errorf("unknown command: %s", cmd)
 	}
@@ -345,7 +349,7 @@ func (c *DebugConsole) selectWorkspaceById(id string) error {
         WHERE id = $1
     `
 
-	var workspace types.Workspace
+	var workspace workspacetypes.Workspace
 	err := c.pgClient.QueryRow(c.ctx, query, id).Scan(
 		&workspace.ID,
 		&workspace.Name,
@@ -372,7 +376,7 @@ func (c *DebugConsole) selectWorkspaceById(id string) error {
 		defer chartRows.Close()
 
 		for chartRows.Next() {
-			var chart types.Chart
+			var chart workspacetypes.Chart
 			if err := chartRows.Scan(&chart.ID, &chart.Name); err != nil {
 				if !c.options.NonInteractive {
 					fmt.Println(dimText(fmt.Sprintf("Warning: Failed to scan chart: %v", err)))
@@ -450,6 +454,7 @@ func (c *DebugConsole) showHelp() {
 	fmt.Println("  " + boldGreen("patch-file") + " <file-path> [--count=N] [--output=<dir>]  Generate N patches for file (requires incomplete revision)")
 	fmt.Println("  " + boldGreen("apply-patch") + " <patch-id> Apply a previously generated patch")
 	fmt.Println("  " + boldGreen("randomize-yaml") + " <file-path> [--complexity=low|medium|high] Generate random YAML for testing")
+	fmt.Println("  " + boldGreen("create-plan") + " <prompt>  Create a plan from the LLM with the given prompt")
 	fmt.Println()
 
 	fmt.Println(boldBlue("General Commands:"))
@@ -561,7 +566,7 @@ func (c *DebugConsole) selectWorkspace() error {
 	return nil
 }
 
-func (c *DebugConsole) listWorkspaces() ([]types.Workspace, error) {
+func (c *DebugConsole) listWorkspaces() ([]workspacetypes.Workspace, error) {
 	query := `
         SELECT id, name, current_revision_number, created_at, last_updated_at
         FROM workspace
@@ -575,9 +580,9 @@ func (c *DebugConsole) listWorkspaces() ([]types.Workspace, error) {
 	}
 	defer rows.Close()
 
-	var workspaces []types.Workspace
+	var workspaces []workspacetypes.Workspace
 	for rows.Next() {
-		var ws types.Workspace
+		var ws workspacetypes.Workspace
 		err := rows.Scan(&ws.ID, &ws.Name, &ws.CurrentRevision, &ws.CreatedAt, &ws.LastUpdatedAt)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to scan workspace")
@@ -980,6 +985,7 @@ func (c *DebugConsole) updateWorkspaceCompletions(rl *readline.Instance) {
 		readline.PcItem("patch-file", filePathCompletions...),
 		readline.PcItem("apply-patch"),
 		readline.PcItem("randomize-yaml", filePathCompletions...),
+		readline.PcItem("create-plan"),
 		readline.PcItem("exit"),
 		readline.PcItem("quit"),
 	)
@@ -1181,4 +1187,90 @@ func formatAsDiffU(patch string, filePath string) string {
 	sb.WriteString(patch)
 
 	return sb.String()
+}
+
+// createPlan implements the create-plan command to generate a plan using LLM
+func (c *DebugConsole) createPlan(args []string) error {
+	if c.activeWorkspace == nil {
+		return errors.New("no workspace selected")
+	}
+
+	if len(args) < 1 {
+		return errors.New("usage: create-plan <prompt>")
+	}
+
+	// Check if current revision is complete
+	isComplete, err := c.isCurrentRevisionComplete()
+	if err != nil {
+		return errors.Wrap(err, "failed to check if current revision is complete")
+	}
+	if isComplete {
+		return errors.New("cannot create plan for completed revision - use 'new-revision' command first")
+	}
+
+	// Join all args to form the prompt
+	prompt := strings.Join(args, " ")
+	fmt.Printf(boldBlue("Creating plan with prompt: '%s'\n"), prompt)
+
+	chat, err := workspace.CreateChatMessage(c.ctx, c.activeWorkspace.ID, prompt)
+	if err != nil {
+		return errors.Wrap(err, "failed to create chat message")
+	}
+
+	chatMessages := []workspacetypes.Chat{*chat}
+
+	relevantFiles, err := workspace.ChooseRelevantFilesForChatMessage(
+		c.ctx,
+		c.activeWorkspace,
+		workspace.WorkspaceFilter{
+			ChartID: &c.activeWorkspace.Charts[0].ID,
+		},
+		c.activeWorkspace.CurrentRevision,
+		prompt,
+	)
+
+	files := []workspacetypes.File{}
+	for _, file := range relevantFiles {
+		files = append(files, file.File)
+	}
+
+	opts := llm.CreatePlanOpts{
+		ChatMessages:  chatMessages,
+		Chart:         &c.activeWorkspace.Charts[0],
+		RelevantFiles: files,
+		IsUpdate:      false,
+	}
+
+	streamCh := make(chan string)
+	doneCh := make(chan error)
+
+	go func() {
+		if err := llm.CreatePlan(c.ctx, streamCh, doneCh, opts); err != nil {
+			fmt.Println(dimText(fmt.Sprintf("Error: %v", err)))
+		}
+	}()
+
+	plan := ""
+
+	done := false
+	for !done {
+		select {
+		case err := <-doneCh:
+			if err != nil {
+				return errors.Wrap(err, "failed to create plan")
+			}
+
+			done = true
+		case stream := <-streamCh:
+			plan += stream
+		}
+	}
+
+	p, err := workspace.CreatePlan(c.ctx, chat.ID, c.activeWorkspace.ID, false)
+	if err != nil {
+		return errors.Wrap(err, "failed to create plan")
+	}
+
+	fmt.Printf(boldGreen("Plan created: %s\n"), p.ID)
+	return nil
 }

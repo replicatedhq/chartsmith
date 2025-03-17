@@ -288,20 +288,20 @@ func SetPlanIsComplete(ctx context.Context, planID string, isComplete bool) erro
 	return nil
 }
 
-func CreatePlan(ctx context.Context, chatMessageID string, workspaceID string) error {
+func CreatePlan(ctx context.Context, chatMessageID string, workspaceID string, enqueue bool) (*types.Plan, error) {
 	logger.Info("creating plan", zap.String("chat_message_id", chatMessageID), zap.String("workspace_id", workspaceID))
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
 
 	tx, err := conn.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("error beginning transaction: %w", err)
+		return nil, fmt.Errorf("error beginning transaction: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
 	id, err := securerandom.Hex(6)
 	if err != nil {
-		return fmt.Errorf("error generating plan ID: %w", err)
+		return nil, fmt.Errorf("error generating plan ID: %w", err)
 	}
 
 	chatMessageIDs := []string{chatMessageID}
@@ -311,24 +311,26 @@ VALUES
 ($1, $2, $3, $4, $5, $6, $7, $8, $9, null)`
 	_, err = tx.Exec(ctx, query, id, workspaceID, chatMessageIDs, time.Now(), time.Now(), 1, types.PlanStatusPending, "", false)
 	if err != nil {
-		return fmt.Errorf("error creating plan: %w", err)
+		return nil, fmt.Errorf("error creating plan: %w", err)
 	}
 
 	query = `UPDATE workspace_chat SET response_plan_id = $1 WHERE id = $2`
 	_, err = tx.Exec(ctx, query, id, chatMessageID)
 	if err != nil {
-		return fmt.Errorf("error updating chat message response plan ID: %w", err)
+		return nil, fmt.Errorf("error updating chat message response plan ID: %w", err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("error committing transaction: %w", err)
+		return nil, fmt.Errorf("error committing transaction: %w", err)
 	}
 
-	if err := persistence.EnqueueWork(ctx, "new_plan", map[string]interface{}{
-		"planId": id,
-	}); err != nil {
-		return fmt.Errorf("error enqueuing new plan: %w", err)
+	if enqueue {
+		if err := persistence.EnqueueWork(ctx, "new_plan", map[string]interface{}{
+			"planId": id,
+		}); err != nil {
+			return nil, fmt.Errorf("error enqueuing new plan: %w", err)
+		}
 	}
 
-	return nil
+	return GetPlan(ctx, nil, id)
 }

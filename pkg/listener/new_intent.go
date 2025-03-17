@@ -221,7 +221,8 @@ func handleNewIntentNotification(ctx context.Context, payload string) error {
 
 	// if the message suggests a plan, send a message to the planner
 	if intent.IsPlan && !intent.IsConversational {
-		if err := workspace.CreatePlan(ctx, chatMessage.ID, w.ID); err != nil {
+		_, err := workspace.CreatePlan(ctx, chatMessage.ID, w.ID, true)
+		if err != nil {
 			return fmt.Errorf("failed to create plan: %w", err)
 		}
 

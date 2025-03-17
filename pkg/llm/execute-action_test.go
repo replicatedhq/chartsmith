@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	llmtypes "github.com/replicatedhq/chartsmith/pkg/llm/types"
 	"github.com/replicatedhq/chartsmith/pkg/param"
@@ -11,6 +12,9 @@ import (
 )
 
 func TestExecuteAction(t *testing.T) {
+	// Add a timeout of 5 minutes for this test
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
 
 	tests := []struct {
 		name               string
@@ -1127,7 +1131,7 @@ unsupported:
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			patchStreamCh := make(chan string)
-			got, err := ExecuteAction(context.Background(), tt.actionPlanWithPath, tt.plan, tt.currentContent, patchStreamCh)
+			got, err := ExecuteAction(ctx, tt.actionPlanWithPath, tt.plan, tt.currentContent, patchStreamCh)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ExecuteAction() error = %v, wantErr %v", err, tt.wantErr)
 				return

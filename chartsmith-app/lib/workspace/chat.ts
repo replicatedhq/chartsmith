@@ -93,29 +93,3 @@ export async function listMessagesForWorkspace(workspaceID: string): Promise<Cha
   }
 }
 
-export async function addChatMessage(workspaceID: string, userID: string, message: string): Promise<Message> {
-  try {
-    const chatID: string = srs.default({ length: 12, alphanumeric: true });
-
-    const db = getDB(await getParam("DB_URI"));
-    await db.query(
-      `
-          INSERT INTO workspace_chat (id, workspace_id, created_at, sent_by, prompt, response)
-          VALUES ($1, $2, now(), $3, $4)
-        `,
-      [chatID, workspaceID, userID, message],
-    );
-
-    await db.query(`SELECT pg_notify('new_chat', $1)`, [chatID]);
-
-    return {
-      id: chatID,
-      prompt: message,
-      response: undefined,
-      isComplete: false,
-    };
-  } catch (err) {
-    logger.error("Failed to add chat message", { err });
-    throw err;
-  }
-}
