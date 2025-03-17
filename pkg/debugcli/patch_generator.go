@@ -142,13 +142,13 @@ func (pg *PatchGenerator) getLastLineWithIndent(indent int) int {
 
 // GeneratePatch creates a unified diff patch for the YAML file
 func (pg *PatchGenerator) GeneratePatch() string {
-	// Select a random patch type
-	patchType := pg.patchTypes[rand.Intn(len(pg.patchTypes))]
-	
-	var patch string
-	maxAttempts := 3 // Try up to 3 different patch types if we get an empty patch
-	
-	for attempt := 0; attempt < maxAttempts; attempt++ {
+	// Try indefinitely until we get a valid patch with changes
+	for {
+		// Select a random patch type
+		patchType := pg.patchTypes[rand.Intn(len(pg.patchTypes))]
+		
+		var patch string
+		
 		switch patchType {
 		case PatchTypeAddValue:
 			patch = pg.generateAddValuePatch()
@@ -167,25 +167,36 @@ func (pg *PatchGenerator) GeneratePatch() string {
 			patch = pg.generateAddValuePatch()
 		}
 		
-		// Check if we have a valid patch with actual changes
-		if patch != "" && 
-		   strings.Contains(patch, "+") && 
-		   (strings.Contains(patch, "\n+") || strings.Contains(patch, "\n-")) {
-			break
+		// Check if we have a valid patch with actual content changes (at least one + or - line)
+		if patch != "" && containsAdditionOrDeletion(patch) {
+			return patch
 		}
 		
-		// Try a different patch type
-		patchType = pg.patchTypes[rand.Intn(len(pg.patchTypes))]
+		// If we got here, the patch wasn't valid - try again with a different type
+		// Favor types that are more likely to generate changes
+		if rand.Intn(100) < 70 {
+			// 70% of the time, directly choose a patch type that always adds/removes content
+			options := []PatchType{PatchTypeAddValue, PatchTypeChangeValue, PatchTypeRemoveValue, PatchTypeAddBlock}
+			patchType = options[rand.Intn(len(options))]
+		}
 	}
-	
-	// If we still don't have a valid patch, generate a simple addition as a last resort
-	if patch == "" || !strings.Contains(patch, "+") || 
-	   (!strings.Contains(patch, "\n+") && !strings.Contains(patch, "\n-")) {
-		// Force generate a new block which almost always succeeds
-		patch = pg.generateAddBlockPatch()
+}
+
+// containsAdditionOrDeletion checks if the patch contains at least one line addition or deletion
+func containsAdditionOrDeletion(patch string) bool {
+	lines := strings.Split(patch, "\n")
+	for _, line := range lines {
+		// Look for lines that start with + or - but not just header lines (like +++ or ---)
+		// This is a simple heuristic to find actual content changes
+		if (strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++")) ||
+		   (strings.HasPrefix(line, "-") && !strings.HasPrefix(line, "---")) {
+			// Make sure it's not just an empty context line
+			if len(strings.TrimSpace(line)) > 1 {
+				return true
+			}
+		}
 	}
-	
-	return patch
+	return false
 }
 
 // generateAddValuePatch creates a patch that adds a new value to the YAML
@@ -487,8 +498,8 @@ func (pg *PatchGenerator) generateAddCommentPatch() string {
 	builder.WriteString(fmt.Sprintf("@@ -%d,%d +%d,%d @@\n", 
 		targetLine.LineNum+1, 1, 
 		targetLine.LineNum+1, 2))
-	builder.WriteString(fmt.Sprintf("+%s\n", commentLine))
 	builder.WriteString(fmt.Sprintf(" %s\n", pg.lines[targetLine.LineNum]))
+	builder.WriteString(fmt.Sprintf("+%s\n", commentLine))
 	
 	return builder.String()
 }

@@ -60,6 +60,38 @@ func getRandomItem[T any](items []T) T {
 	return items[rand.Intn(len(items))]
 }
 
+// generateRandomValue produces a random appropriate value for a key
+func generateRandomValue(key string) string {
+	// Analyze the key to provide domain-appropriate values
+	switch {
+	case strings.Contains(key, "image") || strings.Contains(key, "repository"):
+		return getRandomItem(randomImages)
+	case strings.Contains(key, "port"):
+		return fmt.Sprintf("%d", getRandomItem(randomPorts))
+	case strings.Contains(key, "replica") || strings.Contains(key, "count") || 
+	     strings.Contains(key, "size") || strings.Contains(key, "limit"):
+		return fmt.Sprintf("%d", rand.Intn(10) + 1)
+	case strings.Contains(key, "enabled") || strings.Contains(key, "disabled") || 
+	     strings.Contains(key, "active"):
+		return getRandomItem(randomBooleanValues)
+	case strings.Contains(key, "version"):
+		return fmt.Sprintf("%d.%d.%d", rand.Intn(10), rand.Intn(20), rand.Intn(100))
+	case strings.Contains(key, "env") || strings.Contains(key, "environment"):
+		return getRandomItem(randomEnvVars)
+	case strings.Contains(key, "name"):
+		return getRandomItem(randomNames)
+	case strings.Contains(key, "annotation"):
+		return getRandomItem(randomAnnotations)
+	case strings.Contains(key, "field"):
+		// For generic fields like field_1, generate more generic values 
+		options := []string{"value", "setting", "config"}
+		return fmt.Sprintf("%s-%d", getRandomItem(options), rand.Intn(1000))
+	default:
+		// For unrecognized keys, generate a generic value
+		return fmt.Sprintf("value-%d", rand.Intn(1000))
+	}
+}
+
 // Helper function to get random number within range
 func getRandomNumber(min, max int) int {
 	return rand.Intn(max-min+1) + min
@@ -102,170 +134,166 @@ func GenerateRandomYAML(complexity YAMLComplexity) string {
 		builder.WriteString(fmt.Sprintf("    cpu: %dm\n", getRandomNumber(100, 2000)))
 		builder.WriteString(fmt.Sprintf("    memory: %dMi\n", getRandomNumber(128, 4096)))
 		builder.WriteString("  requests:\n")
-		builder.WriteString(fmt.Sprintf("    cpu: %dm\n", getRandomNumber(50, 1000)))
-		builder.WriteString(fmt.Sprintf("    memory: %dMi\n\n", getRandomNumber(64, 2048)))
+		builder.WriteString(fmt.Sprintf("    cpu: %dm\n", getRandomNumber(50, 500)))
+		builder.WriteString(fmt.Sprintf("    memory: %dMi\n\n", getRandomNumber(64, 1024)))
 	}
 
-	// Add complexity-specific fields
+	// Add complexity-specific sections
 	switch complexity {
 	case ComplexityLow:
-		addLowComplexityFields(&builder)
+		generateSimpleYAML(&builder)
 	case ComplexityMedium:
-		addLowComplexityFields(&builder)
-		addMediumComplexityFields(&builder)
+		generateMediumComplexityYAML(&builder)
 	case ComplexityHigh:
-		addLowComplexityFields(&builder)
-		addMediumComplexityFields(&builder)
-		addHighComplexityFields(&builder)
+		generateHighComplexityYAML(&builder)
+	default:
+		// Default to medium complexity
+		generateMediumComplexityYAML(&builder)
 	}
 
 	return builder.String()
 }
 
-// Add simple top-level fields
-func addLowComplexityFields(builder *strings.Builder) {
-	// Ingress configuration
+// generateSimpleYAML adds a few simple sections to the YAML
+func generateSimpleYAML(builder *strings.Builder) {
+	// Ingress settings
 	builder.WriteString("ingress:\n")
-	builder.WriteString(fmt.Sprintf("  enabled: %s\n", getRandomItem(randomBooleanValues)))
-	builder.WriteString("  annotations:\n")
-	builder.WriteString(fmt.Sprintf("    kubernetes.io/ingress.class: %s\n", getRandomItem([]string{"nginx", "traefik", "istio"})))
-	builder.WriteString("  hosts:\n")
-	builder.WriteString(fmt.Sprintf("    - host: %s.example.com\n", getRandomItem(randomNames)))
-	builder.WriteString("      paths:\n")
-	builder.WriteString("        - path: /\n")
-	builder.WriteString(fmt.Sprintf("          pathType: %s\n\n", getRandomItem([]string{"Prefix", "Exact", "ImplementationSpecific"})))
-
-	// Simple persistence
-	builder.WriteString("persistence:\n")
-	builder.WriteString(fmt.Sprintf("  enabled: %s\n", getRandomItem(randomBooleanValues)))
-	builder.WriteString(fmt.Sprintf("  size: %dGi\n\n", getRandomNumber(1, 100)))
-}
-
-// Add more complex nested structures
-func addMediumComplexityFields(builder *strings.Builder) {
-	// Environment variables
-	builder.WriteString("env:\n")
-	numEnvVars := getRandomNumber(3, 8)
-	for i := 0; i < numEnvVars; i++ {
-		envVar := getRandomItem(randomEnvVars)
-		builder.WriteString(fmt.Sprintf("  %s: \"%s\"\n", envVar, generateRandomValue(envVar)))
+	ingressEnabled := rand.Float32() < 0.7 // 70% chance of enabling ingress
+	builder.WriteString(fmt.Sprintf("  enabled: %v\n", ingressEnabled))
+	if ingressEnabled {
+		builder.WriteString("  hosts:\n")
+		builder.WriteString(fmt.Sprintf("    - host: %s.example.com\n", getRandomItem(randomNames)))
+		builder.WriteString("      paths:\n")
+		builder.WriteString("        - path: /\n")
+		builder.WriteString("          pathType: Prefix\n")
 	}
 	builder.WriteString("\n")
 
-	// Pod security context
-	builder.WriteString("securityContext:\n")
-	builder.WriteString(fmt.Sprintf("  runAsUser: %d\n", getRandomNumber(1000, 9999)))
-	builder.WriteString(fmt.Sprintf("  runAsGroup: %d\n", getRandomNumber(1000, 9999)))
-	builder.WriteString(fmt.Sprintf("  fsGroup: %d\n", getRandomNumber(1000, 9999)))
-	builder.WriteString("  capabilities:\n")
-	builder.WriteString("    drop:\n")
-	builder.WriteString("      - ALL\n\n")
+	// Config settings
+	builder.WriteString("config:\n")
+	builder.WriteString(fmt.Sprintf("  logLevel: %s\n", getRandomItem([]string{"debug", "info", "warn", "error"})))
+	builder.WriteString(fmt.Sprintf("  timeout: %d\n\n", getRandomNumber(5, 60)))
 
-	// NodeSelector, tolerations, and affinity
-	builder.WriteString("nodeSelector:\n")
-	builder.WriteString(fmt.Sprintf("  kubernetes.io/os: %s\n", getRandomItem([]string{"linux", "windows"})))
-	builder.WriteString(fmt.Sprintf("  kubernetes.io/arch: %s\n\n", getRandomItem([]string{"amd64", "arm64"})))
-
-	// Add tolerations
-	builder.WriteString("tolerations: []\n\n")
+	// Add a small environment variables section
+	builder.WriteString("env:\n")
+	for i := 0; i < getRandomNumber(2, 4); i++ {
+		envVar := getRandomItem(randomEnvVars)
+		builder.WriteString(fmt.Sprintf("  %s: \"%s\"\n", envVar, fmt.Sprintf("value-%d", getRandomNumber(100, 999))))
+	}
 }
 
-// Add highly complex, deeply nested structures
-func addHighComplexityFields(builder *strings.Builder) {
-	// Multiple containers
-	builder.WriteString("sidecars:\n")
-	numSidecars := getRandomNumber(1, 3)
-	for i := 0; i < numSidecars; i++ {
-		sidecarName := getRandomItem(randomNames)
-		builder.WriteString(fmt.Sprintf("  - name: %s-sidecar\n", sidecarName))
+// generateMediumComplexityYAML adds more complex sections to the YAML
+func generateMediumComplexityYAML(builder *strings.Builder) {
+	// First add the simple sections
+	generateSimpleYAML(builder)
+	
+	// Add a persistence section
+	builder.WriteString("\npersistence:\n")
+	persistenceEnabled := rand.Float32() < 0.6 // 60% chance of enabling persistence
+	builder.WriteString(fmt.Sprintf("  enabled: %v\n", persistenceEnabled))
+	if persistenceEnabled {
+		builder.WriteString(fmt.Sprintf("  storageClass: \"%s\"\n", getRandomItem([]string{"standard", "ssd", "local-path", "managed-nfs-storage", ""})))
+		builder.WriteString(fmt.Sprintf("  size: %dGi\n", getRandomNumber(1, 100)))
+		builder.WriteString(fmt.Sprintf("  mountPath: \"/data\"\n"))
+		builder.WriteString(fmt.Sprintf("  accessMode: %s\n", getRandomItem([]string{"ReadWriteOnce", "ReadOnlyMany", "ReadWriteMany"})))
+	}
+	
+	// Add security context
+	builder.WriteString("\nsecurityContext:\n")
+	builder.WriteString(fmt.Sprintf("  runAsUser: %d\n", getRandomNumber(1000, 2000)))
+	builder.WriteString(fmt.Sprintf("  runAsGroup: %d\n", getRandomNumber(1000, 2000)))
+	builder.WriteString(fmt.Sprintf("  fsGroup: %d\n", getRandomNumber(1000, 2000)))
+	
+	// Add probes section
+	builder.WriteString("\nprobes:\n")
+	builder.WriteString("  liveness:\n")
+	builder.WriteString("    httpGet:\n")
+	builder.WriteString("      path: /health\n")
+	builder.WriteString(fmt.Sprintf("      port: %d\n", getRandomItem(randomPorts)))
+	builder.WriteString(fmt.Sprintf("    initialDelaySeconds: %d\n", getRandomNumber(10, 60)))
+	builder.WriteString(fmt.Sprintf("    periodSeconds: %d\n", getRandomNumber(5, 30)))
+	builder.WriteString("  readiness:\n")
+	builder.WriteString("    httpGet:\n")
+	builder.WriteString("      path: /ready\n")
+	builder.WriteString(fmt.Sprintf("      port: %d\n", getRandomItem(randomPorts)))
+	builder.WriteString(fmt.Sprintf("    initialDelaySeconds: %d\n", getRandomNumber(5, 30)))
+	builder.WriteString(fmt.Sprintf("    periodSeconds: %d\n", getRandomNumber(5, 15)))
+}
+
+// generateHighComplexityYAML adds advanced sections to the YAML
+func generateHighComplexityYAML(builder *strings.Builder) {
+	// First add the medium complexity sections
+	generateMediumComplexityYAML(builder)
+	
+	// Add a global section with advanced settings
+	builder.WriteString("\nglobal:\n")
+	builder.WriteString("  # Global settings apply to all charts\n")
+	builder.WriteString(fmt.Sprintf("  environment: %s\n", getRandomItem([]string{"development", "staging", "production", "testing"})))
+	builder.WriteString("  labels:\n")
+	builder.WriteString(fmt.Sprintf("    app: %s\n", getRandomItem(randomNames)))
+	builder.WriteString(fmt.Sprintf("    version: \"%s\"\n", fmt.Sprintf("v%d.%d.%d", getRandomNumber(0, 9), getRandomNumber(0, 99), getRandomNumber(0, 999))))
+	builder.WriteString(fmt.Sprintf("    managed-by: %s\n", getRandomItem([]string{"helm", "argocd", "kustomize", "flux"})))
+	
+	// Add advanced networking
+	builder.WriteString("\nnetworking:\n")
+	builder.WriteString("  # Network configuration\n")
+	builder.WriteString("  podNetworkCidr: \"10.244.0.0/16\"\n")
+	builder.WriteString("  serviceNetworkCidr: \"10.96.0.0/12\"\n")
+	builder.WriteString(fmt.Sprintf("  dnsPolicy: %s\n", getRandomItem([]string{"ClusterFirst", "Default", "ClusterFirstWithHostNet"})))
+	
+	// Add monitoring integration
+	builder.WriteString("\nmonitoring:\n")
+	monitoringEnabled := rand.Float32() < 0.8 // 80% chance of enabling monitoring
+	builder.WriteString(fmt.Sprintf("  enabled: %v\n", monitoringEnabled))
+	if monitoringEnabled {
+		builder.WriteString("  prometheus:\n")
+		builder.WriteString("    annotations:\n")
+		for _, annotation := range randomAnnotations[:3] {
+			if strings.Contains(annotation, "prometheus") {
+				builder.WriteString(fmt.Sprintf("      %s: \"true\"\n", annotation))
+			}
+		}
+		builder.WriteString(fmt.Sprintf("    scrapeInterval: %ds\n", getRandomNumber(10, 60)))
+		builder.WriteString("  grafana:\n")
+		builder.WriteString(fmt.Sprintf("    enabled: %v\n", rand.Float32() < 0.7))
+		builder.WriteString(fmt.Sprintf("    dashboards: %v\n", rand.Float32() < 0.8))
+	}
+	
+	// Add autoscaling settings
+	builder.WriteString("\nautoscaling:\n")
+	autoscalingEnabled := rand.Float32() < 0.7 // 70% chance of enabling autoscaling
+	builder.WriteString(fmt.Sprintf("  enabled: %v\n", autoscalingEnabled))
+	if autoscalingEnabled {
+		builder.WriteString(fmt.Sprintf("  minReplicas: %d\n", getRandomNumber(1, 3)))
+		builder.WriteString(fmt.Sprintf("  maxReplicas: %d\n", getRandomNumber(5, 20)))
+		builder.WriteString(fmt.Sprintf("  targetCPUUtilizationPercentage: %d\n", getRandomNumber(50, 90)))
+		builder.WriteString("  behavior:\n")
+		builder.WriteString("    scaleDown:\n")
+		builder.WriteString(fmt.Sprintf("      stabilizationWindowSeconds: %d\n", getRandomNumber(60, 600)))
+		builder.WriteString("    scaleUp:\n")
+		builder.WriteString(fmt.Sprintf("      stabilizationWindowSeconds: %d\n", getRandomNumber(0, 30)))
+	}
+	
+	// Add a detailed config map
+	builder.WriteString("\nconfigMap:\n")
+	builder.WriteString("  data:\n")
+	for i := 0; i < getRandomNumber(5, 10); i++ {
+		key := fmt.Sprintf("CONFIG_%d", i+1)
+		builder.WriteString(fmt.Sprintf("    %s: \"%s\"\n", key, fmt.Sprintf("value-%d", getRandomNumber(100, 999))))
+	}
+	
+	// Add multi-container pod settings
+	builder.WriteString("\nsidecars:\n")
+	for i := 0; i < getRandomNumber(1, 3); i++ {
+		sidecarName := fmt.Sprintf("%s-sidecar", getRandomItem(randomNames))
+		builder.WriteString(fmt.Sprintf("  - name: %s\n", sidecarName))
 		builder.WriteString(fmt.Sprintf("    image: %s\n", getRandomItem(randomImages)))
 		builder.WriteString("    resources:\n")
 		builder.WriteString("      limits:\n")
 		builder.WriteString(fmt.Sprintf("        cpu: %dm\n", getRandomNumber(50, 500)))
 		builder.WriteString(fmt.Sprintf("        memory: %dMi\n", getRandomNumber(64, 512)))
 		builder.WriteString("      requests:\n")
-		builder.WriteString(fmt.Sprintf("        cpu: %dm\n", getRandomNumber(10, 200)))
-		builder.WriteString(fmt.Sprintf("        memory: %dMi\n", getRandomNumber(32, 256)))
-		builder.WriteString("    env:\n")
-		numEnvVars := getRandomNumber(1, 4)
-		for j := 0; j < numEnvVars; j++ {
-			envVar := getRandomItem(randomEnvVars)
-			builder.WriteString(fmt.Sprintf("      - name: %s\n", envVar))
-			builder.WriteString(fmt.Sprintf("        value: \"%s\"\n", generateRandomValue(envVar)))
-		}
-	}
-	builder.WriteString("\n")
-
-	// Advanced affinities
-	builder.WriteString("affinity:\n")
-	builder.WriteString("  podAntiAffinity:\n")
-	builder.WriteString("    preferredDuringSchedulingIgnoredDuringExecution:\n")
-	builder.WriteString("    - weight: 100\n")
-	builder.WriteString("      podAffinityTerm:\n")
-	builder.WriteString("        labelSelector:\n")
-	builder.WriteString("          matchExpressions:\n")
-	builder.WriteString(fmt.Sprintf("          - key: app.kubernetes.io/name\n            operator: In\n            values: [\"%s\"]\n", getRandomItem(randomNames)))
-	builder.WriteString("        topologyKey: \"kubernetes.io/hostname\"\n\n")
-
-	// Complex annotations
-	builder.WriteString("podAnnotations:\n")
-	numAnnotations := getRandomNumber(3, 8)
-	for i := 0; i < numAnnotations; i++ {
-		annotation := getRandomItem(randomAnnotations)
-		builder.WriteString(fmt.Sprintf("  %s: \"%s\"\n", annotation, generateRandomValue(annotation)))
-	}
-	builder.WriteString("\n")
-
-	// Autoscaling
-	builder.WriteString("autoscaling:\n")
-	builder.WriteString(fmt.Sprintf("  enabled: %s\n", getRandomItem(randomBooleanValues)))
-	builder.WriteString(fmt.Sprintf("  minReplicas: %d\n", getRandomNumber(1, 3)))
-	builder.WriteString(fmt.Sprintf("  maxReplicas: %d\n", getRandomNumber(5, 20)))
-	builder.WriteString(fmt.Sprintf("  targetCPUUtilizationPercentage: %d\n", getRandomNumber(50, 90)))
-	builder.WriteString(fmt.Sprintf("  targetMemoryUtilizationPercentage: %d\n\n", getRandomNumber(50, 90)))
-
-	// Configuration map
-	builder.WriteString("configurationFiles:\n")
-	configTypes := []string{"nginx.conf", "app.properties", "db.conf", "cache.json"}
-	for _, configType := range configTypes[:getRandomNumber(1, len(configTypes))] {
-		builder.WriteString(fmt.Sprintf("  %s: |\n", configType))
-		lines := getRandomNumber(3, 8)
-		for i := 0; i < lines; i++ {
-			builder.WriteString(fmt.Sprintf("    # %s line %d\n", configType, i+1))
-			builder.WriteString(fmt.Sprintf("    setting_%d = value_%d\n", i+1, getRandomNumber(1, 100)))
-		}
-	}
-}
-
-// Generate random values appropriate for variable names
-func generateRandomValue(name string) string {
-	switch {
-	case strings.Contains(name, "PORT"):
-		return fmt.Sprintf("%d", getRandomItem(randomPorts))
-	case strings.Contains(name, "DEBUG") || strings.Contains(name, "ENABLE"):
-		return getRandomItem(randomBooleanValues)
-	case strings.Contains(name, "LEVEL"):
-		return getRandomItem([]string{"debug", "info", "warn", "error"})
-	case strings.Contains(name, "ENV") || strings.Contains(name, "ENVIRONMENT"):
-		return getRandomItem([]string{"development", "staging", "production", "test"})
-	case strings.Contains(name, "MAX") || strings.Contains(name, "MIN") || strings.Contains(name, "TIMEOUT"):
-		return fmt.Sprintf("%d", getRandomNumber(10, 300))
-	case strings.Contains(name, "URL"):
-		protocol := getRandomItem([]string{"http", "https"})
-		service := getRandomItem(randomNames)
-		domain := getRandomItem([]string{"svc.cluster.local", "example.com", "internal"})
-		port := getRandomItem(randomPorts)
-		return fmt.Sprintf("%s://%s.%s:%d", protocol, service, domain, port)
-	case strings.Contains(name, "KEY") || strings.Contains(name, "SECRET"):
-		// Generate random alphanumeric string
-		chars := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-		length := getRandomNumber(16, 32)
-		result := make([]byte, length)
-		for i := range result {
-			result[i] = chars[rand.Intn(len(chars))]
-		}
-		return string(result)
-	default:
-		return fmt.Sprintf("value-%d", getRandomNumber(1, 1000))
+		builder.WriteString(fmt.Sprintf("        cpu: %dm\n", getRandomNumber(10, 100)))
+		builder.WriteString(fmt.Sprintf("        memory: %dMi\n", getRandomNumber(32, 128)))
 	}
 }
