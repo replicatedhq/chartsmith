@@ -39,8 +39,7 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 		anthropic.NewUserMessage(anthropic.NewTextBlock(detailedPlanInstructions)),
 	}
 
-	detailedPlanMessage := fmt.Sprintf("The Helm chart plan is: %s", plan.Description)
-	messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(detailedPlanMessage)))
+	messages = append(messages, anthropic.NewAssistantMessage(anthropic.NewTextBlock(plan.Description)))
 
 	if actionPlanWithPath.Action == "create" {
 		createMessage := fmt.Sprintf("Create the file at %s", actionPlanWithPath.Path)
@@ -102,6 +101,13 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 			if err != nil {
 				return "", err
 			}
+
+			switch event := event.AsUnion().(type) {
+			case anthropic.ContentBlockDeltaEvent:
+				if event.Delta.Text != "" {
+					fmt.Printf("%s", event.Delta.Text)
+				}
+			}
 		}
 
 		if stream.Err() != nil {
@@ -130,8 +136,10 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 				}
 
 				if input.Command == "view" {
+					fmt.Printf("\n\n\nviewing file: %s\n\n\n\n", input.Path)
 					response = updatedContent
 				} else if input.Command == "str_replace" {
+					fmt.Printf("\n\n\nreplacing content in file: %s\n\n\n\n", input.Path)
 					patchedContent := strings.ReplaceAll(updatedContent, input.OldStr, input.NewStr)
 					patch, err := diff.GeneratePatch(updatedContent, patchedContent, actionPlanWithPath.Path)
 					if err != nil {

@@ -1,7 +1,7 @@
 package llm
 
 const detailedPlanInstructions = `
-- Provide a detailed plan for the high level plan outlined here.
+Provide a detailed plan for the high level plan outlined here.
 `
 
 const chatOnlyInstructions = `
