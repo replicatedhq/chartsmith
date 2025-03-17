@@ -1277,6 +1277,14 @@ func (c *DebugConsole) createPlan(args []string) error {
 		return errors.Wrap(err, "failed to create plan")
 	}
 
+	if err := workspace.AppendPlanDescription(c.ctx, p.ID, plan); err != nil {
+		return errors.Wrap(err, "failed to append plan description")
+	}
+
+	if err := workspace.UpdatePlanStatus(c.ctx, p.ID, workspacetypes.PlanStatusReview); err != nil {
+		return errors.Wrap(err, "failed to update plan status")
+	}
+
 	fmt.Printf(boldGreen("Plan created: %s\n"), p.ID)
 	return nil
 }
@@ -1366,21 +1374,22 @@ func (c *DebugConsole) executePlan(args []string) error {
 	doneCh := make(chan error)
 
 	go func() {
-		finalContent, err := llm.ExecuteAction(c.ctx, actionPlanWithPath, plan, currentContent, patchStreamCh)
+		_, err := llm.ExecuteAction(c.ctx, actionPlanWithPath, plan, currentContent, patchStreamCh)
 		if err != nil {
 			fmt.Println(dimText(fmt.Sprintf("Error: %v", err)))
 		}
 
-		fmt.Printf(boldGreen("Updated content: %s\n"), finalContent)
 		doneCh <- nil
 	}()
 
-	for {
+	done := false
+	for !done {
 		select {
 		case err := <-doneCh:
 			if err != nil {
 				return errors.Wrap(err, "failed to execute action")
 			}
+			done = true
 		case stream := <-patchStreamCh:
 			fmt.Printf(boldGreen("Patch: %s\n"), stream)
 		}

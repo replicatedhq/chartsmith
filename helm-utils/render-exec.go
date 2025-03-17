@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
 
 	"github.com/replicatedhq/chartsmith/pkg/workspace/types"
 )
@@ -103,8 +104,13 @@ func runHelmDepUpdate(dir string, kubeconfig string, cmdCh chan string, stdoutCh
 		return fmt.Errorf("failed to start helm dep update: %w", err)
 	}
 
+	// Use WaitGroup to track when goroutines finish
+	var wg sync.WaitGroup
+	wg.Add(2) // For 2 goroutines (stdout, stderr)
+
 	// Start goroutines to stream output
 	go func() {
+		defer wg.Done()
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
 			stdoutCh <- scanner.Text() + "\n"
@@ -112,6 +118,7 @@ func runHelmDepUpdate(dir string, kubeconfig string, cmdCh chan string, stdoutCh
 	}()
 
 	go func() {
+		defer wg.Done()
 		scanner := bufio.NewScanner(stderr)
 		for scanner.Scan() {
 			stderrCh <- scanner.Text() + "\n"
@@ -120,8 +127,12 @@ func runHelmDepUpdate(dir string, kubeconfig string, cmdCh chan string, stdoutCh
 
 	// Wait for command to complete
 	if err := depUpdateCmd.Wait(); err != nil {
+		wg.Wait() // Important: Wait for goroutines to finish even on error
 		return err
 	}
+
+	// Wait for goroutines to finish processing all output
+	wg.Wait()
 
 	return nil
 }
@@ -137,6 +148,8 @@ func runHelmTemplate(dir string, valuesYAML string, kubeconfig string, cmdCh cha
 		}
 		args = append(args, "-f", "values.yaml")
 	}
+
+	fmt.Printf("Running helm template with args: %v\n", args)
 
 	cmd := exec.Command("helm", args...)
 	cmd.Env = []string{"KUBECONFIG=" + kubeconfig}
@@ -157,8 +170,13 @@ func runHelmTemplate(dir string, valuesYAML string, kubeconfig string, cmdCh cha
 		return fmt.Errorf("failed to start helm template: %w", err)
 	}
 
+	// Use WaitGroup to track when goroutines finish
+	var wg sync.WaitGroup
+	wg.Add(2) // For 2 goroutines (stdout, stderr)
+
 	// Start goroutines to stream output
 	go func() {
+		defer wg.Done()
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
 			stdoutCh <- scanner.Text() + "\n"
@@ -166,6 +184,7 @@ func runHelmTemplate(dir string, valuesYAML string, kubeconfig string, cmdCh cha
 	}()
 
 	go func() {
+		defer wg.Done()
 		scanner := bufio.NewScanner(stderr)
 		for scanner.Scan() {
 			stderrCh <- scanner.Text() + "\n"
@@ -174,8 +193,12 @@ func runHelmTemplate(dir string, valuesYAML string, kubeconfig string, cmdCh cha
 
 	// Wait for command to complete
 	if err := cmd.Wait(); err != nil {
+		wg.Wait() // Important: Wait for goroutines to finish even on error
 		return err
 	}
+
+	// Wait for goroutines to finish processing all output
+	wg.Wait()
 
 	return nil
 }

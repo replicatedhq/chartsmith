@@ -99,6 +99,8 @@ const executePlanSystemPrompt = commonSystemPrompt + `
   3. If the file is not empty, you should update the file to meet the requirements provided. In this case, provide just a patch file back.
   4. When editing an existing file, you should only edit the file to meet the requirements provided. Do not make any other changes to the file. Attempt to maintain as much of the current file as possible.
   5. You don't need to explain the change, just provide the artifact(s) in your response.
+  6. Do not provide any other comments, just edit the files.
+  7. Do not describe what you are going to do, just do it.
 </execution_instructions>`
 
 const convertFileSystemPrompt = commonSystemPrompt + `
