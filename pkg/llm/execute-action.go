@@ -12,6 +12,14 @@ import (
 	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 )
 
+const (
+	TextEditor_Sonnet37 = "text_editor_20250124"
+	TextEditor_Sonnet35 = "text_editor_20241022"
+
+	Model_Sonnet37 = "claude-3-7-sonnet-20250219"
+	Model_Sonnet35 = "claude-3-5-sonnet-20241022"
+)
+
 type CreateWorkspaceFromArchiveAction struct {
 	ArchivePath string `json:"archivePath"`
 	ArchiveType string `json:"archiveType"` // New field: "helm" or "k8s"
@@ -46,7 +54,7 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 
 	tools := []anthropic.ToolParam{
 		{
-			Name: anthropic.F("text_editor_20250124"),
+			Name: anthropic.F(TextEditor_Sonnet35),
 			InputSchema: anthropic.F(interface{}(map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
@@ -73,12 +81,18 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 		toolUnionParams[i] = tool
 	}
 
+	var disabled anthropic.ThinkingConfigEnabledType
+	disabled = "disabled"
+
 	for {
 		stream := client.Messages.NewStreaming(ctx, anthropic.MessageNewParams{
-			Model:     anthropic.F(anthropic.ModelClaude3_7Sonnet20250219),
+			Model:     anthropic.F(Model_Sonnet35),
 			MaxTokens: anthropic.F(int64(8192)),
 			Messages:  anthropic.F(messages),
 			Tools:     anthropic.F(toolUnionParams),
+			Thinking: anthropic.F[anthropic.ThinkingConfigParamUnion](anthropic.ThinkingConfigEnabledParam{
+				Type: anthropic.F(disabled),
+			}),
 		})
 
 		message := anthropic.Message{}

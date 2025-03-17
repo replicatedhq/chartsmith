@@ -69,9 +69,9 @@ func SetFileEmbeddings(ctx context.Context, fileID string, revisionNumber int, e
 	return nil
 }
 
-func AddPendingPatch(ctx context.Context, workspaceID string, revisionNumber int, chartID string, filePath string, pendingPatch string) error {
+func AddPendingPatch(ctx context.Context, workspaceID string, revisionNumber int, chartID string, filePath string, pendingPatch string) (*types.File, error) {
 	if strings.TrimSpace(pendingPatch) == "" {
-		return nil
+		return nil, nil
 	}
 
 	logger.Debug("Adding pending patch",
@@ -92,15 +92,22 @@ func AddPendingPatch(ctx context.Context, workspaceID string, revisionNumber int
 	if err == pgx.ErrNoRows {
 		id, err := securerandom.Hex(6)
 		if err != nil {
-			return fmt.Errorf("error generating file ID: %w", err)
+			return nil, fmt.Errorf("error generating file ID: %w", err)
 		}
 
 		// create the file with "" content and the pending patch
 		query := `INSERT INTO workspace_file (id, revision_number, chart_id, workspace_id, file_path, content, pending_patches) VALUES ($1, $2, $3, $4, $5, $6, $7)`
 		_, err = conn.Exec(ctx, query, id, revisionNumber, chartID, workspaceID, filePath, "", []string{pendingPatch})
 		if err != nil {
-			return fmt.Errorf("error inserting file in workspace: %w", err)
+			return nil, fmt.Errorf("error inserting file in workspace: %w", err)
 		}
+
+		updatedFile, err := GetFile(ctx, id, revisionNumber)
+		if err != nil {
+			return nil, fmt.Errorf("error getting file: %w", err)
+		}
+
+		return updatedFile, nil
 	} else {
 		// Create a string slice for the patches
 		var patches []string
@@ -119,11 +126,16 @@ func AddPendingPatch(ctx context.Context, workspaceID string, revisionNumber int
 		query := `UPDATE workspace_file SET pending_patches = $1 WHERE id = $2 AND revision_number = $3`
 		_, err = conn.Exec(ctx, query, patches, fileID, revisionNumber)
 		if err != nil {
-			return fmt.Errorf("error updating file in workspace: %w", err)
+			return nil, fmt.Errorf("error updating file in workspace: %w", err)
 		}
-	}
 
-	return nil
+		updatedFile, err := GetFile(ctx, fileID, revisionNumber)
+		if err != nil {
+			return nil, fmt.Errorf("error getting file: %w", err)
+		}
+
+		return updatedFile, nil
+	}
 }
 
 func ListFiles(ctx context.Context, workspaceID string, revisionNumber int, chartID string) ([]types.File, error) {

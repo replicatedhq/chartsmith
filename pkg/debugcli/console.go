@@ -28,7 +28,7 @@ var (
 	boldRed    = color.New(color.FgRed, color.Bold).SprintFunc()
 	boldYellow = color.New(color.FgYellow, color.Bold).SprintFunc()
 	dimText    = color.New(color.Faint).SprintFunc()
-	
+
 	// To track double Ctrl+C for exit
 	lastInterrupt *time.Time
 )
@@ -84,17 +84,17 @@ func RunConsole(options ConsoleOptions) error {
 			return errors.Wrapf(err, "failed to select workspace with ID %s", options.WorkspaceID)
 		}
 	}
-	
+
 	if options.NonInteractive {
 		// Execute a single command and exit
 		if len(options.Command) == 0 {
 			return errors.New("no command specified in non-interactive mode")
 		}
-		
+
 		if console.activeWorkspace == nil && options.WorkspaceID == "" {
 			return errors.New("workspace ID is required for non-interactive mode")
 		}
-		
+
 		return console.executeNonInteractiveCommand(options.Command)
 	}
 
@@ -270,13 +270,13 @@ func (c *DebugConsole) executeNonInteractiveCommand(args []string) error {
 	if len(args) == 0 {
 		return errors.New("no command specified")
 	}
-	
+
 	cmd := args[0]
 	cmdArgs := []string{}
 	if len(args) > 1 {
 		cmdArgs = args[1:]
 	}
-	
+
 	// Filter out any flags that were already processed by cobra (like --workspace-id)
 	filteredArgs := []string{}
 	for _, arg := range cmdArgs {
@@ -284,7 +284,7 @@ func (c *DebugConsole) executeNonInteractiveCommand(args []string) error {
 			filteredArgs = append(filteredArgs, arg)
 		}
 	}
-	
+
 	// Skip the next arg if it's the value for --workspace-id
 	for i := 0; i < len(filteredArgs); i++ {
 		if filteredArgs[i] == "--workspace-id" && i+1 < len(filteredArgs) {
@@ -292,7 +292,7 @@ func (c *DebugConsole) executeNonInteractiveCommand(args []string) error {
 			break
 		}
 	}
-	
+
 	return c.executeCommand(cmd, filteredArgs)
 }
 
@@ -392,7 +392,7 @@ func (c *DebugConsole) selectWorkspaceById(id string) error {
 	}
 
 	c.activeWorkspace = &workspace
-	
+
 	if !c.options.NonInteractive {
 		fmt.Printf(boldGreen("Selected workspace: %s (ID: %s)\n"), workspace.Name, workspace.ID)
 	}
@@ -457,7 +457,7 @@ func (c *DebugConsole) showHelp() {
 	fmt.Println("  " + boldGreen("exit") + "                  Exit the console")
 	fmt.Println("  " + boldGreen("quit") + "                  Exit the console")
 	fmt.Println()
-	
+
 	fmt.Println(boldBlue("Command-line Usage:"))
 	fmt.Println("  These commands can also be run directly from the command line:")
 	fmt.Println("  " + boldGreen("debug-console new-revision --workspace-id <id>"))
@@ -748,9 +748,9 @@ func (c *DebugConsole) generatePatch(args []string) error {
 			}
 
 			// Apply the patch using GNU patch command
-			patchCmd := fmt.Sprintf("cd %s && patch -u %s < %s 2>/dev/null || true", 
+			patchCmd := fmt.Sprintf("cd %s && patch -u %s < %s 2>/dev/null || true",
 				tmpDir, filepath.Base(modifiedFile), filepath.Base(tempPatchFile))
-				
+
 			logger.Debug("Running patch command", logger.Any("cmd", patchCmd))
 			patchExec := exec.Command("bash", "-c", patchCmd)
 			if patchErr := patchExec.Run(); patchErr != nil {
@@ -759,9 +759,9 @@ func (c *DebugConsole) generatePatch(args []string) error {
 
 			// Run diff -u to generate a proper unified diff
 			diffOutFile := filepath.Join(tmpDir, "diff.patch")
-			diffCmd := fmt.Sprintf("diff -u %s %s > %s 2>/dev/null || true", 
+			diffCmd := fmt.Sprintf("diff -u %s %s > %s 2>/dev/null || true",
 				originalFile, modifiedFile, diffOutFile)
-			
+
 			cmd := exec.Command("bash", "-c", diffCmd)
 			if err := cmd.Run(); err != nil {
 				// Ignore diff exit code, it returns non-zero if files differ
@@ -777,10 +777,10 @@ func (c *DebugConsole) generatePatch(args []string) error {
 			// Replace the original patch with the diff output, but with proper filenames
 			if len(diffBytes) > 0 {
 				logger.Debug("Using diff -u output for patch", logger.Any("length", len(diffBytes)))
-				
+
 				// Process the diff to replace temp filenames with the actual filename
 				diffLines := strings.Split(string(diffBytes), "\n")
-				
+
 				// Replace the temp file paths in the diff output with the actual file path
 				// This ensures the patch uses the original file path provided by the user
 				for i := 0; i < len(diffLines); i++ {
@@ -801,11 +801,11 @@ func (c *DebugConsole) generatePatch(args []string) error {
 						diffLines[i] = strings.ReplaceAll(diffLines[i], modifiedFile, filePath)
 					}
 				}
-				
+
 				patchContent = strings.Join(diffLines, "\n")
 			} else {
 				logger.Debug("diff -u produced no output, using original patch")
-				
+
 				// Try to manually format the patch to make it more like a standard diff -u
 				// This is a simplistic approach, real-world patches need proper parsing
 				patchContent = formatAsDiffU(patchContent, filePath)
@@ -830,12 +830,15 @@ func (c *DebugConsole) generatePatch(args []string) error {
 			fmt.Printf("  Saved to: %s\n", patchFile)
 		}
 
-		if err := workspace.AddPendingPatch(c.ctx, c.activeWorkspace.ID, c.activeWorkspace.CurrentRevision, c.activeWorkspace.Charts[0].ID, filePath, patchContent); err != nil {
+		updatedFile, err := workspace.AddPendingPatch(c.ctx, c.activeWorkspace.ID, c.activeWorkspace.CurrentRevision, c.activeWorkspace.Charts[0].ID, filePath, patchContent)
+		if err != nil {
 			return errors.Wrapf(err, "failed to create or patch file: %s", filePath)
 		}
 
-		if err := realtime.SendPatchesToWorkspace(c.ctx, c.activeWorkspace.ID, filePath, content, []string{patchContent}); err != nil {
-			return errors.Wrapf(err, "failed to send patch to realtime server: %s", filePath)
+		if updatedFile != nil {
+			if err := realtime.SendPatchesToWorkspace(c.ctx, c.activeWorkspace.ID, filePath, content, updatedFile.PendingPatches); err != nil {
+				return errors.Wrapf(err, "failed to send patch to realtime server: %s", filePath)
+			}
 		}
 	}
 
@@ -1165,17 +1168,17 @@ func formatAsDiffU(patch string, filePath string) string {
 		}
 		return strings.Join(lines, "\n")
 	}
-	
+
 	// Very simple reformatting - in a real implementation you would need
 	// to properly parse and reconstruct the patch
 	var sb strings.Builder
-	
+
 	// Add standard diff -u headers with the correct file path
 	sb.WriteString("--- " + filePath + "\n")
 	sb.WriteString("+++ " + filePath + "\n")
-	
+
 	// Add the original patch content, preserving any @@ headers
 	sb.WriteString(patch)
-	
+
 	return sb.String()
 }
