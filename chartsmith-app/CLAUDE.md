@@ -1,3 +1,4 @@
-See ARCHITECTURE.md for the current system design.
+See the following files for details:
 
-IMPORTANT: follow the instructions in ARCHITECTURE.md carefully when making changes, and apply new learnings to that file, not here.
+ARCHITECTURE.md: Our core design principles
+CONTRIBUTING.md: How to run and test this project
