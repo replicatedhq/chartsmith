@@ -13,7 +13,9 @@
     "test": "npm run test:unit && npm run test:e2e",
     "test:e2e": "npx playwright test",
     "test:e2e:headed": "npx playwright test --headed",
-    "test:unit": "jest"
+    "test:unit": "jest",
+    "test:watch": "jest --watch",
+    "test:parseDiff": "jest parseDiff"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",

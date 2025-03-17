@@ -21,6 +21,418 @@ export function parseDiff(originalContent: string, diffContent: string): string 
   if (!diffContent || diffContent.trim() === '') {
     return originalContent;
   }
+
+  // First, try the direct content-focused approach (ignores line numbers)
+  // This approach is more reliable for incorrectly positioned patches
+  try {
+    const lines = originalContent.split('\n');
+    
+    // Look for lines to remove (starting with - but not ---)
+    const linesToRemove: string[] = [];
+    const diffLines = diffContent.split('\n');
+    
+    for (const line of diffLines) {
+      if (line.startsWith('-') && !line.startsWith('---')) {
+        // This is a line we need to remove
+        linesToRemove.push(line.substring(1).trim());
+      }
+    }
+    
+    // Remove the lines
+    for (const lineContent of linesToRemove) {
+      const index = lines.findIndex(line => line.trim() === lineContent);
+      if (index >= 0) {
+        lines.splice(index, 1);
+      }
+    }
+    
+    // Look for lines to add (starting with + but not +++)
+    const linesToAdd: {line: string, afterContextLine?: string}[] = [];
+    let lastContextLine: string | undefined;
+    
+    for (const line of diffLines) {
+      if (line.startsWith(' ') && !line.startsWith('---') && !line.startsWith('+++')) {
+        // This is a context line
+        lastContextLine = line.substring(1).trim();
+      } else if (line.startsWith('+') && !line.startsWith('+++')) {
+        // This is a line we need to add
+        linesToAdd.push({
+          line: line.substring(1),
+          afterContextLine: lastContextLine
+        });
+      }
+    }
+    
+    // Add the lines
+    for (const {line, afterContextLine} of linesToAdd) {
+      if (afterContextLine) {
+        const contextIndex = lines.findIndex(l => l.trim() === afterContextLine);
+        if (contextIndex >= 0) {
+          lines.splice(contextIndex + 1, 0, line);
+        } else {
+          // If context line not found, add at the end
+          lines.push(line);
+        }
+      } else {
+        // If no context, add at the end
+        lines.push(line);
+      }
+    }
+    
+    return lines.join('\n');
+  } catch (error) {
+    // If the simple approach fails, try the more complex structured diff parsing
+    console.warn("Simple content-based diff failed, falling back to structured parsing:", error);
+  }
+  
+  // Fallback to the structured diff approach
+  // This is still useful for complex diffs with multiple hunks
+  try {
+    // Extract sections from the unified diff format
+    const unifiedDiffMatch = diffContent.match(/\n--- [\s\S]*?\n\+\+\+ [\s\S]*?\n((?:@@ [\s\S]*? @@[\s\S]*?\n)+)((?: [\s\S]*\n|\+[\s\S]*\n|-[\s\S]*\n)*)/);
+    
+    if (unifiedDiffMatch) {
+      // Get all the hunks in the diff
+      const headerInfo = unifiedDiffMatch[1]; // Contains all @@ lines
+      const fullHunkContent = unifiedDiffMatch[2];
+      
+      // Build the modified content from the original by applying the diff
+      const originalLines = originalContent.split('\n');
+      const modifiedLines = [...originalLines]; // Start with a copy of the original
+      
+      // Parse each hunk individually to maintain proper line order
+      const hunkHeaderMatches = Array.from(headerInfo.matchAll(/@@ -(\d+),(\d+) \+(\d+),(\d+) @@/g));
+      
+      // We'll process each hunk separately to preserve order of context and changed lines
+      for (let i = 0; i < hunkHeaderMatches.length; i++) {
+        const hunkHeader = hunkHeaderMatches[i][0];
+        const origStartStr = hunkHeaderMatches[i][1];
+        const origCountStr = hunkHeaderMatches[i][2];
+        const newStartStr = hunkHeaderMatches[i][3];
+        const newCountStr = hunkHeaderMatches[i][4];
+        
+        // Line numbers in diff are 1-based, arrays are 0-based
+        const origStart = parseInt(origStartStr, 10) - 1;
+        const origCount = parseInt(origCountStr, 10);
+        const newStart = parseInt(newStartStr, 10) - 1;
+        
+        // Extract hunk lines
+        const hunkRegex = new RegExp(`${hunkHeader}\\n([\\s\\S]*?)(?:\\n@@ |$)`, 'g');
+        const hunkMatch = hunkRegex.exec(fullHunkContent);
+        
+        if (!hunkMatch || !hunkMatch[1]) continue;
+        
+        const hunkLines = hunkMatch[1].split('\n').filter(line => line.length > 0);
+        
+        // Process hunk lines in order
+        // First, build a representation of what the hunk contains
+        const hunkLinesByType: {
+          context: Array<{content: string, index: number}>, // ' ' lines
+          removed: Array<{content: string, index: number}>, // '-' lines
+          added: Array<{content: string, index: number}>    // '+' lines
+        } = {
+          context: [], 
+          removed: [], 
+          added: []
+        };
+        
+        // Track the exact order of lines in the hunk
+        const lineOrder = [];
+        
+        for (let j = 0; j < hunkLines.length; j++) {
+          const line = hunkLines[j];
+          if (line.startsWith('-')) {
+            hunkLinesByType.removed.push({
+              content: line.substring(1),
+              index: lineOrder.length
+            });
+            lineOrder.push('removed');
+          } else if (line.startsWith('+')) {
+            hunkLinesByType.added.push({
+              content: line.substring(1),
+              index: lineOrder.length
+            });
+            lineOrder.push('added');
+          } else if (line.startsWith(' ')) {
+            hunkLinesByType.context.push({
+              content: line.substring(1),
+              index: lineOrder.length
+            });
+            lineOrder.push('context');
+          }
+        }
+        
+        // Apply changes with special care for context lines
+        // For context-only hunks, do nothing (they're already in the file)
+        if (hunkLinesByType.added.length === 0 && hunkLinesByType.removed.length === 0) {
+          continue;
+        }
+        
+        // For deletion-only hunks
+        if (hunkLinesByType.added.length === 0 && hunkLinesByType.removed.length > 0) {
+          let position = newStart;
+          let linesToRemove = hunkLinesByType.removed.length;
+          
+          // First, verify the line to be removed matches what we expect
+          const lineToRemove = hunkLinesByType.removed[0].content;
+          
+          // Look for the exact line to be removed - search entire file if needed
+          // This is more aggressive but needed when line numbers are completely wrong
+          let foundRemovalLine = false;
+          
+          // First try near the expected position
+          let searchRadius = 10; // Increased search radius
+          for (let k = Math.max(0, position - searchRadius); k < Math.min(modifiedLines.length, position + searchRadius); k++) {
+            if (modifiedLines[k] === lineToRemove) {
+              position = k;
+              foundRemovalLine = true;
+              break;
+            }
+          }
+          
+          // If not found nearby, search the entire file
+          if (!foundRemovalLine) {
+            for (let k = 0; k < modifiedLines.length; k++) {
+              if (modifiedLines[k] === lineToRemove) {
+                position = k;
+                foundRemovalLine = true;
+                console.log(`Found line to remove "${lineToRemove}" at position ${k} (far from expected position ${newStart})`);
+                break;
+              }
+            }
+          }
+          
+          // If we didn't find the exact line to remove, check if context helps
+          if (!foundRemovalLine) {
+            // Check if we have context lines before removals
+            const hasContextBeforeRemovals = lineOrder.indexOf('context') < lineOrder.indexOf('removed');
+            
+            if (hasContextBeforeRemovals) {
+              // Find the context line in the content
+              const firstContextLine = hunkLinesByType.context[0].content;
+              
+              // Look for context lines nearby
+              let found = false;
+              for (let k = Math.max(0, position - searchRadius); k < Math.min(modifiedLines.length, position + searchRadius); k++) {
+                if (modifiedLines[k] === firstContextLine) {
+                  position = k + 1; // Start removing after the context line
+                  found = true;
+                  break;
+                }
+              }
+              
+              if (!found) {
+                console.warn("Could not find context line or line to remove - patch may be misapplied");
+                // We'll still attempt to use the position from the patch
+              }
+            }
+          }
+          
+          // Extra safety check - make sure we're removing the correct line
+          if (position < modifiedLines.length && modifiedLines[position] === lineToRemove) {
+            // Perfect match, remove just one line
+            modifiedLines.splice(position, 1);
+          } else {
+            // No match found or multiple lines to remove - try to keep going
+            // In this case we'll use the patch location even though we couldn't verify it
+            console.warn("Line to remove doesn't match expected content - patch may be misapplied");
+            modifiedLines.splice(position, linesToRemove);
+          }
+        }
+        // For addition-only hunks
+        else if (hunkLinesByType.added.length > 0 && hunkLinesByType.removed.length === 0) {
+          const addedLines = hunkLinesByType.added.map(line => line.content);
+          let position = newStart;
+          let searchRadius = 5; // Search 5 lines before and after
+          
+          // Check if we have context lines before/after additions
+          const contextIndices = lineOrder
+            .map((type, index) => type === 'context' ? index : -1)
+            .filter(index => index !== -1);
+          
+          const addedIndices = lineOrder
+            .map((type, index) => type === 'added' ? index : -1)
+            .filter(index => index !== -1);
+            
+          // If we have context, use it to position our addition
+          if (contextIndices.length > 0) {
+            const contextBeforeAddition = contextIndices.some(contextIdx => 
+              addedIndices.some(addedIdx => contextIdx < addedIdx));
+              
+            const contextAfterAddition = contextIndices.some(contextIdx => 
+              addedIndices.some(addedIdx => contextIdx > addedIdx));
+              
+            // If context appears before and after, we need to find both
+            if (contextBeforeAddition && contextAfterAddition) {
+              const firstContextIndex = Math.min(...contextIndices);
+              const firstContextLine = hunkLinesByType.context[contextIndices.indexOf(firstContextIndex)].content;
+              
+              // Look for exact match of context line
+              let found = false;
+              
+              // First search nearby
+              for (let k = Math.max(0, position - searchRadius); k < Math.min(modifiedLines.length, position + searchRadius); k++) {
+                if (modifiedLines[k] === firstContextLine) {
+                  position = k + 1; // Insert after the first context line
+                  found = true;
+                  break;
+                }
+              }
+              
+              // If not found nearby, search entire file
+              if (!found) {
+                for (let k = 0; k < modifiedLines.length; k++) {
+                  if (modifiedLines[k] === firstContextLine) {
+                    position = k + 1; // Insert after the first context line
+                    found = true;
+                    console.log(`Found context line "${firstContextLine}" at position ${k} (far from expected position ${newStart})`);
+                    break;
+                  }
+                }
+              }
+              
+              if (!found) {
+                console.warn("Could not find context line - patch may be misapplied");
+              }
+            }
+            // If context appears before additions, add after the context
+            else if (contextBeforeAddition) {
+              const firstContextIndex = Math.min(...contextIndices);
+              const firstContextLine = hunkLinesByType.context[firstContextIndex].content;
+              
+              // Look for exact match of context line
+              let found = false;
+              for (let k = Math.max(0, position - searchRadius); k < Math.min(modifiedLines.length, position + searchRadius); k++) {
+                if (modifiedLines[k] === firstContextLine) {
+                  position = k + 1; // Insert after the context line
+                  found = true;
+                  break;
+                }
+              }
+              
+              if (!found) {
+                console.warn("Could not find context line - patch may be misapplied");
+              }
+            }
+            // If context appears after additions, add before the context
+            else if (contextAfterAddition) {
+              const firstContextIndex = Math.min(...contextIndices);
+              const firstContextLine = hunkLinesByType.context[firstContextIndex].content;
+              
+              // Look for exact match of context line
+              let found = false;
+              for (let k = Math.max(0, position - searchRadius); k < Math.min(modifiedLines.length, position + searchRadius); k++) {
+                if (modifiedLines[k] === firstContextLine) {
+                  position = k; // Insert before the context line
+                  found = true;
+                  break;
+                }
+              }
+              
+              if (!found) {
+                console.warn("Could not find context line - patch may be misapplied");
+              }
+            }
+          }
+          
+          // Add lines at the determined position
+          modifiedLines.splice(position, 0, ...addedLines);
+        }
+        // For replacement hunks (both additions and removals)
+        else {
+          // This is a replacement - we need to locate the exact lines to replace
+          let position = newStart;
+          let searchRadius = 5; // Search 5 lines before and after
+          
+          // Try to locate the line to be removed first - that's the most reliable
+          const linesToRemove = hunkLinesByType.removed.length;
+          const firstLineToRemove = hunkLinesByType.removed[0].content;
+          
+          let foundExactLine = false;
+          
+          // Search for the exact line to remove
+          for (let k = Math.max(0, position - searchRadius); k < Math.min(modifiedLines.length, position + searchRadius); k++) {
+            if (modifiedLines[k] === firstLineToRemove) {
+              position = k;
+              foundExactLine = true;
+              break;
+            }
+          }
+          
+          // If we couldn't find the line to remove, try using context
+          if (!foundExactLine) {
+            // See if we have context lines before the removal
+            const contextIndices = lineOrder
+              .map((type, index) => type === 'context' ? index : -1)
+              .filter(index => index !== -1);
+              
+            const removedIndices = lineOrder
+              .map((type, index) => type === 'removed' ? index : -1)
+              .filter(index => index !== -1);
+              
+            // If we have context before removals, use it to position
+            const contextBeforeRemoval = contextIndices.some(contextIdx => 
+              removedIndices.some(removedIdx => contextIdx < removedIdx));
+              
+            if (contextBeforeRemoval) {
+              const firstContextIndex = Math.min(...contextIndices);
+              const firstContextLine = hunkLinesByType.context[firstContextIndex].content;
+              
+              // Look for exact match of context line
+              let found = false;
+              for (let k = Math.max(0, position - searchRadius); k < Math.min(modifiedLines.length, position + searchRadius); k++) {
+                if (modifiedLines[k] === firstContextLine) {
+                  position = k + 1; // Replace after the context line
+                  found = true;
+                  break;
+                }
+              }
+              
+              if (!found) {
+                console.warn("Could not find context line or line to replace - patch may be misapplied");
+              }
+            }
+          }
+          
+          // Safety check - verify we're replacing the right content
+          let safeToReplace = false;
+          
+          if (position < modifiedLines.length) {
+            // For single line replacements, check exact match
+            if (linesToRemove === 1 && modifiedLines[position] === firstLineToRemove) {
+              safeToReplace = true;
+            }
+            // For multi-line replacements, try to match at least the first line
+            else if (linesToRemove > 1) {
+              if (modifiedLines[position] === firstLineToRemove) {
+                safeToReplace = true;
+              } else {
+                // If we can't match the first line exactly, log a warning but continue
+                console.warn("First line to replace doesn't match - patch may be misapplied");
+              }
+            }
+          }
+          
+          // Get the added lines
+          const addedLines = hunkLinesByType.added.map(line => line.content);
+          
+          // Apply the replacement
+          if (safeToReplace) {
+            // Replace the exact number of lines
+            modifiedLines.splice(position, linesToRemove, ...addedLines);
+          } else {
+            // No exact match found - just try our best by using the line number from the patch
+            console.warn("Could not safely match lines to replace - using patch line number");
+            modifiedLines.splice(position, linesToRemove, ...addedLines);
+          }
+        }
+      }
+      
+      return modifiedLines.join('\n');
+    }
+  } catch (diffError) {
+    console.warn("Error applying structured diff, falling back to simpler approach:", diffError);
+  }
   
   // For new files (empty original content), extract only the added lines
   if (originalContent === '' || diffContent.includes('@@ -0,0 +1,')) {
@@ -35,8 +447,157 @@ export function parseDiff(originalContent: string, diffContent: string): string 
     }
   }
   
-  // Direct text replacement for common fixes
-  // Handle specific line replacements in YAML/JSON
+  // Handle patches that only contain removals (no additions)
+  if (diffContent.includes('@@ ') && 
+      diffContent.split('\n').some(line => line.startsWith('-') && !line.startsWith('---')) &&
+      !diffContent.split('\n').some(line => line.startsWith('+') && !line.startsWith('+++'))) {
+    // This is a removal-only patch
+    try {
+      // Get line numbers from hunk headers
+      const hunkMatches = diffContent.match(/@@ -(\d+),(\d+) \+(\d+),(\d+) @@/g) || [];
+      const contentLines = originalContent.split('\n');
+      
+      // For each hunk, remove the specified lines
+      for (const hunk of hunkMatches) {
+        const match = hunk.match(/@@ -(\d+),(\d+) \+(\d+),(\d+) @@/);
+        if (match) {
+          const origStart = parseInt(match[1], 10) - 1; // Convert to 0-based
+          const origCount = parseInt(match[2], 10);
+          const newStart = parseInt(match[3], 10) - 1;  // Convert to 0-based
+          
+          // Find the lines to remove by looking at lines starting with -
+          const hunkLines = diffContent.split('\n');
+          const hunkStartIndex = hunkLines.findIndex(line => line === hunk);
+          if (hunkStartIndex !== -1) {
+            let removalCount = 0;
+            for (let i = hunkStartIndex + 1; i < hunkLines.length; i++) {
+              if (hunkLines[i].startsWith('@@ ')) break; // Next hunk
+              
+              if (hunkLines[i].startsWith('-')) {
+                removalCount++;
+              }
+            }
+            
+            // Remove the lines from the content
+            if (removalCount > 0) {
+              contentLines.splice(newStart, removalCount);
+            }
+          }
+        }
+      }
+      
+      return contentLines.join('\n');
+    } catch (error) {
+      console.warn("Error applying removal diff:", error);
+    }
+  }
+  
+  // Handle patches that only contain additions (no removals)
+  if (diffContent.includes('@@ ') && 
+      !diffContent.split('\n').some(line => line.startsWith('-') && !line.startsWith('---')) &&
+      diffContent.split('\n').some(line => line.startsWith('+') && !line.startsWith('+++'))) {
+    // This is an addition-only patch
+    try {
+      // Get line numbers from hunk headers
+      const hunkMatches = diffContent.match(/@@ -(\d+),(\d+) \+(\d+),(\d+) @@/g) || [];
+      const contentLines = originalContent.split('\n');
+      
+      // For each hunk, add the specified lines
+      for (const hunk of hunkMatches) {
+        const match = hunk.match(/@@ -(\d+),(\d+) \+(\d+),(\d+) @@/);
+        if (match) {
+          const origStart = parseInt(match[1], 10) - 1; // Convert to 0-based
+          const newStart = parseInt(match[3], 10) - 1;  // Convert to 0-based
+          
+          // Find the lines to add by looking at lines starting with +
+          const hunkLines = diffContent.split('\n');
+          const hunkStartIndex = hunkLines.findIndex(line => line.includes(hunk));
+          if (hunkStartIndex !== -1) {
+            // First, collect all lines in the hunk
+            const hunkLinesByType: {
+              context: Array<{content: string, index: number}>, // ' ' lines
+              added: Array<{content: string, index: number}>    // '+' lines
+            } = {
+              context: [],
+              added: []
+            };
+            
+            // Track the order of lines in the hunk
+            const lineOrder = [];
+            
+            for (let i = hunkStartIndex + 1; i < hunkLines.length; i++) {
+              if (hunkLines[i].startsWith('@@ ')) break; // Next hunk
+              
+              if (hunkLines[i].startsWith(' ')) {
+                // Context line
+                hunkLinesByType.context.push({
+                  content: hunkLines[i].substring(1),
+                  index: lineOrder.length
+                });
+                lineOrder.push('context');
+              } else if (hunkLines[i].startsWith('+')) {
+                // Added line
+                hunkLinesByType.added.push({
+                  content: hunkLines[i].substring(1),
+                  index: lineOrder.length
+                });
+                lineOrder.push('added');
+              }
+            }
+            
+            // Now apply the changes in the correct order
+            if (hunkLinesByType.added.length > 0) {
+              const addedLines = hunkLinesByType.added.map(line => line.content);
+              
+              // Case 1: if we have context lines, make sure we're inserting at the right spot
+              if (hunkLinesByType.context.length > 0) {
+                // Check if the first line is context (common case)
+                if (lineOrder[0] === 'context') {
+                  // We need to insert after the context line
+                  // First verify the context line exists in our content
+                  const contextLine = hunkLinesByType.context[0].content;
+                  
+                  // Check if this line exists at the position we expect
+                  if (contentLines[newStart] === contextLine) {
+                    // Context line exists at position - insert the added lines after it
+                    contentLines.splice(newStart + 1, 0, ...addedLines);
+                  } else {
+                    // Context line doesn't match - search for it nearby
+                    let found = false;
+                    for (let i = Math.max(0, newStart - 3); i < Math.min(contentLines.length, newStart + 3); i++) {
+                      if (contentLines[i] === contextLine) {
+                        contentLines.splice(i + 1, 0, ...addedLines);
+                        found = true;
+                        break;
+                      }
+                    }
+                    
+                    if (!found) {
+                      // Fallback - insert at the calculated position
+                      contentLines.splice(newStart, 0, ...addedLines);
+                    }
+                  }
+                } else {
+                  // First line is not context - use the line number
+                  contentLines.splice(newStart, 0, ...addedLines);
+                }
+              } else {
+                // No context lines - just use the line number
+                contentLines.splice(newStart, 0, ...addedLines);
+              }
+            }
+          }
+        }
+      }
+      
+      return contentLines.join('\n');
+    } catch (error) {
+      console.warn("Error applying addition diff:", error);
+    }
+  }
+  
+  // Existing special case handling
+  // Direct text replacement for common fixes - handle specific line replacements in YAML/JSON
   const replacementMatches = Array.from(diffContent.matchAll(/-([^:\n]+):\s*([^\n]+)\n\+([^:\n]+):\s*([^\n]+)/g));
   if (replacementMatches.length === 1) {
     const match = replacementMatches[0];
@@ -55,9 +616,9 @@ export function parseDiff(originalContent: string, diffContent: string): string 
     }
   }
   
+  // Backup approach: universal diff processing
   try {
-    // Last resort: extract the entire modified file content directly
-    // Look for a complete rendered version in the diff
+    // Extract all hunks
     const completeDiffMatch = diffContent.match(/\n--- [\s\S]*?\n\+\+\+ [\s\S]*?\n((?:@@ [\s\S]*? @@[\s\S]*?\n)+)((?: [\s\S]*\n|\+[\s\S]*\n|-[\s\S]*\n)*)/);
     if (completeDiffMatch) {
       const hunkContent = completeDiffMatch[2].split('\n');
