@@ -94,7 +94,10 @@ export default function CommandMenu({ isOpen, onClose, onToggleDebug, isDebugVis
             </Command.Group>
             <Command.Group heading="Tools">
               <Command.Item
-                onSelect={onToggleDebug}
+                onSelect={() => {
+                  onToggleDebug();
+                  onClose();
+                }}
                 className={`px-3 py-2 rounded-sm text-sm cursor-pointer ${
                   resolvedTheme === "dark"
                     ? "hover:bg-dark-border/40 aria-selected:bg-dark-border/40"

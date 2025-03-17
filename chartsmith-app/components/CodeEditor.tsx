@@ -679,17 +679,11 @@ export const CodeEditor = React.memo(function CodeEditor({
 
   const headerElement = showDiffHeader ? renderDiffHeader() : null;
 
-  // Simple debugging output to help identify issues
-  console.log(
-    "Selected file:", selectedFile?.filePath, 
-    "has pending patches:", !!(selectedFile?.pendingPatches && selectedFile.pendingPatches.length > 0)
-  );
-  
   // Define mount handlers for both editor types
   const handleRegularEditorMount = (editor: editor.IStandaloneCodeEditor, monaco: typeof import("monaco-editor")) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
-    
+
     // Add command palette shortcut
     const commandId = 'chartsmith.openCommandPalette';
     editor.addAction({
@@ -703,7 +697,7 @@ export const CodeEditor = React.memo(function CodeEditor({
       }
     });
   };
-  
+
   // Handle diff editor mount differently
   const handleDiffEditorMount = (editor: any, monaco: typeof import("monaco-editor")) => {
     // We need to handle the diff editor mount differently
@@ -723,14 +717,14 @@ export const CodeEditor = React.memo(function CodeEditor({
       }
     });
   };
-  
+
   // Create a stable key for editor rendering
   const editorKey = selectedFile?.id || 'none';
   const hasPendingPatches = selectedFile?.pendingPatches && selectedFile.pendingPatches.length > 0;
-  
+
   // Generate a unique key for the editor to force re-creation when needed
   const editorStateKey = `${editorKey}-${hasPendingPatches ? 'diff' : 'normal'}-${Date.now()}`;
-  
+
   // Let's try a more conventional approach but with optimizations
   return (
     <div className="flex-1 h-full flex flex-col">
