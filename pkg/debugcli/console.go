@@ -40,6 +40,7 @@ type ConsoleOptions struct {
 	Command        []string // Command to execute in non-interactive mode
 }
 
+// DebugConsole represents the debug console state
 type DebugConsole struct {
 	ctx             context.Context
 	pgClient        *pgxpool.Pool
@@ -48,6 +49,7 @@ type DebugConsole struct {
 	options         ConsoleOptions
 }
 
+// RunConsole initializes and runs the debug console with the given options
 func RunConsole(options ConsoleOptions) error {
 	logger.SetDebug()
 	ctx := context.Background()
@@ -756,8 +758,9 @@ func (c *DebugConsole) generatePatch(args []string) error {
 			}
 
 			// Run diff -u to generate a proper unified diff
+			diffOutFile := filepath.Join(tmpDir, "diff.patch")
 			diffCmd := fmt.Sprintf("diff -u %s %s > %s 2>/dev/null || true", 
-				originalFile, modifiedFile, filepath.Join(tmpDir, "diff.patch"))
+				originalFile, modifiedFile, diffOutFile)
 			
 			cmd := exec.Command("bash", "-c", diffCmd)
 			if err := cmd.Run(); err != nil {
@@ -766,15 +769,40 @@ func (c *DebugConsole) generatePatch(args []string) error {
 			}
 
 			// Read the generated diff
-			diffBytes, err := os.ReadFile(filepath.Join(tmpDir, "diff.patch"))
+			diffBytes, err := os.ReadFile(diffOutFile)
 			if err != nil {
 				return errors.Wrap(err, "failed to read diff output")
 			}
 
-			// Replace the original patch with the diff output
+			// Replace the original patch with the diff output, but with proper filenames
 			if len(diffBytes) > 0 {
 				logger.Debug("Using diff -u output for patch", logger.Any("length", len(diffBytes)))
-				patchContent = string(diffBytes)
+				
+				// Process the diff to replace temp filenames with the actual filename
+				diffLines := strings.Split(string(diffBytes), "\n")
+				
+				// Replace the temp file paths in the diff output with the actual file path
+				// This ensures the patch uses the original file path provided by the user
+				for i := 0; i < len(diffLines); i++ {
+					// Process all lines that might contain the temp file paths
+					if i < 2 {
+						// First two lines are special header lines with filenames
+						if i == 0 && strings.HasPrefix(diffLines[i], "--- ") {
+							// First line is the original file
+							diffLines[i] = fmt.Sprintf("--- %s", filePath)
+						} else if i == 1 && strings.HasPrefix(diffLines[i], "+++ ") {
+							// Second line is the modified file
+							diffLines[i] = fmt.Sprintf("+++ %s", filePath)
+						}
+					} else {
+						// For other lines, replace any instances of the temp file paths
+						// This handles cases where the file path might appear in chunk headers or context
+						diffLines[i] = strings.ReplaceAll(diffLines[i], originalFile, filePath)
+						diffLines[i] = strings.ReplaceAll(diffLines[i], modifiedFile, filePath)
+					}
+				}
+				
+				patchContent = strings.Join(diffLines, "\n")
 			} else {
 				logger.Debug("diff -u produced no output, using original patch")
 				
@@ -1125,16 +1153,24 @@ func (c *DebugConsole) isCurrentRevisionComplete() (bool, error) {
 
 // formatAsDiffU formats a patch to match standard diff -u format
 func formatAsDiffU(patch string, filePath string) string {
-	// If it already has --- and +++ headers, assume it's already in diff -u format
+	// If it already has --- and +++ headers, just ensure they use the correct file path
 	if strings.Contains(patch, "---") && strings.Contains(patch, "+++") {
-		return patch
+		lines := strings.Split(patch, "\n")
+		for i, line := range lines {
+			if i == 0 && strings.HasPrefix(line, "--- ") {
+				lines[i] = fmt.Sprintf("--- %s", filePath)
+			} else if i == 1 && strings.HasPrefix(line, "+++ ") {
+				lines[i] = fmt.Sprintf("+++ %s", filePath)
+			}
+		}
+		return strings.Join(lines, "\n")
 	}
 	
 	// Very simple reformatting - in a real implementation you would need
 	// to properly parse and reconstruct the patch
 	var sb strings.Builder
 	
-	// Add standard diff -u headers
+	// Add standard diff -u headers with the correct file path
 	sb.WriteString("--- " + filePath + "\n")
 	sb.WriteString("+++ " + filePath + "\n")
 	

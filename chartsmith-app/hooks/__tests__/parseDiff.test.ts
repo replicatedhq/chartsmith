@@ -99,4 +99,64 @@ name: okteto`;
     expect(result).toContain("  version: 5.0.0");
     expect(result).toContain("  anotherField: some-other-value");
   });
+  
+  // Test case for multi-line additions in the correct order
+  test('preserves the order of multi-line additions', () => {
+    const original = `annotations:
+  artifacthub.io/changes: |
+    - The changelog is available at https://www.okteto.com/docs/release-notes
+apiVersion: v2
+appVersion: 3fd2e76e9
+dependencies:
+- name: ingress-nginx
+  repository: https://kubernetes.github.io/ingress-nginx
+  version: 4.12.0
+- condition: reloader.enabled
+  name: reloader
+  repository: https://stakater.github.io/stakater-charts`;
+
+    const diff = `--- Chart.yaml
++++ Chart.yaml
+@@ -1,6 +1,7 @@
+ annotations:
+   artifacthub.io/changes: |
+     - The changelog is available at https://www.okteto.com/docs/release-notes
++    - Added Traefik as an ingress controller option
+ apiVersion: v2
+ appVersion: 3fd2e76e9
+ dependencies:
+@@ -13,6 +14,10 @@
+   name: ingress-nginx
+   repository: https://kubernetes.github.io/ingress-nginx
+   version: 4.12.0
++- condition: traefik.enabled
++  name: traefik
++  repository: https://traefik.github.io/charts
++  version: 23.1.0
+ - condition: reloader.enabled
+   name: reloader
+   repository: https://stakater.github.io/stakater-charts`;
+
+    // Use our implementation
+    const result = parseDiff(original, diff);
+    
+    // Check the second addition (4 lines)
+    const lines = result.split('\n');
+    
+    // Find where the traefik dependency starts
+    const conditionIndex = lines.findIndex(line => 
+      line.trim() === '- condition: traefik.enabled');
+    expect(conditionIndex).toBeGreaterThan(0);
+    
+    // Verify lines are in the correct order
+    expect(lines[conditionIndex].trim()).toBe('- condition: traefik.enabled');
+    expect(lines[conditionIndex + 1].trim()).toBe('name: traefik');
+    expect(lines[conditionIndex + 2].trim()).toBe('repository: https://traefik.github.io/charts');
+    expect(lines[conditionIndex + 3].trim()).toBe('version: 23.1.0');
+    
+    // Also verify the first addition was done correctly
+    const changelogAdditionIndex = lines.findIndex(line => 
+      line.includes('Added Traefik as an ingress controller option'));
+    expect(changelogAdditionIndex).toBeGreaterThan(0);
+  });
 });

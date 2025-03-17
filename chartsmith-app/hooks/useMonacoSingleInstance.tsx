@@ -47,35 +47,70 @@ export function parseDiff(originalContent: string, diffContent: string): string 
     }
     
     // Look for lines to add (starting with + but not +++)
-    const linesToAdd: {line: string, afterContextLine?: string}[] = [];
+    // We'll track consecutive additions to preserve their order
+    interface AdditionBlock {
+      lines: string[];
+      afterContextLine?: string;
+    }
+    
+    const additionBlocks: AdditionBlock[] = [];
+    let currentBlock: AdditionBlock | null = null;
     let lastContextLine: string | undefined;
     
     for (const line of diffLines) {
       if (line.startsWith(' ') && !line.startsWith('---') && !line.startsWith('+++')) {
         // This is a context line
+        // If we were in the middle of an addition block, finish it
+        if (currentBlock !== null) {
+          additionBlocks.push(currentBlock);
+          currentBlock = null;
+        }
+        
         lastContextLine = line.substring(1).trim();
       } else if (line.startsWith('+') && !line.startsWith('+++')) {
         // This is a line we need to add
-        linesToAdd.push({
-          line: line.substring(1),
-          afterContextLine: lastContextLine
-        });
+        // If we're not already in an addition block, start a new one
+        if (currentBlock === null) {
+          currentBlock = {
+            lines: [],
+            afterContextLine: lastContextLine
+          };
+        }
+        
+        // Add to the current block
+        currentBlock.lines.push(line.substring(1));
+      } else if (line.startsWith('@')) {
+        // New hunk - finish any current block
+        if (currentBlock !== null) {
+          additionBlocks.push(currentBlock);
+          currentBlock = null;
+        }
       }
     }
     
-    // Add the lines
-    for (const {line, afterContextLine} of linesToAdd) {
-      if (afterContextLine) {
-        const contextIndex = lines.findIndex(l => l.trim() === afterContextLine);
+    // Add any final block
+    if (currentBlock !== null) {
+      additionBlocks.push(currentBlock);
+    }
+    
+    // Apply each block of additions
+    for (const block of additionBlocks) {
+      if (block.afterContextLine) {
+        const contextIndex = lines.findIndex(l => l.trim() === block.afterContextLine);
         if (contextIndex >= 0) {
-          lines.splice(contextIndex + 1, 0, line);
+          // Insert the block after the context line
+          // We reverse the array before using spliceM so that the lines 
+          // are added in the correct order (maintaining order from the diff)
+          for (let i = 0; i < block.lines.length; i++) {
+            lines.splice(contextIndex + 1 + i, 0, block.lines[i]);
+          }
         } else {
-          // If context line not found, add at the end
-          lines.push(line);
+          // If context line not found, add at the end in order
+          lines.push(...block.lines);
         }
       } else {
-        // If no context, add at the end
-        lines.push(line);
+        // If no context, add at the end in order
+        lines.push(...block.lines);
       }
     }
     
