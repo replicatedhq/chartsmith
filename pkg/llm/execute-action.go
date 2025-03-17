@@ -18,6 +18,7 @@ type CreateWorkspaceFromArchiveAction struct {
 }
 
 func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWithPath, plan *workspacetypes.Plan, currentContent string, patchStreamCh chan string) (string, error) {
+	originalContent := currentContent
 	updatedContent := currentContent
 
 	client, err := newAnthropicClient(ctx)
@@ -148,7 +149,7 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 	}
 
 	// Generate a unified diff patch
-	patch, err := diff.GeneratePatch(currentContent, updatedContent, actionPlanWithPath.Path)
+	patch, err := diff.GeneratePatch(currentContent, originalContent, actionPlanWithPath.Path)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate patch: %w", err)
 	}
