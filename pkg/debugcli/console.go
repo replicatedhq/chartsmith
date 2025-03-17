@@ -17,6 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/pkg/errors"
 	"github.com/replicatedhq/chartsmith/pkg/llm"
+	llmtypes "github.com/replicatedhq/chartsmith/pkg/llm/types"
 	"github.com/replicatedhq/chartsmith/pkg/logger"
 	"github.com/replicatedhq/chartsmith/pkg/realtime"
 	"github.com/replicatedhq/chartsmith/pkg/workspace"
@@ -151,6 +152,7 @@ func (c *DebugConsole) run() error {
 				readline.PcItem("apply-patch"),
 				readline.PcItem("randomize-yaml"),
 				readline.PcItem("create-plan"),
+				readline.PcItem("execute-plan"),
 				readline.PcItem("exit"),
 				readline.PcItem("quit"),
 			)...,
@@ -334,6 +336,8 @@ func (c *DebugConsole) executeCommand(cmd string, args []string) error {
 		return c.randomizeYaml(args)
 	case "create-plan":
 		return c.createPlan(args)
+	case "execute-plan":
+		return c.executePlan(args)
 	default:
 		return fmt.Errorf("unknown command: %s", cmd)
 	}
@@ -455,6 +459,7 @@ func (c *DebugConsole) showHelp() {
 	fmt.Println("  " + boldGreen("apply-patch") + " <patch-id> Apply a previously generated patch")
 	fmt.Println("  " + boldGreen("randomize-yaml") + " <file-path> [--complexity=low|medium|high] Generate random YAML for testing")
 	fmt.Println("  " + boldGreen("create-plan") + " <prompt>  Create a plan from the LLM with the given prompt")
+	fmt.Println("  " + boldGreen("execute-plan") + " <plan-id> [--file-path=<path>]  Execute the specified plan, optionally on a specific file")
 	fmt.Println()
 
 	fmt.Println(boldBlue("General Commands:"))
@@ -986,6 +991,7 @@ func (c *DebugConsole) updateWorkspaceCompletions(rl *readline.Instance) {
 		readline.PcItem("apply-patch"),
 		readline.PcItem("randomize-yaml", filePathCompletions...),
 		readline.PcItem("create-plan"),
+		readline.PcItem("execute-plan"),
 		readline.PcItem("exit"),
 		readline.PcItem("quit"),
 	)
@@ -1272,5 +1278,113 @@ func (c *DebugConsole) createPlan(args []string) error {
 	}
 
 	fmt.Printf(boldGreen("Plan created: %s\n"), p.ID)
+	return nil
+}
+
+// executePlan implements the execute-plan command to execute a previously created plan
+func (c *DebugConsole) executePlan(args []string) error {
+	if c.activeWorkspace == nil {
+		return errors.New("no workspace selected")
+	}
+
+	if len(args) < 1 {
+		return errors.New("usage: execute-plan <plan-id> [--file-path=<path>]")
+	}
+
+	planID := args[0]
+	var filePath string
+
+	// Parse additional arguments
+	for i := 1; i < len(args); i++ {
+		if strings.HasPrefix(args[i], "--file-path=") {
+			filePath = strings.TrimPrefix(args[i], "--file-path=")
+		}
+	}
+
+	if filePath != "" {
+		fmt.Printf(boldBlue("Executing plan with ID: %s on file: %s\n"), planID, filePath)
+	} else {
+		fmt.Printf(boldBlue("Executing plan with ID: %s\n"), planID)
+	}
+
+	// Check if current revision is complete
+	isComplete, err := c.isCurrentRevisionComplete()
+	if err != nil {
+		return errors.Wrap(err, "failed to check if current revision is complete")
+	}
+	if isComplete {
+		return errors.New("cannot execute plan for completed revision - use 'new-revision' command first")
+	}
+
+	// Check if file exists if file path is provided
+	if filePath != "" {
+		query := `
+			SELECT count(*) FROM workspace_file
+			WHERE workspace_id = $1 AND file_path = $2 AND revision_number = $3
+		`
+		var count int
+		err := c.pgClient.QueryRow(c.ctx, query, c.activeWorkspace.ID, filePath, c.activeWorkspace.CurrentRevision).Scan(&count)
+		if err != nil {
+			return errors.Wrap(err, "failed to check if file exists")
+		}
+		if count == 0 {
+			return errors.Errorf("file %s does not exist in the current workspace revision", filePath)
+		}
+	}
+
+	plan, err := workspace.GetPlan(c.ctx, nil, planID)
+	if err != nil {
+		return errors.Wrap(err, "failed to get plan")
+	}
+
+	if filePath == "" {
+		fmt.Println("You need to specify a file path to execute the plan on")
+		return nil
+	}
+
+	actionPlanWithPath := llmtypes.ActionPlanWithPath{
+		Path: filePath,
+		ActionPlan: llmtypes.ActionPlan{
+			Action: "update",
+		},
+	}
+
+	files, err := workspace.ListFiles(c.ctx, c.activeWorkspace.ID, c.activeWorkspace.CurrentRevision, c.activeWorkspace.Charts[0].ID)
+	if err != nil {
+		return errors.Wrap(err, "failed to list files")
+	}
+
+	currentContent := ""
+	for _, file := range files {
+		if file.FilePath == filePath {
+			currentContent = file.Content
+			break
+		}
+	}
+
+	patchStreamCh := make(chan string)
+	doneCh := make(chan error)
+
+	go func() {
+		finalContent, err := llm.ExecuteAction(c.ctx, actionPlanWithPath, plan, currentContent, patchStreamCh)
+		if err != nil {
+			fmt.Println(dimText(fmt.Sprintf("Error: %v", err)))
+		}
+
+		fmt.Printf(boldGreen("Updated content: %s\n"), finalContent)
+		doneCh <- nil
+	}()
+
+	for {
+		select {
+		case err := <-doneCh:
+			if err != nil {
+				return errors.Wrap(err, "failed to execute action")
+			}
+		case stream := <-patchStreamCh:
+			fmt.Printf(boldGreen("Patch: %s\n"), stream)
+		}
+	}
+
 	return nil
 }
