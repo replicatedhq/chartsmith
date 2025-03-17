@@ -75,25 +75,23 @@ export function useCentrifugo({
     if (!data.chatMessage) return;
 
     const chatMessage = data.chatMessage;
-    console.log("Received chat message update:", chatMessage);
-    
+
     // If this message starts a render operation, track the render ID
     if (chatMessage.responseRenderId) {
       setActiveRenderIds(prev => {
         // Only add if not already tracked
         if (!prev.includes(chatMessage.responseRenderId!)) {
-          console.log("Tracking new render:", chatMessage.responseRenderId);
           return [...prev, chatMessage.responseRenderId!];
         }
         return prev;
       });
     }
-    
+
     // If the message is complete and had a render ID, we can remove the render from active
     if (chatMessage.isComplete && chatMessage.responseRenderId) {
       setActiveRenderIds(prev => prev.filter(id => id !== chatMessage.responseRenderId));
     }
-    
+
     setMessages(prev => {
       const newMessages = [...prev];
       const index = newMessages.findIndex(m => m.id === chatMessage.id);
@@ -272,23 +270,19 @@ export function useCentrifugo({
       return;
     }
 
-    console.log(data);
-    
     // If this is a completion event (has completedAt or similar marker)
     if (data.completedAt) {
-      console.log("Render completed:", data.renderId);
       setActiveRenderIds(prev => prev.filter(id => id !== data.renderId));
     } else if (data.renderId) {
       // Add to active renders if not already there
       setActiveRenderIds(prev => {
         if (!prev.includes(data.renderId!)) {
-          console.log("Tracking render from stream event:", data.renderId);
           return [...prev, data.renderId!];
         }
         return prev;
       });
     }
-    
+
     let renders = await setRenders(prev => {
       const newRenders = [...prev];
 
@@ -300,37 +294,37 @@ export function useCentrifugo({
             if (newWorkspaceRender.completedAt) {
               setActiveRenderIds(prev => prev.filter(id => id !== data.renderId));
             }
-            
+
             // Ensure dates are properly formatted
             const formattedRender = {
               ...newWorkspaceRender,
               // Ensure createdAt is a Date
               createdAt: new Date(newWorkspaceRender.createdAt),
               // Ensure completedAt is a Date or undefined
-              completedAt: newWorkspaceRender.completedAt 
-                ? new Date(newWorkspaceRender.completedAt) 
+              completedAt: newWorkspaceRender.completedAt
+                ? new Date(newWorkspaceRender.completedAt)
                 : undefined,
               // Format dates for each chart
               charts: newWorkspaceRender.charts.map(chart => ({
                 ...chart,
                 createdAt: new Date(chart.createdAt),
-                completedAt: chart.completedAt 
-                  ? new Date(chart.completedAt) 
+                completedAt: chart.completedAt
+                  ? new Date(chart.completedAt)
                   : undefined
               }))
             };
-            
+
             setRenders(prev => {
               // Check if we already have a render for this revision to avoid duplicates
-              const alreadyHasRenderForRevision = prev.some(r => 
+              const alreadyHasRenderForRevision = prev.some(r =>
                 r.revisionNumber === formattedRender.revisionNumber && r.id !== formattedRender.id
               );
-              
+
               if (alreadyHasRenderForRevision) {
                 console.debug(`Skipping duplicate render for revision ${formattedRender.revisionNumber}`);
                 return prev;
               }
-              
+
               return [...prev, formattedRender];
             });
           });
@@ -341,19 +335,18 @@ export function useCentrifugo({
       // Now update the renders with the new stream data
       return newRenders.map(render => {
         if (render.id !== data.renderId) return render;
-        
+
         // Check if the render is now complete
         const isComplete = data.completedAt ? true : render.completedAt ? true : false;
-        
+
         if (isComplete && !render.completedAt) {
-          console.log("Marking render as complete:", data.renderId);
           // Remove from active renders
           setActiveRenderIds(prev => prev.filter(id => id !== data.renderId));
         }
 
         // Make sure we convert string date to Date object if needed
-        const completedAtDate = data.completedAt 
-          ? new Date(data.completedAt) 
+        const completedAtDate = data.completedAt
+          ? new Date(data.completedAt)
           : render.completedAt;
 
         return {
@@ -363,7 +356,7 @@ export function useCentrifugo({
             if (chart.id !== data.renderChartId) return chart;
 
             // Also convert chart completion date to Date object if needed
-            const chartCompletedAt = data.completedAt 
+            const chartCompletedAt = data.completedAt
               ? new Date(data.completedAt)
               : chart.completedAt;
 
@@ -395,34 +388,34 @@ export function useCentrifugo({
     setRenders(prev => {
       const newRenders = [...prev];
       const index = newRenders.findIndex(r => r.id === render);
-      
+
       // If the render exists, update it with the new file
       if (index !== -1) {
         // Create a copy of the render
         const updatedRender = { ...newRenders[index] };
-        
+
         // Find the chart to update
         const chartIndex = updatedRender.charts.findIndex(c => c.id === renderChartId);
-        
+
         if (chartIndex !== -1) {
           // Create a copy of the chart
           const updatedChart = { ...updatedRender.charts[chartIndex] };
-          
+
           // Add the new file to the chart's rendered files
           updatedChart.renderedFiles = [
             ...(updatedChart.renderedFiles || []),
             renderedFile
           ];
-          
+
           // Update the chart in the render
           updatedRender.charts[chartIndex] = updatedChart;
-          
+
           // Update the render in the list
           newRenders[index] = updatedRender;
-          
+
         }
       }
-      
+
       return newRenders;
     });
 

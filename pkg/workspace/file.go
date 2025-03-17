@@ -111,8 +111,8 @@ func AddPendingPatch(ctx context.Context, workspaceID string, revisionNumber int
 		fmt.Printf("patches to save: %v\n", patches)
 		fmt.Printf("fileID: %v\n", fileID)
 
-		query := `UPDATE workspace_file SET pending_patches = $1 WHERE id = $2`
-		_, err = conn.Exec(ctx, query, patches, fileID)
+		query := `UPDATE workspace_file SET pending_patches = $1 WHERE id = $2 AND revision_number = $3`
+		_, err = conn.Exec(ctx, query, patches, fileID, revisionNumber)
 		if err != nil {
 			return fmt.Errorf("error updating file in workspace: %w", err)
 		}
