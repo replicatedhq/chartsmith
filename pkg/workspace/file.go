@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -69,6 +70,10 @@ func SetFileEmbeddings(ctx context.Context, fileID string, revisionNumber int, e
 }
 
 func AddPendingPatch(ctx context.Context, workspaceID string, revisionNumber int, chartID string, filePath string, pendingPatch string) error {
+	if strings.TrimSpace(pendingPatch) == "" {
+		return nil
+	}
+
 	logger.Debug("Adding pending patch",
 		zap.String("workspaceID", workspaceID),
 		zap.Int("revisionNumber", revisionNumber),
