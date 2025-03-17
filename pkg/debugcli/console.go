@@ -445,7 +445,7 @@ func (c *DebugConsole) showHelp() {
 	fmt.Println("  " + boldGreen("new-revision") + "          Create a new revision for the current workspace")
 	fmt.Println("  " + boldGreen("list-files") + "            List files in the current workspace")
 	fmt.Println("  " + boldGreen("render") + " <values-path>  Render workspace with values.yaml from file path")
-	fmt.Println("  " + boldGreen("patch-file") + " <file-path> [--count=N] [--use-diff-u]  Generate N patches for file (requires incomplete revision)")
+	fmt.Println("  " + boldGreen("patch-file") + " <file-path> [--count=N] [--output=<dir>]  Generate N patches for file (requires incomplete revision)")
 	fmt.Println("  " + boldGreen("apply-patch") + " <patch-id> Apply a previously generated patch")
 	fmt.Println("  " + boldGreen("randomize-yaml") + " <file-path> [--complexity=low|medium|high] Generate random YAML for testing")
 	fmt.Println()
@@ -459,7 +459,7 @@ func (c *DebugConsole) showHelp() {
 	fmt.Println(boldBlue("Command-line Usage:"))
 	fmt.Println("  These commands can also be run directly from the command line:")
 	fmt.Println("  " + boldGreen("debug-console new-revision --workspace-id <id>"))
-	fmt.Println("  " + boldGreen("debug-console patch-file values.yaml --workspace-id <id> [--count=N] [--use-diff-u]"))
+	fmt.Println("  " + boldGreen("debug-console patch-file values.yaml --workspace-id <id> [--count=N] [--output=<dir>]"))
 	fmt.Println("  " + boldGreen("debug-console render values.yaml --workspace-id <id>"))
 	fmt.Println()
 }
@@ -670,13 +670,14 @@ func (c *DebugConsole) generatePatch(args []string) error {
 	}
 
 	if len(args) < 1 {
-		return errors.New("usage: patch-file <file-path> [--count=N] [--output=<output-dir>] [--use-diff-u]")
+		return errors.New("usage: patch-file <file-path> [--count=N] [--output=<output-dir>]")
 	}
 
 	filePath := args[0]
 	count := 1
 	outputDir := ""
-	useDiffU := false
+	// Always use diff -u format
+	useDiffU := true
 
 	// Parse optional arguments
 	for i := 1; i < len(args); i++ {
@@ -689,8 +690,6 @@ func (c *DebugConsole) generatePatch(args []string) error {
 			}
 		} else if strings.HasPrefix(args[i], "--output=") {
 			outputDir = strings.TrimPrefix(args[i], "--output=")
-		} else if args[i] == "--use-diff-u" {
-			useDiffU = true
 		}
 	}
 

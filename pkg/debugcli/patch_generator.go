@@ -146,22 +146,43 @@ func (pg *PatchGenerator) GeneratePatch() string {
 	patchType := pg.patchTypes[rand.Intn(len(pg.patchTypes))]
 	
 	var patch string
-	switch patchType {
-	case PatchTypeAddValue:
-		patch = pg.generateAddValuePatch()
-	case PatchTypeChangeValue:
-		patch = pg.generateChangeValuePatch()
-	case PatchTypeRemoveValue:
-		patch = pg.generateRemoveValuePatch()
-	case PatchTypeAddBlock:
+	maxAttempts := 3 // Try up to 3 different patch types if we get an empty patch
+	
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		switch patchType {
+		case PatchTypeAddValue:
+			patch = pg.generateAddValuePatch()
+		case PatchTypeChangeValue:
+			patch = pg.generateChangeValuePatch()
+		case PatchTypeRemoveValue:
+			patch = pg.generateRemoveValuePatch()
+		case PatchTypeAddBlock:
+			patch = pg.generateAddBlockPatch()
+		case PatchTypeComments:
+			patch = pg.generateCommentsPatch()
+		case PatchTypeRenameKey:
+			patch = pg.generateRenameKeyPatch()
+		default:
+			// If something goes wrong, fall back to adding a value
+			patch = pg.generateAddValuePatch()
+		}
+		
+		// Check if we have a valid patch with actual changes
+		if patch != "" && 
+		   strings.Contains(patch, "+") && 
+		   (strings.Contains(patch, "\n+") || strings.Contains(patch, "\n-")) {
+			break
+		}
+		
+		// Try a different patch type
+		patchType = pg.patchTypes[rand.Intn(len(pg.patchTypes))]
+	}
+	
+	// If we still don't have a valid patch, generate a simple addition as a last resort
+	if patch == "" || !strings.Contains(patch, "+") || 
+	   (!strings.Contains(patch, "\n+") && !strings.Contains(patch, "\n-")) {
+		// Force generate a new block which almost always succeeds
 		patch = pg.generateAddBlockPatch()
-	case PatchTypeComments:
-		patch = pg.generateCommentsPatch()
-	case PatchTypeRenameKey:
-		patch = pg.generateRenameKeyPatch()
-	default:
-		// If something goes wrong, fall back to adding a value
-		patch = pg.generateAddValuePatch()
 	}
 	
 	return patch
