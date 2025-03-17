@@ -28,16 +28,27 @@ var (
 	boldRed    = color.New(color.FgRed, color.Bold).SprintFunc()
 	boldYellow = color.New(color.FgYellow, color.Bold).SprintFunc()
 	dimText    = color.New(color.Faint).SprintFunc()
+	
+	// To track double Ctrl+C for exit
+	lastInterrupt *time.Time
 )
+
+// ConsoleOptions defines configuration options for the debug console
+type ConsoleOptions struct {
+	WorkspaceID    string   // Workspace ID to use for commands
+	NonInteractive bool     // If true, run in non-interactive mode (execute command and exit)
+	Command        []string // Command to execute in non-interactive mode
+}
 
 type DebugConsole struct {
 	ctx             context.Context
 	pgClient        *pgxpool.Pool
 	activeWorkspace *types.Workspace
 	readline        *readline.Instance
+	options         ConsoleOptions
 }
 
-func RunConsole() error {
+func RunConsole(options ConsoleOptions) error {
 	logger.SetDebug()
 	ctx := context.Background()
 
@@ -62,8 +73,30 @@ func RunConsole() error {
 	console := &DebugConsole{
 		ctx:      ctx,
 		pgClient: pgClient,
+		options:  options,
 	}
 
+	// If workspace ID is provided, select it first
+	if options.WorkspaceID != "" {
+		if err := console.selectWorkspaceById(options.WorkspaceID); err != nil {
+			return errors.Wrapf(err, "failed to select workspace with ID %s", options.WorkspaceID)
+		}
+	}
+	
+	if options.NonInteractive {
+		// Execute a single command and exit
+		if len(options.Command) == 0 {
+			return errors.New("no command specified in non-interactive mode")
+		}
+		
+		if console.activeWorkspace == nil && options.WorkspaceID == "" {
+			return errors.New("workspace ID is required for non-interactive mode")
+		}
+		
+		return console.executeNonInteractiveCommand(options.Command)
+	}
+
+	// Run in interactive mode
 	if err := console.run(); err != nil {
 		return errors.Wrap(err, "console error")
 	}
@@ -76,6 +109,7 @@ func (c *DebugConsole) run() error {
 	fmt.Println(dimText("Type 'help' for available commands, 'exit' to quit"))
 	fmt.Println(dimText("Use '/workspace <id>' to select a workspace"))
 	fmt.Println(dimText("Use up/down arrows to navigate command history"))
+	fmt.Println(dimText("Press Ctrl+C twice in quick succession to exit"))
 	fmt.Println()
 
 	// Set up history file
@@ -147,6 +181,14 @@ func (c *DebugConsole) run() error {
 			if err == readline.ErrInterrupt {
 				// Handle Ctrl+C
 				fmt.Println("^C")
+				// Check if we've seen a Ctrl+C recently
+				if lastInterrupt != nil && time.Since(*lastInterrupt) < 2*time.Second {
+					fmt.Println("Exiting...")
+					return nil
+				}
+				// Record this interrupt
+				now := time.Now()
+				lastInterrupt = &now
 				continue
 			} else if err == io.EOF {
 				// Handle Ctrl+D or EOF
@@ -221,9 +263,43 @@ func (c *DebugConsole) run() error {
 	}
 }
 
+// executeNonInteractiveCommand handles execution of a command in non-interactive mode
+func (c *DebugConsole) executeNonInteractiveCommand(args []string) error {
+	if len(args) == 0 {
+		return errors.New("no command specified")
+	}
+	
+	cmd := args[0]
+	cmdArgs := []string{}
+	if len(args) > 1 {
+		cmdArgs = args[1:]
+	}
+	
+	// Filter out any flags that were already processed by cobra (like --workspace-id)
+	filteredArgs := []string{}
+	for _, arg := range cmdArgs {
+		if !strings.HasPrefix(arg, "--workspace-id=") && arg != "--workspace-id" {
+			filteredArgs = append(filteredArgs, arg)
+		}
+	}
+	
+	// Skip the next arg if it's the value for --workspace-id
+	for i := 0; i < len(filteredArgs); i++ {
+		if filteredArgs[i] == "--workspace-id" && i+1 < len(filteredArgs) {
+			filteredArgs = append(filteredArgs[:i], filteredArgs[i+2:]...)
+			break
+		}
+	}
+	
+	return c.executeCommand(cmd, filteredArgs)
+}
+
 func (c *DebugConsole) executeCommand(cmd string, args []string) error {
 	// Most commands require an active workspace
 	if c.activeWorkspace == nil && cmd != "help" && cmd != "workspace" {
+		if c.options.NonInteractive {
+			return errors.New("workspace ID is required. Use --workspace-id flag")
+		}
 		return errors.New("no workspace selected. Use '/workspace <id>' to select a workspace")
 	}
 
@@ -287,28 +363,37 @@ func (c *DebugConsole) selectWorkspaceById(id string) error {
     `
 	chartRows, err := c.pgClient.Query(c.ctx, chartsQuery, id)
 	if err != nil {
-		fmt.Println(dimText("Warning: Failed to fetch charts for workspace"))
+		if !c.options.NonInteractive {
+			fmt.Println(dimText("Warning: Failed to fetch charts for workspace"))
+		}
 	} else {
 		defer chartRows.Close()
 
 		for chartRows.Next() {
 			var chart types.Chart
 			if err := chartRows.Scan(&chart.ID, &chart.Name); err != nil {
-				fmt.Println(dimText(fmt.Sprintf("Warning: Failed to scan chart: %v", err)))
+				if !c.options.NonInteractive {
+					fmt.Println(dimText(fmt.Sprintf("Warning: Failed to scan chart: %v", err)))
+				}
 				continue
 			}
 			workspace.Charts = append(workspace.Charts, chart)
 		}
 
-		if len(workspace.Charts) > 0 {
-			fmt.Printf(dimText("Found %d chart(s)\n"), len(workspace.Charts))
-		} else {
-			fmt.Println(dimText("No charts found for this workspace"))
+		if !c.options.NonInteractive {
+			if len(workspace.Charts) > 0 {
+				fmt.Printf(dimText("Found %d chart(s)\n"), len(workspace.Charts))
+			} else {
+				fmt.Println(dimText("No charts found for this workspace"))
+			}
 		}
 	}
 
 	c.activeWorkspace = &workspace
-	fmt.Printf(boldGreen("Selected workspace: %s (ID: %s)\n"), workspace.Name, workspace.ID)
+	
+	if !c.options.NonInteractive {
+		fmt.Printf(boldGreen("Selected workspace: %s (ID: %s)\n"), workspace.Name, workspace.ID)
+	}
 
 	// Update completions after selecting a workspace
 	// This is useful for getting file path completions
@@ -342,6 +427,12 @@ func (c *DebugConsole) listAvailableWorkspaces() error {
 }
 
 func (c *DebugConsole) showHelp() {
+	// Skip standard help in non-interactive mode, just show command-specific help
+	if c.options.NonInteractive {
+		// For now, just return as we'll implement command-specific help later
+		return
+	}
+
 	fmt.Println(boldBlue("Slash Commands:"))
 	fmt.Println("  " + boldGreen("/help") + "                 Show this help")
 	fmt.Println("  " + boldGreen("/workspace") + "            List available workspaces")
@@ -363,6 +454,13 @@ func (c *DebugConsole) showHelp() {
 	fmt.Println("  " + boldGreen("help") + "                  Show this help")
 	fmt.Println("  " + boldGreen("exit") + "                  Exit the console")
 	fmt.Println("  " + boldGreen("quit") + "                  Exit the console")
+	fmt.Println()
+	
+	fmt.Println(boldBlue("Command-line Usage:"))
+	fmt.Println("  These commands can also be run directly from the command line:")
+	fmt.Println("  " + boldGreen("debug-console new-revision --workspace-id <id>"))
+	fmt.Println("  " + boldGreen("debug-console patch-file values.yaml --workspace-id <id> [--count=N] [--use-diff-u]"))
+	fmt.Println("  " + boldGreen("debug-console render values.yaml --workspace-id <id>"))
 	fmt.Println()
 }
 
