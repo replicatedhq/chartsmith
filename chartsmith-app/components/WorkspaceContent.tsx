@@ -63,6 +63,7 @@ export function WorkspaceContent({
 
     setMessages(initialMessages);
     setPlans(initialPlans);
+    setRenders(initialRenders);
 
     setConversions(initialConversions);
 
