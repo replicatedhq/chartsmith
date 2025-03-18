@@ -59,7 +59,7 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 				"properties": map[string]interface{}{
 					"command": map[string]interface{}{
 						"type": "string",
-						"enum": []string{"view", "str_replace"},
+						"enum": []string{"view", "str_replace", "create"},
 					},
 					"path": map[string]interface{}{
 						"type": "string",
@@ -136,10 +136,8 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 				}
 
 				if input.Command == "view" {
-					fmt.Printf("\n\n\nviewing file: %s\n\n\n\n", input.Path)
 					response = updatedContent
 				} else if input.Command == "str_replace" {
-					fmt.Printf("\n\n\nreplacing content in file: %s\n\n\n\n", input.Path)
 					patchedContent := strings.ReplaceAll(updatedContent, input.OldStr, input.NewStr)
 					patch, err := diff.GeneratePatch(updatedContent, patchedContent, actionPlanWithPath.Path)
 					if err != nil {
@@ -149,6 +147,15 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 					updatedContent = patchedContent
 					patchStreamCh <- patch
 					response = "Updated"
+				} else if input.Command == "create" {
+					patch, err := diff.GeneratePatch(updatedContent, input.NewStr, actionPlanWithPath.Path)
+					if err != nil {
+						return "", err
+					}
+
+					updatedContent = input.NewStr
+					patchStreamCh <- patch
+					response = "Created"
 				}
 
 				b, err := json.Marshal(response)

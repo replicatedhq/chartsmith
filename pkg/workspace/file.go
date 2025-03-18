@@ -78,9 +78,8 @@ func AddPendingPatch(ctx context.Context, workspaceID string, revisionNumber int
 		zap.String("workspaceID", workspaceID),
 		zap.Int("revisionNumber", revisionNumber),
 		zap.String("chartID", chartID),
-		zap.String("filePath", filePath),
-		zap.String("pendingPatch", pendingPatch),
-	)
+		zap.String("filePath", filePath))
+
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
 
@@ -119,9 +118,6 @@ func AddPendingPatch(ctx context.Context, workspaceID string, revisionNumber int
 			// Start with just the new patch
 			patches = []string{pendingPatch}
 		}
-
-		fmt.Printf("patches to save: %v\n", patches)
-		fmt.Printf("fileID: %v\n", fileID)
 
 		query := `UPDATE workspace_file SET pending_patches = $1 WHERE id = $2 AND revision_number = $3`
 		_, err = conn.Exec(ctx, query, patches, fileID, revisionNumber)

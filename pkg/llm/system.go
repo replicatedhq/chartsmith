@@ -29,11 +29,11 @@ Below are guidelines and constraints you must always follow:
 
 <message_formatting_info>
   - Use only valid Markdown for your responses unless required by the instructions below.
-  - Do not use HTML elements except within ` + "`<chartsmithArtifact>`" + ` tags.
-  - Outside of ` + "`<chartsmithArtifact>`" + ` tags, communicate in plain Markdown. Inside these tags, produce only the required YAML, shell commands, or file contents.
+  - Do not use HTML elements.
+  - Communicate in plain Markdown. Inside these tags, produce only the required YAML, shell commands, or file contents.
 </message_formatting_info>
 
-NEVER use the word "artifact" in your final messages to the user. Just follow the instructions and provide a single ` + "`<chartsmithArtifact>`" + ` block with ` + "`<chartsmithAction>`" + ` elements containing the final solution.
+NEVER use the word "artifact" in your final messages to the user.
 
 `
 
@@ -43,7 +43,7 @@ const chatOnlySystemPrompt = commonSystemPrompt + `
   - You will be given the question and the context of the question.
   - You will be given the current chat history.
   - You will be asked to answer the question based on the context and the chat history.
-  - You can provide small examples of code, but just use markdown, do no provide any <chartsmithArtifact> tags in your chat response.
+  - You can provide small examples of code, but just use markdown.
 </question_instructions>
 `
 
@@ -56,7 +56,7 @@ const initialPlanSystemPrompt = commonSystemPrompt + `
   - For selected changes, the user has access to and will use a tool called "Compatibility Matrix" that creates a real matrix of Kubernetes clusters such as OpenShift, RKE2, EKS, and others.
 </testing_info>
 
-NEVER use the word "artifact" in your final messages to the user. Just follow the instructions and provide a single ` + "`<chartsmithArtifact>`" + ` block with ` + "`<chartsmithAction>`" + ` elements containing the final solution.`
+NEVER use the word "artifact" in your final messages to the user. Just follow the instructions use the text_editor tool as needed.`
 
 const updatePlanSystemPrompt = commonSystemPrompt + `
 <testing_info>
@@ -67,7 +67,7 @@ const updatePlanSystemPrompt = commonSystemPrompt + `
   - For selected changes, the user has access to and will use a tool called "Compatibility Matrix" that creates a real matrix of Kubernetes clusters such as OpenShift, RKE2, EKS, and others.
 </testing_info>
 
-NEVER use the word "artifact" in your final messages to the user. Just follow the instructions and provide a single ` + "`<chartsmithArtifact>`" + ` block with ` + "`<chartsmithAction>`" + ` elements containing the final solution.`
+NEVER use the word "artifact" in your final messages to the user. Just follow the instructions and use the text_editor tool as needed.`
 
 const detailedPlanSystemPrompt = commonSystemPrompt + `
 <planning_instructions>
@@ -89,7 +89,6 @@ const cleanupConvertedValuesSystemPrompt = commonSystemPrompt + `
   - Remove any stray and leftover patch markers.
   - Remove any comments that show it was added or merged.
   - Leave comments that explain the values only.
-  - The <chartsmithArtifact> tag must include the path attribute indicating that it's the values.yaml file.
 </cleanup_instructions>`
 
 const executePlanSystemPrompt = commonSystemPrompt + `
