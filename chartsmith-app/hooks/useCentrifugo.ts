@@ -32,6 +32,7 @@ import { selectedFileAtom } from "@/atoms/workspace";
 
 // types
 import { RenderedChart } from "@/lib/types/workspace";
+import { replayEventsAction } from "@/lib/centrifugo/actions/reply-events-action";
 
 const RECONNECT_DELAY_MS = 1000;
 
@@ -54,7 +55,7 @@ export function useCentrifugo({
   const [, handleConversionFileUpdated] = useAtom(handleConversionFileUpdatedAtom)
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [, handlePlanUpdated] = useAtom(handlePlanUpdatedAtom);
-  const [activeRenderIds, setActiveRenderIds] = useAtom(activeRenderIdsAtom);
+  const [, setActiveRenderIds] = useAtom(activeRenderIdsAtom);
 
   const handleRevisionCreated = useCallback(async (revision: any) => {
     if (!session || !revision.workspaceId) return;
@@ -265,6 +266,7 @@ export function useCentrifugo({
   }, [setSelectedFile, setChartsBeforeApplyingPendingPatches]);
 
   const handleRenderStreamEvent = useCallback(async (data: CentrifugoMessageData) => {
+    console.log("handleRenderStreamEvent", data);
     if (!session) return;
     if (data.eventType !== 'render-stream' || !data.renderChartId || !data.renderId) {
       return;
@@ -576,8 +578,15 @@ export function useCentrifugo({
       sub.on("error", (ctx) => {
         console.log(`Subscription error`, { ctx });
       });
-      sub.on("subscribed", () => {
+      sub.on("subscribed", async () => {
         console.log('Successfully subscribed to:', channel);
+
+        // call a server action to replay the events we maybe missed
+        // when we first connected
+        const replayedEvents = await replayEventsAction(session);
+        for (const event of replayedEvents) {
+          handleCentrifugoMessage({ data: event });
+        }
       });
 
       sub.subscribe();

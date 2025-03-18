@@ -1,11 +1,25 @@
 import { logger } from "@/lib/utils/logger";
 import * as jwt from "jsonwebtoken";
-
+import { getParam } from "../data/param";
+import { getDB } from "../data/db";
 interface CentrifugoClaims {
   sub: string;
   exp: number;
   iat: number;
   channels?: string[];
+}
+
+export async function listReplayableEvents(userID: string): Promise<any[]> {
+  logger.debug("listReplayableEvents", { userID });
+  try {
+    const db =  getDB((await getParam("DB_URI")))
+    const result = await db.query("SELECT message_data FROM realtime_replay WHERE user_id = $1", [userID]);
+    const messages = result.rows.map((row) => row.message_data);
+    return messages;
+  } catch (err) {
+    logger.error("Failed to list replayable events", { err });
+    return [];
+  }
 }
 
 export async function getCentrifugoToken(userID: string): Promise<string> {

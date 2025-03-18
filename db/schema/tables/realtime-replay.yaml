@@ -1,0 +1,25 @@
+database: chartsmith
+name: realtime_replay
+schema:
+  postgres:
+    primaryKey:
+      - id
+    columns:
+      - name: id
+        type: text
+        constraints:
+          notNull: true
+      - name: created_at
+        type: timestamp
+        constraints:
+      - name: user_id
+        type: text
+        constraints:
+          notNull: true
+      - name: channel_name
+        type: text
+        constraints:
+          notNull: true
+      - name: message_data
+        type: jsonb
+        constraints:
