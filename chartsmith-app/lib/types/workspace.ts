@@ -31,6 +31,7 @@ export interface RenderedWorkspace {
   createdAt: Date;
   completedAt?: Date;
   charts: RenderedChart[];
+  isAutorender: boolean;
 }
 
 export interface RenderedChart {

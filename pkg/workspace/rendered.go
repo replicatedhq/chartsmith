@@ -30,17 +30,16 @@ func GetRendered(ctx context.Context, id string) (*types.Rendered, error) {
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
 
-	query := `SELECT id, workspace_id, revision_number, created_at, completed_at FROM workspace_rendered WHERE id = $1`
+	query := `SELECT id, workspace_id, revision_number, created_at, completed_at, is_autorender FROM workspace_rendered WHERE id = $1`
 	row := conn.QueryRow(ctx, query, id)
 
 	var rendered types.Rendered
 	var completedAt sql.NullTime
-	if err := row.Scan(&rendered.ID, &rendered.WorkspaceID, &rendered.RevisionNumber, &rendered.CreatedAt, &completedAt); err != nil {
+	if err := row.Scan(&rendered.ID, &rendered.WorkspaceID, &rendered.RevisionNumber, &rendered.CreatedAt, &completedAt, &rendered.IsAutorender); err != nil {
 		return nil, fmt.Errorf("failed to get rendered: %w", err)
 	}
 
 	rendered.CompletedAt = &completedAt.Time
-
 	query = `SELECT id, chart_id, is_success, dep_update_command, dep_update_stdout, dep_update_stderr, helm_template_command, helm_template_stdout, helm_template_stderr, created_at, completed_at FROM workspace_rendered_chart WHERE workspace_render_id = $1`
 	rows, err := conn.Query(ctx, query, id)
 	if err != nil {
@@ -276,8 +275,8 @@ func enqueueRenderWorkspaceForRevision(ctx context.Context, workspaceID string, 
 	}
 	defer tx.Rollback(ctx)
 
-	query = `INSERT INTO workspace_rendered (id, workspace_id, revision_number, created_at) VALUES ($1, $2, $3, now())`
-	_, err = tx.Exec(ctx, query, id, workspaceID, revisionNumber)
+	query = `INSERT INTO workspace_rendered (id, workspace_id, revision_number, created_at, is_autorender) VALUES ($1, $2, $3, now(), $4)`
+	_, err = tx.Exec(ctx, query, id, workspaceID, revisionNumber, includePendingPatches)
 	if err != nil {
 		return fmt.Errorf("failed to enqueue render workspace: %w", err)
 	}

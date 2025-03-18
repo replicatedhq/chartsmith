@@ -266,7 +266,6 @@ export function useCentrifugo({
   }, [setSelectedFile, setChartsBeforeApplyingPendingPatches]);
 
   const handleRenderStreamEvent = useCallback(async (data: CentrifugoMessageData) => {
-    console.log("handleRenderStreamEvent", data);
     if (!session) return;
     if (data.eventType !== 'render-stream' || !data.renderChartId || !data.renderId) {
       return;
@@ -306,6 +305,7 @@ export function useCentrifugo({
               completedAt: newWorkspaceRender.completedAt
                 ? new Date(newWorkspaceRender.completedAt)
                 : undefined,
+              isAutorender: newWorkspaceRender.isAutorender,
               // Format dates for each chart
               charts: newWorkspaceRender.charts.map(chart => ({
                 ...chart,

@@ -23,3 +23,8 @@ schema:
           notNull: true
       - name: completed_at
         type: timestamp
+      - name: is_autorender
+        type: boolean
+        constraints:
+          notNull: true
+        default: "false"

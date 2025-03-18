@@ -117,13 +117,13 @@ type Intent struct {
 }
 
 type Rendered struct {
-	ID             string     `json:"id"`
-	WorkspaceID    string     `json:"-"`
-	RevisionNumber int        `json:"-"`
-	CreatedAt      time.Time  `json:"createdAt"`
-	CompletedAt    *time.Time `json:"completedAt"`
-
-	Charts []RenderedChart `json:"charts"`
+	ID             string          `json:"id"`
+	WorkspaceID    string          `json:"-"`
+	RevisionNumber int             `json:"-"`
+	CreatedAt      time.Time       `json:"createdAt"`
+	CompletedAt    *time.Time      `json:"completedAt"`
+	IsAutorender   bool            `json:"isAutorender"`
+	Charts         []RenderedChart `json:"charts"`
 }
 
 type RenderedChart struct {

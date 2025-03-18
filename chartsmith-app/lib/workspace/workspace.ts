@@ -690,8 +690,8 @@ export async function renderWorkspace(workspaceId: string, chatMessageId: string
     try {
       await client.query("BEGIN");
 
-      await client.query(`INSERT INTO workspace_rendered (id, workspace_id, revision_number, created_at)
-        VALUES ($1, $2, $3, now())`, [id, workspaceId, revisionNumber]);
+      await client.query(`INSERT INTO workspace_rendered (id, workspace_id, revision_number, created_at, is_autorender)
+        VALUES ($1, $2, $3, now(), false)`, [id, workspaceId, revisionNumber]);
 
       for (const chart of workspace.charts) {
         const chartRenderId = srs.default({ length: 12, alphanumeric: true });

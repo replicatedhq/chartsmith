@@ -103,6 +103,7 @@ export interface CentrifugoMessageData {
   filePath?: string;
   status?: string;
   completedAt?: string;
+  isAutorender?: boolean;
 }
 
 export interface RawRevision {

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 	"sync"
-	"time"
 
 	helmutils "github.com/replicatedhq/chartsmith/helm-utils"
 	"github.com/replicatedhq/chartsmith/pkg/diff"
@@ -27,7 +26,6 @@ type renderWorkspacePayload struct {
 }
 
 func handleRenderWorkspaceNotification(ctx context.Context, payload string) error {
-	logStartTime := time.Now()
 	logger.Info("Received render workspace notification",
 		zap.String("payload", payload),
 	)
@@ -76,21 +74,11 @@ func handleRenderWorkspaceNotification(ctx context.Context, payload string) erro
 
 			if err := renderChart(ctx, &chart, renderedWorkspace, w, includePendingPatches); err != nil {
 				logger.Error(err)
-			} else {
-				logger.Info("Completed render chart",
-					zap.String("chartID", chart.ChartID),
-				)
 			}
 		}(chart)
 	}
 
 	wg.Wait()
-
-	// now we mark the top render as completed
-	logger.Info("Completed render workspace",
-		zap.String("workspaceID", renderedWorkspace.WorkspaceID),
-		zap.Duration("duration", time.Since(logStartTime)),
-	)
 
 	if err := workspace.FinishRendered(ctx, renderedWorkspace.ID); err != nil {
 		return fmt.Errorf("failed to finish rendered workspace: %w", err)

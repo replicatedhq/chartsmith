@@ -175,7 +175,7 @@ export function ChatMessage({
           </div>
         )}
 
-        {message?.responseRenderId && (
+        {message?.responseRenderId && !render?.isAutorender && (
           <div className="space-y-4 mt-4">
             {render?.charts ? (
               render.charts.map((chart, index) => (

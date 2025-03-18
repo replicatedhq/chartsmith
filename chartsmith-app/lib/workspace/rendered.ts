@@ -15,7 +15,8 @@ export async function listWorkspaceRenders(session: Session, workspaceId: string
         workspace_id,
         revision_number,
         created_at,
-        completed_at
+        completed_at,
+        is_autorender
       FROM workspace_rendered
       WHERE workspace_id = $1
     `;
@@ -31,6 +32,7 @@ export async function listWorkspaceRenders(session: Session, workspaceId: string
         createdAt: row.created_at,
         completedAt: row.completed_at,
         charts: [],
+        isAutorender: row.is_autorender,
       };
 
       const renderedCharts = await listRenderedChartsForWorkspaceRender(row.id, row.workspace_id, row.revision_number);
@@ -56,7 +58,8 @@ export async function getRenderedWorkspace(renderId: string): Promise<RenderedWo
         workspace_id,
         revision_number,
         created_at,
-        completed_at
+        completed_at,
+        is_autorender
       FROM workspace_rendered
       WHERE id = $1
     `;
@@ -69,6 +72,7 @@ export async function getRenderedWorkspace(renderId: string): Promise<RenderedWo
       createdAt: result.rows[0].created_at,
       completedAt: result.rows[0].completed_at,
       charts: [],
+      isAutorender: result.rows[0].is_autorender,
     };
 
     const renderedCharts = await listRenderedChartsForWorkspaceRender(renderId, renderedWorkspace.workspaceId, renderedWorkspace.revisionNumber);
@@ -102,7 +106,7 @@ export async function listRenderedChartsForWorkspaceRender(renderId: string, wor
       FROM workspace_rendered_chart
       INNER JOIN workspace_chart ON workspace_rendered_chart.chart_id = workspace_chart.id
       INNER JOIN workspace_rendered on workspace_rendered.id = workspace_rendered_chart.workspace_render_id
-      WHERE workspace_render_id = $1 
+      WHERE workspace_render_id = $1
         AND workspace_chart.revision_number = workspace_rendered.revision_number
     `;
 
