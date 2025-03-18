@@ -9,6 +9,7 @@ import (
 	"time"
 
 	helmutils "github.com/replicatedhq/chartsmith/helm-utils"
+	"github.com/replicatedhq/chartsmith/pkg/diff"
 	"github.com/replicatedhq/chartsmith/pkg/logger"
 	"github.com/replicatedhq/chartsmith/pkg/realtime"
 	realtimetypes "github.com/replicatedhq/chartsmith/pkg/realtime/types"
@@ -71,11 +72,9 @@ func handleRenderWorkspaceNotification(ctx context.Context, payload string) erro
 		go func(chart workspacetypes.RenderedChart) {
 			defer wg.Done()
 
-			if p.IncludePendingPatches != nil && *p.IncludePendingPatches {
-				// apply the pending patches to the chart
-			}
+			includePendingPatches := p.IncludePendingPatches != nil && *p.IncludePendingPatches
 
-			if err := renderChart(ctx, &chart, renderedWorkspace, w); err != nil {
+			if err := renderChart(ctx, &chart, renderedWorkspace, w, includePendingPatches); err != nil {
 				logger.Error(err)
 			} else {
 				logger.Info("Completed render chart",
@@ -100,8 +99,7 @@ func handleRenderWorkspaceNotification(ctx context.Context, payload string) erro
 	return nil
 }
 
-func renderChart(ctx context.Context, renderedChart *workspacetypes.RenderedChart, renderedWorkspace *workspacetypes.Rendered, w *workspacetypes.Workspace) error {
-	chartStartTime := time.Now()
+func renderChart(ctx context.Context, renderedChart *workspacetypes.RenderedChart, renderedWorkspace *workspacetypes.Rendered, w *workspacetypes.Workspace, includePendingPatches bool) error {
 	logger.Info("Starting chart render",
 		zap.String("chartID", renderedChart.ChartID),
 		zap.String("workspaceID", renderedWorkspace.WorkspaceID))
@@ -139,15 +137,33 @@ func renderChart(ctx context.Context, renderedChart *workspacetypes.RenderedChar
 	}
 
 	done := make(chan error)
-	go func() {
-		err := helmutils.RenderChartExec(chart.Files, "", renderChannels)
+	go func(includePendingPatches bool) {
+		files := chart.Files
+		if includePendingPatches {
+			files = []workspacetypes.File{}
+
+			for _, file := range chart.Files {
+				if file.PendingPatches == nil || len(file.PendingPatches) == 0 {
+					files = append(files, file)
+				} else {
+					patchedContent, err := diff.ApplyPatches(file.Content, file.PendingPatches)
+					if err != nil {
+						done <- err
+						return
+					}
+					file.Content = patchedContent
+					files = append(files, file)
+				}
+			}
+		}
+		err := helmutils.RenderChartExec(files, "", renderChannels)
 		if err != nil {
 			done <- err
 			return
 		}
 
 		done <- nil
-	}()
+	}(includePendingPatches)
 
 	workspaceFiles, err := workspace.ListFiles(ctx, w.ID, renderedWorkspace.RevisionNumber, chart.ID)
 	if err != nil {
@@ -159,11 +175,6 @@ func renderChart(ctx context.Context, renderedChart *workspacetypes.RenderedChar
 	for {
 		select {
 		case err := <-renderChannels.Done:
-			logger.Debug("Received render done",
-				zap.String("chartID", renderedChart.ChartID),
-				zap.Duration("renderTime", time.Since(chartStartTime)),
-			)
-
 			isSuccess := true
 			if err != nil {
 				isSuccess = false
