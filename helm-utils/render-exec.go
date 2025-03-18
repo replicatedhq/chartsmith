@@ -2,11 +2,13 @@ package helmutils
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/replicatedhq/chartsmith/pkg/workspace/types"
 )
@@ -23,6 +25,10 @@ type RenderChannels struct {
 }
 
 func RenderChartExec(files []types.File, valuesYAML string, renderChannels RenderChannels) error {
+	start := time.Now()
+	defer func() {
+		fmt.Printf("RenderChartExec completed in %v\n", time.Since(start))
+	}()
 	// in order to avoid the special feature of helm where it detects the kubeconfig and uses that
 	// when templating the chart, we put a completely fake kubeconfig in the env for this command
 	fakeKubeconfig := `apiVersion: v1
@@ -86,7 +92,11 @@ func findExecutableForHelmVersion(helmVersion string) (string, error) {
 func runHelmDepUpdate(dir string, kubeconfig string, cmdCh chan string, stdoutCh chan string, stderrCh chan string) error {
 	fmt.Printf("Running helm dep update in %s\n", dir)
 
-	depUpdateCmd := exec.Command("helm", "dep", "update")
+	// Add timeout to avoid hanging commands
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	depUpdateCmd := exec.CommandContext(ctx, "helm", "dep", "update")
 	depUpdateCmd.Env = []string{"KUBECONFIG=" + kubeconfig}
 	depUpdateCmd.Dir = dir
 
@@ -111,17 +121,33 @@ func runHelmDepUpdate(dir string, kubeconfig string, cmdCh chan string, stdoutCh
 	// Start goroutines to stream output
 	go func() {
 		defer wg.Done()
+		// Increase buffer size to handle large lines
 		scanner := bufio.NewScanner(stdout)
+		buf := make([]byte, 1024*1024) // 1MB buffer
+		scanner.Buffer(buf, 10*1024*1024) // Allow up to 10MB per line
+		
 		for scanner.Scan() {
 			stdoutCh <- scanner.Text() + "\n"
+		}
+		
+		if err := scanner.Err(); err != nil {
+			fmt.Printf("Error reading helm dep update stdout: %v\n", err)
 		}
 	}()
 
 	go func() {
 		defer wg.Done()
+		// Increase buffer size to handle large lines
 		scanner := bufio.NewScanner(stderr)
+		buf := make([]byte, 1024*1024) // 1MB buffer
+		scanner.Buffer(buf, 10*1024*1024) // Allow up to 10MB per line
+		
 		for scanner.Scan() {
 			stderrCh <- scanner.Text() + "\n"
+		}
+		
+		if err := scanner.Err(); err != nil {
+			fmt.Printf("Error reading helm dep update stderr: %v\n", err)
 		}
 	}()
 
@@ -140,6 +166,10 @@ func runHelmDepUpdate(dir string, kubeconfig string, cmdCh chan string, stdoutCh
 func runHelmTemplate(dir string, valuesYAML string, kubeconfig string, cmdCh chan string, stdoutCh chan string, stderrCh chan string) error {
 	fmt.Printf("Running helm template in %s\n", dir)
 
+	// Add timeout to avoid hanging commands
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
 	args := []string{"template", "chartsmith", "."}
 	if valuesYAML != "" {
 		valuesFile := filepath.Join(dir, "values.yaml")
@@ -151,7 +181,7 @@ func runHelmTemplate(dir string, valuesYAML string, kubeconfig string, cmdCh cha
 
 	fmt.Printf("Running helm template with args: %v\n", args)
 
-	cmd := exec.Command("helm", args...)
+	cmd := exec.CommandContext(ctx, "helm", args...)
 	cmd.Env = []string{"KUBECONFIG=" + kubeconfig}
 	cmd.Dir = dir
 
@@ -177,17 +207,33 @@ func runHelmTemplate(dir string, valuesYAML string, kubeconfig string, cmdCh cha
 	// Start goroutines to stream output
 	go func() {
 		defer wg.Done()
+		// Increase buffer size to handle large lines
 		scanner := bufio.NewScanner(stdout)
+		buf := make([]byte, 1024*1024) // 1MB buffer
+		scanner.Buffer(buf, 10*1024*1024) // Allow up to 10MB per line
+		
 		for scanner.Scan() {
 			stdoutCh <- scanner.Text() + "\n"
+		}
+		
+		if err := scanner.Err(); err != nil {
+			fmt.Printf("Error reading helm template stdout: %v\n", err)
 		}
 	}()
 
 	go func() {
 		defer wg.Done()
+		// Increase buffer size to handle large lines
 		scanner := bufio.NewScanner(stderr)
+		buf := make([]byte, 1024*1024) // 1MB buffer
+		scanner.Buffer(buf, 10*1024*1024) // Allow up to 10MB per line
+		
 		for scanner.Scan() {
 			stderrCh <- scanner.Text() + "\n"
+		}
+		
+		if err := scanner.Err(); err != nil {
+			fmt.Printf("Error reading helm template stderr: %v\n", err)
 		}
 	}()
 

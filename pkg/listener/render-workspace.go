@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	helmutils "github.com/replicatedhq/chartsmith/helm-utils"
 	"github.com/replicatedhq/chartsmith/pkg/logger"
@@ -17,13 +18,15 @@ import (
 )
 
 type renderWorkspacePayload struct {
-	ID            string `json:"id"`
-	WorkspaceID   string `json:"workspaceId"`
-	RevisionNumber int    `json:"revisionNumber"`
-	ChatMessageID string `json:"chatMessageId"` // Added to associate render with chat message
+	ID                    string `json:"id"`
+	WorkspaceID           string `json:"workspaceId"`
+	RevisionNumber        int    `json:"revisionNumber"`
+	ChatMessageID         string `json:"chatMessageId"`
+	IncludePendingPatches *bool  `json:"includePendingPatches"`
 }
 
 func handleRenderWorkspaceNotification(ctx context.Context, payload string) error {
+	logStartTime := time.Now()
 	logger.Info("Received render workspace notification",
 		zap.String("payload", payload),
 	)
@@ -41,7 +44,7 @@ func handleRenderWorkspaceNotification(ctx context.Context, payload string) erro
 			zap.String("workspaceID", p.WorkspaceID),
 			zap.Int("revisionNumber", p.RevisionNumber),
 			zap.String("chatMessageID", chatMessageID))
-		
+
 		if err := workspace.EnqueueRenderWorkspaceForRevision(ctx, p.WorkspaceID, p.RevisionNumber, chatMessageID); err != nil {
 			return fmt.Errorf("failed to enqueue render job from TS request: %w", err)
 		}
@@ -61,12 +64,17 @@ func handleRenderWorkspaceNotification(ctx context.Context, payload string) erro
 
 	// we need to render each chart in separate goroutines
 	// and create a sync group to wait for them all to complete
-
 	wg := sync.WaitGroup{}
+
 	for _, chart := range renderedWorkspace.Charts {
 		wg.Add(1)
 		go func(chart workspacetypes.RenderedChart) {
 			defer wg.Done()
+
+			if p.IncludePendingPatches != nil && *p.IncludePendingPatches {
+				// apply the pending patches to the chart
+			}
+
 			if err := renderChart(ctx, &chart, renderedWorkspace, w); err != nil {
 				logger.Error(err)
 			} else {
@@ -82,6 +90,7 @@ func handleRenderWorkspaceNotification(ctx context.Context, payload string) erro
 	// now we mark the top render as completed
 	logger.Info("Completed render workspace",
 		zap.String("workspaceID", renderedWorkspace.WorkspaceID),
+		zap.Duration("duration", time.Since(logStartTime)),
 	)
 
 	if err := workspace.FinishRendered(ctx, renderedWorkspace.ID); err != nil {
@@ -92,6 +101,11 @@ func handleRenderWorkspaceNotification(ctx context.Context, payload string) erro
 }
 
 func renderChart(ctx context.Context, renderedChart *workspacetypes.RenderedChart, renderedWorkspace *workspacetypes.Rendered, w *workspacetypes.Workspace) error {
+	chartStartTime := time.Now()
+	logger.Info("Starting chart render",
+		zap.String("chartID", renderedChart.ChartID),
+		zap.String("workspaceID", renderedWorkspace.WorkspaceID))
+
 	var chart *workspacetypes.Chart
 	for _, c := range w.Charts {
 		if c.ID == renderedChart.ChartID {
@@ -147,11 +161,13 @@ func renderChart(ctx context.Context, renderedChart *workspacetypes.RenderedChar
 		case err := <-renderChannels.Done:
 			logger.Debug("Received render done",
 				zap.String("chartID", renderedChart.ChartID),
+				zap.Duration("renderTime", time.Since(chartStartTime)),
 			)
 
 			isSuccess := true
 			if err != nil {
 				isSuccess = false
+				logger.Errorf("Render error: %v", err)
 			}
 
 			if err := workspace.FinishRenderedChart(ctx, renderedChart.ID, renderedChart.DepupdateCommand, renderedChart.DepupdateStdout, renderedChart.DepupdateStderr, renderedChart.HelmTemplateCommand, renderedChart.HelmTemplateStdout, renderedChart.HelmTemplateStderr, isSuccess); err != nil {

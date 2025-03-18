@@ -172,14 +172,6 @@ export function CreateChartOptions() {
           <Search className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
           Start from a chart in Artifact Hub
         </button>
-        <button
-          onClick={() => setShowReplicatedModal(true)}
-          disabled={isUploading || isPromptLoading}
-          className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm rounded-full bg-gray-800/60 backdrop-blur-sm border border-gray-700 hover:bg-gray-700/60 transition-colors text-gray-300 hover:text-white disabled:opacity-50 disabled:hover:bg-gray-800/60 disabled:cursor-not-allowed"
-        >
-          <Download className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-          Import a chart from Replicated
-        </button>
       </div>
 
       <input ref={fileInputRef} type="file" accept=".tgz,.tar.gz,.tar" className="hidden" onChange={handleFileUpload} />

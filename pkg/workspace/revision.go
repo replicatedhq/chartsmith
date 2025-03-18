@@ -2,9 +2,7 @@ package workspace
 
 import (
 	"context"
-	"database/sql"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/replicatedhq/chartsmith/pkg/logger"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 	"github.com/replicatedhq/chartsmith/pkg/workspace/types"
@@ -189,46 +187,6 @@ func SetRevisionComplete(ctx context.Context, workspaceID string, revisionNumber
 
 	if err := tx.Commit(ctx); err != nil {
 		return err
-	}
-
-	// Try to get the last chat message id for this revision
-	chatMessageID := ""
-	err = conn.QueryRow(ctx, `SELECT id FROM workspace_chat WHERE workspace_id = $1 AND revision_number = $2 ORDER BY created_at DESC LIMIT 1`,
-		workspaceID, revisionNumber).Scan(&chatMessageID)
-	if err != nil {
-		if err != pgx.ErrNoRows {
-			return err
-		}
-		logger.Warn("No chat message found for revision, will use empty chat ID",
-			zap.String("workspaceID", workspaceID),
-			zap.Int("revisionNumber", revisionNumber))
-	}
-
-	// Check if this is a plan-initiated revision
-	var planID sql.NullString
-	err = conn.QueryRow(ctx, `SELECT plan_id FROM workspace_revision WHERE workspace_id = $1 AND revision_number = $2`,
-		workspaceID, revisionNumber).Scan(&planID)
-	if err != nil {
-		return err
-	}
-
-	// Only create a render job if this is NOT a plan-related revision
-	// This avoids duplicate renders since execute-action.go already creates
-	// a render job when a plan is applied
-	if !planID.Valid {
-		logger.Info("Creating render job for non-plan revision",
-			zap.String("workspaceID", workspaceID),
-			zap.Int("revisionNumber", revisionNumber),
-			zap.String("chatMessageID", chatMessageID))
-
-		if err := EnqueueRenderWorkspaceForRevision(ctx, workspaceID, revisionNumber, chatMessageID); err != nil {
-			return err
-		}
-	} else {
-		logger.Info("Not creating render job for plan-related revision to avoid duplicates",
-			zap.String("workspaceID", workspaceID),
-			zap.Int("revisionNumber", revisionNumber),
-			zap.String("planID", planID.String))
 	}
 
 	return nil

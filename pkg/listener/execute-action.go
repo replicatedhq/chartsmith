@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/replicatedhq/chartsmith/pkg/llm"
@@ -46,7 +47,6 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 
 	// find the action, confirm it's still pending for now
 	actionFound := false
-	actionIndex := -1
 	currentStatus := ""
 
 	logger.Info("Looking for action in plan",
@@ -57,7 +57,6 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 	for i, item := range plan.ActionFiles {
 		if item.Path == p.Path {
 			actionFound = true
-			actionIndex = i
 			currentStatus = item.Status
 
 			logger.Info("Found action in plan",
@@ -92,11 +91,6 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 			zap.String("planId", p.PlanID))
 		return fmt.Errorf("action not found in plan for path %s", p.Path)
 	}
-
-	logger.Info("Updating plan action files in database",
-		zap.String("path", p.Path),
-		zap.String("planId", p.PlanID),
-		zap.Int("actionIndex", actionIndex))
 
 	if err := workspace.UpdatePlanActionFiles(ctx, tx, plan.ID, plan.ActionFiles); err != nil {
 		logger.Error(fmt.Errorf("failed to update plan: %w", err),
@@ -164,10 +158,6 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 	errCh := make(chan error)
 
 	go func() {
-		logger.Info("Starting execute action goroutine",
-			zap.String("path", p.Path),
-			zap.String("planId", p.PlanID))
-
 		action := ""
 
 		for _, item := range plan.ActionFiles {
@@ -176,12 +166,6 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 				break
 			}
 		}
-
-		// Log the action we're about to execute
-		logger.Info("Executing action",
-			zap.String("path", p.Path),
-			zap.String("planId", p.PlanID),
-			zap.String("actionLength", fmt.Sprintf("%d", len(action))))
 
 		apwp := llmtypes.ActionPlanWithPath{
 			ActionPlan: llmtypes.ActionPlan{
@@ -232,16 +216,8 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 					zap.String("planId", p.PlanID))
 				return err
 			}
-			logger.Info("Received nil error signal",
-				zap.String("path", p.Path),
-				zap.String("planId", p.PlanID))
 
 		case finalContent := <-finalContentCh:
-			logger.Info("Received final content",
-				zap.String("path", p.Path),
-				zap.String("planId", p.PlanID),
-				zap.String("contentLength", fmt.Sprintf("%d", len(finalContent))))
-
 			if err := finalizeFile(ctx, finalContent, updatedPlan, p, w, c, realtimeRecipient); err != nil {
 				logger.Error(fmt.Errorf("failed to finalize file: %w", err),
 					zap.String("path", p.Path),
@@ -251,10 +227,9 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 			return nil
 
 		case patchContent := <-patchCh:
-			logger.Info("Received patch update",
-				zap.String("path", p.Path),
-				zap.String("planId", p.PlanID),
-				zap.String("patchLength", fmt.Sprintf("%d", len(patchContent))))
+			if strings.TrimSpace(patchContent) == "" {
+				continue
+			}
 
 			updatedFile, err := workspace.AddPendingPatch(ctx, updatedPlan.WorkspaceID, w.CurrentRevision, c.ID, p.Path, patchContent)
 			if err != nil {
@@ -358,14 +333,8 @@ func finalizeFile(ctx context.Context, finalContent string, updatedPlan *workspa
 			if len(finalUpdatePlan.ChatMessageIDs) > 0 {
 				chatMessageID = finalUpdatePlan.ChatMessageIDs[len(finalUpdatePlan.ChatMessageIDs)-1]
 
-				// Log the chat message we're associating the render job with
-				logger.Info("Associating render job with chat message",
-					zap.String("chatMessageID", chatMessageID),
-					zap.String("planID", finalUpdatePlan.ID),
-					zap.Int("currentRevision", w.CurrentRevision))
-
 				// Create a render job for the completed revision and associate it with the chat message
-				if err := workspace.EnqueueRenderWorkspaceForRevision(ctx, finalUpdatePlan.WorkspaceID, w.CurrentRevision, chatMessageID); err != nil {
+				if err := workspace.EnqueueRenderWorkspaceForRevisionWithPendingPatches(ctx, finalUpdatePlan.WorkspaceID, w.CurrentRevision, chatMessageID); err != nil {
 					return fmt.Errorf("failed to create render job for completed plan: %w", err)
 				}
 			} else {

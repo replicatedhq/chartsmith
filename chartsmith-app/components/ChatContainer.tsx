@@ -87,14 +87,6 @@ export function ChatContainer({ session }: ChatContainerProps) {
               } focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50`}
             />
             <div className="absolute right-4 top-[18px]">
-              {isRendering && (
-                <div className={`absolute right-7 top-[-25px] text-xs py-1 px-2 rounded flex items-center gap-1 ${
-                  theme === "dark" ? "bg-yellow-900/30 text-yellow-200" : "bg-yellow-100 text-yellow-800"
-                }`}>
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                  <span>Rendering in progress</span>
-                </div>
-              )}
               <button
                 type="submit"
                 disabled={isRendering}

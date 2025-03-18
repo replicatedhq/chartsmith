@@ -197,6 +197,16 @@ func SetRenderedChartHelmTemplateStderr(ctx context.Context, renderedChartID str
 	return nil
 }
 
+func EnqueueRenderWorkspaceForRevisionWithPendingPatches(ctx context.Context, workspaceID string, revisionNumber int, chatMessageID string) error {
+	logger.Info("EnqueueRenderWorkspaceForRevisionWithPendingPatches",
+		zap.String("workspaceID", workspaceID),
+		zap.Int("revisionNumber", revisionNumber),
+		zap.String("chatMessageID", chatMessageID),
+	)
+
+	return enqueueRenderWorkspaceForRevision(ctx, workspaceID, revisionNumber, chatMessageID, true)
+}
+
 func EnqueueRenderWorkspaceForRevision(ctx context.Context, workspaceID string, revisionNumber int, chatMessageID string) error {
 	logger.Info("EnqueueRenderWorkspaceForRevision",
 		zap.String("workspaceID", workspaceID),
@@ -204,6 +214,10 @@ func EnqueueRenderWorkspaceForRevision(ctx context.Context, workspaceID string, 
 		zap.String("chatMessageID", chatMessageID),
 	)
 
+	return enqueueRenderWorkspaceForRevision(ctx, workspaceID, revisionNumber, chatMessageID, false)
+}
+
+func enqueueRenderWorkspaceForRevision(ctx context.Context, workspaceID string, revisionNumber int, chatMessageID string, includePendingPatches bool) error {
 	// Get workspace to retrieve charts
 	w, err := GetWorkspace(ctx, workspaceID)
 	if err != nil {
@@ -216,7 +230,7 @@ func EnqueueRenderWorkspaceForRevision(ctx context.Context, workspaceID string, 
 	// First check if we already have a render job associated with this chat message
 	// This prevents duplicate renders for the same chat message
 	if chatMessageID != "" {
-		query := `SELECT COUNT(*) FROM workspace_chat 
+		query := `SELECT COUNT(*) FROM workspace_chat
 			WHERE id = $1 AND response_render_id IS NOT NULL`
 		var chatCount int
 		err = conn.QueryRow(ctx, query, chatMessageID).Scan(&chatCount)
@@ -295,7 +309,8 @@ func EnqueueRenderWorkspaceForRevision(ctx context.Context, workspaceID string, 
 	}
 
 	if err := persistence.EnqueueWork(ctx, "render_workspace", map[string]interface{}{
-		"id": id,
+		"id":                    id,
+		"includePendingPatches": includePendingPatches,
 	}); err != nil {
 		return fmt.Errorf("failed to enqueue render workspace: %w", err)
 	}
