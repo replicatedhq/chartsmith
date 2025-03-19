@@ -2,12 +2,12 @@ package helmutils
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sync"
 	"time"
 
 	"github.com/replicatedhq/chartsmith/pkg/workspace/types"
@@ -102,64 +102,29 @@ func runHelmDepUpdate(dir string, kubeconfig string, cmdCh chan string, stdoutCh
 	depUpdateCmd.Dir = dir
 
 	cmdCh <- depUpdateCmd.String()
-	stdout, err := depUpdateCmd.StdoutPipe()
+
+	// Use CombinedOutput instead of pipes for reliable output capture
+	output, err := depUpdateCmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to create stdout pipe: %w", err)
-	}
-	stderr, err := depUpdateCmd.StderrPipe()
-	if err != nil {
-		return fmt.Errorf("failed to create stderr pipe: %w", err)
-	}
-
-	if err := depUpdateCmd.Start(); err != nil {
-		return fmt.Errorf("failed to start helm dep update: %w", err)
+		// Send the output to stderr channel before returning error
+		errLines := bufio.NewScanner(bufio.NewReader(bytes.NewReader(output)))
+		for errLines.Scan() {
+			stderrCh <- errLines.Text() + "\n"
+		}
+		return fmt.Errorf("helm dep update command failed: %w", err)
 	}
 
-	// Use WaitGroup to track when goroutines finish
-	var wg sync.WaitGroup
-	wg.Add(2) // For 2 goroutines (stdout, stderr)
-
-	// Start goroutines to stream output
-	go func() {
-		defer wg.Done()
-		// Increase buffer size to handle large lines
-		scanner := bufio.NewScanner(stdout)
-		buf := make([]byte, 1024*1024)    // 1MB buffer
-		scanner.Buffer(buf, 10*1024*1024) // Allow up to 10MB per line
-
-		for scanner.Scan() {
-			stdoutCh <- scanner.Text() + "\n"
-		}
-
-		if err := scanner.Err(); err != nil {
-			fmt.Printf("Error reading helm dep update stdout: %v\n", err)
-		}
-	}()
-
-	go func() {
-		defer wg.Done()
-		// Increase buffer size to handle large lines
-		scanner := bufio.NewScanner(stderr)
-		buf := make([]byte, 1024*1024)    // 1MB buffer
-		scanner.Buffer(buf, 10*1024*1024) // Allow up to 10MB per line
-
-		for scanner.Scan() {
-			stderrCh <- scanner.Text() + "\n"
-		}
-
-		if err := scanner.Err(); err != nil {
-			fmt.Printf("Error reading helm dep update stderr: %v\n", err)
-		}
-	}()
-
-	// Wait for command to complete
-	if err := depUpdateCmd.Wait(); err != nil {
-		wg.Wait() // Important: Wait for goroutines to finish even on error
-		return err
+	// Process the captured output line by line
+	lines := bufio.NewScanner(bufio.NewReader(bytes.NewReader(output)))
+	for lines.Scan() {
+		line := lines.Text()
+		// Send to stdout channel
+		stdoutCh <- line + "\n"
 	}
 
-	// Wait for goroutines to finish processing all output
-	wg.Wait()
+	if err := lines.Err(); err != nil {
+		return fmt.Errorf("error reading helm dep update output: %w", err)
+	}
 
 	return nil
 }
@@ -182,70 +147,35 @@ func runHelmTemplate(dir string, valuesYAML string, kubeconfig string, cmdCh cha
 
 	fmt.Printf("Running helm template with args: %v\n", args)
 
+	// Use CombinedOutput instead of pipes for reliable output capture
 	cmd := exec.CommandContext(ctx, "helm", args...)
 	cmd.Env = []string{"KUBECONFIG=" + kubeconfig}
 	cmd.Dir = dir
 
 	cmdCh <- cmd.String()
 
-	stdout, err := cmd.StdoutPipe()
+	// Capture all output at once, which avoids the pipe closure issue
+	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to create stdout pipe: %w", err)
-	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return fmt.Errorf("failed to create stderr pipe: %w", err)
-	}
-
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("failed to start helm template: %w", err)
+		// Send the output to stderr channel before returning error
+		errLines := bufio.NewScanner(bufio.NewReader(bytes.NewReader(output)))
+		for errLines.Scan() {
+			stderrCh <- errLines.Text() + "\n"
+		}
+		return fmt.Errorf("helm template command failed: %w", err)
 	}
 
-	// Use WaitGroup to track when goroutines finish
-	var wg sync.WaitGroup
-	wg.Add(2) // For 2 goroutines (stdout, stderr)
-
-	// Start goroutines to stream output
-	go func() {
-		defer wg.Done()
-		// Increase buffer size to handle large lines
-		scanner := bufio.NewScanner(stdout)
-		buf := make([]byte, 1024*1024)    // 1MB buffer
-		scanner.Buffer(buf, 10*1024*1024) // Allow up to 10MB per line
-
-		for scanner.Scan() {
-			stdoutCh <- scanner.Text() + "\n"
-		}
-
-		if err := scanner.Err(); err != nil {
-			fmt.Printf("Error reading helm template stdout: %v\n", err)
-		}
-	}()
-
-	go func() {
-		defer wg.Done()
-		// Increase buffer size to handle large lines
-		scanner := bufio.NewScanner(stderr)
-		buf := make([]byte, 1024*1024)    // 1MB buffer
-		scanner.Buffer(buf, 10*1024*1024) // Allow up to 10MB per line
-
-		for scanner.Scan() {
-			stderrCh <- scanner.Text() + "\n"
-		}
-
-		if err := scanner.Err(); err != nil {
-			fmt.Printf("Error reading helm template stderr: %v\n", err)
-		}
-	}()
-
-	// Wait for command to complete
-	if err := cmd.Wait(); err != nil {
-		wg.Wait() // Important: Wait for goroutines to finish even on error
-		return err
+	// Process the captured output line by line
+	lines := bufio.NewScanner(bufio.NewReader(bytes.NewReader(output)))
+	for lines.Scan() {
+		line := lines.Text()
+		// Send to stdout channel
+		stdoutCh <- line + "\n"
 	}
 
-	// Wait for goroutines to finish processing all output
-	wg.Wait()
+	if err := lines.Err(); err != nil {
+		return fmt.Errorf("error reading helm template output: %w", err)
+	}
 
 	return nil
 }
