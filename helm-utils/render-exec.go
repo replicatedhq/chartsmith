@@ -44,9 +44,8 @@ clusters:
 	if err != nil {
 		return fmt.Errorf("failed to create temp dir: %w", err)
 	}
-	// defer os.RemoveAll(tempDir)
+	defer os.RemoveAll(tempDir)
 
-	fmt.Printf("Rendering %d files\n", len(files))
 	for _, file := range files {
 		filePath := filepath.Join(tempDir, file.FilePath)
 		// ensure the directory exists

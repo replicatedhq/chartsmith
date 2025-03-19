@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 	"github.com/replicatedhq/chartsmith/pkg/workspace/types"
 )
@@ -225,7 +226,8 @@ func listFilesForChart(ctx context.Context, chartID string, revisionNumber int) 
 		chart_id,
 		workspace_id,
 		file_path,
-		content
+		content,
+		pending_patches
 	FROM
 		workspace_file
 	WHERE
@@ -239,9 +241,12 @@ func listFilesForChart(ctx context.Context, chartID string, revisionNumber int) 
 	defer rows.Close()
 
 	var files []types.File
+
 	for rows.Next() {
 		var file types.File
 		var chartID sql.NullString
+		var pendingPatches pgtype.Array[string]
+
 		err := rows.Scan(
 			&file.ID,
 			&file.RevisionNumber,
@@ -249,13 +254,18 @@ func listFilesForChart(ctx context.Context, chartID string, revisionNumber int) 
 			&file.WorkspaceID,
 			&file.FilePath,
 			&file.Content,
+			&pendingPatches,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("error scanning file: %w", err)
 		}
 
 		file.ChartID = chartID.String
-
+		if pendingPatches.Valid {
+			file.PendingPatches = pendingPatches.Elements
+		} else {
+			file.PendingPatches = []string{}
+		}
 		files = append(files, file)
 	}
 	rows.Close()
@@ -273,7 +283,8 @@ func listFilesWithoutChartsForWorkspace(ctx context.Context, workspaceID string,
 		chart_id,
 		workspace_id,
 		file_path,
-		content
+		content,
+		pending_patches
 	FROM
 		workspace_file
 	WHERE
@@ -292,6 +303,8 @@ func listFilesWithoutChartsForWorkspace(ctx context.Context, workspaceID string,
 	for rows.Next() {
 		var file types.File
 		var chartID sql.NullString
+		var pendingPatches pgtype.Array[string]
+
 		err := rows.Scan(
 			&file.ID,
 			&file.RevisionNumber,
@@ -299,11 +312,17 @@ func listFilesWithoutChartsForWorkspace(ctx context.Context, workspaceID string,
 			&file.WorkspaceID,
 			&file.FilePath,
 			&file.Content,
+			&pendingPatches,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("error scanning file: %w", err)
 		}
 		file.ChartID = chartID.String
+		if pendingPatches.Valid {
+			file.PendingPatches = pendingPatches.Elements
+		} else {
+			file.PendingPatches = []string{}
+		}
 		files = append(files, file)
 	}
 
