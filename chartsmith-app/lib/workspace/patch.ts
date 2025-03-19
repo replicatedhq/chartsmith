@@ -474,7 +474,7 @@ export async function updateFileAfterPatchOperation(
     const db = getDB(await getParam("DB_URI"));
     await db.query(
       `UPDATE workspace_file
-       SET content = $1, pending_patches = $2
+       SET content = $1, content_pending = $2
        WHERE id = $3 AND revision_number = $4`,
       [content, pendingPatches, fileId, revisionNumber]
     );
@@ -490,7 +490,7 @@ export async function getFileByIdAndRevision(fileId: string, revision: number): 
     logger.info(`Getting file by id=${fileId} and revision=${revision}`);
 
     const result = await db.query(
-      `SELECT id, revision_number, chart_id, workspace_id, file_path, content, pending_patches
+      `SELECT id, revision_number, chart_id, workspace_id, file_path, content, content_pending
        FROM workspace_file
        WHERE id = $1 AND revision_number = $2`,
       [fileId, revision]
@@ -508,7 +508,7 @@ export async function getFileByIdAndRevision(fileId: string, revision: number): 
       id: result.rows[0].id,
       filePath: result.rows[0].file_path,
       content: result.rows[0].content,
-      pendingPatches: result.rows[0].pending_patches
+      contentPending: result.rows[0].content_pending
     }
 
     return file;
@@ -519,20 +519,13 @@ export async function getFileByIdAndRevision(fileId: string, revision: number): 
 }
 
 export async function applyPatch(file: WorkspaceFile): Promise<WorkspaceFile> {
-  if (!file.pendingPatches || file.pendingPatches.length === 0) {
+  if (!file.contentPending) {
     return file;
   }
 
   try {
     // Get the first patch to apply (in the future could be enhanced to apply multiple patches)
-    const pendingPatch = file.pendingPatches[0];
-
-    logger.info('Starting patch application:', {
-      fileId: file.id,
-      patchLength: pendingPatch.length,
-      contentLength: file.content.length,
-      totalPatches: file.pendingPatches.length
-    });
+    const pendingPatch = file.contentPending;
 
     logger.debug('Patch content:', { patch: pendingPatch });
 

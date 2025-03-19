@@ -1081,7 +1081,7 @@ async function listFilesForChart(workspaceID: string, chartID: string, revisionN
           workspace_id,
           file_path,
           content,
-          pending_patches
+          content_pending
         FROM
           workspace_file
         WHERE
@@ -1094,12 +1094,12 @@ async function listFilesForChart(workspaceID: string, chartID: string, revisionN
       return [];
     }
 
-    const files: WorkspaceFile[] = result.rows.map((row: { id: string; file_path: string; content: string; summary: string, pending_patches: string[] }) => {
+    const files: WorkspaceFile[] = result.rows.map((row: { id: string; file_path: string; content: string; summary: string, content_pending?: string }) => {
       return {
         id: row.id,
         filePath: row.file_path,
         content: row.content,
-        pendingPatches: row.pending_patches,
+        contentPending: row.content_pending,
       };
     });
 
@@ -1122,7 +1122,7 @@ async function listFilesWithoutChartsForWorkspace(workspaceID: string, revisionN
           workspace_id,
           file_path,
           content,
-          pending_patches
+          content_pending
         FROM
           workspace_file
         WHERE
@@ -1137,12 +1137,12 @@ async function listFilesWithoutChartsForWorkspace(workspaceID: string, revisionN
       return [];
     }
 
-    const files: WorkspaceFile[] = result.rows.map((row: { id: string; file_path: string; content: string; summary: string, pending_patches: string[] }) => {
+    const files: WorkspaceFile[] = result.rows.map((row: { id: string; file_path: string; content: string; summary: string, content_pending?: string }) => {
       return {
         id: row.id,
         filePath: row.file_path,
         content: row.content,
-        pendingPatches: row.pending_patches,
+        contentPending: row.content_pending,
       };
     });
 

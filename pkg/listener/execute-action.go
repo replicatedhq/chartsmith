@@ -231,17 +231,6 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 				continue
 			}
 
-			updatedFile, err := workspace.AddPendingPatch(ctx, updatedPlan.WorkspaceID, w.CurrentRevision, c.ID, p.Path, patchContent)
-			if err != nil {
-				return fmt.Errorf("failed to create or patch file: %w", err)
-			}
-
-			if updatedFile != nil {
-				if err := realtime.SendPatchesToWorkspace(ctx, updatedPlan.WorkspaceID, p.Path, currentContent, updatedFile.PendingPatches); err != nil {
-					return fmt.Errorf("failed to send artifact update: %w", err)
-				}
-			}
-
 			if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
 				return fmt.Errorf("failed to send artifact update: %w", err)
 			}

@@ -9,7 +9,6 @@ import (
 	"time"
 
 	helmutils "github.com/replicatedhq/chartsmith/helm-utils"
-	"github.com/replicatedhq/chartsmith/pkg/diff"
 	"github.com/replicatedhq/chartsmith/pkg/logger"
 	"github.com/replicatedhq/chartsmith/pkg/realtime"
 	realtimetypes "github.com/replicatedhq/chartsmith/pkg/realtime/types"
@@ -128,23 +127,7 @@ func renderChart(ctx context.Context, renderedChart *workspacetypes.RenderedChar
 	done := make(chan error)
 	go func(includePendingPatches bool) {
 		files := chart.Files
-		if includePendingPatches {
-			files = []workspacetypes.File{}
 
-			for _, file := range chart.Files {
-				if file.PendingPatches == nil || len(file.PendingPatches) == 0 {
-					files = append(files, file)
-				} else {
-					patchedContent, err := diff.ApplyPatches(file.Content, file.PendingPatches)
-					if err != nil {
-						done <- err
-						return
-					}
-					file.Content = patchedContent
-					files = append(files, file)
-				}
-			}
-		}
 		err := helmutils.RenderChartExec(files, "", renderChannels)
 		if err != nil {
 			done <- err
