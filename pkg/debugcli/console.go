@@ -1363,7 +1363,7 @@ func (c *DebugConsole) executePlan(args []string) error {
 	doneCh := make(chan error)
 
 	go func() {
-		_, err := llm.ExecuteAction(c.ctx, actionPlanWithPath, plan, currentContent, patchStreamCh)
+		_, err := llm.ExecuteAction(c.ctx, actionPlanWithPath, plan, currentContent)
 		if err != nil {
 			fmt.Println(dimText(fmt.Sprintf("Error: %v", err)))
 		}

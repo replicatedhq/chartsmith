@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
-	"github.com/replicatedhq/chartsmith/pkg/diff"
 	llmtypes "github.com/replicatedhq/chartsmith/pkg/llm/types"
 	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 )
@@ -25,8 +24,7 @@ type CreateWorkspaceFromArchiveAction struct {
 	ArchiveType string `json:"archiveType"` // New field: "helm" or "k8s"
 }
 
-func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWithPath, plan *workspacetypes.Plan, currentContent string, patchStreamCh chan string) (string, error) {
-	originalContent := currentContent
+func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWithPath, plan *workspacetypes.Plan, currentContent string) (string, error) {
 	updatedContent := currentContent
 
 	client, err := newAnthropicClient(ctx)
@@ -139,22 +137,10 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 					response = updatedContent
 				} else if input.Command == "str_replace" {
 					patchedContent := strings.ReplaceAll(updatedContent, input.OldStr, input.NewStr)
-					patch, err := diff.GeneratePatch(updatedContent, patchedContent, actionPlanWithPath.Path)
-					if err != nil {
-						return "", err
-					}
-
 					updatedContent = patchedContent
-					patchStreamCh <- patch
 					response = "Updated"
 				} else if input.Command == "create" {
-					patch, err := diff.GeneratePatch(updatedContent, input.NewStr, actionPlanWithPath.Path)
-					if err != nil {
-						return "", err
-					}
-
 					updatedContent = input.NewStr
-					patchStreamCh <- patch
 					response = "Created"
 				}
 
@@ -175,17 +161,6 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 			Role:    anthropic.F(anthropic.MessageParamRoleUser),
 			Content: anthropic.F(toolResults),
 		})
-	}
-
-	// Generate a unified diff patch
-	patch, err := diff.GeneratePatch(currentContent, originalContent, actionPlanWithPath.Path)
-	if err != nil {
-		return "", fmt.Errorf("failed to generate patch: %w", err)
-	}
-
-	// Send the patch to the channel if it's provided
-	if patchStreamCh != nil {
-		patchStreamCh <- patch
 	}
 
 	return updatedContent, nil

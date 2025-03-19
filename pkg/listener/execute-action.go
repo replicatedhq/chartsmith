@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/replicatedhq/chartsmith/pkg/llm"
@@ -153,7 +152,6 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 		}
 	}
 
-	patchCh := make(chan string)
 	finalContentCh := make(chan string)
 	errCh := make(chan error)
 
@@ -176,7 +174,7 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 			Path: p.Path,
 		}
 
-		finalContent, err := llm.ExecuteAction(ctx, apwp, plan, currentContent, patchCh)
+		finalContent, err := llm.ExecuteAction(ctx, apwp, plan, currentContent)
 		if err != nil {
 			logger.Error(fmt.Errorf("failed to execute action: %w", err),
 				zap.String("path", p.Path),
@@ -184,11 +182,6 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 			errCh <- fmt.Errorf("failed to execute action: %w", err)
 			return
 		}
-
-		logger.Info("Action execution successful",
-			zap.String("path", p.Path),
-			zap.String("planId", p.PlanID),
-			zap.String("contentLength", fmt.Sprintf("%d", len(finalContent))))
 
 		finalContentCh <- finalContent
 		errCh <- nil
@@ -225,20 +218,15 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 				return err
 			}
 			return nil
-
-		case patchContent := <-patchCh:
-			if strings.TrimSpace(patchContent) == "" {
-				continue
-			}
-
-			if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
-				return fmt.Errorf("failed to send artifact update: %w", err)
-			}
 		}
 	}
 }
 
 func finalizeFile(ctx context.Context, finalContent string, updatedPlan *workspacetypes.Plan, p executeActionPayload, w *workspacetypes.Workspace, c workspacetypes.Chart, realtimeRecipient realtimetypes.Recipient) error {
+	if err := workspace.SetFileContentPending(ctx, p.Path, w.CurrentRevision, c.ID, w.ID, finalContent); err != nil {
+		return fmt.Errorf("failed to set file content pending: %w", err)
+	}
+
 	// update the action file to completed
 	conn := persistence.MustGeUunpooledPostgresSession()
 	defer conn.Close(ctx)
