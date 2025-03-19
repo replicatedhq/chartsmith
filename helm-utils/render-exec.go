@@ -44,8 +44,9 @@ clusters:
 	if err != nil {
 		return fmt.Errorf("failed to create temp dir: %w", err)
 	}
-	defer os.RemoveAll(tempDir)
+	// defer os.RemoveAll(tempDir)
 
+	fmt.Printf("Rendering %d files\n", len(files))
 	for _, file := range files {
 		filePath := filepath.Join(tempDir, file.FilePath)
 		// ensure the directory exists
@@ -123,13 +124,13 @@ func runHelmDepUpdate(dir string, kubeconfig string, cmdCh chan string, stdoutCh
 		defer wg.Done()
 		// Increase buffer size to handle large lines
 		scanner := bufio.NewScanner(stdout)
-		buf := make([]byte, 1024*1024) // 1MB buffer
+		buf := make([]byte, 1024*1024)    // 1MB buffer
 		scanner.Buffer(buf, 10*1024*1024) // Allow up to 10MB per line
-		
+
 		for scanner.Scan() {
 			stdoutCh <- scanner.Text() + "\n"
 		}
-		
+
 		if err := scanner.Err(); err != nil {
 			fmt.Printf("Error reading helm dep update stdout: %v\n", err)
 		}
@@ -139,13 +140,13 @@ func runHelmDepUpdate(dir string, kubeconfig string, cmdCh chan string, stdoutCh
 		defer wg.Done()
 		// Increase buffer size to handle large lines
 		scanner := bufio.NewScanner(stderr)
-		buf := make([]byte, 1024*1024) // 1MB buffer
+		buf := make([]byte, 1024*1024)    // 1MB buffer
 		scanner.Buffer(buf, 10*1024*1024) // Allow up to 10MB per line
-		
+
 		for scanner.Scan() {
 			stderrCh <- scanner.Text() + "\n"
 		}
-		
+
 		if err := scanner.Err(); err != nil {
 			fmt.Printf("Error reading helm dep update stderr: %v\n", err)
 		}
@@ -209,13 +210,13 @@ func runHelmTemplate(dir string, valuesYAML string, kubeconfig string, cmdCh cha
 		defer wg.Done()
 		// Increase buffer size to handle large lines
 		scanner := bufio.NewScanner(stdout)
-		buf := make([]byte, 1024*1024) // 1MB buffer
+		buf := make([]byte, 1024*1024)    // 1MB buffer
 		scanner.Buffer(buf, 10*1024*1024) // Allow up to 10MB per line
-		
+
 		for scanner.Scan() {
 			stdoutCh <- scanner.Text() + "\n"
 		}
-		
+
 		if err := scanner.Err(); err != nil {
 			fmt.Printf("Error reading helm template stdout: %v\n", err)
 		}
@@ -225,13 +226,13 @@ func runHelmTemplate(dir string, valuesYAML string, kubeconfig string, cmdCh cha
 		defer wg.Done()
 		// Increase buffer size to handle large lines
 		scanner := bufio.NewScanner(stderr)
-		buf := make([]byte, 1024*1024) // 1MB buffer
+		buf := make([]byte, 1024*1024)    // 1MB buffer
 		scanner.Buffer(buf, 10*1024*1024) // Allow up to 10MB per line
-		
+
 		for scanner.Scan() {
 			stderrCh <- scanner.Text() + "\n"
 		}
-		
+
 		if err := scanner.Err(); err != nil {
 			fmt.Printf("Error reading helm template stderr: %v\n", err)
 		}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	helmutils "github.com/replicatedhq/chartsmith/helm-utils"
 	"github.com/replicatedhq/chartsmith/pkg/diff"
@@ -171,6 +172,28 @@ func renderChart(ctx context.Context, renderedChart *workspacetypes.RenderedChar
 
 			if err := workspace.FinishRenderedChart(ctx, renderedChart.ID, renderedChart.DepupdateCommand, renderedChart.DepupdateStdout, renderedChart.DepupdateStderr, renderedChart.HelmTemplateCommand, renderedChart.HelmTemplateStdout, renderedChart.HelmTemplateStderr, isSuccess); err != nil {
 				return fmt.Errorf("failed to finish rendered chart: %w", err)
+			}
+
+			now := time.Now()
+			e := realtimetypes.RenderStreamEvent{
+				WorkspaceID:         w.ID,
+				RenderID:            renderedWorkspace.ID,
+				RenderChartID:       renderedChart.ID,
+				DepUpdateCommand:    renderedChart.DepupdateCommand,
+				DepUpdateStdout:     renderedChart.DepupdateStdout,
+				DepUpdateStderr:     renderedChart.DepupdateStderr,
+				HelmTemplateCommand: renderedChart.HelmTemplateCommand,
+				HelmTemplateStdout:  renderedChart.HelmTemplateStdout,
+				HelmTemplateStderr:  renderedChart.HelmTemplateStderr,
+				CompletedAt:         &now,
+			}
+
+			if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
+				return fmt.Errorf("failed to send render stream event: %w", err)
+			}
+
+			if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
+				return fmt.Errorf("failed to send render stream event: %w", err)
 			}
 
 			updatedRenderedFiles, err := parseRenderedFiles(ctx, renderedChart.HelmTemplateStdout, chart.Name, &renderedFiles, workspaceFiles)
