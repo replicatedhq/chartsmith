@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/replicatedhq/chartsmith/pkg/logger"
@@ -17,7 +18,7 @@ func FinishRendered(ctx context.Context, id string) error {
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
 
-	query := `UPDATE workspace_rendered SET completed_at = NOW() WHERE id = $1`
+	query := `UPDATE workspace_rendered SET completed_at = NOW(), error_message = NULL WHERE id = $1`
 	_, err := conn.Exec(ctx, query, id)
 	if err != nil {
 		return fmt.Errorf("failed to finish rendered: %w", err)
@@ -26,7 +27,40 @@ func FinishRendered(ctx context.Context, id string) error {
 	return nil
 }
 
+// FailRendered marks a render job as failed with an error message
+func FailRendered(ctx context.Context, id string, errorMessage string) error {
+	// Use a background context if the provided context is already done
+	if ctx.Err() != nil {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+	}
+
+	conn := persistence.MustGetPooledPostgresSession()
+	defer conn.Release()
+
+	// Update the record with error message and mark as completed (but failed)
+	query := `UPDATE workspace_rendered SET completed_at = NOW(), error_message = $2 WHERE id = $1`
+	_, err := conn.Exec(ctx, query, id, errorMessage)
+	if err != nil {
+		return fmt.Errorf("failed to mark render as failed: %w", err)
+	}
+
+	// Also update any incomplete rendered charts to mark them as failed
+	query = `UPDATE workspace_rendered_chart
+		SET completed_at = NOW(), is_success = false, helm_template_stderr = COALESCE(helm_template_stderr, '') || $2
+		WHERE workspace_render_id = $1 AND completed_at IS NULL`
+	_, err = conn.Exec(ctx, query, id, "\n\nRender operation failed: "+errorMessage)
+	if err != nil {
+		return fmt.Errorf("failed to mark rendered charts as failed: %w", err)
+	}
+
+	return nil
+}
+
 func GetRendered(ctx context.Context, id string) (*types.Rendered, error) {
+	logger.Info("GetRendered", zap.String("id", id))
+
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
 

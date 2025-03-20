@@ -52,8 +52,8 @@ type queueProcessor struct {
 func NewListener() *Listener {
 	return &Listener{
 		handlers:          make(map[string]NotificationHandler),
-		reconnectInterval: 5 * time.Second,  // Start with a shorter interval
-		maxReconnectRetry: 0,                // 0 means unlimited retries
+		reconnectInterval: 5 * time.Second, // Start with a shorter interval
+		maxReconnectRetry: 0,               // 0 means unlimited retries
 		processors:        make(map[string]*queueProcessor),
 		pgURI:             param.Get().PGURI,
 		queueLocks:        make(map[string]map[string]chan struct{}),
@@ -82,28 +82,28 @@ func (l *Listener) AddHandler(ctx context.Context, channel string, maxWorkers in
 // Start begins listening for notifications
 func (l *Listener) Start(ctx context.Context) error {
 	logger.Info("Starting listener")
-	
+
 	// Establish initial connection
 	var err error
 	connectionTimeoutCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	
+
 	l.conn, err = pgx.Connect(connectionTimeoutCtx, param.Get().PGURI)
 	if err != nil {
 		logger.Error(fmt.Errorf("failed to connect to database: %w", err))
-		
+
 		// Try to establish connection with retry logic
 		if reconnectErr := l.reconnect(ctx); reconnectErr != nil {
 			return fmt.Errorf("failed to establish initial database connection: %w", reconnectErr)
 		}
 	}
-	
+
 	// Verify connection with a simple query
 	var one int
 	err = l.conn.QueryRow(connectionTimeoutCtx, "SELECT 1").Scan(&one)
 	if err != nil {
 		logger.Error(fmt.Errorf("initial connection test failed: %w", err))
-		
+
 		// Try to establish connection with retry logic
 		if reconnectErr := l.reconnect(ctx); reconnectErr != nil {
 			return fmt.Errorf("failed to establish valid database connection: %w", reconnectErr)
@@ -113,14 +113,14 @@ func (l *Listener) Start(ctx context.Context) error {
 	logger.Info("Database connection established successfully")
 
 	// Listen on all channels that have registered handlers
-	logger.Info("Subscribing to notification channels", 
+	logger.Info("Subscribing to notification channels",
 		zap.Int("channelCount", len(l.handlers)))
-		
+
 	channelCount := 0
 	for channel := range l.handlers {
 		// Use a dedicated context for each LISTEN command with timeout
 		listenCtx, listenCancel := context.WithTimeout(ctx, 10*time.Second)
-		
+
 		// Add retry logic for initial listen
 		var listenErr error
 		for listenAttempt := 0; listenAttempt < 3; listenAttempt++ {
@@ -130,7 +130,7 @@ func (l *Listener) Start(ctx context.Context) error {
 					zap.String("channel", channel),
 					zap.Int("attempt", listenAttempt+1),
 					zap.Error(err))
-				
+
 				// If connection is busy, wait a moment before retry
 				if strings.Contains(err.Error(), "conn busy") {
 					select {
@@ -151,15 +151,15 @@ func (l *Listener) Start(ctx context.Context) error {
 				break
 			}
 		}
-		
+
 		listenCancel()
-		
+
 		if listenErr != nil {
 			return fmt.Errorf("failed to listen on channel %s: %w", channel, listenErr)
 		}
-		
+
 		channelCount++
-		
+
 		// Check for existing work in each queue and start processing
 		processor := l.processors[channel]
 		if !processor.processing {
@@ -167,13 +167,13 @@ func (l *Listener) Start(ctx context.Context) error {
 			go l.processQueue(ctx, processor)
 		}
 	}
-	
-	logger.Info("Successfully subscribed to all channels", 
+
+	logger.Info("Successfully subscribed to all channels",
 		zap.Int("channelCount", channelCount))
 
 	// Start processing notifications in a separate goroutine
 	go l.processNotifications(ctx)
-	
+
 	logger.Info("Listener started successfully")
 	return nil
 }
@@ -185,12 +185,12 @@ func (l *Listener) processNotifications(ctx context.Context) {
 	maxConsecutiveErrors := 3
 	lastSuccessTime := time.Now()
 	healthCheckInterval := 30 * time.Second
-	
+
 	// Start a separate goroutine for periodic health checks
 	go func() {
 		ticker := time.NewTicker(healthCheckInterval)
 		defer ticker.Stop()
-		
+
 		for {
 			select {
 			case <-ctx.Done():
@@ -199,7 +199,7 @@ func (l *Listener) processNotifications(ctx context.Context) {
 				// Check if we've been silent for too long
 				if time.Since(lastSuccessTime) > healthCheckInterval*2 {
 					logger.Warn("No notification received in a while, performing health check")
-					
+
 					// Try a ping operation to verify connection
 					if l.conn != nil {
 						// Create a timeout context for the health check query
@@ -207,32 +207,32 @@ func (l *Listener) processNotifications(ctx context.Context) {
 						var result int
 						err := l.conn.QueryRow(healthCtx, "SELECT 1").Scan(&result)
 						healthCancel()
-						
+
 						if err != nil {
 							if strings.Contains(err.Error(), "conn busy") {
 								logger.Warn("Health check found busy connection, waiting before retry")
-								
+
 								// Wait a short time and try again with a fresh context
 								time.Sleep(500 * time.Millisecond)
-								
+
 								retryCtx, retryCancel := context.WithTimeout(ctx, 5*time.Second)
 								err = l.conn.QueryRow(retryCtx, "SELECT 1").Scan(&result)
 								retryCancel()
-								
+
 								if err == nil {
 									logger.Info("Connection health check passed on retry")
 									lastSuccessTime = time.Now()
 									continue
 								}
 							}
-							
+
 							logger.Error(fmt.Errorf("health check failed: %w", err))
-							
+
 							// Force a reconnection
 							if reconnectErr := l.reconnect(ctx); reconnectErr != nil {
 								logger.Error(fmt.Errorf("failed to reconnect after health check: %w", reconnectErr))
 							} else {
-								consecutiveErrors = 0 // Reset on successful reconnect
+								consecutiveErrors = 0        // Reset on successful reconnect
 								lastSuccessTime = time.Now() // Update last success time after reconnect
 							}
 						} else {
@@ -244,14 +244,14 @@ func (l *Listener) processNotifications(ctx context.Context) {
 			}
 		}
 	}()
-	
+
 	for {
 		// Check if context is canceled
 		if ctx.Err() != nil {
 			logger.Info("Context canceled, exiting notification processor")
 			return
 		}
-		
+
 		// Check if connection is available before waiting for notification
 		if l.conn == nil {
 			logger.Error(fmt.Errorf("connection is nil, attempting to reconnect"))
@@ -265,71 +265,71 @@ func (l *Listener) processNotifications(ctx context.Context) {
 				continue
 			}
 		}
-		
+
 		// Set a reasonable timeout for waiting for notifications
 		waitCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 		notification, err := l.conn.WaitForNotification(waitCtx)
 		cancel()
-		
+
 		if err != nil {
 			if ctx.Err() != nil {
 				// Context was canceled, exit gracefully
 				return
 			}
-			
+
 			// Special handling for "conn busy" errors
 			if strings.Contains(err.Error(), "conn busy") {
 				logger.Warn("Connection busy during WaitForNotification, waiting before retry",
 					zap.String("timeSinceLastSuccess", time.Since(lastSuccessTime).String()))
-				
+
 				// Short delay before retrying with a potentially cleared connection
 				select {
 				case <-time.After(500 * time.Millisecond):
 				case <-ctx.Done():
 					return
 				}
-				
+
 				// Don't increment consecutive errors for busy connection
 				// This prevents unnecessary reconnection which could make things worse
 				continue
 			}
-			
+
 			// Check for closed connection error
-			if strings.Contains(err.Error(), "closed network connection") || 
-			   strings.Contains(err.Error(), "connection reset by peer") {
+			if strings.Contains(err.Error(), "closed network connection") ||
+				strings.Contains(err.Error(), "connection reset by peer") {
 				logger.Warn("Connection appears to be closed, forcing reconnection")
-				
+
 				// Force connection to nil to ensure reconnection on next iteration
 				if l.conn != nil {
 					// Don't try to close an already closed connection
 					l.conn = nil
 				}
-				
+
 				// Short delay before retrying
 				select {
 				case <-time.After(1 * time.Second):
 				case <-ctx.Done():
 					return
 				}
-				
+
 				continue
 			}
-			
+
 			consecutiveErrors++
 			logger.Error(fmt.Errorf("failed to wait for notification: %w", err),
 				zap.Int("consecutiveErrors", consecutiveErrors),
 				zap.String("timeSinceLastSuccess", time.Since(lastSuccessTime).String()))
 
 			// Force a reconnection after maxConsecutiveErrors or database termination
-			if consecutiveErrors >= maxConsecutiveErrors || 
-			   strings.Contains(err.Error(), "terminating connection") {
+			if consecutiveErrors >= maxConsecutiveErrors ||
+				strings.Contains(err.Error(), "terminating connection") {
 				logger.Warn("Too many consecutive errors or connection terminated, forcing reconnection",
 					zap.Int("consecutiveErrors", consecutiveErrors))
-				
+
 				// Attempt to reconnect with exponential backoff
 				if err := l.reconnect(ctx); err != nil {
 					logger.Error(fmt.Errorf("failed to reconnect: %w", err))
-					
+
 					// If reconnection fails, add a small delay to avoid thrashing
 					select {
 					case <-time.After(5 * time.Second):
@@ -344,7 +344,7 @@ func (l *Listener) processNotifications(ctx context.Context) {
 			}
 			continue
 		}
-		
+
 		// Reset error counter and update last success time on successful notification
 		consecutiveErrors = 0
 		lastSuccessTime = time.Now()
@@ -370,6 +370,7 @@ func (l *Listener) processQueue(ctx context.Context, processor *queueProcessor) 
 	for {
 		select {
 		case <-ctx.Done():
+			logger.Info("Received context done, existing process queue")
 			return
 		case <-processor.pollTicker.C:
 			// Continue processing on ticker
@@ -595,8 +596,8 @@ func (l *Listener) reconnect(ctx context.Context) error {
 	var err error
 	attempt := 0
 	backoffInterval := l.reconnectInterval
-	maxBackoff := 5 * time.Minute       // Cap the backoff at 5 minutes
-	maxAttempts := l.maxReconnectRetry  // Use the configured max, 0 means unlimited
+	maxBackoff := 5 * time.Minute      // Cap the backoff at 5 minutes
+	maxAttempts := l.maxReconnectRetry // Use the configured max, 0 means unlimited
 
 	// Log reconnection attempt
 	logger.Info("Database connection lost, attempting to reconnect...")
@@ -617,20 +618,20 @@ func (l *Listener) reconnect(ctx context.Context) error {
 
 		// Try to connect with a timeout
 		connectCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-		logger.Info("Attempting database reconnection", 
+		logger.Info("Attempting database reconnection",
 			zap.Int("attempt", attempt),
 			zap.Duration("backoff", backoffInterval))
-		
+
 		l.conn, err = pgx.Connect(connectCtx, param.Get().PGURI)
 		cancel() // Cancel the timeout context
-		
+
 		if err == nil {
 			// Test the connection with a simple query
 			testCtx, testCancel := context.WithTimeout(ctx, 10*time.Second)
 			var one int
 			err = l.conn.QueryRow(testCtx, "SELECT 1").Scan(&one)
 			testCancel()
-			
+
 			if err != nil {
 				logger.Error(fmt.Errorf("connection test failed: %w", err))
 				// Close the connection and continue to next attempt
@@ -642,14 +643,14 @@ func (l *Listener) reconnect(ctx context.Context) error {
 				// Resubscribe to all channels
 				logger.Info("Connection reestablished, resubscribing to channels",
 					zap.Int("channelCount", len(l.handlers)))
-				
+
 				// Successfully resubscribe to all channels
 				resubscribeSuccess := true
-				
+
 				for channel := range l.handlers {
 					// Use a short timeout for each LISTEN command
 					listenCtx, listenCancel := context.WithTimeout(ctx, 5*time.Second)
-					
+
 					var listenErr error
 					for listenAttempt := 0; listenAttempt < 3; listenAttempt++ {
 						if _, err := l.conn.Exec(listenCtx, fmt.Sprintf("LISTEN %s", channel)); err != nil {
@@ -658,7 +659,7 @@ func (l *Listener) reconnect(ctx context.Context) error {
 								zap.String("channel", channel),
 								zap.Int("attempt", listenAttempt+1),
 								zap.Error(err))
-							
+
 							// If connection is busy, wait a moment before retry
 							if strings.Contains(err.Error(), "conn busy") {
 								select {
@@ -679,16 +680,16 @@ func (l *Listener) reconnect(ctx context.Context) error {
 							break
 						}
 					}
-					
+
 					listenCancel() // Always cancel the context
-					
+
 					if listenErr != nil {
 						logger.Error(fmt.Errorf("failed to relisten on channel %s: %w", channel, listenErr))
 						resubscribeSuccess = false
 						break
 					}
 				}
-				
+
 				if !resubscribeSuccess {
 					logger.Warn("Failed to resubscribe to all channels, retrying full reconnection")
 					if l.conn != nil {
@@ -697,9 +698,9 @@ func (l *Listener) reconnect(ctx context.Context) error {
 					}
 					continue // Try reconnection again
 				}
-				
+
 				logger.Info("Successfully reconnected and resubscribed to all channels")
-				
+
 				// Immediately check for any pending work in queues
 				for _, processor := range l.processors {
 					if !processor.processing {
@@ -707,7 +708,7 @@ func (l *Listener) reconnect(ctx context.Context) error {
 						go l.processQueue(ctx, processor)
 					}
 				}
-				
+
 				return nil
 			}
 		} else {
@@ -724,11 +725,11 @@ func (l *Listener) reconnect(ctx context.Context) error {
 
 		// Add some jitter (±20%)
 		jitter := time.Duration(float64(backoffInterval) * (0.8 + 0.4*rand.Float64()))
-		
+
 		logger.Info("Will retry connection after backoff",
 			zap.Duration("backoff", jitter),
 			zap.Int("attempt", attempt))
-		
+
 		timer := time.NewTimer(jitter)
 		select {
 		case <-timer.C:
