@@ -120,11 +120,44 @@ func (l *Listener) Start(ctx context.Context) error {
 	for channel := range l.handlers {
 		// Use a dedicated context for each LISTEN command with timeout
 		listenCtx, listenCancel := context.WithTimeout(ctx, 10*time.Second)
-		if _, err := l.conn.Exec(listenCtx, fmt.Sprintf("LISTEN %s", channel)); err != nil {
-			listenCancel()
-			return fmt.Errorf("failed to listen on channel %s: %w", channel, err)
+		
+		// Add retry logic for initial listen
+		var listenErr error
+		for listenAttempt := 0; listenAttempt < 3; listenAttempt++ {
+			if _, err := l.conn.Exec(listenCtx, fmt.Sprintf("LISTEN %s", channel)); err != nil {
+				listenErr = err
+				logger.Warn("Initial LISTEN command failed, retrying",
+					zap.String("channel", channel),
+					zap.Int("attempt", listenAttempt+1),
+					zap.Error(err))
+				
+				// If connection is busy, wait a moment before retry
+				if strings.Contains(err.Error(), "conn busy") {
+					select {
+					case <-time.After(500 * time.Millisecond):
+					case <-listenCtx.Done():
+						break
+					}
+				} else {
+					// For other errors, a shorter retry wait
+					select {
+					case <-time.After(100 * time.Millisecond):
+					case <-listenCtx.Done():
+						break
+					}
+				}
+			} else {
+				listenErr = nil
+				break
+			}
 		}
+		
 		listenCancel()
+		
+		if listenErr != nil {
+			return fmt.Errorf("failed to listen on channel %s: %w", channel, listenErr)
+		}
+		
 		channelCount++
 		
 		// Check for existing work in each queue and start processing
@@ -169,9 +202,30 @@ func (l *Listener) processNotifications(ctx context.Context) {
 					
 					// Try a ping operation to verify connection
 					if l.conn != nil {
+						// Create a timeout context for the health check query
+						healthCtx, healthCancel := context.WithTimeout(ctx, 5*time.Second)
 						var result int
-						err := l.conn.QueryRow(ctx, "SELECT 1").Scan(&result)
+						err := l.conn.QueryRow(healthCtx, "SELECT 1").Scan(&result)
+						healthCancel()
+						
 						if err != nil {
+							if strings.Contains(err.Error(), "conn busy") {
+								logger.Warn("Health check found busy connection, waiting before retry")
+								
+								// Wait a short time and try again with a fresh context
+								time.Sleep(500 * time.Millisecond)
+								
+								retryCtx, retryCancel := context.WithTimeout(ctx, 5*time.Second)
+								err = l.conn.QueryRow(retryCtx, "SELECT 1").Scan(&result)
+								retryCancel()
+								
+								if err == nil {
+									logger.Info("Connection health check passed on retry")
+									lastSuccessTime = time.Now()
+									continue
+								}
+							}
+							
 							logger.Error(fmt.Errorf("health check failed: %w", err))
 							
 							// Force a reconnection
@@ -179,6 +233,7 @@ func (l *Listener) processNotifications(ctx context.Context) {
 								logger.Error(fmt.Errorf("failed to reconnect after health check: %w", reconnectErr))
 							} else {
 								consecutiveErrors = 0 // Reset on successful reconnect
+								lastSuccessTime = time.Now() // Update last success time after reconnect
 							}
 						} else {
 							logger.Info("Connection health check passed")
@@ -206,6 +261,23 @@ func (l *Listener) processNotifications(ctx context.Context) {
 			if ctx.Err() != nil {
 				// Context was canceled, exit gracefully
 				return
+			}
+			
+			// Special handling for "conn busy" errors
+			if strings.Contains(err.Error(), "conn busy") {
+				logger.Warn("Connection busy during WaitForNotification, waiting before retry",
+					zap.String("timeSinceLastSuccess", time.Since(lastSuccessTime).String()))
+				
+				// Short delay before retrying with a potentially cleared connection
+				select {
+				case <-time.After(500 * time.Millisecond):
+				case <-ctx.Done():
+					return
+				}
+				
+				// Don't increment consecutive errors for busy connection
+				// This prevents unnecessary reconnection which could make things worse
+				continue
 			}
 			
 			consecutiveErrors++
@@ -500,6 +572,7 @@ func (l *Listener) reconnect(ctx context.Context) error {
 		// Close the old connection if it exists
 		if l.conn != nil {
 			l.conn.Close(ctx)
+			l.conn = nil // Prevent potential use of closed connection
 		}
 
 		// Check if context is canceled
@@ -507,44 +580,87 @@ func (l *Listener) reconnect(ctx context.Context) error {
 			return fmt.Errorf("context canceled during reconnection: %w", ctx.Err())
 		}
 
-		// Try to connect
+		// Try to connect with a timeout
+		connectCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		logger.Info("Attempting database reconnection", 
 			zap.Int("attempt", attempt),
 			zap.Duration("backoff", backoffInterval))
 		
-		l.conn, err = pgx.Connect(ctx, param.Get().PGURI)
+		l.conn, err = pgx.Connect(connectCtx, param.Get().PGURI)
+		cancel() // Cancel the timeout context
+		
 		if err == nil {
 			// Test the connection with a simple query
+			testCtx, testCancel := context.WithTimeout(ctx, 10*time.Second)
 			var one int
-			err = l.conn.QueryRow(ctx, "SELECT 1").Scan(&one)
+			err = l.conn.QueryRow(testCtx, "SELECT 1").Scan(&one)
+			testCancel()
+			
 			if err != nil {
 				logger.Error(fmt.Errorf("connection test failed: %w", err))
-				// Continue to next attempt
+				// Close the connection and continue to next attempt
+				if l.conn != nil {
+					l.conn.Close(ctx)
+					l.conn = nil
+				}
 			} else {
 				// Resubscribe to all channels
 				logger.Info("Connection reestablished, resubscribing to channels",
 					zap.Int("channelCount", len(l.handlers)))
 				
+				// Successfully resubscribe to all channels
+				resubscribeSuccess := true
+				
 				for channel := range l.handlers {
-					listenErr := fmt.Errorf("failed to relisten on channel %s", channel)
+					// Use a short timeout for each LISTEN command
+					listenCtx, listenCancel := context.WithTimeout(ctx, 5*time.Second)
+					
+					var listenErr error
 					for listenAttempt := 0; listenAttempt < 3; listenAttempt++ {
-						if _, err := l.conn.Exec(ctx, fmt.Sprintf("LISTEN %s", channel)); err != nil {
-							listenErr = fmt.Errorf("%s: %w", listenErr, err)
+						if _, err := l.conn.Exec(listenCtx, fmt.Sprintf("LISTEN %s", channel)); err != nil {
+							listenErr = err
 							logger.Warn("LISTEN command failed, retrying",
 								zap.String("channel", channel),
 								zap.Int("attempt", listenAttempt+1),
 								zap.Error(err))
-							time.Sleep(1 * time.Second)
+							
+							// If connection is busy, wait a moment before retry
+							if strings.Contains(err.Error(), "conn busy") {
+								select {
+								case <-time.After(500 * time.Millisecond):
+								case <-listenCtx.Done():
+									break
+								}
+							} else {
+								// For other errors, the short retry wait
+								select {
+								case <-time.After(100 * time.Millisecond):
+								case <-listenCtx.Done():
+									break
+								}
+							}
 						} else {
 							listenErr = nil
 							break
 						}
 					}
 					
+					listenCancel() // Always cancel the context
+					
 					if listenErr != nil {
-						logger.Error(listenErr)
-						return listenErr
+						logger.Error(fmt.Errorf("failed to relisten on channel %s: %w", channel, listenErr))
+						resubscribeSuccess = false
+						break
 					}
+				}
+				
+				if !resubscribeSuccess {
+					logger.Warn("Failed to resubscribe to all channels, retrying full reconnection")
+					if l.conn != nil {
+						l.conn.Close(ctx)
+						l.conn = nil
+					}
+					continue // Try reconnection again
 				}
 				
 				logger.Info("Successfully reconnected and resubscribed to all channels")
