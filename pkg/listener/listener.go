@@ -252,6 +252,20 @@ func (l *Listener) processNotifications(ctx context.Context) {
 			return
 		}
 		
+		// Check if connection is available before waiting for notification
+		if l.conn == nil {
+			logger.Error(fmt.Errorf("connection is nil, attempting to reconnect"))
+			if err := l.reconnect(ctx); err != nil {
+				logger.Error(fmt.Errorf("failed to reconnect: %w", err))
+				select {
+				case <-time.After(5 * time.Second):
+				case <-ctx.Done():
+					return
+				}
+				continue
+			}
+		}
+		
 		// Set a reasonable timeout for waiting for notifications
 		waitCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 		notification, err := l.conn.WaitForNotification(waitCtx)
@@ -277,6 +291,27 @@ func (l *Listener) processNotifications(ctx context.Context) {
 				
 				// Don't increment consecutive errors for busy connection
 				// This prevents unnecessary reconnection which could make things worse
+				continue
+			}
+			
+			// Check for closed connection error
+			if strings.Contains(err.Error(), "closed network connection") || 
+			   strings.Contains(err.Error(), "connection reset by peer") {
+				logger.Warn("Connection appears to be closed, forcing reconnection")
+				
+				// Force connection to nil to ensure reconnection on next iteration
+				if l.conn != nil {
+					// Don't try to close an already closed connection
+					l.conn = nil
+				}
+				
+				// Short delay before retrying
+				select {
+				case <-time.After(1 * time.Second):
+				case <-ctx.Done():
+					return
+				}
+				
 				continue
 			}
 			
