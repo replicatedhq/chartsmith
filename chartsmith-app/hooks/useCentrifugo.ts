@@ -284,7 +284,7 @@ export function useCentrifugo({
       });
     }
 
-    let renders = await setRenders(prev => {
+    await setRenders(prev => {
       const newRenders = [...prev];
 
       // if the message has a renderWorkspaceId that we don't know, fetch and add it
@@ -381,11 +381,9 @@ export function useCentrifugo({
   const handleRenderFileEvent = useCallback((data: CentrifugoMessageData) => {
     if (!data.renderId || !data.renderChartId || !data.renderedFile) return;
 
-
     const render = data.renderId;
     const renderChartId = data.renderChartId;
     const renderedFile = data.renderedFile;
-
 
     setRenders(prev => {
       const newRenders = [...prev];
@@ -403,18 +401,29 @@ export function useCentrifugo({
           // Create a copy of the chart
           const updatedChart = { ...updatedRender.charts[chartIndex] };
 
-          // Add the new file to the chart's rendered files
-          updatedChart.renderedFiles = [
-            ...(updatedChart.renderedFiles || []),
-            renderedFile
-          ];
+          // Initialize renderedFiles array if it doesn't exist
+          const currentRenderedFiles = updatedChart.renderedFiles || [];
+
+          // Check if this file already exists in the rendered files (based on id)
+          const existingFileIndex = currentRenderedFiles.findIndex(
+            f => f.id === renderedFile.id
+          );
+
+          if (existingFileIndex !== -1) {
+            // Update the existing file instead of adding a duplicate
+            const updatedFiles = [...currentRenderedFiles];
+            updatedFiles[existingFileIndex] = renderedFile;
+            updatedChart.renderedFiles = updatedFiles;
+          } else {
+            // Add the new file only if it doesn't already exist
+            updatedChart.renderedFiles = [...currentRenderedFiles, renderedFile];
+          }
 
           // Update the chart in the render
           updatedRender.charts[chartIndex] = updatedChart;
 
           // Update the render in the list
           newRenders[index] = updatedRender;
-
         }
       }
 
