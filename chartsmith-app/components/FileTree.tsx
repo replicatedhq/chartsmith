@@ -14,6 +14,8 @@ interface TreeNode {
   children: TreeNode[];
   name: string;
   pendingPatches?: string[];
+  contentPending?: string;
+  content_pending?: string;
 }
 
 interface FileTreeProps {
@@ -177,7 +179,56 @@ export function FileTree({ files = [], charts = [] }: FileTreeProps) {
     }
   };
 
-  const getPatchStats = (patches?: string[]) => {
+  // Calculate differences between two content strings
+  const getContentDiffStats = (originalContent: string, newContent: string) => {
+    if (!originalContent || !newContent) {
+      return null;
+    }
+
+    if (originalContent === newContent) {
+      return { additions: 0, deletions: 0 };
+    }
+
+    const originalLines = originalContent.split('\n');
+    const newLines = newContent.split('\n');
+    
+    let additions = 0;
+    let deletions = 0;
+
+    // Simple diff algorithm that counts line differences
+    // In a real diff, we would use a more sophisticated algorithm
+    // but this will give us a rough estimate for display purposes
+    
+    // First, find the minimum length to compare line by line
+    const minLength = Math.min(originalLines.length, newLines.length);
+    
+    // Count changed lines
+    for (let i = 0; i < minLength; i++) {
+      if (originalLines[i] !== newLines[i]) {
+        // Count as both an addition and deletion when lines differ
+        additions++;
+        deletions++;
+      }
+    }
+    
+    // If files have different lengths, count the extras
+    if (originalLines.length > newLines.length) {
+      // Extra lines in original count as deletions
+      deletions += originalLines.length - newLines.length;
+    } else if (newLines.length > originalLines.length) {
+      // Extra lines in new content count as additions
+      additions += newLines.length - originalLines.length;
+    }
+
+    return { additions, deletions };
+  };
+
+  const getPatchStats = (patches?: string[], contentPending?: string, content?: string) => {
+    // If we have contentPending, use that instead of patches
+    if (contentPending && content) {
+      return getContentDiffStats(content, contentPending);
+    }
+    
     if (!patches || patches.length === 0) return null;
     
     // Sum up counts from all patches in the array
@@ -275,7 +326,8 @@ export function FileTree({ files = [], charts = [] }: FileTreeProps) {
   };
 
   const renderNode = (node: TreeNode, level: number) => {
-    const patchStats = node.type === "file" ? getPatchStats(node.pendingPatches) : null;
+    const patchStats = node.type === "file" ? 
+      getPatchStats(node.pendingPatches, node.contentPending, node.content) : null;
 
     return (
     <div key={node.filePath}>
