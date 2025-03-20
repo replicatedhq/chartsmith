@@ -772,6 +772,12 @@ export function useMonacoSingleInstance(
   // Calculate derived state
   const original = selectedFile?.content || '';
   const language = getLanguage(selectedFile?.filePath || '');
+  
+  // Using contentPending instead of pendingPatches for tracking changes
+  const modifiedContent = React.useMemo(() => {
+    // If we have pending content, return that, otherwise return the original content
+    return selectedFile?.contentPending || selectedFile?.content || "";
+  }, [selectedFile?.content, selectedFile?.contentPending]);
 
   // Simplified effect that handles model creation only
   // We now rely on React's key mechanism to unmount/remount editors
@@ -929,6 +935,7 @@ export function useMonacoSingleInstance(
   return {
     original,
     language,
+    modifiedContent, // Add the modifiedContent property
     inDiffMode,
     setInDiffMode
   };

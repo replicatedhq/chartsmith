@@ -228,8 +228,8 @@ export function FileTree({ files = [], charts = [] }: FileTreeProps) {
     }
 
     // Sum up counts from all patches in the array
-    let totalAdditions = 0;
-    let totalDeletions = 0;
+    const totalAdditions = 0;
+    const totalDeletions = 0;
 
     return { additions: totalAdditions, deletions: totalDeletions };
   };
@@ -266,6 +266,7 @@ export function FileTree({ files = [], charts = [] }: FileTreeProps) {
               filePath: rest.filePath,
               content: rest.content || '',
               contentPending: rest.contentPending,
+              revisionNumber: 0, // Default revision number
             });
           }
         }}

@@ -31,6 +31,7 @@ describe('workspace atoms', () => {
         revisionNumber: 1,
         createdAt: new Date(),
         charts: [sampleChart],
+        isAutorender: false,
       };
 
       const duplicateRender: RenderedWorkspace = {
@@ -39,6 +40,7 @@ describe('workspace atoms', () => {
         revisionNumber: 1, // Same revision number as existing render
         createdAt: new Date(),
         charts: [sampleChart],
+        isAutorender: false,
       };
 
       const newRevisionRender: RenderedWorkspace = {
@@ -47,6 +49,7 @@ describe('workspace atoms', () => {
         revisionNumber: 2, // Different revision number
         createdAt: new Date(),
         charts: [sampleChart],
+        isAutorender: false,
       };
 
       // Let's simplify and just test the deduplication logic directly

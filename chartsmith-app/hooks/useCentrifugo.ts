@@ -184,6 +184,7 @@ export function useCentrifugo({
           // For new files, use empty content and contentPending with the full content
           content: "",
           contentPending: "",
+          revisionNumber: 0, // Default revision number
         };
 
         // Add to both the first chart AND to the top-level files array
@@ -215,6 +216,8 @@ export function useCentrifugo({
           ...file,
           content: getFileContent(file.content, artifact),
           contentPending: "",
+          // Keep the existing revisionNumber
+          revisionNumber: file.revisionNumber
         } : file
       ) || [];
 
@@ -225,6 +228,8 @@ export function useCentrifugo({
           file.filePath === artifact.path ? {
             ...file,
             content: getFileContent(file.content, artifact),
+            // Keep the existing revisionNumber
+            revisionNumber: file.revisionNumber
           } : file
         )
       })) || [];
@@ -242,6 +247,7 @@ export function useCentrifugo({
       filePath: artifact.path,
       // For new files, set empty content
       content: artifact.content || "",
+      contentPending: artifact.contentPending,
       revisionNumber: 0,
     };
 

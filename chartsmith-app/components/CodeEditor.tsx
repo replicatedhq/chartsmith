@@ -105,12 +105,7 @@ export const CodeEditor = React.memo(function CodeEditor({
   } = useMonacoSingleInstance(
     selectedFile || null,
     editorRef,
-    monacoRef,
-    editorOptions,
-    handleContentChange,
-    theme,
-    readOnly,
-    editorContainerRef
+    monacoRef
   );
 
   // Setup editor init handler
@@ -751,7 +746,7 @@ export const CodeEditor = React.memo(function CodeEditor({
               }}
               onMount={handleDiffEditorMount}
             />
-          ) : selectedFile?.contentPending || selectedFile?.content_pending ? (
+          ) : selectedFile?.contentPending ? (
             // DiffEditor for contentPending
             <DiffEditor
               height="100%"

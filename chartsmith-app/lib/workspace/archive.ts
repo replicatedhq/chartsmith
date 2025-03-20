@@ -268,6 +268,7 @@ async function parseFilesInDirectory(extractPath: string): Promise<WorkspaceFile
           id: srs.default({ length: 12, alphanumeric: true }),
           filePath: filePath,
           content: content,
+          revisionNumber: 0, // Default revision number
         });
       } else if (entry.isDirectory()) {
         await walk(entryPath);
