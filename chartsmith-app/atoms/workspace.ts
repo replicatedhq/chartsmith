@@ -221,12 +221,6 @@ export const addFileToWorkspaceAtom = atom(
 
     // Update looseFilesBeforeApplyingPendingPatches directly
     set(looseFilesBeforeApplyingPendingPatchesAtom, prev => [...prev, newFile]);
-
-    // Update allFilesWithPendingPatches if needed
-    if (newFile.pendingPatches && newFile.pendingPatches.length > 0) {
-      // This is already a derived atom, so we don't need to update it directly
-      // It will update based on the changes to looseFilesBeforeApplyingPendingPatchesAtom
-    }
   }
 );
 
@@ -253,12 +247,6 @@ export const renderedFilesAtom = atom(get => {
   const allRenders = get(rendersAtom);
 
   if (!workspace) return [];
-
-  // Log debug info to help identify filtering
-  console.debug(
-    `Filtering ${allRenders.length} renders to only show revision ${workspace.currentRevisionNumber}. ` +
-    `Available revisions: ${[...new Set(allRenders.map(r => r.revisionNumber))].join(', ')}`
-  );
 
   // Get rendered files for the current revision
   return getRenderedFilesByRevision(workspace.currentRevisionNumber);

@@ -148,9 +148,9 @@ type RenderedChart struct {
 
 type RenderedFile struct {
 	ID              string `json:"id"`
-	RevisionNumber  int    `json:"revision_number"`
-	ChartID         string `json:"chart_id,omitempty"`
-	WorkspaceID     string `json:"workspace_id"`
+	RevisionNumber  int    `json:"-"`
+	ChartID         string `json:"-"`
+	WorkspaceID     string `json:"-"`
 	FilePath        string `json:"filePath"`
 	RenderedContent string `json:"renderedContent"`
 }

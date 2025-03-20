@@ -555,7 +555,6 @@ func renderChart(ctx context.Context, renderedChart *workspacetypes.RenderedChar
 						RenderedFile:  file,
 					}
 
-					fmt.Printf("sending render file event: %+v\n", e)
 					if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
 						return fmt.Errorf("failed to send render updated event: %w", err)
 					}
@@ -634,6 +633,7 @@ func parseRenderedFiles(ctx context.Context, stdout string, chartName string, re
 				if existing.RenderedContent != content {
 					// Content has changed, update it and add to updatedFiles
 					(*renderedFiles)[i].RenderedContent = content
+					renderedFile.ID = existing.ID
 					updatedFiles = append(updatedFiles, renderedFile)
 				}
 				break
@@ -649,8 +649,6 @@ func parseRenderedFiles(ctx context.Context, stdout string, chartName string, re
 					break
 				}
 			}
-
-			logger.Debug("new rendered file", zap.String("path", path), zap.String("id", renderedFile.ID))
 
 			*renderedFiles = append(*renderedFiles, renderedFile)
 			updatedFiles = append(updatedFiles, renderedFile)

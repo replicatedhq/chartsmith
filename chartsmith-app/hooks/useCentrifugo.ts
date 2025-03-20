@@ -385,6 +385,8 @@ export function useCentrifugo({
     const renderChartId = data.renderChartId;
     const renderedFile = data.renderedFile;
 
+    console.log('handleRenderFileEvent', data);
+
     setRenders(prev => {
       const newRenders = [...prev];
       const index = newRenders.findIndex(r => r.id === render);
