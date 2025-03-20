@@ -22,4 +22,3 @@ schema:
           notNull: true
       - name: message_data
         type: jsonb
-        constraints:
