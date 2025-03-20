@@ -29,7 +29,7 @@ func SendPatchesToWorkspace(ctx context.Context, workspaceID string, path string
 			RevisionNumber: w.CurrentRevision,
 			Path:           path,
 			Content:        currentContent,
-			PendingPatches: patchesContent,
+			ContentPending: "",
 		},
 	}
 

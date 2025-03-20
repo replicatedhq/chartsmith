@@ -116,8 +116,8 @@ func SetFileContentPending(ctx context.Context, path string, revisionNumber int,
 
 	// set the content pending
 	if fileID != "" {
-		query = `UPDATE workspace_file SET content_pending = $1 WHERE id = $2`
-		_, err = tx.Exec(ctx, query, contentPending, fileID)
+		query = `UPDATE workspace_file SET content_pending = $1 WHERE id = $2 AND revision_number = $3`
+		_, err = tx.Exec(ctx, query, contentPending, fileID, revisionNumber)
 		if err != nil {
 			return err
 		}

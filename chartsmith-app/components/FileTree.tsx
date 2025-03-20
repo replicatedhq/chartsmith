@@ -291,6 +291,8 @@ export function FileTree({ files = [], charts = [] }: FileTreeProps) {
               id: rest.id,
               filePath: rest.filePath,
               content: rest.content || '',
+              contentPending: rest.contentPending,
+              // Keep pendingPatches for backward compatibility
               pendingPatches: rest.pendingPatches
             });
           }

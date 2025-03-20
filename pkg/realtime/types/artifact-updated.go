@@ -3,10 +3,10 @@ package types
 var _ Event = ArtifactUpdatedEvent{}
 
 type Artifact struct {
-	RevisionNumber int      `json:"revisionNumber"`
-	Path           string   `json:"path"`
-	Content        string   `json:"content"`
-	PendingPatches []string `json:"pendingPatches"`
+	RevisionNumber int    `json:"revisionNumber"`
+	Path           string `json:"path"`
+	Content        string `json:"content"`
+	ContentPending string `json:"contentPending"`
 }
 
 type ArtifactUpdatedEvent struct {

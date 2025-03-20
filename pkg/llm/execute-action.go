@@ -136,8 +136,7 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 				if input.Command == "view" {
 					response = updatedContent
 				} else if input.Command == "str_replace" {
-					patchedContent := strings.ReplaceAll(updatedContent, input.OldStr, input.NewStr)
-					updatedContent = patchedContent
+					updatedContent = strings.ReplaceAll(updatedContent, input.OldStr, input.NewStr)
 					response = "Updated"
 				} else if input.Command == "create" {
 					updatedContent = input.NewStr

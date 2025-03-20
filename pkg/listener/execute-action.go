@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/replicatedhq/chartsmith/pkg/llm"
@@ -17,13 +18,68 @@ import (
 	"go.uber.org/zap"
 )
 
+var (
+	heartbeatOnce sync.Once
+	heartbeatDone chan struct{}
+)
+
 type executeActionPayload struct {
 	PlanID string `json:"planId"`
 	Path   string `json:"path"`
 }
 
+// StartHeartbeat initiates a goroutine that periodically pings database connections
+// to prevent them from becoming stale during idle periods
+func StartHeartbeat(ctx context.Context) {
+	heartbeatOnce.Do(func() {
+		// Create a buffered channel to avoid leaking goroutines
+		heartbeatDone = make(chan struct{})
+
+		go func() {
+			ticker := time.NewTicker(30 * time.Second)
+			defer ticker.Stop()
+
+			for {
+				select {
+				case <-ticker.C:
+					// Perform health check
+					if err := ensureActiveConnection(ctx); err != nil {
+						logger.Warn("Connection heartbeat check failed", zap.Error(err))
+					} else {
+						logger.Debug("Connection heartbeat: OK")
+					}
+
+					// Also check if the realtime system is functioning
+					if err := realtime.Ping(ctx); err != nil {
+						logger.Warn("Realtime system heartbeat check failed", zap.Error(err))
+					} else {
+						logger.Debug("Realtime system heartbeat: OK")
+					}
+
+				case <-ctx.Done():
+					logger.Info("Stopping connection heartbeat due to context cancellation")
+					close(heartbeatDone)
+					return
+
+				case <-heartbeatDone:
+					logger.Info("Stopping connection heartbeat")
+					return
+				}
+			}
+		}()
+
+		logger.Info("Started connection heartbeat")
+	})
+}
+
 func handleExecuteActionNotification(ctx context.Context, payload string) error {
 	logger.Info("New execute action notification received", zap.String("payload", payload))
+
+	// Verify connection is active before proceeding
+	if err := ensureActiveConnection(ctx); err != nil {
+		logger.Error(fmt.Errorf("connection check failed before processing action notification: %w", err))
+		// Continue anyway, we'll use a fresh connection below
+	}
 
 	conn := persistence.MustGeUunpooledPostgresSession()
 	defer conn.Close(ctx)
@@ -98,20 +154,12 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 		return fmt.Errorf("failed to update plan: %w", err)
 	}
 
-	logger.Info("Committing transaction",
-		zap.String("path", p.Path),
-		zap.String("planId", p.PlanID))
-
 	if err := tx.Commit(ctx); err != nil {
 		logger.Error(fmt.Errorf("failed to commit transaction: %w", err),
 			zap.String("path", p.Path),
 			zap.String("planId", p.PlanID))
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
-
-	logger.Info("Transaction committed successfully, closing connection",
-		zap.String("path", p.Path),
-		zap.String("planId", p.PlanID))
 
 	conn.Close(ctx)
 
