@@ -28,7 +28,7 @@ schema:
       type: text
       constraints:
         notNull: true
-    - name: pending_patches
-      type: text[]
+    - name: content_pending
+      type: text
     - name: embeddings
       type: vector (1024)

@@ -13,9 +13,10 @@ export interface Workspace {
 
 export interface WorkspaceFile {
   id: string;
-  filePath: string;  // Required - files without paths are filtered out
-  content: string;   // Required but may be empty string
-  pendingPatches?: string[];
+  revisionNumber: number;
+  filePath: string;
+  content: string;
+  contentPending?: string;
 }
 
 export interface Chart {

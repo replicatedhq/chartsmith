@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 	"github.com/replicatedhq/chartsmith/pkg/workspace/types"
 )
@@ -227,7 +226,7 @@ func listFilesForChart(ctx context.Context, chartID string, revisionNumber int) 
 		workspace_id,
 		file_path,
 		content,
-		pending_patches
+		content_pending
 	FROM
 		workspace_file
 	WHERE
@@ -245,7 +244,7 @@ func listFilesForChart(ctx context.Context, chartID string, revisionNumber int) 
 	for rows.Next() {
 		var file types.File
 		var chartID sql.NullString
-		var pendingPatches pgtype.Array[string]
+		var contentPending sql.NullString
 
 		err := rows.Scan(
 			&file.ID,
@@ -254,17 +253,17 @@ func listFilesForChart(ctx context.Context, chartID string, revisionNumber int) 
 			&file.WorkspaceID,
 			&file.FilePath,
 			&file.Content,
-			&pendingPatches,
+			&contentPending,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("error scanning file: %w", err)
 		}
 
 		file.ChartID = chartID.String
-		if pendingPatches.Valid {
-			file.PendingPatches = pendingPatches.Elements
+		if contentPending.Valid {
+			file.ContentPending = &contentPending.String
 		} else {
-			file.PendingPatches = []string{}
+			file.ContentPending = nil
 		}
 		files = append(files, file)
 	}
@@ -284,7 +283,7 @@ func listFilesWithoutChartsForWorkspace(ctx context.Context, workspaceID string,
 		workspace_id,
 		file_path,
 		content,
-		pending_patches
+		content_pending
 	FROM
 		workspace_file
 	WHERE
@@ -303,7 +302,7 @@ func listFilesWithoutChartsForWorkspace(ctx context.Context, workspaceID string,
 	for rows.Next() {
 		var file types.File
 		var chartID sql.NullString
-		var pendingPatches pgtype.Array[string]
+		var contentPending sql.NullString
 
 		err := rows.Scan(
 			&file.ID,
@@ -312,16 +311,14 @@ func listFilesWithoutChartsForWorkspace(ctx context.Context, workspaceID string,
 			&file.WorkspaceID,
 			&file.FilePath,
 			&file.Content,
-			&pendingPatches,
+			&contentPending,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("error scanning file: %w", err)
 		}
 		file.ChartID = chartID.String
-		if pendingPatches.Valid {
-			file.PendingPatches = pendingPatches.Elements
-		} else {
-			file.PendingPatches = []string{}
+		if contentPending.Valid {
+			file.ContentPending = &contentPending.String
 		}
 		files = append(files, file)
 	}

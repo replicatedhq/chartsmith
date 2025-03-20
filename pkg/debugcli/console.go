@@ -19,7 +19,6 @@ import (
 	"github.com/replicatedhq/chartsmith/pkg/llm"
 	llmtypes "github.com/replicatedhq/chartsmith/pkg/llm/types"
 	"github.com/replicatedhq/chartsmith/pkg/logger"
-	"github.com/replicatedhq/chartsmith/pkg/realtime"
 	"github.com/replicatedhq/chartsmith/pkg/workspace"
 	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 )
@@ -840,16 +839,6 @@ func (c *DebugConsole) generatePatch(args []string) error {
 			fmt.Printf("  Saved to: %s\n", patchFile)
 		}
 
-		updatedFile, err := workspace.AddPendingPatch(c.ctx, c.activeWorkspace.ID, c.activeWorkspace.CurrentRevision, c.activeWorkspace.Charts[0].ID, filePath, patchContent)
-		if err != nil {
-			return errors.Wrapf(err, "failed to create or patch file: %s", filePath)
-		}
-
-		if updatedFile != nil {
-			if err := realtime.SendPatchesToWorkspace(c.ctx, c.activeWorkspace.ID, filePath, content, updatedFile.PendingPatches); err != nil {
-				return errors.Wrapf(err, "failed to send patch to realtime server: %s", filePath)
-			}
-		}
 	}
 
 	return nil
@@ -1374,7 +1363,7 @@ func (c *DebugConsole) executePlan(args []string) error {
 	doneCh := make(chan error)
 
 	go func() {
-		_, err := llm.ExecuteAction(c.ctx, actionPlanWithPath, plan, currentContent, patchStreamCh)
+		_, err := llm.ExecuteAction(c.ctx, actionPlanWithPath, plan, currentContent)
 		if err != nil {
 			fmt.Println(dimText(fmt.Sprintf("Error: %v", err)))
 		}

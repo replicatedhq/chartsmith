@@ -5,13 +5,13 @@ import (
 )
 
 type File struct {
-	ID             string   `json:"id"`
-	RevisionNumber int      `json:"revision_number"`
-	ChartID        string   `json:"chart_id,omitempty"`
-	WorkspaceID    string   `json:"workspace_id"`
-	FilePath       string   `json:"filePath"`
-	Content        string   `json:"content"`
-	PendingPatches []string `json:"pending_patches"`
+	ID             string  `json:"id"`
+	RevisionNumber int     `json:"revision_number"`
+	ChartID        string  `json:"chart_id,omitempty"`
+	WorkspaceID    string  `json:"workspace_id"`
+	FilePath       string  `json:"filePath"`
+	Content        string  `json:"content"`
+	ContentPending *string `json:"content_pending,omitempty"`
 }
 
 type Chart struct {

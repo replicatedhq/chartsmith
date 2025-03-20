@@ -13,6 +13,7 @@ export function DebugPanel({ isVisible }: DebugPanelProps) {
 
   if (!isVisible) return null;
 
+  console.log("selectedFile", selectedFile);
   return (
     <div
       className={`fixed right-0 top-0 bottom-0 w-1/4 border-l shadow-lg overflow-auto z-10 ${
@@ -24,20 +25,30 @@ export function DebugPanel({ isVisible }: DebugPanelProps) {
       <div className="p-4">
         <h2 className="text-lg font-semibold mb-4">Debug Panel</h2>
 
-        {selectedFile?.pendingPatches && selectedFile.pendingPatches.length > 0 ? (
-          <div>
-            <div className="mb-2 flex items-center">
-              <h3 className="text-md font-medium">
-                Pending Patches ({selectedFile.pendingPatches.length})
-              </h3>
-              <span className="ml-2 text-xs opacity-70 font-mono">
-                ({selectedFile.filePath?.split('/').pop()})
-              </span>
+        {selectedFile && (
+          <>
+            {/* File metadata */}
+            <div className="mb-4 p-3 rounded text-xs font-mono border border-gray-200 dark:border-dark-border">
+              <div className="grid grid-cols-2 gap-x-2 gap-y-1">
+                <div className="font-semibold text-gray-500 dark:text-gray-400">ID:</div>
+                <div>{selectedFile.id || 'N/A'}</div>
+                <div className="font-semibold text-gray-500 dark:text-gray-400">Revision:</div>
+                <div>{selectedFile.revisionNumber !== undefined ? selectedFile.revisionNumber : 'N/A'}</div>
+                <div className="font-semibold text-gray-500 dark:text-gray-400">Chart ID:</div>
+                <div className="font-semibold text-gray-500 dark:text-gray-400">Path:</div>
+                <div className="break-all">{selectedFile.filePath || 'N/A'}</div>
+              </div>
             </div>
-            {selectedFile.pendingPatches.map((patch, index) => (
-              <div key={index} className="mb-4">
-                <div className="text-xs font-medium mb-1 px-1 py-0.5 inline-block rounded bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200">
-                  Patch #{index + 1}
+
+            {(selectedFile.contentPending) && (
+              <div className="mb-6">
+                <div className="mb-2 flex items-center">
+                  <h3 className="text-md font-medium">
+                    Pending Content
+                  </h3>
+                  <span className="ml-2 text-xs opacity-70 font-mono">
+                    ({selectedFile.filePath?.split('/').pop()})
+                  </span>
                 </div>
                 <pre
                   className={`p-3 rounded text-xs font-mono overflow-auto max-h-[calc(100vh-250px)] whitespace-pre ${
@@ -46,14 +57,17 @@ export function DebugPanel({ isVisible }: DebugPanelProps) {
                       : "bg-gray-100"
                   }`}
                 >
-                  {patch}
+                  {selectedFile.contentPending}
                 </pre>
               </div>
-            ))}
-          </div>
-        ) : (
+            )}
+
+          </>
+        )}
+
+        {!selectedFile && (
           <p className="text-sm opacity-70">
-            No pending patches for the selected file.
+            Select a file to view pending changes.
           </p>
         )}
       </div>

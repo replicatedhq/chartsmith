@@ -85,6 +85,63 @@ func storeEventForReplay(ctx context.Context, r types.Recipient, e types.Event, 
 	return nil
 }
 
+// Ping checks if the realtime system is functioning by making a lightweight API call
+func Ping(ctx context.Context) error {
+	// Check if database connection is active for realtime events
+	conn := persistence.MustGetPooledPostgresSession()
+	defer conn.Release()
+	
+	// Simple query to check database connectivity
+	var count int
+	err := conn.QueryRow(ctx, "SELECT COUNT(*) FROM realtime_replay LIMIT 1").Scan(&count)
+	if err != nil {
+		return fmt.Errorf("realtime database check failed: %w", err)
+	}
+	
+	// Check Centrifugo connectivity with a ping request
+	if centrifugoConfig == nil {
+		return fmt.Errorf("centrifugo config not initialized")
+	}
+	
+	// Make a simple info request to centrifugo
+	url := centrifugoConfig.Address
+	apiKey := centrifugoConfig.APIKey
+	
+	requestBody := map[string]interface{}{
+		"method": "info",
+	}
+	
+	jsonData, err := json.Marshal(requestBody)
+	if err != nil {
+		return fmt.Errorf("error encoding ping JSON: %w", err)
+	}
+	
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return fmt.Errorf("error creating ping request: %w", err)
+	}
+	
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "apikey "+apiKey)
+	
+	// Use a client with a timeout
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+	}
+	
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("error sending ping to Centrifugo server: %w", err)
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("centrifugo ping failed with status code: %d", resp.StatusCode)
+	}
+	
+	return nil
+}
+
 func sendMessage(channelName string, data map[string]interface{}) error {
 	if centrifugoConfig == nil {
 		panic("Centrifugo config not initialized")

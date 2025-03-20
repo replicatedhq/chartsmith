@@ -721,9 +721,10 @@ export const CodeEditor = React.memo(function CodeEditor({
   // Create a stable key for editor rendering
   const editorKey = selectedFile?.id || 'none';
   const hasPendingPatches = selectedFile?.pendingPatches && selectedFile.pendingPatches.length > 0;
+  const hasContentPending = selectedFile?.contentPending || selectedFile?.content_pending;
 
   // Generate a unique key for the editor to force re-creation when needed
-  const editorStateKey = `${editorKey}-${hasPendingPatches ? 'diff' : 'normal'}-${Date.now()}`;
+  const editorStateKey = `${editorKey}-${(hasPendingPatches || hasContentPending) ? 'diff' : 'normal'}-${Date.now()}`;
 
   // Let's try a more conventional approach but with optimizations
   return (
@@ -735,12 +736,30 @@ export const CodeEditor = React.memo(function CodeEditor({
         {/* Using a stable key pattern for the outer container */}
         <div key={editorStateKey} className="h-full">
           {selectedFile?.pendingPatches && selectedFile.pendingPatches.length > 0 ? (
-            // Import DiffEditor dynamically
+            // Import DiffEditor dynamically for pendingPatches
             <DiffEditor
               height="100%"
               language={language}
               original={original}
               modified={modifiedContent}
+              loading={null} // Disable the loading message
+              theme={theme === "light" ? "vs" : "vs-dark"}
+              options={{
+                ...editorOptions,
+                renderSideBySide: false,
+                originalEditable: false,
+                diffCodeLens: false,
+                readOnly: true
+              }}
+              onMount={handleDiffEditorMount}
+            />
+          ) : selectedFile?.contentPending || selectedFile?.content_pending ? (
+            // DiffEditor for contentPending
+            <DiffEditor
+              height="100%"
+              language={language}
+              original={selectedFile.content}
+              modified={selectedFile.contentPending || selectedFile.content_pending}
               loading={null} // Disable the loading message
               theme={theme === "light" ? "vs" : "vs-dark"}
               options={{

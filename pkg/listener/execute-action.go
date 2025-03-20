@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
+	"sync"
 	"time"
 
 	"github.com/replicatedhq/chartsmith/pkg/llm"
@@ -18,13 +18,68 @@ import (
 	"go.uber.org/zap"
 )
 
+var (
+	heartbeatOnce sync.Once
+	heartbeatDone chan struct{}
+)
+
 type executeActionPayload struct {
 	PlanID string `json:"planId"`
 	Path   string `json:"path"`
 }
 
+// StartHeartbeat initiates a goroutine that periodically pings database connections
+// to prevent them from becoming stale during idle periods
+func StartHeartbeat(ctx context.Context) {
+	heartbeatOnce.Do(func() {
+		// Create a buffered channel to avoid leaking goroutines
+		heartbeatDone = make(chan struct{})
+
+		go func() {
+			ticker := time.NewTicker(30 * time.Second)
+			defer ticker.Stop()
+
+			for {
+				select {
+				case <-ticker.C:
+					// Perform health check
+					if err := ensureActiveConnection(ctx); err != nil {
+						logger.Warn("Connection heartbeat check failed", zap.Error(err))
+					} else {
+						logger.Debug("Connection heartbeat: OK")
+					}
+
+					// Also check if the realtime system is functioning
+					if err := realtime.Ping(ctx); err != nil {
+						logger.Warn("Realtime system heartbeat check failed", zap.Error(err))
+					} else {
+						logger.Debug("Realtime system heartbeat: OK")
+					}
+
+				case <-ctx.Done():
+					logger.Info("Stopping connection heartbeat due to context cancellation")
+					close(heartbeatDone)
+					return
+
+				case <-heartbeatDone:
+					logger.Info("Stopping connection heartbeat")
+					return
+				}
+			}
+		}()
+
+		logger.Info("Started connection heartbeat")
+	})
+}
+
 func handleExecuteActionNotification(ctx context.Context, payload string) error {
 	logger.Info("New execute action notification received", zap.String("payload", payload))
+
+	// Verify connection is active before proceeding
+	if err := ensureActiveConnection(ctx); err != nil {
+		logger.Error(fmt.Errorf("connection check failed before processing action notification: %w", err))
+		// Continue anyway, we'll use a fresh connection below
+	}
 
 	conn := persistence.MustGeUunpooledPostgresSession()
 	defer conn.Close(ctx)
@@ -99,20 +154,12 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 		return fmt.Errorf("failed to update plan: %w", err)
 	}
 
-	logger.Info("Committing transaction",
-		zap.String("path", p.Path),
-		zap.String("planId", p.PlanID))
-
 	if err := tx.Commit(ctx); err != nil {
 		logger.Error(fmt.Errorf("failed to commit transaction: %w", err),
 			zap.String("path", p.Path),
 			zap.String("planId", p.PlanID))
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
-
-	logger.Info("Transaction committed successfully, closing connection",
-		zap.String("path", p.Path),
-		zap.String("planId", p.PlanID))
 
 	conn.Close(ctx)
 
@@ -153,7 +200,6 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 		}
 	}
 
-	patchCh := make(chan string)
 	finalContentCh := make(chan string)
 	errCh := make(chan error)
 
@@ -176,7 +222,7 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 			Path: p.Path,
 		}
 
-		finalContent, err := llm.ExecuteAction(ctx, apwp, plan, currentContent, patchCh)
+		finalContent, err := llm.ExecuteAction(ctx, apwp, plan, currentContent)
 		if err != nil {
 			logger.Error(fmt.Errorf("failed to execute action: %w", err),
 				zap.String("path", p.Path),
@@ -184,11 +230,6 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 			errCh <- fmt.Errorf("failed to execute action: %w", err)
 			return
 		}
-
-		logger.Info("Action execution successful",
-			zap.String("path", p.Path),
-			zap.String("planId", p.PlanID),
-			zap.String("contentLength", fmt.Sprintf("%d", len(finalContent))))
 
 		finalContentCh <- finalContent
 		errCh <- nil
@@ -225,31 +266,15 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 				return err
 			}
 			return nil
-
-		case patchContent := <-patchCh:
-			if strings.TrimSpace(patchContent) == "" {
-				continue
-			}
-
-			updatedFile, err := workspace.AddPendingPatch(ctx, updatedPlan.WorkspaceID, w.CurrentRevision, c.ID, p.Path, patchContent)
-			if err != nil {
-				return fmt.Errorf("failed to create or patch file: %w", err)
-			}
-
-			if updatedFile != nil {
-				if err := realtime.SendPatchesToWorkspace(ctx, updatedPlan.WorkspaceID, p.Path, currentContent, updatedFile.PendingPatches); err != nil {
-					return fmt.Errorf("failed to send artifact update: %w", err)
-				}
-			}
-
-			if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
-				return fmt.Errorf("failed to send artifact update: %w", err)
-			}
 		}
 	}
 }
 
 func finalizeFile(ctx context.Context, finalContent string, updatedPlan *workspacetypes.Plan, p executeActionPayload, w *workspacetypes.Workspace, c workspacetypes.Chart, realtimeRecipient realtimetypes.Recipient) error {
+	if err := workspace.SetFileContentPending(ctx, p.Path, w.CurrentRevision, c.ID, w.ID, finalContent); err != nil {
+		return fmt.Errorf("failed to set file content pending: %w", err)
+	}
+
 	// update the action file to completed
 	conn := persistence.MustGeUunpooledPostgresSession()
 	defer conn.Close(ctx)

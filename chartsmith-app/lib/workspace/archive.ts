@@ -137,7 +137,7 @@ async function downloadChartFilesFromArtifactHub(url: string): Promise<Workspace
     // First check if we have the chart in our local database
     const { getArtifactHubChart } = await import('@/lib/artifacthub/artifacthub');
     const chart = await getArtifactHubChart(org, name);
-    
+
     if (chart && chart.content_url) {
       console.log(`Using cached chart from local database: ${org}/${name} v${chart.version}`);
       // We found the chart in our local database
@@ -156,14 +156,14 @@ async function downloadChartFilesFromArtifactHub(url: string): Promise<Workspace
     if (!packageInfo.ok) {
       throw new Error(`Failed to fetch package info: ${packageInfo.status} ${packageInfo.statusText}`);
     }
-    
+
     const packageInfoJson = await packageInfo.json();
     const contentURL = packageInfoJson.content_url;
-    
+
     if (!contentURL) {
       throw new Error("Content URL not found in package info");
     }
-    
+
     const extractPath = await downloadChartArchiveFromURL(contentURL);
     await removeBinaryFilesInPath(extractPath);
     return filesInArchive(extractPath);
@@ -175,7 +175,6 @@ async function downloadChartFilesFromArtifactHub(url: string): Promise<Workspace
 
 async function filesInArchive(extractPath: string): Promise<WorkspaceFile[]> {
   const files = await parseFilesInDirectory(extractPath);
-  const filePaths = files.map(file => file.filePath);
   const commonPrefix = await findCommonPrefix(files);
 
   const filesWithoutCommonPrefix = files.map(file => ({
