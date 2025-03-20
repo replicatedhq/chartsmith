@@ -104,28 +104,28 @@ export const chartsAtom = atom(get => {
   return workspace.charts
 })
 
-export const chartsBeforeApplyingPendingPatchesAtom = atom<Chart[]>([])
-export const looseFilesBeforeApplyingPendingPatchesAtom = atom<WorkspaceFile[]>([])
+export const chartsBeforeApplyingContentPendingAtom = atom<Chart[]>([])
+export const looseFilesBeforeApplyingContentPendingAtom = atom<WorkspaceFile[]>([])
 
-export const allFilesBeforeApplyingPendingPatchesAtom = atom(get => {
-  const charts = get(chartsBeforeApplyingPendingPatchesAtom)
-  const chartFilesBeforeApplyingPendingPatches = charts.flatMap(c => c.files.filter(f => f.pendingPatches && f.pendingPatches.length > 0))
-  const looseFilesBeforeApplyingPendingPatches = get(looseFilesBeforeApplyingPendingPatchesAtom)
-  return [...chartFilesBeforeApplyingPendingPatches, ...looseFilesBeforeApplyingPendingPatches]
+export const allFilesBeforeApplyingContentPendingAtom = atom(get => {
+  const charts = get(chartsBeforeApplyingContentPendingAtom)
+  const chartFilesBeforeApplyingContentPending = charts.flatMap(c => c.files.filter(f => f.contentPending && f.contentPending.length > 0))
+  const looseFilesBeforeApplyingContentPending = get(looseFilesBeforeApplyingContentPendingAtom)
+  return [...chartFilesBeforeApplyingContentPending, ...looseFilesBeforeApplyingContentPending]
 })
 
-export const allFilesWithPendingPatchesAtom = atom(get => {
+export const allFilesWithContentPendingAtom = atom(get => {
   const files = get(looseFilesAtom)
-  const filesWithPendingPatches = files.filter(f => f.pendingPatches && f.pendingPatches.length > 0)
+  const filesWithContentPending = files.filter(f => f.contentPending && f.contentPending.length > 0)
 
   // find files in charts with pending patches too
   const charts = get(chartsAtom)
-  const chartsWithPendingPatches = charts.filter(c => c.files.some(f => f.pendingPatches && f.pendingPatches.length > 0))
+  const chartsWithContentPending = charts.filter(c => c.files.some(f => f.contentPending && f.contentPending.length > 0))
   // get the files with pending patches from each of the charts with pending patches
-  const filesWithPendingPatchesFromCharts = chartsWithPendingPatches.flatMap(c =>
-    c.files.filter(f => f.pendingPatches && f.pendingPatches.length > 0))
+  const filesWithContentPendingFromCharts = chartsWithContentPending.flatMap(c =>
+    c.files.filter(f => f.contentPending && f.contentPending.length > 0))
 
-  return [...filesWithPendingPatches, ...filesWithPendingPatchesFromCharts]
+  return [...filesWithContentPending, ...filesWithContentPendingFromCharts]
 })
 
 // Handle plan updated, will update the plan if its found, otherwise it will add it to the list
@@ -204,11 +204,11 @@ function determineConversionStatus(currentStatus: ConversionStatus, status: stri
 }
 
 // Create a writable version of the atoms we need to update
-export const allFilesBeforeApplyingPendingPatchesWritableAtom = atom(
-  get => get(allFilesBeforeApplyingPendingPatchesAtom),
+export const allFilesBeforeApplyingContentPendingWritableAtom = atom(
+  get => get(allFilesBeforeApplyingContentPendingAtom),
   (get, set, newFiles: WorkspaceFile[]) => {
     // This is a writable version that we can use
-    set(looseFilesBeforeApplyingPendingPatchesAtom, newFiles);
+    set(looseFilesBeforeApplyingContentPendingAtom, newFiles);
     // Note: We would need to update charts too if needed
   }
 );
@@ -219,8 +219,8 @@ export const addFileToWorkspaceAtom = atom(
     const workspace = get(workspaceAtom);
     if (!workspace) return;
 
-    // Update looseFilesBeforeApplyingPendingPatches directly
-    set(looseFilesBeforeApplyingPendingPatchesAtom, prev => [...prev, newFile]);
+    // Update looseFilesBeforeApplyingContentPending directly
+    set(looseFilesBeforeApplyingContentPendingAtom, prev => [...prev, newFile]);
   }
 );
 

@@ -19,11 +19,11 @@ import (
 )
 
 type renderWorkspacePayload struct {
-	ID                    string `json:"id"`
-	WorkspaceID           string `json:"workspaceId"`
-	RevisionNumber        int    `json:"revisionNumber"`
-	ChatMessageID         string `json:"chatMessageId"`
-	IncludePendingPatches *bool  `json:"includePendingPatches"`
+	ID                string `json:"id"`
+	WorkspaceID       string `json:"workspaceId"`
+	RevisionNumber    int    `json:"revisionNumber"`
+	ChatMessageID     string `json:"chatMessageId"`
+	UsePendingContent *bool  `json:"usePendingContent"`
 }
 
 // ensureActiveConnection performs a lightweight operation to ensure database connection is alive
@@ -165,9 +165,9 @@ func handleRenderWorkspaceNotification(ctx context.Context, payload string) erro
 		go func(chart workspacetypes.RenderedChart) {
 			defer wg.Done()
 
-			includePendingPatches := p.IncludePendingPatches != nil && *p.IncludePendingPatches
+			usePendingContent := p.UsePendingContent != nil && *p.UsePendingContent
 
-			if err := renderChart(ctx, &chart, renderedWorkspace, w, includePendingPatches); err != nil {
+			if err := renderChart(ctx, &chart, renderedWorkspace, w, usePendingContent); err != nil {
 				logger.Error(err)
 				errorChan <- err
 			}
@@ -261,14 +261,14 @@ func handleRenderWorkspaceNotification(ctx context.Context, payload string) erro
 	return nil
 }
 
-func renderChart(ctx context.Context, renderedChart *workspacetypes.RenderedChart, renderedWorkspace *workspacetypes.Rendered, w *workspacetypes.Workspace, includePendingPatches bool) error {
+func renderChart(ctx context.Context, renderedChart *workspacetypes.RenderedChart, renderedWorkspace *workspacetypes.Rendered, w *workspacetypes.Workspace, usePendingContent bool) error {
 	startTime := time.Now()
 
 	logger.Info("Starting chart render",
 		zap.String("chartID", renderedChart.ChartID),
 		zap.String("workspaceID", renderedWorkspace.WorkspaceID),
 		zap.Time("startTime", startTime),
-		zap.Bool("includePendingPatches", includePendingPatches))
+		zap.Bool("usePendingContent", usePendingContent))
 
 	var chart *workspacetypes.Chart
 	for _, c := range w.Charts {
@@ -341,7 +341,7 @@ func renderChart(ctx context.Context, renderedChart *workspacetypes.RenderedChar
 	}
 
 	done := make(chan error)
-	go func(includePendingPatches bool) {
+	go func(usePendingContent bool) {
 		files := chart.Files
 
 		err := helmutils.RenderChartExec(files, "", renderChannels)
@@ -351,7 +351,7 @@ func renderChart(ctx context.Context, renderedChart *workspacetypes.RenderedChar
 		}
 
 		done <- nil
-	}(includePendingPatches)
+	}(usePendingContent)
 
 	// Create a new context just for database operations
 	filesCtx, filesCancel := context.WithTimeout(ctx, 30*time.Second)

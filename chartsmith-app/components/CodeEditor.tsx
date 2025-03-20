@@ -6,7 +6,7 @@ import { Check, X, ChevronUp, ChevronDown } from "lucide-react";
 
 // atoms
 import { selectedFileAtom, currentDiffIndexAtom, updateCurrentDiffIndexAtom, updateFileContentAtom } from "@/atoms/workspace";
-import { allFilesBeforeApplyingPendingPatchesAtom, allFilesWithPendingPatchesAtom, workspaceAtom, addFileToWorkspaceAtom } from "@/atoms/workspace";
+import { allFilesBeforeApplyingContentPendingAtom, allFilesWithContentPendingAtom, workspaceAtom, addFileToWorkspaceAtom } from "@/atoms/workspace";
 
 // types
 import type { editor } from "monaco-editor";
@@ -50,8 +50,7 @@ export const CodeEditor = React.memo(function CodeEditor({
   const editorRef = useRef<editor.IStandaloneCodeEditor>(null as unknown as editor.IStandaloneCodeEditor);
   const monacoRef = useRef<typeof import("monaco-editor")>(null as unknown as typeof import("monaco-editor"));
 
-  const [allFilesWithPendingPatches] = useAtom(allFilesWithPendingPatchesAtom);
-  const [allFilesBeforeApplyingPendingPatches] = useAtom(allFilesBeforeApplyingPendingPatchesAtom);
+  const [allFilesWithContentPending] = useAtom(allFilesWithContentPendingAtom);
 
   const [acceptDropdownOpen, setAcceptDropdownOpen] = useState(false);
   const [rejectDropdownOpen, setRejectDropdownOpen] = useState(false);
@@ -137,8 +136,8 @@ export const CodeEditor = React.memo(function CodeEditor({
   useEffect(() => {
     // Just update diff index - don't manually clear editor reference
     // This prevents the TextModel disposed error by letting React handle component lifecycle
-    updateCurrentDiffIndex(allFilesWithPendingPatches);
-  }, [selectedFile, allFilesWithPendingPatches, updateCurrentDiffIndex]);
+    updateCurrentDiffIndex(allFilesWithContentPending);
+  }, [selectedFile, allFilesWithContentPending, updateCurrentDiffIndex]);
 
   // Handle outside clicks for dropdowns
   useEffect(() => {
@@ -161,10 +160,10 @@ export const CodeEditor = React.memo(function CodeEditor({
     return null;
   }
 
-  const showDiffHeader = allFilesWithPendingPatches.length > 0;
+  const showDiffHeader = allFilesWithContentPending.length > 0;
 
   const handleAcceptThisFile = async () => {
-    if (selectedFile?.pendingPatches && selectedFile.pendingPatches.length > 0) {
+    if (selectedFile?.contentPending && selectedFile.contentPending.length > 0) {
       try {
         // Get the modified content from our pre-computed value and store it locally
         // This ensures we have the value even if the editor is disposed during state updates
@@ -183,7 +182,7 @@ export const CodeEditor = React.memo(function CodeEditor({
           const updatedFile = {
             ...selectedFile,
             content: updatedContent,
-            pendingPatches: undefined
+            contentPending: undefined
           };
 
           // Update workspace state first, editor state will follow
@@ -239,7 +238,7 @@ export const CodeEditor = React.memo(function CodeEditor({
             const updatedFile = {
               ...selectedFile,
               content: updatedContent,
-              pendingPatches: undefined
+              contentPending: undefined
             };
 
             // Update workspace state first
@@ -271,7 +270,7 @@ export const CodeEditor = React.memo(function CodeEditor({
         try {
           const updatedFile = {
             ...selectedFile,
-            pendingPatches: undefined
+            contentPending: undefined
           };
 
           // Update workspace state first
@@ -350,7 +349,7 @@ export const CodeEditor = React.memo(function CodeEditor({
   };
 
   const handleRejectThisFile = async () => {
-    if (selectedFile?.pendingPatches && selectedFile.pendingPatches.length > 0) {
+    if (selectedFile?.contentPending && selectedFile.contentPending.length > 0) {
       try {
         // First, immediately close the dropdown to prevent double-clicks
         setRejectDropdownOpen(false);
@@ -360,10 +359,10 @@ export const CodeEditor = React.memo(function CodeEditor({
 
         // Now handle the actual rejection logic
         if (selectedFile.id.startsWith('file-')) {
-          // For temporary IDs, just clear the pendingPatches client-side
+          // For temporary IDs, just clear the contentPending client-side
           const updatedFile = {
             ...selectedFile,
-            pendingPatches: undefined
+            contentPending: undefined
           };
 
           // Update workspace state first
@@ -390,10 +389,10 @@ export const CodeEditor = React.memo(function CodeEditor({
           // For permanent IDs, use the server action
           await rejectPatchAction(session, selectedFile.id, workspace.currentRevisionNumber);
 
-          // Create updated file with pendingPatches cleared for UI update
+          // Create updated file with contentPending cleared for UI update
           const updatedFile = {
             ...selectedFile,
-            pendingPatches: undefined
+            contentPending: undefined
           };
 
           // Update workspace state first
@@ -422,10 +421,10 @@ export const CodeEditor = React.memo(function CodeEditor({
 
         // Fall back to client-side rejection for any errors
         try {
-          // Create updated file with pendingPatches cleared
+          // Create updated file with contentPending cleared
           const updatedFile = {
             ...selectedFile,
-            pendingPatches: undefined
+            contentPending: undefined
           };
 
           // Update workspace state first
@@ -472,13 +471,13 @@ export const CodeEditor = React.memo(function CodeEditor({
           ...workspace,
           files: workspace.files.map(f => ({
             ...f,
-            pendingPatches: undefined
+            contentPending: undefined
           })),
           charts: workspace.charts.map(chart => ({
             ...chart,
             files: chart.files.map(f => ({
               ...f,
-              pendingPatches: undefined
+              contentPending: undefined
             }))
           }))
         };
@@ -487,11 +486,11 @@ export const CodeEditor = React.memo(function CodeEditor({
         setWorkspace(updatedWorkspace);
 
         // Then update editor state if needed
-        if (selectedFile?.pendingPatches && selectedFile.pendingPatches.length > 0) {
+        if (selectedFile?.contentPending && selectedFile.contentPending.length > 0) {
           setTimeout(() => {
             updateFileContent({
               ...selectedFile,
-              pendingPatches: undefined
+              contentPending: undefined
             });
           }, 10);
         }
@@ -502,28 +501,28 @@ export const CodeEditor = React.memo(function CodeEditor({
   };
 
   const handlePrevDiff = () => {
-    if (allFilesWithPendingPatches.length === 0) return;
+    if (allFilesWithContentPending.length === 0) return;
 
     const newIndex = currentDiffIndex <= 0
-      ? allFilesWithPendingPatches.length - 1
+      ? allFilesWithContentPending.length - 1
       : currentDiffIndex - 1;
 
     setCurrentDiffIndex(newIndex);
-    setSelectedFile(allFilesWithPendingPatches[newIndex]);
+    setSelectedFile(allFilesWithContentPending[newIndex]);
   };
 
   const handleNextDiff = () => {
-    if (allFilesWithPendingPatches.length === 0) return;
+    if (allFilesWithContentPending.length === 0) return;
 
-    const newIndex = currentDiffIndex >= allFilesWithPendingPatches.length - 1
+    const newIndex = currentDiffIndex >= allFilesWithContentPending.length - 1
       ? 0
       : currentDiffIndex + 1;
 
     setCurrentDiffIndex(newIndex);
-    setSelectedFile(allFilesWithPendingPatches[newIndex]);
+    setSelectedFile(allFilesWithContentPending[newIndex]);
   };
 
-  const currentFileNumber = allFilesWithPendingPatches.length > 0 ? currentDiffIndex + 1 : 0;
+  const currentFileNumber = allFilesWithContentPending.length > 0 ? currentDiffIndex + 1 : 0;
 
   const renderDiffHeader = () => (
     <div className={`flex items-center justify-end gap-2 p-2 border-b min-h-[36px] pr-4 ${theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"} sticky top-0 z-20`}>
@@ -532,7 +531,7 @@ export const CodeEditor = React.memo(function CodeEditor({
           <span className={`text-xs font-mono ${
             theme === "dark" ? "text-gray-400" : "text-gray-500"
           }`}>
-            Showing {currentFileNumber}/{allFilesWithPendingPatches.length} files with diffs
+            Showing {currentFileNumber}/{allFilesWithContentPending.length} files with diffs
           </span>
           <div className={`flex rounded overflow-hidden border ${theme === "dark" ? "border-dark-border" : "border-gray-200"}`}>
             <button
@@ -558,7 +557,7 @@ export const CodeEditor = React.memo(function CodeEditor({
           </div>
         </div>
 
-        {allFilesWithPendingPatches.length > 0 && selectedFile?.pendingPatches && selectedFile.pendingPatches.length > 0 && (
+        {allFilesWithContentPending.length > 0 && selectedFile?.contentPending && selectedFile.contentPending.length > 0 && (
           <div className="flex items-center gap-2">
             <div ref={acceptButtonRef} className="relative">
               <div className="flex">
@@ -608,7 +607,7 @@ export const CodeEditor = React.memo(function CodeEditor({
                     >
                       <div className="flex items-center">
                         <span className="font-medium">All files</span>
-                        <span className="ml-2 text-xs opacity-70">({allFilesWithPendingPatches.length} files)</span>
+                        <span className="ml-2 text-xs opacity-70">({allFilesWithContentPending.length} files)</span>
                       </div>
                     </button>
                   </div>
@@ -664,7 +663,7 @@ export const CodeEditor = React.memo(function CodeEditor({
                     >
                       <div className="flex items-center">
                         <span className="font-medium">All files</span>
-                        <span className="ml-2 text-xs opacity-70">({allFilesWithPendingPatches.length} files)</span>
+                        <span className="ml-2 text-xs opacity-70">({allFilesWithContentPending.length} files)</span>
                       </div>
                     </button>
                   </div>
@@ -720,11 +719,10 @@ export const CodeEditor = React.memo(function CodeEditor({
 
   // Create a stable key for editor rendering
   const editorKey = selectedFile?.id || 'none';
-  const hasPendingPatches = selectedFile?.pendingPatches && selectedFile.pendingPatches.length > 0;
-  const hasContentPending = selectedFile?.contentPending || selectedFile?.content_pending;
+  const hasContentPending = selectedFile?.contentPending;
 
   // Generate a unique key for the editor to force re-creation when needed
-  const editorStateKey = `${editorKey}-${(hasPendingPatches || hasContentPending) ? 'diff' : 'normal'}-${Date.now()}`;
+  const editorStateKey = `${editorKey}-${(hasContentPending) ? 'diff' : 'normal'}-${Date.now()}`;
 
   // Let's try a more conventional approach but with optimizations
   return (
@@ -735,8 +733,8 @@ export const CodeEditor = React.memo(function CodeEditor({
       <div className="flex-1 h-full">
         {/* Using a stable key pattern for the outer container */}
         <div key={editorStateKey} className="h-full">
-          {selectedFile?.pendingPatches && selectedFile.pendingPatches.length > 0 ? (
-            // Import DiffEditor dynamically for pendingPatches
+          {selectedFile?.contentPending && selectedFile.contentPending.length > 0 ? (
+            // Import DiffEditor dynamically for contentPending
             <DiffEditor
               height="100%"
               language={language}
@@ -759,7 +757,7 @@ export const CodeEditor = React.memo(function CodeEditor({
               height="100%"
               language={language}
               original={selectedFile.content}
-              modified={selectedFile.contentPending || selectedFile.content_pending}
+              modified={selectedFile.contentPending}
               loading={null} // Disable the loading message
               theme={theme === "light" ? "vs" : "vs-dark"}
               options={{
@@ -791,5 +789,3 @@ export const CodeEditor = React.memo(function CodeEditor({
   );
 });
 
-// Remove the custom shouldComponentUpdate implementation
-// This was preventing re-renders when pendingPatches changes

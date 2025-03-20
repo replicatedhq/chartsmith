@@ -359,7 +359,7 @@ func finalizeFile(ctx context.Context, finalContent string, updatedPlan *workspa
 				chatMessageID = finalUpdatePlan.ChatMessageIDs[len(finalUpdatePlan.ChatMessageIDs)-1]
 
 				// Create a render job for the completed revision and associate it with the chat message
-				if err := workspace.EnqueueRenderWorkspaceForRevisionWithPendingPatches(ctx, finalUpdatePlan.WorkspaceID, w.CurrentRevision, chatMessageID); err != nil {
+				if err := workspace.EnqueueRenderWorkspaceForRevisionWithPendingContent(ctx, finalUpdatePlan.WorkspaceID, w.CurrentRevision, chatMessageID); err != nil {
 					return fmt.Errorf("failed to create render job for completed plan: %w", err)
 				}
 			} else {

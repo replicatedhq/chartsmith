@@ -230,8 +230,8 @@ func SetRenderedChartHelmTemplateStderr(ctx context.Context, renderedChartID str
 	return nil
 }
 
-func EnqueueRenderWorkspaceForRevisionWithPendingPatches(ctx context.Context, workspaceID string, revisionNumber int, chatMessageID string) error {
-	logger.Info("EnqueueRenderWorkspaceForRevisionWithPendingPatches",
+func EnqueueRenderWorkspaceForRevisionWithPendingContent(ctx context.Context, workspaceID string, revisionNumber int, chatMessageID string) error {
+	logger.Info("EnqueueRenderWorkspaceForRevisionWithPendingContent",
 		zap.String("workspaceID", workspaceID),
 		zap.Int("revisionNumber", revisionNumber),
 		zap.String("chatMessageID", chatMessageID),
@@ -250,7 +250,7 @@ func EnqueueRenderWorkspaceForRevision(ctx context.Context, workspaceID string, 
 	return enqueueRenderWorkspaceForRevision(ctx, workspaceID, revisionNumber, chatMessageID, false)
 }
 
-func enqueueRenderWorkspaceForRevision(ctx context.Context, workspaceID string, revisionNumber int, chatMessageID string, includePendingPatches bool) error {
+func enqueueRenderWorkspaceForRevision(ctx context.Context, workspaceID string, revisionNumber int, chatMessageID string, usePendingContent bool) error {
 	// Get workspace to retrieve charts
 	w, err := GetWorkspace(ctx, workspaceID)
 	if err != nil {
@@ -310,7 +310,7 @@ func enqueueRenderWorkspaceForRevision(ctx context.Context, workspaceID string, 
 	defer tx.Rollback(ctx)
 
 	query = `INSERT INTO workspace_rendered (id, workspace_id, revision_number, created_at, is_autorender) VALUES ($1, $2, $3, now(), $4)`
-	_, err = tx.Exec(ctx, query, id, workspaceID, revisionNumber, includePendingPatches)
+	_, err = tx.Exec(ctx, query, id, workspaceID, revisionNumber, usePendingContent)
 	if err != nil {
 		return fmt.Errorf("failed to enqueue render workspace: %w", err)
 	}
@@ -342,8 +342,8 @@ func enqueueRenderWorkspaceForRevision(ctx context.Context, workspaceID string, 
 	}
 
 	if err := persistence.EnqueueWork(ctx, "render_workspace", map[string]interface{}{
-		"id":                    id,
-		"includePendingPatches": includePendingPatches,
+		"id":                id,
+		"usePendingContent": usePendingContent,
 	}); err != nil {
 		return fmt.Errorf("failed to enqueue render workspace: %w", err)
 	}

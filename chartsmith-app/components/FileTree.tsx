@@ -13,9 +13,7 @@ interface TreeNode {
   type: "file" | "folder";
   children: TreeNode[];
   name: string;
-  pendingPatches?: string[];
   contentPending?: string;
-  content_pending?: string;
 }
 
 interface FileTreeProps {
@@ -191,17 +189,17 @@ export function FileTree({ files = [], charts = [] }: FileTreeProps) {
 
     const originalLines = originalContent.split('\n');
     const newLines = newContent.split('\n');
-    
+
     let additions = 0;
     let deletions = 0;
 
     // Simple diff algorithm that counts line differences
     // In a real diff, we would use a more sophisticated algorithm
     // but this will give us a rough estimate for display purposes
-    
+
     // First, find the minimum length to compare line by line
     const minLength = Math.min(originalLines.length, newLines.length);
-    
+
     // Count changed lines
     for (let i = 0; i < minLength; i++) {
       if (originalLines[i] !== newLines[i]) {
@@ -210,7 +208,7 @@ export function FileTree({ files = [], charts = [] }: FileTreeProps) {
         deletions++;
       }
     }
-    
+
     // If files have different lengths, count the extras
     if (originalLines.length > newLines.length) {
       // Extra lines in original count as deletions
@@ -223,91 +221,15 @@ export function FileTree({ files = [], charts = [] }: FileTreeProps) {
     return { additions, deletions };
   };
 
-  const getPatchStats = (patches?: string[], contentPending?: string, content?: string) => {
+  const getPatchStats = (contentPending?: string, content?: string) => {
     // If we have contentPending, use that instead of patches
     if (contentPending && content) {
       return getContentDiffStats(content, contentPending);
     }
-    
-    if (!patches || patches.length === 0) return null;
-    
+
     // Sum up counts from all patches in the array
     let totalAdditions = 0;
     let totalDeletions = 0;
-    
-    for (const patch of patches) {
-      const lines = patch.split('\n');
-      let additions = 0;
-      let deletions = 0;
-      let contentStarted = false;
-
-      // Check if this is a new file patch (indicated by @@ -0,0 +1,N @@)
-      const isNewFile = patch.includes('@@ -0,0 +1,');
-
-      // Check if this is a simple content replacement without proper diff markers
-      const isSimpleReplacement = patch.match(/@@ -1,\d+ \+1,\d+ @@/);
-      const hasProperDiffMarkers = patch.includes('\n+') || patch.includes('\n-');
-
-      // For new files, count every non-header line as an addition
-      if (isNewFile) {
-        for (const line of lines) {
-          // Skip headers
-          if (line.startsWith('---') || line.startsWith('+++') || line.startsWith('@@')) {
-            continue;
-          }
-
-          // For new files, lines might not be prefixed with '+' in some cases
-          additions++;
-        }
-      }
-      // For simple replacement patches without proper markers, compare line counts
-      else if (isSimpleReplacement && !hasProperDiffMarkers) {
-        // Try to extract old and new line counts from the patch header
-        const match = patch.match(/@@ -1,(\d+) \+1,(\d+) @@/);
-        if (match) {
-          const oldLineCount = parseInt(match[1]);
-          const newLineCount = parseInt(match[2]);
-
-          // Count the difference as additions or deletions
-          if (newLineCount > oldLineCount) {
-            additions = newLineCount - oldLineCount;
-          } else if (oldLineCount > newLineCount) {
-            deletions = oldLineCount - newLineCount;
-          }
-
-          // If line counts are the same but content differs, show at least one change
-          if (newLineCount === oldLineCount && hasContentChanges(patch)) {
-            additions = 1;
-            deletions = 1;
-          }
-        } else {
-          // Fallback: count non-header lines
-          let lineCount = 0;
-          for (const line of lines) {
-            if (!line.startsWith('---') && !line.startsWith('+++') && !line.startsWith('@@')) {
-              lineCount++;
-            }
-          }
-          additions = lineCount;
-        }
-      } else {
-        // Regular diff processing
-        for (const line of lines) {
-          if (!contentStarted && line.startsWith('@')) {
-            contentStarted = true;
-            continue;
-          }
-          if (contentStarted) {
-            if (line.startsWith('+')) additions++;
-            if (line.startsWith('-')) deletions++;
-          }
-        }
-      }
-      
-      // Add to the total counts
-      totalAdditions += additions;
-      totalDeletions += deletions;
-    }
 
     return { additions: totalAdditions, deletions: totalDeletions };
   };
@@ -326,8 +248,8 @@ export function FileTree({ files = [], charts = [] }: FileTreeProps) {
   };
 
   const renderNode = (node: TreeNode, level: number) => {
-    const patchStats = node.type === "file" ? 
-      getPatchStats(node.pendingPatches, node.contentPending, node.content) : null;
+    const patchStats = node.type === "file" ?
+      getPatchStats(node.contentPending, node.content) : null;
 
     return (
     <div key={node.filePath}>
@@ -344,8 +266,6 @@ export function FileTree({ files = [], charts = [] }: FileTreeProps) {
               filePath: rest.filePath,
               content: rest.content || '',
               contentPending: rest.contentPending,
-              // Keep pendingPatches for backward compatibility
-              pendingPatches: rest.pendingPatches
             });
           }
         }}

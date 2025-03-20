@@ -21,8 +21,7 @@ import {
   rendersAtom,
   workspaceAtom,
   handlePlanUpdatedAtom,
-  looseFilesBeforeApplyingPendingPatchesAtom,
-  chartsBeforeApplyingPendingPatchesAtom,
+  chartsBeforeApplyingContentPendingAtom,
   handleConversionUpdatedAtom,
   handleConversionFileUpdatedAtom,
   activeRenderIdsAtom
@@ -49,8 +48,7 @@ export function useCentrifugo({
   const [, setRenders] = useAtom(rendersAtom)
   const [, setMessages] = useAtom(messagesAtom)
   const [, setSelectedFile] = useAtom(selectedFileAtom)
-  const [, setChartsBeforeApplyingPendingPatches] = useAtom(chartsBeforeApplyingPendingPatchesAtom)
-  const [, setLooseFilesBeforeApplyingPendingPatches] = useAtom(looseFilesBeforeApplyingPendingPatchesAtom)
+  const [, setChartsBeforeApplyingContentPending] = useAtom(chartsBeforeApplyingContentPendingAtom)
   const [, handleConversionUpdated] = useAtom(handleConversionUpdatedAtom)
   const [, handleConversionFileUpdated] = useAtom(handleConversionFileUpdatedAtom)
   const [isReconnecting, setIsReconnecting] = useState(false);
@@ -67,8 +65,7 @@ export function useCentrifugo({
       const updatedMessages = await getWorkspaceMessagesAction(session, revision.workspaceId);
       setMessages(updatedMessages);
 
-      setChartsBeforeApplyingPendingPatches([]);
-      setLooseFilesBeforeApplyingPendingPatches([]);
+      setChartsBeforeApplyingContentPending([]);
     }
   }, [session, setMessages, setWorkspace]);
 
@@ -137,12 +134,7 @@ export function useCentrifugo({
   };
 
   // Helper function to get the appropriate content for a file
-  const getFileContent = (existingContent: string | undefined, artifact: { path: string, content: string, pendingPatches?: string[] }) => {
-    // If we have a pending patch for a new file, content should be empty string
-    if (isNewFilePatch(artifact.pendingPatches)) {
-      return "";
-    }
-
+  const getFileContent = (existingContent: string | undefined, artifact: { path: string, content: string, contentPending?: string }) => {
     // For existing files with patches, preserve their content
     if (existingContent) {
       return existingContent;
@@ -152,7 +144,7 @@ export function useCentrifugo({
     return artifact.content || "";
   };
 
-  const handleArtifactReceived = useCallback((artifact: { path: string, content: string, pendingPatches?: string[] }) => {
+  const handleArtifactReceived = useCallback((artifact: { path: string, content: string, contentPending?: string }) => {
     if (!setSelectedFile) return;
 
     // Generate a consistent file ID once to use in both places
@@ -181,20 +173,17 @@ export function useCentrifugo({
 
       // Check if it's a new file patch
       const isNewFile = !existingWorkspaceFile && !fileInChart;
-      const isNewFileFromPatch = isNewFilePatch(artifact.pendingPatches);
 
       // Fix for new files - ensure proper initialization for diff to work
       // If the file doesn't exist anywhere, create a new file and add it to both places
       if (isNewFile) {
         // For new files that have a pending patch but no content, initialize content to empty string
-        // This matches backend behavior where new files have content="" and pendingPatches with the full content
         const newFile = {
           id: fileId,
           filePath: artifact.path,
-          // For new files, use empty content and pendingPatches with the full content
+          // For new files, use empty content and contentPending with the full content
           content: "",
-          // Make sure pendingPatches always exists for new files
-          pendingPatches: artifact.pendingPatches || (artifact.content ? [artifact.content] : [])
+          contentPending: "",
         };
 
         // Add to both the first chart AND to the top-level files array
@@ -216,10 +205,6 @@ export function useCentrifugo({
         };
       }
 
-      // If the file exists and has pending patches, track the pre-patch state
-      if (chartWithFile && artifact.pendingPatches && artifact.pendingPatches.length > 0) {
-        setChartsBeforeApplyingPendingPatches(prev => [...prev, chartWithFile]);
-      }
 
       // Determine content for existing files based on the patch type
       const existingContent = existingWorkspaceFile?.content || fileInChart?.content;
@@ -229,7 +214,7 @@ export function useCentrifugo({
         file.filePath === artifact.path ? {
           ...file,
           content: getFileContent(file.content, artifact),
-          pendingPatches: artifact.pendingPatches
+          contentPending: "",
         } : file
       ) || [];
 
@@ -240,7 +225,6 @@ export function useCentrifugo({
           file.filePath === artifact.path ? {
             ...file,
             content: getFileContent(file.content, artifact),
-            pendingPatches: artifact.pendingPatches
           } : file
         )
       })) || [];
@@ -257,13 +241,12 @@ export function useCentrifugo({
       id: fileId, // Use the same ID created above
       filePath: artifact.path,
       // For new files, set empty content
-      content: isNewFilePatch(artifact.pendingPatches) ? "" : (artifact.content || ""),
-      // Make sure pendingPatches is always defined, even for empty patches
-      pendingPatches: artifact.pendingPatches || (artifact.content ? [artifact.content] : [])
+      content: artifact.content || "",
+      revisionNumber: 0,
     };
 
     setSelectedFile(file);
-  }, [setSelectedFile, setChartsBeforeApplyingPendingPatches]);
+  }, [setSelectedFile, setChartsBeforeApplyingContentPending]);
 
   const handleRenderStreamEvent = useCallback(async (data: CentrifugoMessageData) => {
     if (!session) return;

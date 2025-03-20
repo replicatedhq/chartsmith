@@ -20,7 +20,7 @@ import { ChatContainer } from "@/components/ChatContainer";
 import { Conversion, Plan, RenderedWorkspace, Workspace } from "@/lib/types/workspace";
 
 // atoms
-import { chartsBeforeApplyingPendingPatchesAtom, editorViewAtom, looseFilesBeforeApplyingPendingPatchesAtom, selectedFileAtom, workspaceAtom } from "@/atoms/workspace";
+import { chartsBeforeApplyingContentPendingAtom, editorViewAtom, looseFilesBeforeApplyingContentPendingAtom, selectedFileAtom, workspaceAtom } from "@/atoms/workspace";
 import { editorContentAtom } from "@/atoms/workspace";
 import { messagesAtom, plansAtom, rendersAtom, conversionsAtom } from "@/atoms/workspace";
 import { Message } from "./types";
@@ -47,8 +47,8 @@ export function WorkspaceContent({
   const [, setPlans] = useAtom(plansAtom);
   const [, setRenders] = useAtom(rendersAtom);
   const [, setConversions] = useAtom(conversionsAtom);
-  const [, setChartsBeforeApplyingPendingPatches] = useAtom(chartsBeforeApplyingPendingPatchesAtom);
-  const [, setLooseFilesBeforeApplyingPendingPatches] = useAtom(looseFilesBeforeApplyingPendingPatchesAtom);
+  const [, setChartsBeforeApplyingContentPending] = useAtom(chartsBeforeApplyingContentPendingAtom);
+  const [, setLooseFilesBeforeApplyingContentPending] = useAtom(looseFilesBeforeApplyingContentPendingAtom);
   const [, setEditorView] = useAtom(editorViewAtom);
   const [, setSelectedFile] = useAtom(selectedFileAtom);
 
@@ -58,8 +58,8 @@ export function WorkspaceContent({
     setWorkspace(initialWorkspace);
 
     // hydrate the before applying pending patches based on the current state
-    setChartsBeforeApplyingPendingPatches(initialWorkspace.charts);
-    setLooseFilesBeforeApplyingPendingPatches(initialWorkspace.files);
+    setChartsBeforeApplyingContentPending(initialWorkspace.charts);
+    setLooseFilesBeforeApplyingContentPending(initialWorkspace.files);
 
     setMessages(initialMessages);
     setPlans(initialPlans);
@@ -77,8 +77,8 @@ export function WorkspaceContent({
     initialRenders,
     initialConversions,
     setWorkspace,
-    setChartsBeforeApplyingPendingPatches,
-    setLooseFilesBeforeApplyingPendingPatches,
+    setChartsBeforeApplyingContentPending,
+    setLooseFilesBeforeApplyingContentPending,
     setMessages,
     setPlans,
     setRenders,
