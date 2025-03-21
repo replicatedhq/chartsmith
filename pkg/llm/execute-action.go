@@ -34,7 +34,7 @@ func min(a, b int) int {
 	return b
 }
 
-func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWithPath, plan *workspacetypes.Plan, currentContent string) (string, error) {
+func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWithPath, plan *workspacetypes.Plan, currentContent string, interimContentCh chan string) (string, error) {
 	updatedContent := currentContent
 
 	client, err := newAnthropicClient(ctx)
@@ -153,6 +153,7 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 					response = updatedContent
 				} else if input.Command == "str_replace" {
 					updatedContent = strings.ReplaceAll(updatedContent, input.OldStr, input.NewStr)
+					interimContentCh <- updatedContent
 					response = "Updated"
 				} else if input.Command == "create" {
 					updatedContent = input.NewStr

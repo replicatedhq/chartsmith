@@ -44,6 +44,8 @@ export function useCentrifugo({
 }: UseCentrifugoProps) {
   const centrifugeRef = useRef<Centrifuge | null>(null);
 
+  const [isReconnecting, setIsReconnecting] = useState(false);
+
   const [workspace, setWorkspace] = useAtom(workspaceAtom)
   const [, setRenders] = useAtom(rendersAtom)
   const [, setMessages] = useAtom(messagesAtom)
@@ -51,7 +53,6 @@ export function useCentrifugo({
   const [, setChartsBeforeApplyingContentPending] = useAtom(chartsBeforeApplyingContentPendingAtom)
   const [, handleConversionUpdated] = useAtom(handleConversionUpdatedAtom)
   const [, handleConversionFileUpdated] = useAtom(handleConversionFileUpdatedAtom)
-  const [isReconnecting, setIsReconnecting] = useState(false);
   const [, handlePlanUpdated] = useAtom(handlePlanUpdatedAtom);
   const [, setActiveRenderIds] = useAtom(activeRenderIdsAtom);
 
@@ -144,115 +145,103 @@ export function useCentrifugo({
     return artifact.content || "";
   };
 
-  const handleArtifactReceived = useCallback((artifact: { path: string, content: string, contentPending?: string }) => {
-    if (!setSelectedFile) return;
-
-    // Generate a consistent file ID once to use in both places
-    const fileId = `file-${Date.now()}`;
-
-    setWorkspace(workspace => {
-      if (!workspace) return workspace;
-
-      // First check for the file in the top-level files array
-      const existingWorkspaceFile = workspace.files?.find(f => f.filePath === artifact.path);
-
-      // Then check if the file exists in any chart
-      let chartWithFile = null;
-      let fileInChart = null;
-
-      if (workspace.charts) {
-        for (const chart of workspace.charts) {
-          const foundFile = chart.files.find(f => f.filePath === artifact.path);
-          if (foundFile) {
-            chartWithFile = chart;
-            fileInChart = foundFile;
-            break;
+  const handleArtifactUpdated = useCallback((data: CentrifugoMessageData) => {
+    console.log('handleArtifactUpdated', data);
+    
+    if (!data.file || !data.workspaceId) return;
+    
+    const artifactFile = data.file;
+    const workspaceId = data.workspaceId;
+    
+    // First, update the workspace with the updated file
+    setWorkspace(prevWorkspace => {
+      if (!prevWorkspace || prevWorkspace.id !== workspaceId) return prevWorkspace;
+      
+      // Create a deep copy of the workspace
+      const updatedWorkspace = { ...prevWorkspace };
+      
+      // Check if the file belongs to a chart
+      let fileUpdated = false;
+      
+      // Look for the file in charts
+      if (artifactFile.chart_id) {
+        updatedWorkspace.charts = updatedWorkspace.charts.map(chart => {
+          if (chart.id === artifactFile.chart_id) {
+            // Check if the file already exists in the chart
+            const fileIndex = chart.files.findIndex(f => f.id === artifactFile.id || f.filePath === artifactFile.filePath);
+            
+            const updatedFile = {
+              id: artifactFile.id,
+              revisionNumber: artifactFile.revision_number,
+              filePath: artifactFile.filePath,
+              content: artifactFile.content || "",
+              contentPending: artifactFile.content_pending
+            };
+            
+            if (fileIndex >= 0) {
+              // Update existing file
+              const updatedFiles = [...chart.files];
+              updatedFiles[fileIndex] = updatedFile;
+              fileUpdated = true;
+              return {
+                ...chart,
+                files: updatedFiles
+              };
+            } else {
+              // Add new file
+              fileUpdated = true;
+              return {
+                ...chart,
+                files: [...chart.files, updatedFile]
+              };
+            }
           }
+          return chart;
+        });
+      } else {
+        // Check loose files
+        const fileIndex = updatedWorkspace.files.findIndex(f => f.id === artifactFile.id || f.filePath === artifactFile.filePath);
+        
+        const updatedFile = {
+          id: artifactFile.id,
+          revisionNumber: artifactFile.revision_number,
+          filePath: artifactFile.filePath,
+          content: artifactFile.content || "",
+          contentPending: artifactFile.content_pending
+        };
+        
+        if (fileIndex >= 0) {
+          // Update existing file
+          const updatedFiles = [...updatedWorkspace.files];
+          updatedFiles[fileIndex] = updatedFile;
+          fileUpdated = true;
+          updatedWorkspace.files = updatedFiles;
+        } else {
+          // Add new file
+          fileUpdated = true;
+          updatedWorkspace.files = [...updatedWorkspace.files, updatedFile];
         }
       }
-
-      // Check if it's a new file patch
-      const isNewFile = !existingWorkspaceFile && !fileInChart;
-
-      // Fix for new files - ensure proper initialization for diff to work
-      // If the file doesn't exist anywhere, create a new file and add it to both places
-      if (isNewFile) {
-        // For new files that have a pending patch but no content, initialize content to empty string
-        const newFile = {
-          id: fileId,
-          filePath: artifact.path,
-          // For new files, use empty content and contentPending with the full content
-          content: "",
-          contentPending: "",
-          revisionNumber: 0, // Default revision number
-        };
-
-        // Add to both the first chart AND to the top-level files array
-        // Make sure we have at least one chart
-        if (!workspace.charts || workspace.charts.length === 0) {
-          return workspace;
-        }
-
-        return {
-          ...workspace,
-          // Add the new file to the workspace files array
-          files: [...(workspace.files || []), newFile],
-          charts: workspace.charts.map((chart, index) =>
-            index === 0 ? {
-              ...chart,
-              files: [...chart.files, newFile]
-            } : chart
-          )
-        };
+      
+      if (fileUpdated) {
+        // After updating the workspace, select the file in the editor
+        // The setTimeout ensures this happens after the workspace update
+        setTimeout(() => {
+          setSelectedFile({
+            id: artifactFile.id,
+            revisionNumber: artifactFile.revision_number,
+            filePath: artifactFile.filePath,
+            content: artifactFile.content || "",
+            contentPending: artifactFile.content_pending
+          });
+        }, 0);
+        
+        return updatedWorkspace;
       }
-
-
-      // Determine content for existing files based on the patch type
-      const existingContent = existingWorkspaceFile?.content || fileInChart?.content;
-
-      // Update files in the top-level files array
-      const updatedFiles = workspace.files?.map(file =>
-        file.filePath === artifact.path ? {
-          ...file,
-          content: getFileContent(file.content, artifact),
-          contentPending: "",
-          // Keep the existing revisionNumber
-          revisionNumber: file.revisionNumber
-        } : file
-      ) || [];
-
-      // Update files in all charts
-      const updatedCharts = workspace.charts?.map(chart => ({
-        ...chart,
-        files: chart.files.map(file =>
-          file.filePath === artifact.path ? {
-            ...file,
-            content: getFileContent(file.content, artifact),
-            // Keep the existing revisionNumber
-            revisionNumber: file.revisionNumber
-          } : file
-        )
-      })) || [];
-
-      return {
-        ...workspace,
-        files: updatedFiles,
-        charts: updatedCharts
-      };
+      
+      return prevWorkspace;
     });
-
-    // Create a representation of the file for the editor with appropriate content
-    const file = {
-      id: fileId, // Use the same ID created above
-      filePath: artifact.path,
-      // For new files, set empty content
-      content: artifact.content || "",
-      contentPending: artifact.contentPending,
-      revisionNumber: 0,
-    };
-
-    setSelectedFile(file);
-  }, [setSelectedFile, setChartsBeforeApplyingContentPending]);
+  }, [setWorkspace, setSelectedFile]);
 
   const handleRenderStreamEvent = useCallback(async (data: CentrifugoMessageData) => {
     if (!session) return;
@@ -466,21 +455,13 @@ export function useCentrifugo({
       handleConversionFileUpdatedMessage(message.data);
     } else if (eventType === 'conversion-status') {
       handleConversationUpdatedMessage(message.data);
+    } else if (eventType === 'artifact-updated') {
+      handleArtifactUpdated(message.data);
     }
 
     const isWorkspaceUpdatedEvent = message.data.workspace;
     if (isWorkspaceUpdatedEvent) {
       handleWorkspaceUpdated(message.data.workspace!);
-    }
-
-    const artifact = message.data.artifact;
-    if (artifact) {
-      // Check if path and content exist, even if content is empty string
-      if (artifact.path) {
-        handleArtifactReceived(artifact);
-      } else {
-        console.error("Artifact missing required path:", artifact);
-      }
     }
 
     handleExecuteAction(message.data);
@@ -490,7 +471,7 @@ export function useCentrifugo({
     handleRevisionCreated,
     handleRenderStreamEvent,
     handleWorkspaceUpdated,
-    handleArtifactReceived,
+    handleArtifactUpdated,
     handleRenderFileEvent,
     handleConversionFileUpdatedMessage,
     handleConversationUpdatedMessage

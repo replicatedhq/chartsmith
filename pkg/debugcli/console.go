@@ -1359,11 +1359,11 @@ func (c *DebugConsole) executePlan(args []string) error {
 		}
 	}
 
-	patchStreamCh := make(chan string)
+	interimContentCh := make(chan string)
 	doneCh := make(chan error)
 
 	go func() {
-		_, err := llm.ExecuteAction(c.ctx, actionPlanWithPath, plan, currentContent)
+		_, err := llm.ExecuteAction(c.ctx, actionPlanWithPath, plan, currentContent, interimContentCh)
 		if err != nil {
 			fmt.Println(dimText(fmt.Sprintf("Error: %v", err)))
 		}
@@ -1379,8 +1379,8 @@ func (c *DebugConsole) executePlan(args []string) error {
 				return errors.Wrap(err, "failed to execute action")
 			}
 			done = true
-		case stream := <-patchStreamCh:
-			fmt.Printf(boldGreen("Patch: %s\n"), stream)
+		case stream := <-interimContentCh:
+			fmt.Printf(boldGreen("Interim content: %s\n"), stream)
 		}
 	}
 

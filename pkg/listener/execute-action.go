@@ -45,15 +45,11 @@ func StartHeartbeat(ctx context.Context) {
 					// Perform health check
 					if err := ensureActiveConnection(ctx); err != nil {
 						logger.Warn("Connection heartbeat check failed", zap.Error(err))
-					} else {
-						logger.Debug("Connection heartbeat: OK")
 					}
 
 					// Also check if the realtime system is functioning
 					if err := realtime.Ping(ctx); err != nil {
 						logger.Warn("Realtime system heartbeat check failed", zap.Error(err))
-					} else {
-						logger.Debug("Realtime system heartbeat: OK")
 					}
 
 				case <-ctx.Done():
@@ -102,37 +98,14 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 
 	// find the action, confirm it's still pending for now
 	actionFound := false
-	currentStatus := ""
-
-	logger.Info("Looking for action in plan",
-		zap.String("path", p.Path),
-		zap.String("planId", p.PlanID),
-		zap.Int("actionFilesCount", len(plan.ActionFiles)))
 
 	for i, item := range plan.ActionFiles {
 		if item.Path == p.Path {
 			actionFound = true
-			currentStatus = item.Status
-
-			logger.Info("Found action in plan",
-				zap.String("path", p.Path),
-				zap.String("planId", p.PlanID),
-				zap.String("currentStatus", currentStatus),
-				zap.Int("actionIndex", i))
 
 			if item.Status != string(llmtypes.ActionPlanStatusPending) {
-				logger.Info("Skipping non-pending action",
-					zap.String("path", p.Path),
-					zap.String("status", item.Status),
-					zap.String("planId", p.PlanID))
-				return nil // Skip instead of error
+				return nil
 			}
-
-			// update the action to creating
-			logger.Info("Updating action status to creating",
-				zap.String("path", p.Path),
-				zap.String("planId", p.PlanID),
-				zap.String("oldStatus", item.Status))
 
 			item.Status = string(llmtypes.ActionPlanStatusCreating)
 			plan.ActionFiles[i] = item
@@ -141,23 +114,14 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 	}
 
 	if !actionFound {
-		logger.Error(fmt.Errorf("action not found in plan"),
-			zap.String("path", p.Path),
-			zap.String("planId", p.PlanID))
 		return fmt.Errorf("action not found in plan for path %s", p.Path)
 	}
 
 	if err := workspace.UpdatePlanActionFiles(ctx, tx, plan.ID, plan.ActionFiles); err != nil {
-		logger.Error(fmt.Errorf("failed to update plan: %w", err),
-			zap.String("path", p.Path),
-			zap.String("planId", p.PlanID))
 		return fmt.Errorf("failed to update plan: %w", err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		logger.Error(fmt.Errorf("failed to commit transaction: %w", err),
-			zap.String("path", p.Path),
-			zap.String("planId", p.PlanID))
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
@@ -200,6 +164,7 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 		}
 	}
 
+	interimContentCh := make(chan string)
 	finalContentCh := make(chan string)
 	errCh := make(chan error)
 
@@ -222,11 +187,8 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 			Path: p.Path,
 		}
 
-		finalContent, err := llm.ExecuteAction(ctx, apwp, plan, currentContent)
+		finalContent, err := llm.ExecuteAction(ctx, apwp, plan, currentContent, interimContentCh)
 		if err != nil {
-			logger.Error(fmt.Errorf("failed to execute action: %w", err),
-				zap.String("path", p.Path),
-				zap.String("planId", p.PlanID))
 			errCh <- fmt.Errorf("failed to execute action: %w", err)
 			return
 		}
@@ -236,46 +198,53 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 	}()
 
 	timeout := time.After(5 * time.Minute)
-	logger.Info("Starting response processing loop",
-		zap.String("path", p.Path),
-		zap.String("planId", p.PlanID))
+
+	// get the file from the workspace, if it exists
+	files, err := workspace.ListFiles(ctx, w.ID, w.CurrentRevision, c.ID)
+	if err != nil {
+		return fmt.Errorf("failed to list files: %w", err)
+	}
+
+	var file *workspacetypes.File
+	for _, f := range files {
+		if f.FilePath == p.Path {
+			file = &f
+			break
+		}
+	}
 
 	for {
 		select {
 		case <-timeout:
-			logger.Error(fmt.Errorf("timeout waiting for action execution"),
-				zap.String("path", p.Path),
-				zap.String("planId", p.PlanID),
-				zap.String("timeout", "5m"))
 			return fmt.Errorf("timeout waiting for action execution")
 
 		case err := <-errCh:
 			if err != nil {
-				logger.Error(fmt.Errorf("error received from action execution"),
-					zap.Error(err),
-					zap.String("path", p.Path),
-					zap.String("planId", p.PlanID))
 				return err
+			}
+
+		case interimContent := <-interimContentCh:
+			if file == nil {
+				continue
+			}
+
+			file.ContentPending = &interimContent
+			e := realtimetypes.ArtifactUpdatedEvent{
+				WorkspaceID:   updatedPlan.WorkspaceID,
+				WorkspaceFile: file,
+			}
+
+			if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
+				return fmt.Errorf("failed to send artifact update: %w", err)
 			}
 
 		case finalContent := <-finalContentCh:
 			if err := finalizeFile(ctx, finalContent, updatedPlan, p, w, c, realtimeRecipient); err != nil {
-				logger.Error(fmt.Errorf("failed to finalize file: %w", err),
-					zap.String("path", p.Path),
-					zap.String("planId", p.PlanID))
 				return err
 			}
 			return nil
 		}
 	}
-}
-
-// min function to get the minimum of two integers
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 func finalizeFile(ctx context.Context, finalContent string, updatedPlan *workspacetypes.Plan, p executeActionPayload, w *workspacetypes.Workspace, c workspacetypes.Chart, realtimeRecipient realtimetypes.Recipient) error {

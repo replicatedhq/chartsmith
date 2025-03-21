@@ -60,8 +60,9 @@ export interface RawFollowupAction {
 // Raw workspace data from server before normalization
 export interface RawFile {
   id?: string;
-  filePath: string;  // Changed from path to filePath to match actual data
+  filePath: string;
   content: string;
+  contentPending?: string;
 }
 
 export interface RawWorkspace {
@@ -85,7 +86,7 @@ export interface CentrifugoMessageData {
   message?: RawMessage;
   plan?: RawPlan;
   revision?: RawRevision;
-  artifact?: RawArtifact;
+  file?: RawFile;
   workspaceId: string;
   eventType?: string;
   renderedFile?: RenderedFile;

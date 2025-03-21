@@ -1,23 +1,21 @@
 package types
 
+import (
+	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
+)
+
 var _ Event = ArtifactUpdatedEvent{}
 
-type Artifact struct {
-	RevisionNumber int    `json:"revisionNumber"`
-	Path           string `json:"path"`
-	Content        string `json:"content"`
-	ContentPending string `json:"contentPending"`
-}
-
 type ArtifactUpdatedEvent struct {
-	WorkspaceID string   `json:"workspaceId"`
-	Artifact    Artifact `json:"artifact"`
+	WorkspaceID   string               `json:"workspaceId"`
+	WorkspaceFile *workspacetypes.File `json:"file"`
 }
 
 func (e ArtifactUpdatedEvent) GetMessageData() (map[string]interface{}, error) {
 	return map[string]interface{}{
+		"eventType":   "artifact-updated",
 		"workspaceId": e.WorkspaceID,
-		"artifact":    e.Artifact,
+		"file":        e.WorkspaceFile,
 	}, nil
 }
 
