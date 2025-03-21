@@ -132,7 +132,7 @@ func GetChatMessage(ctx context.Context, chatMessageId string) (*types.Chat, err
 		&chat.RevisionNumber,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to scan chat message: %w", err)
+		return nil, fmt.Errorf("failed to scan chat message in getChatMessage: %w", err)
 	}
 
 	chat.Response = response.String
@@ -186,8 +186,8 @@ ORDER BY created_at DESC`
 		var isIntentChartDeveloper sql.NullBool
 		var isIntentChartOperator sql.NullBool
 		var isIntentProceed sql.NullBool
-		if err := rows.Scan(&chat.ID, &chat.Prompt, &response, &chat.CreatedAt, &chat.IsIntentComplete, &isIntentConversational, &isIntentPlan, &isIntentOffTopic, &isIntentChartDeveloper, &isIntentChartOperator, &isIntentProceed); err != nil {
-			return nil, fmt.Errorf("failed to scan chat message: %w", err)
+		if err := rows.Scan(&chat.ID, &chat.Prompt, &response, &chat.CreatedAt, &chat.IsIntentComplete, &isIntentConversational, &isIntentPlan, &isIntentOffTopic, &isIntentChartDeveloper, &isIntentChartOperator, &isIntentProceed, &chat.RevisionNumber); err != nil {
+			return nil, fmt.Errorf("failed to scan chat message in listChatMessagesForWorkspace: %w", err)
 		}
 
 		chat.Response = response.String
@@ -233,7 +233,7 @@ func ListChatMessagesAfterPlan(ctx context.Context, planID string) ([]types.Chat
 
 	query = `SELECT
 id, prompt, response, created_at, is_intent_complete, is_intent_conversational, is_intent_plan, is_intent_off_topic, is_intent_chart_developer,
-is_intent_chart_operator, is_intent_proceed FROM workspace_chat WHERE workspace_id = $1 AND created_at > $2`
+is_intent_chart_operator, is_intent_proceed, revision_number FROM workspace_chat WHERE workspace_id = $1 AND created_at > $2`
 	rows, err := conn.Query(ctx, query, workspaceID, mostRecentChatCreatedAt)
 	if err != nil {
 		return nil, err
@@ -250,9 +250,9 @@ is_intent_chart_operator, is_intent_proceed FROM workspace_chat WHERE workspace_
 		var isIntentChartDeveloper sql.NullBool
 		var isIntentChartOperator sql.NullBool
 		var isIntentProceed sql.NullBool
-		err := rows.Scan(&chat.ID, &chat.Prompt, &response, &chat.CreatedAt, &chat.IsIntentComplete, &isIntentConversational, &isIntentPlan, &isIntentOffTopic, &isIntentChartDeveloper, &isIntentChartOperator, &isIntentProceed)
+		err := rows.Scan(&chat.ID, &chat.Prompt, &response, &chat.CreatedAt, &chat.IsIntentComplete, &isIntentConversational, &isIntentPlan, &isIntentOffTopic, &isIntentChartDeveloper, &isIntentChartOperator, &isIntentProceed, &chat.RevisionNumber)
 		if err != nil {
-			return nil, fmt.Errorf("failed to scan chat message: %w", err)
+			return nil, fmt.Errorf("failed to scan chat message in listChatMessagesAfterPlan: %w", err)
 		}
 
 		chat.Response = response.String
