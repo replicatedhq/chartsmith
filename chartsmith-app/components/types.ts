@@ -59,10 +59,12 @@ export interface RawFollowupAction {
 
 // Raw workspace data from server before normalization
 export interface RawFile {
-  id?: string;
+  id: string;
   filePath: string;
+  chart_id?: string;
   content: string;
-  contentPending?: string;
+  content_pending?: string;
+  revision_number: number;
 }
 
 export interface RawWorkspace {

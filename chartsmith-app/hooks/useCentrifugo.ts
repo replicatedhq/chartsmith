@@ -147,29 +147,29 @@ export function useCentrifugo({
 
   const handleArtifactUpdated = useCallback((data: CentrifugoMessageData) => {
     console.log('handleArtifactUpdated', data);
-    
+
     if (!data.file || !data.workspaceId) return;
-    
+
     const artifactFile = data.file;
     const workspaceId = data.workspaceId;
-    
+
     // First, update the workspace with the updated file
     setWorkspace(prevWorkspace => {
       if (!prevWorkspace || prevWorkspace.id !== workspaceId) return prevWorkspace;
-      
+
       // Create a deep copy of the workspace
       const updatedWorkspace = { ...prevWorkspace };
-      
+
       // Check if the file belongs to a chart
       let fileUpdated = false;
-      
+
       // Look for the file in charts
       if (artifactFile.chart_id) {
         updatedWorkspace.charts = updatedWorkspace.charts.map(chart => {
           if (chart.id === artifactFile.chart_id) {
             // Check if the file already exists in the chart
             const fileIndex = chart.files.findIndex(f => f.id === artifactFile.id || f.filePath === artifactFile.filePath);
-            
+
             const updatedFile = {
               id: artifactFile.id,
               revisionNumber: artifactFile.revision_number,
@@ -177,7 +177,7 @@ export function useCentrifugo({
               content: artifactFile.content || "",
               contentPending: artifactFile.content_pending
             };
-            
+
             if (fileIndex >= 0) {
               // Update existing file
               const updatedFiles = [...chart.files];
@@ -201,7 +201,7 @@ export function useCentrifugo({
       } else {
         // Check loose files
         const fileIndex = updatedWorkspace.files.findIndex(f => f.id === artifactFile.id || f.filePath === artifactFile.filePath);
-        
+
         const updatedFile = {
           id: artifactFile.id,
           revisionNumber: artifactFile.revision_number,
@@ -209,7 +209,7 @@ export function useCentrifugo({
           content: artifactFile.content || "",
           contentPending: artifactFile.content_pending
         };
-        
+
         if (fileIndex >= 0) {
           // Update existing file
           const updatedFiles = [...updatedWorkspace.files];
@@ -222,7 +222,7 @@ export function useCentrifugo({
           updatedWorkspace.files = [...updatedWorkspace.files, updatedFile];
         }
       }
-      
+
       if (fileUpdated) {
         // After updating the workspace, select the file in the editor
         // The setTimeout ensures this happens after the workspace update
@@ -235,10 +235,10 @@ export function useCentrifugo({
             contentPending: artifactFile.content_pending
           });
         }, 0);
-        
+
         return updatedWorkspace;
       }
-      
+
       return prevWorkspace;
     });
   }, [setWorkspace, setSelectedFile]);
@@ -422,18 +422,6 @@ export function useCentrifugo({
     handleConversionUpdated(data.conversion);
   }, []);
 
-  const handleExecuteAction = async (message: any) => {
-    // ... existing message handling ...
-
-    // Handle file creation
-    if (message.type === 'execute_action' && message.action === 'create_file') {
-      const { filePath, content } = message.data;
-      handleArtifactReceived({ path: filePath, content });
-    }
-
-    // ... rest of message handling ...
-  };
-
   const handleCentrifugoMessage = useCallback((message: { data: CentrifugoMessageData }) => {
     const eventType = message.data.eventType;
     if (eventType === 'plan-updated') {
@@ -463,8 +451,6 @@ export function useCentrifugo({
     if (isWorkspaceUpdatedEvent) {
       handleWorkspaceUpdated(message.data.workspace!);
     }
-
-    handleExecuteAction(message.data);
   }, [
     handlePlanUpdated,
     handleChatMessageUpdated,

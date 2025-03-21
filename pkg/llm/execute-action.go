@@ -26,14 +26,6 @@ type CreateWorkspaceFromArchiveAction struct {
 	ArchiveType string `json:"archiveType"` // New field: "helm" or "k8s"
 }
 
-// min helper function for logging
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWithPath, plan *workspacetypes.Plan, currentContent string, interimContentCh chan string) (string, error) {
 	updatedContent := currentContent
 
@@ -47,16 +39,26 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 		anthropic.NewUserMessage(anthropic.NewTextBlock(detailedPlanInstructions)),
 	}
 
+	// Add more explicit instructions about the file workflow
+	workflowInstructions := `
+		Important workflow instructions:
+		1. For ANY file operation, ALWAYS use "view" command first to check if a file exists and view its contents.
+		2. Only after viewing, decide whether to use "create" (if file doesn't exist) or "str_replace" (if file exists).
+		3. Never use "create" on an existing file.
+		`
+
 	messages = append(messages, anthropic.NewAssistantMessage(anthropic.NewTextBlock(plan.Description)))
 
 	if actionPlanWithPath.Action == "create" {
+		logger.Debug("create file", zap.String("path", actionPlanWithPath.Path))
 		createMessage := fmt.Sprintf("Create the file at %s", actionPlanWithPath.Path)
-		messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(createMessage)))
+		messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(workflowInstructions+createMessage)))
 	} else if actionPlanWithPath.Action == "update" {
+		logger.Debug("update file", zap.String("path", actionPlanWithPath.Path))
 		updateMessage := fmt.Sprintf(`The file at %s needs to be updated according to the plan.`,
 			actionPlanWithPath.Path)
 
-		messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(updateMessage)))
+		messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(workflowInstructions+updateMessage)))
 	}
 
 	tools := []anthropic.ToolParam{
@@ -150,14 +152,23 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 					zap.Int("new_str_len", len(input.NewStr)))
 
 				if input.Command == "view" {
-					response = updatedContent
+					if updatedContent == "" {
+						// File doesn't exist yet
+						response = "File does not exist"
+					} else {
+						response = updatedContent
+					}
 				} else if input.Command == "str_replace" {
 					updatedContent = strings.ReplaceAll(updatedContent, input.OldStr, input.NewStr)
 					interimContentCh <- updatedContent
 					response = "Updated"
 				} else if input.Command == "create" {
-					updatedContent = input.NewStr
-					response = "Created"
+					if updatedContent != "" {
+						response = "Error: File already exists. Use view and str_replace instead."
+					} else {
+						updatedContent = input.NewStr
+						response = "Created"
+					}
 				}
 
 				b, err := json.Marshal(response)
