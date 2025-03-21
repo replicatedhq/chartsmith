@@ -47,9 +47,6 @@ func ChooseRelevantFilesForChatMessage(
 
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
-
-	// Use file ID as the key instead of the File struct, since File contains a slice (PendingPatches)
-	// which makes it not comparable and unsuitable as a map key
 	fileMap := make(map[string]struct {
 		file       types.File
 		similarity float64
@@ -169,10 +166,10 @@ func ChooseRelevantFilesForChatMessage(
 			Similarity: item.similarity,
 		})
 	}
-	
+
 	sort.Slice(sorted, func(i, j int) bool {
 		return sorted[i].Similarity > sorted[j].Similarity
 	})
-	
+
 	return sorted, nil
 }

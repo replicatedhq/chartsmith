@@ -32,9 +32,6 @@ export function DebugPanel({ isVisible }: DebugPanelProps) {
               <div className="grid grid-cols-2 gap-x-2 gap-y-1">
                 <div className="font-semibold text-gray-500 dark:text-gray-400">ID:</div>
                 <div>{selectedFile.id || 'N/A'}</div>
-                <div className="font-semibold text-gray-500 dark:text-gray-400">Revision:</div>
-                <div>{selectedFile.revisionNumber !== undefined ? selectedFile.revisionNumber : 'N/A'}</div>
-                <div className="font-semibold text-gray-500 dark:text-gray-400">Chart ID:</div>
                 <div className="font-semibold text-gray-500 dark:text-gray-400">Path:</div>
                 <div className="break-all">{selectedFile.filePath || 'N/A'}</div>
               </div>
