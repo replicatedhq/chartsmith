@@ -3,10 +3,7 @@
 import { Session } from "@/lib/types/session";
 import { WorkspaceFile } from "@/lib/types/workspace";
 import { logger } from "@/lib/utils/logger";
-import { acceptPatch } from "../patch";
-
-// These actions have been deprecated as part of the removal of the pendingPatches feature
-// They are kept as stubs for backward compatibility
+import { acceptAllPatches, acceptPatch } from "../patch";
 
 export async function acceptPatchAction(session: Session, fileId: string, revision: number): Promise<WorkspaceFile> {
   try {
@@ -30,10 +27,9 @@ export async function acceptAllPatchesAction(session: Session, workspaceId: stri
       throw new Error("User not found");
     }
 
-    logger.info(`Accepting all patches for workspace ${workspaceId} at revision ${revision} is no longer supported`);
-    throw new Error("Pending patches functionality has been removed");
+    const updatedFiles = await acceptAllPatches(workspaceId, revision);
+    return updatedFiles;
   } catch (error) {
-    logger.error(`Error in acceptAllPatchesAction:`, { error, workspaceId, revision });
     throw error;
   }
 }

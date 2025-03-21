@@ -24,7 +24,18 @@ type CreateWorkspaceFromArchiveAction struct {
 	ArchiveType string `json:"archiveType"` // New field: "helm" or "k8s"
 }
 
+// min helper function for logging
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWithPath, plan *workspacetypes.Plan, currentContent string) (string, error) {
+	// DEBUG-CONTENT-PENDING: Log the initial content
+	fmt.Printf("DEBUG-CONTENT-PENDING: Starting ExecuteAction for path=%s, action=%s, content_len=%d\n", 
+		actionPlanWithPath.Path, actionPlanWithPath.Action, len(currentContent))
 	updatedContent := currentContent
 
 	client, err := newAnthropicClient(ctx)
@@ -134,11 +145,16 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 				}
 
 				if input.Command == "view" {
+					fmt.Printf("DEBUG-CONTENT-PENDING: LLM viewing content, length=%d\n", len(updatedContent))
 					response = updatedContent
 				} else if input.Command == "str_replace" {
+					fmt.Printf("DEBUG-CONTENT-PENDING: LLM using str_replace, old_len=%d, new_len=%d\n", 
+						len(input.OldStr), len(input.NewStr))
 					updatedContent = strings.ReplaceAll(updatedContent, input.OldStr, input.NewStr)
 					response = "Updated"
 				} else if input.Command == "create" {
+					fmt.Printf("DEBUG-CONTENT-PENDING: LLM using create, new content length=%d\n", 
+						len(input.NewStr))
 					updatedContent = input.NewStr
 					response = "Created"
 				}
@@ -162,5 +178,9 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 		})
 	}
 
+	// DEBUG-CONTENT-PENDING: Log final content before returning
+	fmt.Printf("DEBUG-CONTENT-PENDING: Finished ExecuteAction, final content length=%d, snippet=%s\n", 
+		len(updatedContent), updatedContent[:min(100, len(updatedContent))])
+	
 	return updatedContent, nil
 }

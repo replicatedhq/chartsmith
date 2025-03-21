@@ -45,6 +45,34 @@ export async function getFile(fileID: string, revisionNumber: number): Promise<W
   }
 }
 
+export async function rejectAllPatches(workspaceId: string, revisionNumber: number): Promise<WorkspaceFile[]> {
+  logger.info(`Rejecting all patches for workspace ${workspaceId} at revision ${revisionNumber}`);
+
+  try {
+    const db = getDB(await getParam("DB_URI"))
+    const rows = await db.query(`SELECT id, content_pending FROM workspace_file WHERE workspace_id = $1 AND revision_number = $2 AND content_pending IS NOT NULL`, [workspaceId, revisionNumber]);
+    const files = rows.rows.map((row) => ({
+      id: row.id,
+      contentPending: row.content_pending,
+    }));
+
+    if (files.length === 0) {
+      throw new Error(`No patches to reject for workspace ${workspaceId} at revision ${revisionNumber}`);
+    }
+
+    const updatedFiles: WorkspaceFile[] = [];
+    for (const file of files) {
+      const updatedFile = await rejectPatch(file.id, revisionNumber);
+      updatedFiles.push(updatedFile);
+    }
+
+    return updatedFiles;
+  } catch (error) {
+    logger.error(`Error rejecting all patches for workspace ${workspaceId} at revision ${revisionNumber}: ${error}`);
+    throw error;
+  }
+}
+
 export async function rejectPatch(fileID: string, revisionNumber: number): Promise<WorkspaceFile> {
   logger.info(`Rejecting patch for file ${fileID} at revision ${revisionNumber}`);
 
@@ -63,6 +91,34 @@ export async function rejectPatch(fileID: string, revisionNumber: number): Promi
     return getFile(fileID, revisionNumber);
   } catch (error) {
     logger.error(`Error rejecting patch for file ${fileID} at revision ${revisionNumber}: ${error}`);
+    throw error;
+  }
+}
+
+export async function acceptAllPatches(workspaceId: string, revisionNumber: number): Promise<WorkspaceFile[]> {
+  logger.info(`Accepting all patches for workspace ${workspaceId} at revision ${revisionNumber}`);
+
+  try {
+    const db = getDB(await getParam("DB_URI"))
+    const rows = await db.query(`SELECT id, content_pending FROM workspace_file WHERE workspace_id = $1 AND revision_number = $2 AND content_pending IS NOT NULL`, [workspaceId, revisionNumber]);
+    const files = rows.rows.map((row) => ({
+      id: row.id,
+      contentPending: row.content_pending,
+    }));
+
+    if (files.length === 0) {
+      throw new Error(`No patches to accept for workspace ${workspaceId} at revision ${revisionNumber}`);
+    }
+
+    const updatedFiles: WorkspaceFile[] = [];
+    for (const file of files) {
+      const updatedFile = await acceptPatch(file.id, revisionNumber);
+      updatedFiles.push(updatedFile);
+    }
+
+    return updatedFiles;
+  } catch (error) {
+    logger.error(`Error accepting all patches for workspace ${workspaceId} at revision ${revisionNumber}: ${error}`);
     throw error;
   }
 }
