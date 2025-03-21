@@ -104,16 +104,11 @@ func min(a, b int) int {
 }
 
 func SetFileContentPending(ctx context.Context, path string, revisionNumber int, chartID string, workspaceID string, contentPending string) error {
-	// DEBUG-CONTENT-PENDING: Log inputs to SetFileContentPending
-	fmt.Printf("DEBUG-CONTENT-PENDING: SetFileContentPending called: path=%s, rev=%d, chartID=%s, workspaceID=%s, content_len=%d, snippet=%s\n", 
-		path, revisionNumber, chartID, workspaceID, len(contentPending), contentPending[:min(50, len(contentPending))])
-	
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
 
 	tx, err := conn.Begin(ctx)
 	if err != nil {
-		fmt.Printf("DEBUG-CONTENT-PENDING: Error beginning transaction: %v\n", err)
 		return fmt.Errorf("error beginning transaction: %w", err)
 	}
 	defer tx.Rollback(ctx)
@@ -124,46 +119,32 @@ func SetFileContentPending(ctx context.Context, path string, revisionNumber int,
 	var fileID string
 	err = row.Scan(&fileID)
 	if err != nil && err != pgx.ErrNoRows {
-		fmt.Printf("DEBUG-CONTENT-PENDING: Error scanning file ID: %v\n", err)
 		return fmt.Errorf("error scanning file id: %w", err)
 	}
 
 	// set the content pending
 	if fileID != "" {
-		fmt.Printf("DEBUG-CONTENT-PENDING: Updating existing file with ID=%s\n", fileID)
 		query = `UPDATE workspace_file SET content_pending = $1 WHERE id = $2 AND revision_number = $3`
-		result, err := tx.Exec(ctx, query, contentPending, fileID, revisionNumber)
+		_, err := tx.Exec(ctx, query, contentPending, fileID, revisionNumber)
 		if err != nil {
-			fmt.Printf("DEBUG-CONTENT-PENDING: Error updating content_pending: %v\n", err)
 			return fmt.Errorf("error updating file content pending: %w", err)
 		}
-		
-		rowsAffected := result.RowsAffected()
-		fmt.Printf("DEBUG-CONTENT-PENDING: Update affected %d rows\n", rowsAffected)
 	} else {
-		fmt.Printf("DEBUG-CONTENT-PENDING: Creating new file since fileID is empty\n")
 		id, err := securerandom.Hex(16)
 		if err != nil {
-			fmt.Printf("DEBUG-CONTENT-PENDING: Error generating file ID: %v\n", err)
 			return fmt.Errorf("error generating file id: %w", err)
 		}
 
 		query = `INSERT INTO workspace_file (id, revision_number, chart_id, workspace_id, file_path, content, content_pending) VALUES ($1, $2, $3, $4, $5, $6, $7)`
-		result, err := tx.Exec(ctx, query, id, revisionNumber, chartID, workspaceID, path, "", contentPending)
+		_, err = tx.Exec(ctx, query, id, revisionNumber, chartID, workspaceID, path, "", contentPending)
 		if err != nil {
-			fmt.Printf("DEBUG-CONTENT-PENDING: Error inserting file: %v\n", err)
 			return fmt.Errorf("error inserting file: %w", err)
 		}
-		
-		rowsAffected := result.RowsAffected()
-		fmt.Printf("DEBUG-CONTENT-PENDING: Insert affected %d rows\n", rowsAffected)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		fmt.Printf("DEBUG-CONTENT-PENDING: Error committing transaction: %v\n", err)
 		return fmt.Errorf("error committing transaction: %w", err)
 	}
-	
-	fmt.Printf("DEBUG-CONTENT-PENDING: Successfully committed transaction to update/insert content_pending\n")
+
 	return nil
 }

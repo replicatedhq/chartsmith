@@ -279,29 +279,9 @@ func min(a, b int) int {
 }
 
 func finalizeFile(ctx context.Context, finalContent string, updatedPlan *workspacetypes.Plan, p executeActionPayload, w *workspacetypes.Workspace, c workspacetypes.Chart, realtimeRecipient realtimetypes.Recipient) error {
-	// DEBUG-CONTENT-PENDING: Log the content before setting it in the database
-	logger.Info("DEBUG-CONTENT-PENDING: Finalizing file content",
-		zap.String("path", p.Path),
-		zap.String("planId", updatedPlan.ID),
-		zap.Int("contentLength", len(finalContent)),
-		zap.String("contentSnippet", finalContent[:min(100, len(finalContent))]),
-		zap.Int("revision", w.CurrentRevision),
-		zap.String("chartID", c.ID),
-		zap.String("workspaceID", w.ID))
-	
 	if err := workspace.SetFileContentPending(ctx, p.Path, w.CurrentRevision, c.ID, w.ID, finalContent); err != nil {
-		logger.Error(fmt.Errorf("failed to set file content pending: %w", err),
-			zap.String("DEBUG-CONTENT-PENDING", "Failed to set file content pending"),
-			zap.String("path", p.Path),
-			zap.String("planId", updatedPlan.ID))
 		return fmt.Errorf("failed to set file content pending: %w", err)
 	}
-	
-	// DEBUG-CONTENT-PENDING: Log successful update
-	logger.Info("DEBUG-CONTENT-PENDING: Successfully set file content pending",
-		zap.String("path", p.Path),
-		zap.String("planId", updatedPlan.ID))
-
 	// update the action file to completed
 	conn := persistence.MustGeUunpooledPostgresSession()
 	defer conn.Close(ctx)

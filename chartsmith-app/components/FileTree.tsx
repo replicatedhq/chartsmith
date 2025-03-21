@@ -285,7 +285,12 @@ export function FileTree({ files = [], charts = [] }: FileTreeProps) {
         )}
         <div className="flex-1 flex items-center min-w-0">
           <span className="text-xs truncate">{node.name}</span>
-          {patchStats && (
+          {/* For new files (empty content with pending changes) */}
+          {node.type === "file" && (!node.content || node.content === "") && node.contentPending ? (
+            <span className="ml-2 text-[10px] font-mono whitespace-nowrap">
+              <span className="text-green-500">+{node.contentPending?.split('\n').length || 0}</span>
+            </span>
+          ) : patchStats ? (
             <span className="ml-2 text-[10px] font-mono whitespace-nowrap">
               {patchStats.additions > 0 && (
                 <span className="text-green-500">+{patchStats.additions}</span>
@@ -297,7 +302,7 @@ export function FileTree({ files = [], charts = [] }: FileTreeProps) {
                 <span className="text-red-500">-{patchStats.deletions}</span>
               )}
             </span>
-          )}
+          ) : null}
         </div>
         <button
           onClick={(e) => node.type === "file" && handleDelete(node, e)}

@@ -8,7 +8,9 @@ import (
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
 	llmtypes "github.com/replicatedhq/chartsmith/pkg/llm/types"
+	"github.com/replicatedhq/chartsmith/pkg/logger"
 	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
+	"go.uber.org/zap"
 )
 
 const (
@@ -33,9 +35,6 @@ func min(a, b int) int {
 }
 
 func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWithPath, plan *workspacetypes.Plan, currentContent string) (string, error) {
-	// DEBUG-CONTENT-PENDING: Log the initial content
-	fmt.Printf("DEBUG-CONTENT-PENDING: Starting ExecuteAction for path=%s, action=%s, content_len=%d\n", 
-		actionPlanWithPath.Path, actionPlanWithPath.Action, len(currentContent))
 	updatedContent := currentContent
 
 	client, err := newAnthropicClient(ctx)
@@ -111,12 +110,12 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 				return "", err
 			}
 
-			switch event := event.AsUnion().(type) {
-			case anthropic.ContentBlockDeltaEvent:
-				if event.Delta.Text != "" {
-					fmt.Printf("%s", event.Delta.Text)
-				}
-			}
+			// switch event := event.AsUnion().(type) {
+			// case anthropic.ContentBlockDeltaEvent:
+			// 	if event.Delta.Text != "" {
+			// 		fmt.Printf("%s", event.Delta.Text)
+			// 	}
+			// }
 		}
 
 		if stream.Err() != nil {
@@ -144,17 +143,18 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 					return "", err
 				}
 
+				logger.Info("LLM text_editor tool use",
+					zap.String("command", input.Command),
+					zap.String("path", input.Path),
+					zap.Int("old_str_len", len(input.OldStr)),
+					zap.Int("new_str_len", len(input.NewStr)))
+
 				if input.Command == "view" {
-					fmt.Printf("DEBUG-CONTENT-PENDING: LLM viewing content, length=%d\n", len(updatedContent))
 					response = updatedContent
 				} else if input.Command == "str_replace" {
-					fmt.Printf("DEBUG-CONTENT-PENDING: LLM using str_replace, old_len=%d, new_len=%d\n", 
-						len(input.OldStr), len(input.NewStr))
 					updatedContent = strings.ReplaceAll(updatedContent, input.OldStr, input.NewStr)
 					response = "Updated"
 				} else if input.Command == "create" {
-					fmt.Printf("DEBUG-CONTENT-PENDING: LLM using create, new content length=%d\n", 
-						len(input.NewStr))
 					updatedContent = input.NewStr
 					response = "Created"
 				}
@@ -178,9 +178,5 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 		})
 	}
 
-	// DEBUG-CONTENT-PENDING: Log final content before returning
-	fmt.Printf("DEBUG-CONTENT-PENDING: Finished ExecuteAction, final content length=%d, snippet=%s\n", 
-		len(updatedContent), updatedContent[:min(100, len(updatedContent))])
-	
 	return updatedContent, nil
 }
