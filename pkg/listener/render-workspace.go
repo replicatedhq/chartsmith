@@ -70,23 +70,30 @@ func handleRenderWorkspaceNotification(ctx context.Context, payload string) erro
 	timeoutCtx, cancel := context.WithTimeout(ctx, 10*time.Minute) // Increased timeout to 10 minutes
 	defer cancel()
 
+	logger.Debug("Verifying database connection")
 	// Verify connection is active before proceeding
 	if err := ensureActiveConnection(timeoutCtx); err != nil {
 		logger.Error(fmt.Errorf("connection check failed before processing notification: %w", err))
 		// Continue anyway, as we're using a fresh connection below
 	}
+	logger.Debug("Database connection verified")
 
 	logger.Info("Processing render workspace notification",
 		zap.String("payload", payload),
 		zap.Time("startTime", startTime),
 	)
 
+	logger.Debug("Unmarshalling payload")
 	var p renderWorkspacePayload
 	if err := json.Unmarshal([]byte(payload), &p); err != nil {
 		logger.Error(fmt.Errorf("failed to unmarshal render workspace notification: %w", err),
 			zap.String("payload", payload))
 		return fmt.Errorf("failed to unmarshal render workspace notification: %w", err)
 	}
+	logger.Debug("Successfully unmarshalled payload", 
+		zap.String("id", p.ID),
+		zap.String("workspaceID", p.WorkspaceID),
+		zap.Int("revisionNumber", p.RevisionNumber))
 
 	logger.Info("Successfully parsed render payload",
 		zap.String("id", p.ID),
@@ -114,8 +121,18 @@ func handleRenderWorkspaceNotification(ctx context.Context, payload string) erro
 	logger.Info("Fetching existing render job",
 		zap.String("renderID", p.ID),
 	)
+	
+	logger.Debug("Calling workspace.GetRendered", 
+		zap.String("renderID", p.ID))
+	startFetch := time.Now()
 
 	renderedWorkspace, err := workspace.GetRendered(ctx, p.ID)
+	
+	logger.Debug("workspace.GetRendered completed", 
+		zap.String("renderID", p.ID),
+		zap.Duration("duration", time.Since(startFetch)),
+		zap.Error(err))
+		
 	if err != nil {
 		logger.Error(fmt.Errorf("failed to get rendered: %w", err))
 		if strings.Contains(err.Error(), "context deadline exceeded") ||

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"runtime/debug"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -59,29 +60,81 @@ func FailRendered(ctx context.Context, id string, errorMessage string) error {
 }
 
 func GetRendered(ctx context.Context, id string) (*types.Rendered, error) {
+	startTime := time.Now()
 	logger.Info("GetRendered", zap.String("id", id))
+	
+	// Add panic recovery
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error(fmt.Errorf("PANIC in GetRendered: %v", r),
+				zap.String("id", id))
+			debug.PrintStack()
+		}
+		
+		logger.Debug("GetRendered completed",
+			zap.String("id", id),
+			zap.Duration("duration", time.Since(startTime)))
+	}()
 
+	logger.Debug("Getting DB connection", zap.String("id", id))
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
+	logger.Debug("Got DB connection", zap.String("id", id))
 
 	query := `SELECT id, workspace_id, revision_number, created_at, completed_at, is_autorender FROM workspace_rendered WHERE id = $1`
+	logger.Debug("Executing first query", 
+		zap.String("id", id),
+		zap.String("query", query))
+		
 	row := conn.QueryRow(ctx, query, id)
+	logger.Debug("Got row from first query", zap.String("id", id))
 
 	var rendered types.Rendered
 	var completedAt sql.NullTime
+	
+	logger.Debug("About to scan row", zap.String("id", id))
 	if err := row.Scan(&rendered.ID, &rendered.WorkspaceID, &rendered.RevisionNumber, &rendered.CreatedAt, &completedAt, &rendered.IsAutorender); err != nil {
+		logger.Error(fmt.Errorf("failed to scan row: %w", err),
+			zap.String("id", id))
 		return nil, fmt.Errorf("failed to get rendered: %w", err)
 	}
+	logger.Debug("Successfully scanned row", 
+		zap.String("id", id),
+		zap.String("workspaceID", rendered.WorkspaceID),
+		zap.Int("revisionNumber", rendered.RevisionNumber))
 
 	rendered.CompletedAt = &completedAt.Time
+	
 	query = `SELECT id, chart_id, is_success, dep_update_command, dep_update_stdout, dep_update_stderr, helm_template_command, helm_template_stdout, helm_template_stderr, created_at, completed_at FROM workspace_rendered_chart WHERE workspace_render_id = $1`
+	
+	logger.Debug("Executing second query for charts", 
+		zap.String("id", id),
+		zap.String("workspaceID", rendered.WorkspaceID))
+		
 	rows, err := conn.Query(ctx, query, id)
 	if err != nil {
+		logger.Error(fmt.Errorf("failed to query rendered charts: %w", err),
+			zap.String("id", id),
+			zap.String("workspaceID", rendered.WorkspaceID))
 		return nil, fmt.Errorf("failed to get rendered charts: %w", err)
 	}
+	
+	logger.Debug("Successfully executed charts query", 
+		zap.String("id", id),
+		zap.String("workspaceID", rendered.WorkspaceID))
+		
 	defer rows.Close()
 
+	rowCount := 0
+	logger.Debug("Starting to iterate through rendered chart rows", 
+		zap.String("id", id))
+		
 	for rows.Next() {
+		rowCount++
+		logger.Debug("Processing chart row", 
+			zap.String("id", id),
+			zap.Int("rowNumber", rowCount))
+			
 		var renderedChart types.RenderedChart
 
 		var depUpdateCommand sql.NullString
@@ -93,9 +146,21 @@ func GetRendered(ctx context.Context, id string) (*types.Rendered, error) {
 
 		var completedAt sql.NullTime
 
+		logger.Debug("About to scan chart row", 
+			zap.String("id", id),
+			zap.Int("rowNumber", rowCount))
+			
 		if err := rows.Scan(&renderedChart.ID, &renderedChart.ChartID, &renderedChart.IsSuccess, &depUpdateCommand, &depUpdateStdout, &depUpdateStderr, &helmTemplateCommand, &helmTemplateStdout, &helmTemplateStderr, &renderedChart.CreatedAt, &completedAt); err != nil {
+			logger.Error(fmt.Errorf("failed to scan chart row: %w", err),
+				zap.String("id", id),
+				zap.Int("rowNumber", rowCount))
 			return nil, fmt.Errorf("failed to get rendered chart: %w", err)
 		}
+		
+		logger.Debug("Successfully scanned chart row", 
+			zap.String("id", id),
+			zap.String("chartID", renderedChart.ChartID),
+			zap.Int("rowNumber", rowCount))
 
 		renderedChart.DepupdateCommand = depUpdateCommand.String
 		renderedChart.DepupdateStdout = depUpdateStdout.String
@@ -106,7 +171,16 @@ func GetRendered(ctx context.Context, id string) (*types.Rendered, error) {
 		renderedChart.CompletedAt = &completedAt.Time
 
 		rendered.Charts = append(rendered.Charts, renderedChart)
+		logger.Debug("Added chart to rendered object", 
+			zap.String("id", id),
+			zap.String("chartID", renderedChart.ChartID),
+			zap.Int("currentChartCount", len(rendered.Charts)))
 	}
+
+	logger.Debug("Completed processing all chart rows", 
+		zap.String("id", id),
+		zap.Int("totalRowsProcessed", rowCount),
+		zap.Int("finalChartCount", len(rendered.Charts)))
 
 	return &rendered, nil
 }
