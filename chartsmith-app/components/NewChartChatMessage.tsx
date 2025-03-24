@@ -200,7 +200,7 @@ export function NewChartChatMessage({
     <div className="space-y-2" data-testid="chat-message">
       {/* User Message */}
       <div className="px-2 py-1" data-testid="user-message">
-        <div className={`p-3 rounded-lg ${theme === "dark" ? "bg-gray-800" : "bg-gray-100"} rounded-tr-sm w-full`}>
+        <div className={`p-3 rounded-lg ${theme === "dark" ? "bg-primary/20" : "bg-primary/10"} rounded-tr-sm w-full`}>
           <div className="flex items-start gap-2">
             <Image
               src={session.user.imageUrl}
@@ -243,7 +243,7 @@ export function NewChartChatMessage({
       {/* Assistant Message */}
       {(message.response || message.responsePlanId || message.responseRenderId || message.responseConversionId || (message.isIntentComplete && !message.responsePlanId)) && (
         <div className="px-2 py-1" data-testid="assistant-message">
-          <div className={`p-3 rounded-lg ${theme === "dark" ? "bg-transparent" : "bg-transparent"} rounded-tl-sm w-full`}>
+          <div className={`p-3 rounded-lg ${theme === "dark" ? "bg-dark-border/40" : "bg-gray-100"} rounded-tl-sm w-full`}>
             <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"} mb-1 flex items-center justify-between`}>
               <div>ChartSmith</div>
               <div className="text-[10px] opacity-70">
@@ -289,8 +289,8 @@ export function NewChartChatMessage({
                     key={index}
                     className={`text-xs px-2 py-1 rounded ${
                       theme === "dark"
-                        ? "bg-red-500 border-red-600 text-gray-300 hover:text-white hover:bg-red-600"
-                        : "bg-red-400 border border-red-500 text-gray-600 hover:text-gray-800 hover:bg-red-500"
+                        ? "bg-dark border-dark-border/60 text-gray-300 hover:text-white hover:bg-dark-border/40"
+                        : "bg-white border border-gray-300 text-gray-600 hover:text-gray-800 hover:bg-gray-50"
                     }`}
                     onClick={async () => {
                       const chatMessage = await performFollowupAction(session, workspace.id, message.id, action.action);
@@ -327,15 +327,15 @@ export function NewChartChatMessage({
                       style={{ height: 'auto', minHeight: '34px', maxHeight: '150px' }}
                       className={`w-full px-3 py-1.5 pr-10 text-sm rounded-md border resize-none overflow-hidden ${
                         theme === "dark"
-                          ? "bg-purple-500 border-purple-600 text-white placeholder-gray-200"
-                          : "bg-purple-400 border-purple-500 text-gray-900 placeholder-gray-200"
+                          ? "bg-dark border-dark-border/60 text-white placeholder-gray-500"
+                          : "bg-white border-gray-200 text-gray-900 placeholder-gray-400"
                       } focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50`}
                     />
                     <button
                       type="submit"
                       className={`absolute right-2 top-[5px] p-1.5 rounded-full ${
-                        theme === "dark" ? "text-gray-400 hover:bg-green-500" : "text-gray-500 hover:bg-green-400"
-                      }`}
+                        theme === "dark" ? "text-gray-400 hover:text-gray-200" : "text-gray-500 hover:text-gray-700"
+                      } hover:bg-gray-100 dark:hover:bg-dark-border/40`}
                     >
                       <Send className="w-4 h-4" />
                     </button>
