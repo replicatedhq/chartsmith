@@ -29,20 +29,15 @@ type renderWorkspacePayload struct {
 
 // ensureActiveConnection performs a lightweight operation to ensure database connection is alive
 func ensureActiveConnection(ctx context.Context) error {
-	logger.Debug("ensureActiveConnection: Starting database connection check")
-	
 	// Create a specific timeout context for this operation
 	dbCheckCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	
 	// Get a fresh connection and perform a simple query to verify connectivity
-	logger.Debug("ensureActiveConnection: Getting pooled connection")
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
-	logger.Debug("ensureActiveConnection: Got pooled connection")
 
 	// Perform a simple ping-like query
-	logger.Debug("ensureActiveConnection: Executing SELECT 1 query")
 	var result int
 	err := conn.QueryRow(dbCheckCtx, "SELECT 1").Scan(&result)
 	if err != nil {
@@ -55,7 +50,6 @@ func ensureActiveConnection(ctx context.Context) error {
 		return fmt.Errorf("unexpected result from connection check: %d", result)
 	}
 
-	logger.Debug("ensureActiveConnection: Database connection check successful")
 	return nil
 }
 
@@ -69,21 +63,12 @@ func handleRenderWorkspaceNotification(ctx context.Context, payload string) erro
 			logger.Error(err)
 			logger.Error(fmt.Errorf("Stack trace (if available):\n%s", string(debug.Stack())))
 		}
-		logger.Debug("handleRenderWorkspaceNotification completed", 
-			zap.Duration("duration", time.Since(startTime)),
-			zap.String("payload", payload))
 	}()
-	
-	// Add explicit logging at the very beginning
-	logger.Debug("handleRenderWorkspaceNotification started", 
-		zap.String("payload", payload))
 
 	// Create a timeout context to ensure we don't hang indefinitely
 	timeoutCtx, cancel := context.WithTimeout(ctx, 10*time.Minute) // Increased timeout to 10 minutes
 	defer cancel()
 
-	logger.Debug("Verifying database connection")
-	
 	// Use a separate shorter timeout just for the connection check
 	connCheckCtx, connCheckCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer connCheckCancel()
@@ -91,10 +76,7 @@ func handleRenderWorkspaceNotification(ctx context.Context, payload string) erro
 	// Verify connection is active before proceeding
 	if err := ensureActiveConnection(connCheckCtx); err != nil {
 		logger.Error(fmt.Errorf("connection check failed before processing notification: %w", err))
-		logger.Debug("Continuing despite connection check failure - will use a fresh connection")
 		// Continue anyway, as we're using a fresh connection below
-	} else {
-		logger.Debug("Database connection verified successfully")
 	}
 
 	logger.Info("Processing render workspace notification",
@@ -102,17 +84,12 @@ func handleRenderWorkspaceNotification(ctx context.Context, payload string) erro
 		zap.Time("startTime", startTime),
 	)
 
-	logger.Debug("Unmarshalling payload")
 	var p renderWorkspacePayload
 	if err := json.Unmarshal([]byte(payload), &p); err != nil {
 		logger.Error(fmt.Errorf("failed to unmarshal render workspace notification: %w", err),
 			zap.String("payload", payload))
 		return fmt.Errorf("failed to unmarshal render workspace notification: %w", err)
 	}
-	logger.Debug("Successfully unmarshalled payload", 
-		zap.String("id", p.ID),
-		zap.String("workspaceID", p.WorkspaceID),
-		zap.Int("revisionNumber", p.RevisionNumber))
 
 	logger.Info("Successfully parsed render payload",
 		zap.String("id", p.ID),
@@ -141,16 +118,7 @@ func handleRenderWorkspaceNotification(ctx context.Context, payload string) erro
 		zap.String("renderID", p.ID),
 	)
 	
-	logger.Debug("Calling workspace.GetRendered", 
-		zap.String("renderID", p.ID))
-	startFetch := time.Now()
-
 	renderedWorkspace, err := workspace.GetRendered(ctx, p.ID)
-	
-	logger.Debug("workspace.GetRendered completed", 
-		zap.String("renderID", p.ID),
-		zap.Duration("duration", time.Since(startFetch)),
-		zap.Error(err))
 		
 	if err != nil {
 		logger.Error(fmt.Errorf("failed to get rendered: %w", err))
@@ -324,11 +292,6 @@ func renderChart(ctx context.Context, renderedChart *workspacetypes.RenderedChar
 	}()
 	startTime := time.Now()
 
-	logger.Debug("renderChart function started", 
-		zap.String("chartID", renderedChart.ChartID),
-		zap.String("renderID", renderedWorkspace.ID),
-		zap.String("workspaceID", renderedWorkspace.WorkspaceID))
-
 	logger.Info("Starting chart render",
 		zap.String("chartID", renderedChart.ChartID),
 		zap.String("workspaceID", renderedWorkspace.WorkspaceID),
@@ -409,23 +372,11 @@ func renderChart(ctx context.Context, renderedChart *workspacetypes.RenderedChar
 	go func(usePendingContent bool) {
 		files := chart.Files
 		
-		logger.Debug("Starting RenderChartExec",
-			zap.String("chartID", chart.ID),
-			zap.String("chartName", chart.Name),
-			zap.Int("fileCount", len(files)),
-			zap.Bool("usePendingContent", usePendingContent))
-
 		err := helmutils.RenderChartExec(files, "", renderChannels)
 		if err != nil {
-			logger.Debug("RenderChartExec failed", 
-				zap.String("chartID", chart.ID),
-				zap.String("error", err.Error()))
 			done <- err
 			return
 		}
-
-		logger.Debug("RenderChartExec completed successfully",
-			zap.String("chartID", chart.ID))
 		done <- nil
 	}(usePendingContent)
 
@@ -455,17 +406,9 @@ func renderChart(ctx context.Context, renderedChart *workspacetypes.RenderedChar
 
 	renderedFiles := []workspacetypes.RenderedFile{}
 
-	logger.Debug("Beginning render channel processing",
-		zap.String("chartID", renderedChart.ChartID),
-		zap.String("renderID", renderedWorkspace.ID))
-
 	for {
 		select {
 		case err := <-renderChannels.Done:
-			logger.Debug("Received signal from renderChannels.Done", 
-				zap.String("chartID", renderedChart.ChartID),
-				zap.Error(err))
-				
 			isSuccess := true
 			if err != nil {
 				isSuccess = false
@@ -670,14 +613,7 @@ func parseRenderedFiles(ctx context.Context, stdout string, chartName string, re
 			logger.Error(fmt.Errorf("Stack trace (if available):\n%s", string(debug.Stack())))
 		}
 	}()
-	logger.Debug("parseRenderedFiles started",
-		zap.String("chartName", chartName),
-		zap.Int("stdoutLength", len(stdout)),
-		zap.Int("existingRenderedFilesCount", len(*renderedFiles)),
-		zap.Int("workspaceFilesCount", len(workspaceFiles)))
-	
 	if stdout == "" {
-		logger.Debug("Empty stdout, returning empty files list")
 		return []workspacetypes.RenderedFile{}, nil
 	}
 
@@ -691,9 +627,6 @@ func parseRenderedFiles(ctx context.Context, stdout string, chartName string, re
 
 	// Split the stdout into individual YAML documents
 	documents := strings.Split(stdout, "\n---\n")
-	logger.Debug("Split stdout into YAML documents", 
-		zap.String("chartName", chartName),
-		zap.Int("documentCount", len(documents)))
 
 	updatedFiles := []workspacetypes.RenderedFile{}
 
@@ -756,10 +689,5 @@ func parseRenderedFiles(ctx context.Context, stdout string, chartName string, re
 		}
 	}
 
-	logger.Debug("Completed parsing rendered files",
-		zap.String("chartName", chartName),
-		zap.Int("updatedFilesCount", len(updatedFiles)),
-		zap.Int("totalRenderedFilesCount", len(*renderedFiles)))
-		
 	return updatedFiles, nil
 }
