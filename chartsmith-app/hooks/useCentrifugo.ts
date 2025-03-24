@@ -225,16 +225,23 @@ export function useCentrifugo({
 
       if (fileUpdated) {
         // After updating the workspace, select the file in the editor
-        // The setTimeout ensures this happens after the workspace update
+        // Use a longer timeout to ensure the workspace update is fully processed
         setTimeout(() => {
-          setSelectedFile({
-            id: artifactFile.id,
-            revisionNumber: artifactFile.revision_number,
-            filePath: artifactFile.filePath,
-            content: artifactFile.content || "",
-            contentPending: artifactFile.content_pending
-          });
-        }, 0);
+          console.log("Selecting file after artifact update:", artifactFile.filePath);
+          // First reset selection to force a re-render
+          setSelectedFile(null);
+          
+          // Then select the file after a short delay
+          setTimeout(() => {
+            setSelectedFile({
+              id: artifactFile.id,
+              revisionNumber: artifactFile.revision_number,
+              filePath: artifactFile.filePath,
+              content: artifactFile.content || "",
+              contentPending: artifactFile.content_pending
+            });
+          }, 50);
+        }, 50);
 
         return updatedWorkspace;
       }

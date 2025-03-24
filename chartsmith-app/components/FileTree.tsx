@@ -99,6 +99,42 @@ export function FileTree({ files = [], charts = [] }: FileTreeProps) {
     return expanded;
   });
 
+  // Helper function to expand parent directories for a file path
+  const expandParentDirectories = React.useCallback((filePath: string | undefined, chartId?: string) => {
+    if (!filePath) return;
+    
+    setExpandedFolders(prev => {
+      const expanded = new Set(prev);
+      
+      // If this file belongs to a chart, make sure the chart folder is expanded
+      if (chartId) {
+        expanded.add(chartId);
+      }
+      
+      // Add all parent directories to the expandedFolders set
+      const parts = filePath.split('/');
+      let path = '';
+      for (let i = 0; i < parts.length - 1; i++) {
+        path = path ? `${path}/${parts[i]}` : parts[i];
+        expanded.add(path);
+      }
+      
+      return expanded;
+    });
+  }, []);
+
+  // Effect to expand parent directories when a file is selected
+  React.useEffect(() => {
+    if (selectedFile?.filePath) {
+      // Find the chart this file belongs to, if any
+      const chartId = charts.find(chart => 
+        chart.files.some(file => file.filePath === selectedFile.filePath)
+      )?.id;
+      
+      expandParentDirectories(selectedFile.filePath, chartId);
+    }
+  }, [selectedFile?.filePath, expandParentDirectories, charts]);
+
   React.useEffect(() => {
     const newFiles = files.filter(file =>
       !prevFilesRef.current.some(prevFile => prevFile.filePath === file.filePath)
@@ -247,14 +283,95 @@ export function FileTree({ files = [], charts = [] }: FileTreeProps) {
     return nextNewline < patch.length - 1;
   };
 
+  // Create a ref for selected file elements
+  const selectedNodeRef = React.useRef<HTMLDivElement>(null);
+
+  // Reference to the outer container of the file tree
+  const treeContainerRef = React.useRef<HTMLDivElement>(null);
+
+  // Add effect to scroll selected element into view
+  React.useEffect(() => {
+    if (!selectedFile?.filePath) return;
+    
+    console.log("Selected file path changed:", selectedFile.filePath);
+    
+    // First ensure folders are expanded
+    const chartId = charts.find(chart => 
+      chart.files.some(file => file.filePath === selectedFile.filePath)
+    )?.id;
+    
+    expandParentDirectories(selectedFile.filePath, chartId);
+    
+    // Then scroll the element into view after DOM updates
+    const scrollTimeout = setTimeout(() => {
+      if (selectedNodeRef.current) {
+        console.log("Scrolling node into view:", selectedFile.filePath);
+        // Use a more reliable scroll approach
+        selectedNodeRef.current.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center', // Center the element in the viewport
+        });
+      } else {
+        console.log("Node reference not found for:", selectedFile.filePath);
+        console.log("Available nodes:", [...fileNodesMap.current.keys()]);
+      }
+    }, 500); // Longer timeout to ensure all DOM updates have completed
+    
+    return () => clearTimeout(scrollTimeout);
+  }, [selectedFile?.filePath, expandParentDirectories, charts]);
+
+  // Map to keep track of all file nodes by their filePath for easier reference
+  const fileNodesMap = React.useRef(new Map<string, HTMLDivElement>());
+  
+  // Reset the file nodes map when the file or chart list changes
+  React.useEffect(() => {
+    // Keep the map in sync with actual rendered nodes
+    const currentPaths = [...files.map(f => f.filePath), 
+      ...charts.flatMap(chart => chart.files.map(f => f.filePath))];
+    
+    // Remove any stale entries
+    for (const path of fileNodesMap.current.keys()) {
+      if (!currentPaths.includes(path)) {
+        fileNodesMap.current.delete(path);
+      }
+    }
+  }, [files, charts]);
+  
+  // When selectedFile changes, update the selectedNodeRef
+  React.useEffect(() => {
+    if (selectedFile?.filePath) {
+      console.log("Looking for node with path:", selectedFile.filePath);
+      const selectedNode = fileNodesMap.current.get(selectedFile.filePath);
+      if (selectedNode) {
+        console.log("Found node in map, updating ref");
+        selectedNodeRef.current = selectedNode;
+      } else {
+        console.log("Node not found in map yet");
+      }
+    }
+  }, [selectedFile?.filePath]);
+
   const renderNode = (node: TreeNode, level: number) => {
     const patchStats = node.type === "file" ?
       getPatchStats(node.contentPending, node.content) : null;
+    
+    const isSelected = selectedFile?.filePath === node.filePath;
 
     return (
     <div key={node.filePath}>
       <div
-        className={`flex items-center py-1 px-2 cursor-pointer rounded-sm group ${selectedFile?.filePath === node.filePath ? `bg-primary/10 text-primary` : theme === "dark" ? "text-gray-300 hover:text-gray-100 hover:bg-dark-border/40" : "text-gray-700 hover:text-gray-900 hover:bg-gray-100"}`}
+        ref={el => {
+          // Store all file nodes in our map for easier access
+          if (el && node.type === "file") {
+            fileNodesMap.current.set(node.filePath, el);
+            
+            // If this is the selected node, also update selectedNodeRef
+            if (isSelected) {
+              selectedNodeRef.current = el;
+            }
+          }
+        }}
+        className={`flex items-center py-1 px-2 cursor-pointer rounded-sm group ${isSelected ? `bg-primary/10 text-primary` : theme === "dark" ? "text-gray-300 hover:text-gray-100 hover:bg-dark-border/40" : "text-gray-700 hover:text-gray-900 hover:bg-gray-100"}`}
         style={{ paddingLeft: `${level * 16}px` }}
         onClick={() => {
           if (node.type === "folder") {
@@ -335,7 +452,7 @@ export function FileTree({ files = [], charts = [] }: FileTreeProps) {
 
   return (
     <>
-      <div className="flex-1 overflow-auto p-2">
+      <div ref={treeContainerRef} className="flex-1 overflow-auto p-2">
         {treeNodes
           .sort((a, b) => {
             if (a.type === "folder" && b.type !== "folder") return -1;
