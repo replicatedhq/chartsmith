@@ -82,12 +82,14 @@ func MustGetPooledPostgresSession() *pgxpool.Conn {
 		panic("Postgres pool is not initialized")
 	}
 
-	// Log pool stats
-	logger.Debug("Pool stats before acquire",
-		zap.Int32("TotalConns", pool.Stat().TotalConns()),
-		zap.Int32("AcquiredConns", pool.Stat().AcquiredConns()),
-		zap.Int32("IdleConns", pool.Stat().IdleConns()),
-		zap.Int32("MaxConns", pool.Stat().MaxConns()))
+	// Only log pool stats if pool is getting full
+	if pool.Stat().AcquiredConns() >= pool.Stat().MaxConns()*70/100 {
+		logger.Debug("Pool stats before acquire",
+			zap.Int32("TotalConns", pool.Stat().TotalConns()),
+			zap.Int32("AcquiredConns", pool.Stat().AcquiredConns()),
+			zap.Int32("IdleConns", pool.Stat().IdleConns()),
+			zap.Int32("MaxConns", pool.Stat().MaxConns()))
+	}
 	
 	// If the pool is saturated, log a warning
 	if pool.Stat().AcquiredConns() >= pool.Stat().MaxConns() {
@@ -99,7 +101,6 @@ func MustGetPooledPostgresSession() *pgxpool.Conn {
 
 	// Track timing for connection acquisition
 	startTime := time.Now()
-	logger.Debug("Getting pooled PostgreSQL connection")
 	
 	// Try 3 times to get a connection with increasing timeouts
 	var conn *pgxpool.Conn
@@ -114,10 +115,13 @@ func MustGetPooledPostgresSession() *pgxpool.Conn {
 		cancel() // Cancel the context immediately after the acquire attempt
 		
 		if err == nil {
-			// Successfully acquired a connection
-			logger.Debug("Acquired PostgreSQL connection", 
-				zap.Duration("duration", time.Since(startTime)),
-				zap.Int("attempt", attempt))
+			// Only log if acquisition was slow
+			duration := time.Since(startTime)
+			if duration > 100*time.Millisecond {
+				logger.Debug("Slow DB connection acquisition", 
+					zap.String("duration", duration.String()),
+					zap.Int("attempt", attempt))
+			}
 			return conn
 		}
 		
@@ -126,8 +130,8 @@ func MustGetPooledPostgresSession() *pgxpool.Conn {
 			zap.Int("maxAttempts", 3),
 			zap.Error(err))
 			
-		// Check if the pool is still saturated before retrying
-		logger.Debug("Pool stats after failed attempt",
+		// Only log pool stats on failure
+		logger.Warn("Pool stats after failed acquisition attempt",
 			zap.Int32("TotalConns", pool.Stat().TotalConns()),
 			zap.Int32("AcquiredConns", pool.Stat().AcquiredConns()),
 			zap.Int32("IdleConns", pool.Stat().IdleConns()),
@@ -159,12 +163,14 @@ func monitorPoolHealth() {
 		
 		stats := pool.Stat()
 		
-		// Log current pool statistics
-		logger.Info("DB Pool Health", 
-			zap.Int32("Total", stats.TotalConns()),
-			zap.Int32("Acquired", stats.AcquiredConns()),
-			zap.Int32("Idle", stats.IdleConns()),
-			zap.Int32("Max", stats.MaxConns()))
+		// Only log if pool usage is significant
+		if stats.AcquiredConns() > stats.MaxConns()*20/100 {
+			logger.Info("DB Pool Health", 
+				zap.Int32("Total", stats.TotalConns()),
+				zap.Int32("Acquired", stats.AcquiredConns()),
+				zap.Int32("Idle", stats.IdleConns()),
+				zap.Int32("Max", stats.MaxConns()))
+		}
 		
 		// Check if the pool is approaching saturation
 		if stats.AcquiredConns() > stats.MaxConns()*80/100 {
@@ -197,8 +203,7 @@ func monitorPoolHealth() {
 			logger.Error(fmt.Errorf("health check query failed: %w", err))
 		} else if result != 1 {
 			logger.Error(fmt.Errorf("health check returned unexpected result: %d", result))
-		} else {
-			logger.Debug("DB health check: connection test passed")
 		}
+		// Removed the "DB health check: connection test passed" message to reduce noise
 	}
 }
