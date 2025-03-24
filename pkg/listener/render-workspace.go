@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -49,12 +50,21 @@ func ensureActiveConnection(ctx context.Context) error {
 func handleRenderWorkspaceNotification(ctx context.Context, payload string) error {
 	startTime := time.Now()
 	
-	// Add defer for debugging  
+	// Add panic recovery
 	defer func() {
+		if r := recover(); r != nil {
+			err := fmt.Errorf("PANIC in handleRenderWorkspaceNotification: %v", r)
+			logger.Error(err)
+			logger.Error(fmt.Errorf("Stack trace (if available):\n%s", string(debug.Stack())))
+		}
 		logger.Debug("handleRenderWorkspaceNotification completed", 
 			zap.Duration("duration", time.Since(startTime)),
 			zap.String("payload", payload))
 	}()
+	
+	// Add explicit logging at the very beginning
+	logger.Debug("handleRenderWorkspaceNotification started", 
+		zap.String("payload", payload))
 
 	// Create a timeout context to ensure we don't hang indefinitely
 	timeoutCtx, cancel := context.WithTimeout(ctx, 10*time.Minute) // Increased timeout to 10 minutes
@@ -269,6 +279,13 @@ func handleRenderWorkspaceNotification(ctx context.Context, payload string) erro
 }
 
 func renderChart(ctx context.Context, renderedChart *workspacetypes.RenderedChart, renderedWorkspace *workspacetypes.Rendered, w *workspacetypes.Workspace, usePendingContent bool) error {
+	// Add panic recovery
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error(fmt.Errorf("PANIC in renderChart: %v", r))
+			logger.Error(fmt.Errorf("Stack trace (if available):\n%s", string(debug.Stack())))
+		}
+	}()
 	startTime := time.Now()
 
 	logger.Debug("renderChart function started", 
@@ -610,6 +627,13 @@ func renderChart(ctx context.Context, renderedChart *workspacetypes.RenderedChar
 }
 
 func parseRenderedFiles(ctx context.Context, stdout string, chartName string, renderedFiles *[]workspacetypes.RenderedFile, workspaceFiles []workspacetypes.File) ([]workspacetypes.RenderedFile, error) {
+	// Add panic recovery
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error(fmt.Errorf("PANIC in parseRenderedFiles: %v", r))
+			logger.Error(fmt.Errorf("Stack trace (if available):\n%s", string(debug.Stack())))
+		}
+	}()
 	logger.Debug("parseRenderedFiles started",
 		zap.String("chartName", chartName),
 		zap.Int("stdoutLength", len(stdout)),
