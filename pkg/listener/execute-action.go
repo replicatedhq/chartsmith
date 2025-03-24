@@ -225,10 +225,33 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 
 		case interimContent := <-interimContentCh:
 			if file == nil {
-				continue
+				// we need to create the file since we got content
+				// we doin't do this early b/c sometimes the LLM will expect to
+				// create the file but never put content in it
+				err := workspace.AddFileToChart(ctx, c.ID, w.ID, w.CurrentRevision, p.Path, "")
+				if err != nil {
+					return fmt.Errorf("failed to add file to chart: %w", err)
+				}
+
+				files, err := workspace.ListFiles(ctx, w.ID, w.CurrentRevision, c.ID)
+				if err != nil {
+					return fmt.Errorf("failed to list files: %w", err)
+				}
+
+				for _, f := range files {
+					if f.FilePath == p.Path {
+						file = &f
+						break
+					}
+				}
+			}
+
+			if file == nil {
+				return fmt.Errorf("file not found in workspace")
 			}
 
 			file.ContentPending = &interimContent
+
 			e := realtimetypes.ArtifactUpdatedEvent{
 				WorkspaceID:   updatedPlan.WorkspaceID,
 				WorkspaceFile: file,
@@ -248,18 +271,14 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 }
 
 func finalizeFile(ctx context.Context, finalContent string, updatedPlan *workspacetypes.Plan, p executeActionPayload, w *workspacetypes.Workspace, c workspacetypes.Chart, realtimeRecipient realtimetypes.Recipient) error {
-	fmt.Printf("DEBUG-CONTENT-PENDING: Finalizing file content for path=%s, length=%d\n", p.Path, len(finalContent))
-	
 	// Create dedicated context with timeout for database operations
 	dbCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	
+
 	if err := workspace.SetFileContentPending(dbCtx, p.Path, w.CurrentRevision, c.ID, w.ID, finalContent); err != nil {
-		fmt.Printf("DEBUG-CONTENT-PENDING: Failed to set file content pending: %v\n", err)
 		return fmt.Errorf("failed to set file content pending: %w", err)
 	}
-	
-	fmt.Printf("DEBUG-CONTENT-PENDING: Successfully set content_pending in finalizeFile for path=%s\n", p.Path)
+
 	// update the action file to completed
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
