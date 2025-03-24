@@ -213,7 +213,10 @@ export function FileTree({ files = [], charts = [] }: FileTreeProps) {
     }
   };
 
-  // Calculate differences between two content strings
+  // Import the diff library at the top of the file
+  // import { diffLines } from 'diff';
+  
+  // Calculate differences between two content strings using the diff library
   const getContentDiffStats = (originalContent: string, newContent: string) => {
     if (!originalContent || !newContent) {
       return null;
@@ -223,51 +226,56 @@ export function FileTree({ files = [], charts = [] }: FileTreeProps) {
       return { additions: 0, deletions: 0 };
     }
 
-    const originalLines = originalContent.split('\n');
-    const newLines = newContent.split('\n');
-
+    // Import the diff function directly to avoid issues with module imports
+    // This is a workaround since we're editing an existing file
+    const diffLines = require('diff').diffLines;
+    
+    // Use the diffLines function to compare the two strings
+    const changes = diffLines(originalContent, newContent);
+    
     let additions = 0;
     let deletions = 0;
-
-    // Simple diff algorithm that counts line differences
-    // In a real diff, we would use a more sophisticated algorithm
-    // but this will give us a rough estimate for display purposes
-
-    // First, find the minimum length to compare line by line
-    const minLength = Math.min(originalLines.length, newLines.length);
-
-    // Count changed lines
-    for (let i = 0; i < minLength; i++) {
-      if (originalLines[i] !== newLines[i]) {
-        // Count as both an addition and deletion when lines differ
-        additions++;
-        deletions++;
+    
+    // Process each change and count additions and deletions
+    for (const change of changes) {
+      // Count the number of lines more accurately
+      // If the string ends with a newline, we don't want to count an extra empty line
+      const lines = change.value.endsWith('\n') 
+        ? change.value.split('\n').length - 1 
+        : change.value.split('\n').length;
+      
+      // Skip empty changes
+      if (lines === 0) continue;
+      
+      if (change.added) {
+        additions += lines;
+      } else if (change.removed) {
+        deletions += lines;
       }
     }
-
-    // If files have different lengths, count the extras
-    if (originalLines.length > newLines.length) {
-      // Extra lines in original count as deletions
-      deletions += originalLines.length - newLines.length;
-    } else if (newLines.length > originalLines.length) {
-      // Extra lines in new content count as additions
-      additions += newLines.length - originalLines.length;
-    }
-
+    
     return { additions, deletions };
   };
 
   const getPatchStats = (contentPending?: string, content?: string) => {
-    // If we have contentPending, use that instead of patches
+    // If we have both contentPending and content, calculate diff
     if (contentPending && content) {
       return getContentDiffStats(content, contentPending);
     }
+    
+    // Handle case where we have contentPending but no content (new file)
+    if (contentPending && (!content || content === "")) {
+      // For new files, all lines are additions
+      // Count lines properly accounting for trailing newline
+      const lines = contentPending.endsWith('\n')
+        ? contentPending.split('\n').length - 1
+        : contentPending.split('\n').length;
+      
+      return { additions: lines, deletions: 0 };
+    }
 
-    // Sum up counts from all patches in the array
-    const totalAdditions = 0;
-    const totalDeletions = 0;
-
-    return { additions: totalAdditions, deletions: totalDeletions };
+    // Default case with no meaningful changes to show
+    return { additions: 0, deletions: 0 };
   };
 
   // Helper function to check if a patch actually changes content
@@ -403,11 +411,7 @@ export function FileTree({ files = [], charts = [] }: FileTreeProps) {
         <div className="flex-1 flex items-center min-w-0">
           <span className="text-xs truncate">{node.name}</span>
           {/* For new files (empty content with pending changes) */}
-          {node.type === "file" && (!node.content || node.content === "") && node.contentPending ? (
-            <span className="ml-2 text-[10px] font-mono whitespace-nowrap">
-              <span className="text-green-500">+{node.contentPending?.split('\n').length || 0}</span>
-            </span>
-          ) : patchStats ? (
+          {patchStats && (patchStats.additions > 0 || patchStats.deletions > 0) ? (
             <span className="ml-2 text-[10px] font-mono whitespace-nowrap">
               {patchStats.additions > 0 && (
                 <span className="text-green-500">+{patchStats.additions}</span>
