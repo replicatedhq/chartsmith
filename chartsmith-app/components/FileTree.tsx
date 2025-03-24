@@ -5,6 +5,7 @@ import { DeleteFileModal } from "./DeleteFileModal";
 import { Chart, WorkspaceFile } from "@/lib/types/workspace";
 import { selectedFileAtom } from "@/atoms/workspace";
 import { useAtom } from "jotai";
+import { diffLines } from 'diff';
 
 interface TreeNode {
   id: string;
@@ -213,8 +214,8 @@ export function FileTree({ files = [], charts = [] }: FileTreeProps) {
     }
   };
 
-  // Import the diff library at the top of the file
-  // import { diffLines } from 'diff';
+  // We use the diffLines function from the diff library 
+  // that we imported at the top of the file
   
   // Calculate differences between two content strings using the diff library
   const getContentDiffStats = (originalContent: string, newContent: string) => {
@@ -246,10 +247,6 @@ export function FileTree({ files = [], charts = [] }: FileTreeProps) {
       return { additions: 0, deletions: 0 };
     }
 
-    // Import the diff function directly to avoid issues with module imports
-    // This is a workaround since we're editing an existing file
-    const diffLines = require('diff').diffLines;
-    
     // Use the diffLines function to compare the two strings
     const changes = diffLines(originalContent, newContent);
     

@@ -229,7 +229,7 @@ export function useCentrifugo({
         setTimeout(() => {
           console.log("Selecting file after artifact update:", artifactFile.filePath);
           // First reset selection to force a re-render
-          setSelectedFile(null);
+          setSelectedFile(undefined);
           
           // Then select the file after a short delay
           setTimeout(() => {
