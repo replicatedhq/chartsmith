@@ -756,6 +756,7 @@ export async function getWorkspace(id: string): Promise<Workspace | undefined> {
       currentRevisionNumber: row.current_revision_number,
       files: [],
       charts: [],
+      isCurrentVersionComplete: true,
     };
 
     // get the charts and their files, only if revision number is > 0
@@ -766,6 +767,18 @@ export async function getWorkspace(id: string): Promise<Workspace | undefined> {
       // Get non-chart files
       const files = await listFilesWithoutChartsForWorkspace(id, result.rows[0].current_revision_number);
       w.files = files;
+    }
+
+    // check if the current revision is complete
+    const result3 = await db.query(
+      `
+        SELECT is_complete FROM workspace_revision WHERE workspace_id = $1 AND revision_number = $2
+      `,
+      [id, w.currentRevisionNumber],
+    );
+
+    if (result3.rows.length > 0) {
+      w.isCurrentVersionComplete = result3.rows[0].is_complete;
     }
 
     // look for an incomplete revision

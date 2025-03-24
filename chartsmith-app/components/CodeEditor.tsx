@@ -13,6 +13,9 @@ import type { editor } from "monaco-editor";
 import Editor, { DiffEditor } from "@monaco-editor/react";
 import type { Session } from "@/lib/types/session";
 
+// actions
+import { getWorkspaceAction } from "@/lib/workspace/actions/get-workspace";
+
 // hooks
 import {
   useMonacoSingleInstance,
@@ -226,6 +229,20 @@ export const CodeEditor = React.memo(function CodeEditor({
             setTimeout(() => {
               updateFileContent(updatedFile);
             }, 0);
+
+            // Reload the workspace to check for revision status changes
+            setTimeout(async () => {
+              try {
+                if (workspace && workspace.id) {
+                  const freshWorkspace = await getWorkspaceAction(session, workspace.id);
+                  if (freshWorkspace) {
+                    setWorkspace(freshWorkspace);
+                  }
+                }
+              } catch (reloadError) {
+                console.error("Error reloading workspace:", reloadError);
+              }
+            }, 500); // Allow time for database updates
           } catch (serverError) {
             console.error("Server-side patch application failed, using client-side fallback:", serverError);
 
@@ -336,6 +353,20 @@ export const CodeEditor = React.memo(function CodeEditor({
           }
         }
       }, 10);
+
+      // Reload the workspace to check for revision status changes
+      setTimeout(async () => {
+        try {
+          if (workspace && workspace.id) {
+            const freshWorkspace = await getWorkspaceAction(session, workspace.id);
+            if (freshWorkspace) {
+              setWorkspace(freshWorkspace);
+            }
+          }
+        } catch (reloadError) {
+          console.error("Error reloading workspace:", reloadError);
+        }
+      }, 500); // Allow time for database updates
     } catch (error) {
       console.error("Error accepting all patches:", error);
       // Make sure dropdown is closed in case of error
@@ -410,6 +441,20 @@ export const CodeEditor = React.memo(function CodeEditor({
           setTimeout(() => {
             updateFileContent(updatedFile);
           }, 10);
+
+          // Reload the workspace to check for revision status changes
+          setTimeout(async () => {
+            try {
+              if (workspace && workspace.id) {
+                const freshWorkspace = await getWorkspaceAction(session, workspace.id);
+                if (freshWorkspace) {
+                  setWorkspace(freshWorkspace);
+                }
+              }
+            } catch (reloadError) {
+              console.error("Error reloading workspace:", reloadError);
+            }
+          }, 500); // Allow time for database updates
         }
       } catch (error) {
         console.error("Error rejecting patch:", error);
@@ -489,6 +534,20 @@ export const CodeEditor = React.memo(function CodeEditor({
             });
           }, 10);
         }
+
+        // Reload the workspace to check for revision status changes
+        setTimeout(async () => {
+          try {
+            if (workspace && workspace.id) {
+              const freshWorkspace = await getWorkspaceAction(session, workspace.id);
+              if (freshWorkspace) {
+                setWorkspace(freshWorkspace);
+              }
+            }
+          } catch (reloadError) {
+            console.error("Error reloading workspace:", reloadError);
+          }
+        }, 500); // Allow time for database updates
       }
     } catch (error) {
       console.error("Error rejecting all patches:", error);
@@ -554,117 +613,128 @@ export const CodeEditor = React.memo(function CodeEditor({
 
         {allFilesWithContentPending.length > 0 && selectedFile?.contentPending && selectedFile.contentPending.length > 0 && (
           <div className="flex items-center gap-2">
-            <div ref={acceptButtonRef} className="relative">
-              <div className="flex">
-                <button
-                  className={`px-3 py-1 text-xs rounded-l-md flex items-center gap-1 font-mono ${
-                    theme === "dark"
-                      ? "bg-green-600 text-white hover:bg-green-700"
-                      : "bg-green-600 text-white hover:bg-green-700"
-                  }`}
-                  onClick={handleAcceptThisFile}
-                >
-                  <Check className="w-3 h-3" />
-                  Accept
-                </button>
-                <button
-                  className={`px-1 py-1 text-xs rounded-r-md flex items-center border-l border-green-700 ${
-                    theme === "dark"
-                      ? "bg-green-600 text-white hover:bg-green-700"
-                      : "bg-green-600 text-white hover:bg-green-700"
-                  }`}
-                  onClick={() => setAcceptDropdownOpen(!acceptDropdownOpen)}
-                >
-                  <ChevronDown className="w-3 h-3" />
-                </button>
-              </div>
-              {acceptDropdownOpen && (
-                <div className={`absolute right-0 mt-1 w-56 rounded-md shadow-lg z-30 ${
-                  theme === "dark" ? "bg-dark-surface border border-dark-border" : "bg-white border border-gray-200"
-                }`}>
-                  <div className="py-1">
+            {/* Only show Accept/Reject buttons when workspace doesn't have an incomplete revision and current version is complete */}
+            {!workspace.incompleteRevisionNumber && workspace.isCurrentVersionComplete && (
+              <>
+                <div ref={acceptButtonRef} className="relative">
+                  <div className="flex">
                     <button
-                      className={`block w-full text-left px-4 py-2 text-xs ${
-                        theme === "dark" ? "text-gray-300 hover:bg-dark-border/40" : "text-gray-700 hover:bg-gray-100"
+                      className={`px-3 py-1 text-xs rounded-l-md flex items-center gap-1 font-mono ${
+                        theme === "dark"
+                          ? "bg-green-600 text-white hover:bg-green-700"
+                          : "bg-green-600 text-white hover:bg-green-700"
                       }`}
                       onClick={handleAcceptThisFile}
                     >
-                      <div className="flex items-center">
-                        <span className="font-medium">This file only</span>
-                        <span className="ml-2 text-xs opacity-70">({selectedFile?.filePath?.split('/').pop()})</span>
-                      </div>
+                      <Check className="w-3 h-3" />
+                      Accept
                     </button>
                     <button
-                      className={`block w-full text-left px-4 py-2 text-xs ${
-                        theme === "dark" ? "text-gray-300 hover:bg-dark-border/40" : "text-gray-700 hover:bg-gray-100"
+                      className={`px-1 py-1 text-xs rounded-r-md flex items-center border-l border-green-700 ${
+                        theme === "dark"
+                          ? "bg-green-600 text-white hover:bg-green-700"
+                          : "bg-green-600 text-white hover:bg-green-700"
                       }`}
-                      onClick={handleAcceptAllFiles}
+                      onClick={() => setAcceptDropdownOpen(!acceptDropdownOpen)}
                     >
-                      <div className="flex items-center">
-                        <span className="font-medium">All files</span>
-                        <span className="ml-2 text-xs opacity-70">({allFilesWithContentPending.length} files)</span>
-                      </div>
+                      <ChevronDown className="w-3 h-3" />
                     </button>
                   </div>
+                  {acceptDropdownOpen && (
+                    <div className={`absolute right-0 mt-1 w-56 rounded-md shadow-lg z-30 ${
+                      theme === "dark" ? "bg-dark-surface border border-dark-border" : "bg-white border border-gray-200"
+                    }`}>
+                      <div className="py-1">
+                        <button
+                          className={`block w-full text-left px-4 py-2 text-xs ${
+                            theme === "dark" ? "text-gray-300 hover:bg-dark-border/40" : "text-gray-700 hover:bg-gray-100"
+                          }`}
+                          onClick={handleAcceptThisFile}
+                        >
+                          <div className="flex items-center">
+                            <span className="font-medium">This file only</span>
+                            <span className="ml-2 text-xs opacity-70">({selectedFile?.filePath?.split('/').pop()})</span>
+                          </div>
+                        </button>
+                        <button
+                          className={`block w-full text-left px-4 py-2 text-xs ${
+                            theme === "dark" ? "text-gray-300 hover:bg-dark-border/40" : "text-gray-700 hover:bg-gray-100"
+                          }`}
+                          onClick={handleAcceptAllFiles}
+                        >
+                          <div className="flex items-center">
+                            <span className="font-medium">All files</span>
+                            <span className="ml-2 text-xs opacity-70">({allFilesWithContentPending.length} files)</span>
+                          </div>
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
 
-            <div ref={rejectButtonRef} className="relative">
-              <div className="flex">
-                <button
-                  className={`px-3 py-1 text-xs rounded-l-md flex items-center gap-1 font-mono ${
-                    theme === "dark"
-                      ? "bg-red-600 text-white hover:bg-red-700"
-                      : "bg-red-600 text-white hover:bg-red-700"
-                  }`}
-                  onClick={handleRejectThisFile}
-                >
-                  <X className="w-3 h-3" />
-                  Reject
-                </button>
-                <button
-                  className={`px-1 py-1 text-xs rounded-r-md flex items-center border-l border-red-700 ${
-                    theme === "dark"
-                      ? "bg-red-600 text-white hover:bg-red-700"
-                      : "bg-red-600 text-white hover:bg-red-700"
-                  }`}
-                  onClick={() => setRejectDropdownOpen(!rejectDropdownOpen)}
-                >
-                  <ChevronDown className="w-3 h-3" />
-                </button>
-              </div>
-              {rejectDropdownOpen && (
-                <div className={`absolute right-0 mt-1 w-56 rounded-md shadow-lg z-30 ${
-                  theme === "dark" ? "bg-dark-surface border border-dark-border" : "bg-white border border-gray-200"
-                }`}>
-                  <div className="py-1">
+                <div ref={rejectButtonRef} className="relative">
+                  <div className="flex">
                     <button
-                      className={`block w-full text-left px-4 py-2 text-xs ${
-                        theme === "dark" ? "text-gray-300 hover:bg-dark-border/40" : "text-gray-700 hover:bg-gray-100"
+                      className={`px-3 py-1 text-xs rounded-l-md flex items-center gap-1 font-mono ${
+                        theme === "dark"
+                          ? "bg-red-600 text-white hover:bg-red-700"
+                          : "bg-red-600 text-white hover:bg-red-700"
                       }`}
                       onClick={handleRejectThisFile}
                     >
-                      <div className="flex items-center">
-                        <span className="font-medium">This file only</span>
-                        <span className="ml-2 text-xs opacity-70">({selectedFile?.filePath?.split('/').pop()})</span>
-                      </div>
+                      <X className="w-3 h-3" />
+                      Reject
                     </button>
                     <button
-                      className={`block w-full text-left px-4 py-2 text-xs ${
-                        theme === "dark" ? "text-gray-300 hover:bg-dark-border/40" : "text-gray-700 hover:bg-gray-100"
+                      className={`px-1 py-1 text-xs rounded-r-md flex items-center border-l border-red-700 ${
+                        theme === "dark"
+                          ? "bg-red-600 text-white hover:bg-red-700"
+                          : "bg-red-600 text-white hover:bg-red-700"
                       }`}
-                      onClick={handleRejectAllFiles}
+                      onClick={() => setRejectDropdownOpen(!rejectDropdownOpen)}
                     >
-                      <div className="flex items-center">
-                        <span className="font-medium">All files</span>
-                        <span className="ml-2 text-xs opacity-70">({allFilesWithContentPending.length} files)</span>
-                      </div>
+                      <ChevronDown className="w-3 h-3" />
                     </button>
                   </div>
+                  {rejectDropdownOpen && (
+                    <div className={`absolute right-0 mt-1 w-56 rounded-md shadow-lg z-30 ${
+                      theme === "dark" ? "bg-dark-surface border border-dark-border" : "bg-white border border-gray-200"
+                    }`}>
+                      <div className="py-1">
+                        <button
+                          className={`block w-full text-left px-4 py-2 text-xs ${
+                            theme === "dark" ? "text-gray-300 hover:bg-dark-border/40" : "text-gray-700 hover:bg-gray-100"
+                          }`}
+                          onClick={handleRejectThisFile}
+                        >
+                          <div className="flex items-center">
+                            <span className="font-medium">This file only</span>
+                            <span className="ml-2 text-xs opacity-70">({selectedFile?.filePath?.split('/').pop()})</span>
+                          </div>
+                        </button>
+                        <button
+                          className={`block w-full text-left px-4 py-2 text-xs ${
+                            theme === "dark" ? "text-gray-300 hover:bg-dark-border/40" : "text-gray-700 hover:bg-gray-100"
+                          }`}
+                          onClick={handleRejectAllFiles}
+                        >
+                          <div className="flex items-center">
+                            <span className="font-medium">All files</span>
+                            <span className="ml-2 text-xs opacity-70">({allFilesWithContentPending.length} files)</span>
+                          </div>
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+              </>
+            )}
+            {/* When there's an incomplete revision, show a message instead of the buttons */}
+            {(workspace.incompleteRevisionNumber || !workspace.isCurrentVersionComplete) && (
+              <div className="text-xs text-gray-500 italic">
+                Waiting for plan to complete before changes can be accepted
+              </div>
+            )}
           </div>
         )}
       </div>

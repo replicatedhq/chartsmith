@@ -9,6 +9,7 @@ export interface Workspace {
   files: WorkspaceFile[];
   currentRevisionNumber: number;
   incompleteRevisionNumber?: number;
+  isCurrentVersionComplete?: boolean;
 }
 
 export interface WorkspaceFile {

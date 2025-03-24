@@ -19,7 +19,6 @@ export default function TestAuthPage() {
 
       try {
         const jwt = await validateTestAuth();
-        console.log("jwt", jwt);
         if (jwt) {
           const expires = new Date();
           expires.setDate(expires.getDate() + 7);

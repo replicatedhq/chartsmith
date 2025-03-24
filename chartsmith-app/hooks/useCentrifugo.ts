@@ -230,7 +230,7 @@ export function useCentrifugo({
           console.log("Selecting file after artifact update:", artifactFile.filePath);
           // First reset selection to force a re-render
           setSelectedFile(undefined);
-          
+
           // Then select the file after a short delay
           setTimeout(() => {
             setSelectedFile({
@@ -369,8 +369,6 @@ export function useCentrifugo({
     const render = data.renderId;
     const renderChartId = data.renderChartId;
     const renderedFile = data.renderedFile;
-
-    console.log('handleRenderFileEvent', data);
 
     setRenders(prev => {
       const newRenders = [...prev];

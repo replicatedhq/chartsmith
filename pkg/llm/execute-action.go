@@ -160,6 +160,9 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 					}
 				} else if input.Command == "str_replace" {
 					if !strings.Contains(updatedContent, input.OldStr) {
+						logger.Debug("str_replace: string to replace not found in file",
+							zap.String("old_str", input.OldStr),
+							zap.String("updated_content", updatedContent))
 						response = "Error: String to replace not found in file"
 					} else {
 						updatedContent = strings.ReplaceAll(updatedContent, input.OldStr, input.NewStr)

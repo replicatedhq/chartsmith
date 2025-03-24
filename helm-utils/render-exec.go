@@ -216,5 +216,8 @@ func runHelmTemplate(dir string, valuesYAML string, kubeconfig string, cmdCh cha
 		return fmt.Errorf("error reading helm template output: %w", err)
 	}
 
+	// always send the last buffer
+	stdoutCh <- strings.Join(buffer, "\n")
+
 	return nil
 }
