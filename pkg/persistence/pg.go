@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/replicatedhq/chartsmith/pkg/logger"
+	"go.uber.org/zap"
 )
 
 type PostgresOpts struct {
@@ -47,9 +48,9 @@ func InitPostgres(opts PostgresOpts) error {
 	poolConfig.HealthCheckPeriod = 1 * time.Minute
 	
 	logger.Info("Initializing database connection pool", 
-		fmt.Sprintf("MaxConns=%d", poolConfig.MaxConns),
-		fmt.Sprintf("MaxConnLifetime=%v", poolConfig.MaxConnLifetime),
-		fmt.Sprintf("MaxConnIdleTime=%v", poolConfig.MaxConnIdleTime))
+		zap.Int32("MaxConns", poolConfig.MaxConns),
+		zap.Duration("MaxConnLifetime", poolConfig.MaxConnLifetime),
+		zap.Duration("MaxConnIdleTime", poolConfig.MaxConnIdleTime))
 
 	pool, err = pgxpool.NewWithConfig(context.Background(), poolConfig)
 	if err != nil {
@@ -82,16 +83,18 @@ func MustGetPooledPostgresSession() *pgxpool.Conn {
 	}
 
 	// Log pool stats
-	logger.Debug(fmt.Sprintf("Pool stats before acquire: Total=%d, Acquired=%d, Idle=%d, Max=%d", 
-		pool.Stat().TotalConns(), 
-		pool.Stat().AcquiredConns(),
-		pool.Stat().IdleConns(),
-		pool.Stat().MaxConns()))
+	logger.Debug("Pool stats before acquire",
+		zap.Int32("TotalConns", pool.Stat().TotalConns()),
+		zap.Int32("AcquiredConns", pool.Stat().AcquiredConns()),
+		zap.Int32("IdleConns", pool.Stat().IdleConns()),
+		zap.Int32("MaxConns", pool.Stat().MaxConns()))
 	
 	// If the pool is saturated, log a warning
 	if pool.Stat().AcquiredConns() >= pool.Stat().MaxConns() {
-		logger.Warn(fmt.Sprintf("WARNING: Connection pool saturated: %d/%d connections in use",
-			pool.Stat().AcquiredConns(), pool.Stat().MaxConns()))
+		logger.Warn("WARNING: Connection pool saturated",
+			zap.Int32("AcquiredConns", pool.Stat().AcquiredConns()),
+			zap.Int32("MaxConns", pool.Stat().MaxConns()),
+			zap.Float64("UsagePercent", float64(pool.Stat().AcquiredConns())/float64(pool.Stat().MaxConns())*100))
 	}
 
 	// Track timing for connection acquisition
@@ -112,20 +115,23 @@ func MustGetPooledPostgresSession() *pgxpool.Conn {
 		
 		if err == nil {
 			// Successfully acquired a connection
-			logger.Debug(fmt.Sprintf("Acquired PostgreSQL connection in %v (attempt %d)", 
-				time.Since(startTime), attempt))
+			logger.Debug("Acquired PostgreSQL connection", 
+				zap.Duration("duration", time.Since(startTime)),
+				zap.Int("attempt", attempt))
 			return conn
 		}
 		
-		logger.Warn(fmt.Sprintf("Failed to acquire DB connection on attempt %d/%d: %v", 
-			attempt, 3, err))
+		logger.Warn("Failed to acquire DB connection", 
+			zap.Int("attempt", attempt),
+			zap.Int("maxAttempts", 3),
+			zap.Error(err))
 			
 		// Check if the pool is still saturated before retrying
-		logger.Debug(fmt.Sprintf("Pool stats after failed attempt: Total=%d, Acquired=%d, Idle=%d, Max=%d", 
-			pool.Stat().TotalConns(), 
-			pool.Stat().AcquiredConns(),
-			pool.Stat().IdleConns(),
-			pool.Stat().MaxConns()))
+		logger.Debug("Pool stats after failed attempt",
+			zap.Int32("TotalConns", pool.Stat().TotalConns()),
+			zap.Int32("AcquiredConns", pool.Stat().AcquiredConns()),
+			zap.Int32("IdleConns", pool.Stat().IdleConns()),
+			zap.Int32("MaxConns", pool.Stat().MaxConns()))
 			
 		// Wait a short time before retrying to give connections a chance to be released
 		time.Sleep(time.Duration(attempt*100) * time.Millisecond)
@@ -154,18 +160,18 @@ func monitorPoolHealth() {
 		stats := pool.Stat()
 		
 		// Log current pool statistics
-		logger.Info(fmt.Sprintf("DB Pool Health: Total=%d, Acquired=%d, Idle=%d, Max=%d", 
-			stats.TotalConns(), 
-			stats.AcquiredConns(),
-			stats.IdleConns(),
-			stats.MaxConns()))
+		logger.Info("DB Pool Health", 
+			zap.Int32("Total", stats.TotalConns()),
+			zap.Int32("Acquired", stats.AcquiredConns()),
+			zap.Int32("Idle", stats.IdleConns()),
+			zap.Int32("Max", stats.MaxConns()))
 		
 		// Check if the pool is approaching saturation
 		if stats.AcquiredConns() > stats.MaxConns()*80/100 {
-			logger.Warn(fmt.Sprintf("DB Pool nearing saturation: %d/%d connections in use (%.1f%%)",
-				stats.AcquiredConns(), 
-				stats.MaxConns(),
-				float64(stats.AcquiredConns())/float64(stats.MaxConns())*100))
+			logger.Warn("DB Pool nearing saturation",
+				zap.Int32("AcquiredConns", stats.AcquiredConns()),
+				zap.Int32("MaxConns", stats.MaxConns()),
+				zap.Float64("UsagePercent", float64(stats.AcquiredConns())/float64(stats.MaxConns())*100))
 		}
 		
 		// Test a connection to make sure the pool is working properly
