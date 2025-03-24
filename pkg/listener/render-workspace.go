@@ -32,7 +32,7 @@ func ensureActiveConnection(ctx context.Context) error {
 	// Create a specific timeout context for this operation
 	dbCheckCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	
+
 	// Get a fresh connection and perform a simple query to verify connectivity
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
@@ -55,7 +55,7 @@ func ensureActiveConnection(ctx context.Context) error {
 
 func handleRenderWorkspaceNotification(ctx context.Context, payload string) error {
 	startTime := time.Now()
-	
+
 	// Add panic recovery
 	defer func() {
 		if r := recover(); r != nil {
@@ -72,7 +72,7 @@ func handleRenderWorkspaceNotification(ctx context.Context, payload string) erro
 	// Use a separate shorter timeout just for the connection check
 	connCheckCtx, connCheckCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer connCheckCancel()
-	
+
 	// Verify connection is active before proceeding
 	if err := ensureActiveConnection(connCheckCtx); err != nil {
 		logger.Error(fmt.Errorf("connection check failed before processing notification: %w", err))
@@ -91,35 +91,18 @@ func handleRenderWorkspaceNotification(ctx context.Context, payload string) erro
 		return fmt.Errorf("failed to unmarshal render workspace notification: %w", err)
 	}
 
-	logger.Info("Successfully parsed render payload",
-		zap.String("id", p.ID),
-		zap.String("workspaceID", p.WorkspaceID),
-		zap.Int("revisionNumber", p.RevisionNumber),
-		zap.String("chatMessageID", p.ChatMessageID),
-	)
-
 	// Handle request from TypeScript side with workspaceId and revisionNumber
 	if p.ID == "" && p.WorkspaceID != "" && p.RevisionNumber > 0 {
 		// Create a new render job for this workspace/revision
 		chatMessageID := p.ChatMessageID // Use the provided chat message ID
-		logger.Info("Handling render request from TypeScript",
-			zap.String("workspaceID", p.WorkspaceID),
-			zap.Int("revisionNumber", p.RevisionNumber),
-			zap.String("chatMessageID", chatMessageID))
-
 		if err := workspace.EnqueueRenderWorkspaceForRevision(ctx, p.WorkspaceID, p.RevisionNumber, chatMessageID); err != nil {
 			return fmt.Errorf("failed to enqueue render job from TS request: %w", err)
 		}
 		return nil
 	}
 
-	// Traditional flow with existing render job ID
-	logger.Info("Fetching existing render job",
-		zap.String("renderID", p.ID),
-	)
-	
 	renderedWorkspace, err := workspace.GetRendered(ctx, p.ID)
-		
+
 	if err != nil {
 		logger.Error(fmt.Errorf("failed to get rendered: %w", err))
 		if strings.Contains(err.Error(), "context deadline exceeded") ||
@@ -142,10 +125,6 @@ func handleRenderWorkspaceNotification(ctx context.Context, payload string) erro
 		zap.Int("chartCount", len(renderedWorkspace.Charts)),
 	)
 
-	logger.Info("Fetching workspace",
-		zap.String("workspaceID", renderedWorkspace.WorkspaceID),
-	)
-
 	w, err := workspace.GetWorkspace(ctx, renderedWorkspace.WorkspaceID)
 	if err != nil {
 		if strings.Contains(err.Error(), "context deadline exceeded") ||
@@ -162,24 +141,12 @@ func handleRenderWorkspaceNotification(ctx context.Context, payload string) erro
 		return fmt.Errorf("failed to get workspace for render: %w", err)
 	}
 
-	logger.Info("Successfully retrieved workspace",
-		zap.String("workspaceID", w.ID),
-		zap.Int("chartCount", len(w.Charts)),
-		zap.Int("fileCount", len(w.Files)),
-	)
-
 	// we need to render each chart in separate goroutines
 	// and create a sync group to wait for them all to complete
 	wg := sync.WaitGroup{}
 
 	// Create error channel to collect errors from goroutines
 	errorChan := make(chan error, len(renderedWorkspace.Charts))
-
-	// Count of charts being rendered
-	chartCount := len(renderedWorkspace.Charts)
-	logger.Info("Preparing to render charts",
-		zap.Int("chartCount", chartCount),
-	)
 
 	for _, chart := range renderedWorkspace.Charts {
 		wg.Add(1)
@@ -194,11 +161,6 @@ func handleRenderWorkspaceNotification(ctx context.Context, payload string) erro
 			}
 		}(chart)
 	}
-
-	logger.Info("Waiting for all chart renders to complete...",
-		zap.Int("pendingCharts", chartCount),
-		zap.String("renderID", renderedWorkspace.ID),
-	)
 
 	// Create a timeout for waiting on goroutines - 8 minutes (keeping 2 minutes for finalization)
 	renderTimeout := 8 * time.Minute
@@ -250,10 +212,6 @@ func handleRenderWorkspaceNotification(ctx context.Context, payload string) erro
 	finishCtx, finishCancel := context.WithTimeout(ctx, 30*time.Second)
 	defer finishCancel()
 
-	logger.Info("Finalizing render job",
-		zap.String("renderID", renderedWorkspace.ID),
-	)
-
 	if err := workspace.FinishRendered(finishCtx, renderedWorkspace.ID); err != nil {
 		if strings.Contains(err.Error(), "context deadline exceeded") ||
 			strings.Contains(err.Error(), "context canceled") {
@@ -265,19 +223,12 @@ func handleRenderWorkspaceNotification(ctx context.Context, payload string) erro
 					zap.String("renderID", renderedWorkspace.ID))
 				return fmt.Errorf("timeout finalizing render: %w", err)
 			}
-			logger.Info("Render finalized successfully on retry",
-				zap.String("renderID", renderedWorkspace.ID))
 		} else {
 			logger.Error(fmt.Errorf("failed to finish rendered workspace: %w", err),
 				zap.String("renderID", renderedWorkspace.ID))
 			return fmt.Errorf("failed to finish rendered workspace: %w", err)
 		}
 	}
-
-	logger.Info("Render job completed successfully",
-		zap.String("renderID", renderedWorkspace.ID),
-		zap.Duration("totalDuration", time.Since(startTime)),
-	)
 
 	return nil
 }
@@ -290,13 +241,6 @@ func renderChart(ctx context.Context, renderedChart *workspacetypes.RenderedChar
 			logger.Error(fmt.Errorf("Stack trace (if available):\n%s", string(debug.Stack())))
 		}
 	}()
-	startTime := time.Now()
-
-	logger.Info("Starting chart render",
-		zap.String("chartID", renderedChart.ChartID),
-		zap.String("workspaceID", renderedWorkspace.WorkspaceID),
-		zap.Time("startTime", startTime),
-		zap.Bool("usePendingContent", usePendingContent))
 
 	var chart *workspacetypes.Chart
 	for _, c := range w.Charts {
@@ -319,11 +263,6 @@ func renderChart(ctx context.Context, renderedChart *workspacetypes.RenderedChar
 
 		return err
 	}
-
-	logger.Info("Found chart in workspace",
-		zap.String("chartID", chart.ID),
-		zap.String("chartName", chart.Name),
-		zap.Int("fileCount", len(chart.Files)))
 
 	// Create a shorter timeout for database operations
 	dbCtx, dbCancel := context.WithTimeout(ctx, 30*time.Second)
@@ -349,10 +288,6 @@ func renderChart(ctx context.Context, renderedChart *workspacetypes.RenderedChar
 		return err
 	}
 
-	logger.Info("Retrieved user IDs for workspace",
-		zap.String("workspaceID", w.ID),
-		zap.Int("userCount", len(userIDs)))
-
 	realtimeRecipient := realtimetypes.Recipient{
 		UserIDs: userIDs,
 	}
@@ -371,7 +306,7 @@ func renderChart(ctx context.Context, renderedChart *workspacetypes.RenderedChar
 	done := make(chan error)
 	go func(usePendingContent bool) {
 		files := chart.Files
-		
+
 		err := helmutils.RenderChartExec(files, "", renderChannels)
 		if err != nil {
 			done <- err

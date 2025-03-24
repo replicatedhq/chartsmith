@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/replicatedhq/chartsmith/pkg/workspace/types"
@@ -28,7 +29,7 @@ func RenderChartExec(files []types.File, valuesYAML string, renderChannels Rende
 	start := time.Now()
 	defer func() {
 		fmt.Printf("RenderChartExec completed in %v\n", time.Since(start))
-		
+
 		// Add capture for panic recovery
 		if r := recover(); r != nil {
 			fmt.Printf("PANIC in RenderChartExec: %v\n", r)
@@ -71,7 +72,7 @@ clusters:
 			fmt.Printf("ERROR: Failed to create directory %s: %v\n", dir, err)
 			return fmt.Errorf("failed to create directory: %w", err)
 		}
-		
+
 		if err := os.WriteFile(filePath, []byte(file.Content), 0644); err != nil {
 			fmt.Printf("ERROR: Failed to write file %s: %v\n", filePath, err)
 			return fmt.Errorf("failed to write file: %w", err)
@@ -193,12 +194,22 @@ func runHelmTemplate(dir string, valuesYAML string, kubeconfig string, cmdCh cha
 		return fmt.Errorf("helm template command failed: %w", err)
 	}
 
+	bufferLineCount := 500
+	buffer := make([]string, 0, bufferLineCount)
 	// Process the captured output line by line
+	// let 20 lines pass before sending to the
 	lines := bufio.NewScanner(bufio.NewReader(bytes.NewReader(output)))
+	var linesRead int
 	for lines.Scan() {
 		line := lines.Text()
-		// Send to stdout channel
-		stdoutCh <- line + "\n"
+		linesRead++
+		buffer = append(buffer, line)
+		if linesRead%bufferLineCount == 0 {
+			// Send to stdout channel
+			stdoutCh <- strings.Join(buffer, "\n")
+			buffer = buffer[:0]
+			linesRead = 0
+		}
 	}
 
 	if err := lines.Err(); err != nil {
