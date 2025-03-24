@@ -218,8 +218,28 @@ export function FileTree({ files = [], charts = [] }: FileTreeProps) {
   
   // Calculate differences between two content strings using the diff library
   const getContentDiffStats = (originalContent: string, newContent: string) => {
-    if (!originalContent || !newContent) {
-      return null;
+    if (!originalContent && !newContent) {
+      return { additions: 0, deletions: 0 };
+    }
+    
+    // Special case: If original content is empty or just whitespace,
+    // treat all lines in new content as additions with no deletions
+    if (!originalContent || originalContent.trim() === "") {
+      const lines = newContent.endsWith('\n')
+        ? newContent.split('\n').length - 1
+        : newContent.split('\n').length;
+      
+      return { additions: lines, deletions: 0 };
+    }
+    
+    // Special case: If new content is empty or just whitespace,
+    // treat all lines in original content as deletions with no additions
+    if (!newContent || newContent.trim() === "") {
+      const lines = originalContent.endsWith('\n')
+        ? originalContent.split('\n').length - 1
+        : originalContent.split('\n').length;
+      
+      return { additions: 0, deletions: lines };
     }
 
     if (originalContent === newContent) {
@@ -258,23 +278,13 @@ export function FileTree({ files = [], charts = [] }: FileTreeProps) {
   };
 
   const getPatchStats = (contentPending?: string, content?: string) => {
-    // If we have both contentPending and content, calculate diff
-    if (contentPending && content) {
-      return getContentDiffStats(content, contentPending);
-    }
-    
-    // Handle case where we have contentPending but no content (new file)
-    if (contentPending && (!content || content === "")) {
-      // For new files, all lines are additions
-      // Count lines properly accounting for trailing newline
-      const lines = contentPending.endsWith('\n')
-        ? contentPending.split('\n').length - 1
-        : contentPending.split('\n').length;
-      
-      return { additions: lines, deletions: 0 };
+    // Use our improved getContentDiffStats function to handle all cases,
+    // including empty original content
+    if (contentPending) {
+      return getContentDiffStats(content || "", contentPending);
     }
 
-    // Default case with no meaningful changes to show
+    // Default case with no pending changes to show
     return { additions: 0, deletions: 0 };
   };
 
