@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/replicatedhq/chartsmith/pkg/logger"
 )
 
 type PostgresOpts struct {
@@ -58,13 +60,32 @@ func MustGeUnpooledPostgresSession() *pgx.Conn {
 
 func MustGetPooledPostgresSession() *pgxpool.Conn {
 	if pool == nil {
+		logger.Error(fmt.Errorf("Postgres pool is not initialized"))
 		panic("Postgres pool is not initialized")
 	}
 
-	conn, err := pool.Acquire(context.Background())
+	// Log pool stats
+	logger.Debug(fmt.Sprintf("Pool stats before acquire: Total=%d, Acquired=%d, Idle=%d, Max=%d", 
+		pool.Stat().TotalConns(), 
+		pool.Stat().AcquiredConns(),
+		pool.Stat().IdleConns(),
+		pool.Stat().MaxConns()))
+
+	// Set a 5 second timeout for acquiring a connection
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	
+	// Track timing for connection acquisition
+	startTime := time.Now()
+	logger.Debug("Getting pooled PostgreSQL connection")
+	
+	conn, err := pool.Acquire(ctx)
 	if err != nil {
+		logger.Error(fmt.Errorf("failed to acquire from Postgres pool: %w", err))
 		panic("failed to acquire from Postgres pool: " + err.Error())
 	}
+	
+	logger.Debug(fmt.Sprintf("Acquired PostgreSQL connection in %v", time.Since(startTime)))
 
 	return conn
 }

@@ -29,21 +29,33 @@ type renderWorkspacePayload struct {
 
 // ensureActiveConnection performs a lightweight operation to ensure database connection is alive
 func ensureActiveConnection(ctx context.Context) error {
+	logger.Debug("ensureActiveConnection: Starting database connection check")
+	
+	// Create a specific timeout context for this operation
+	dbCheckCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	
 	// Get a fresh connection and perform a simple query to verify connectivity
+	logger.Debug("ensureActiveConnection: Getting pooled connection")
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
+	logger.Debug("ensureActiveConnection: Got pooled connection")
 
 	// Perform a simple ping-like query
+	logger.Debug("ensureActiveConnection: Executing SELECT 1 query")
 	var result int
-	err := conn.QueryRow(ctx, "SELECT 1").Scan(&result)
+	err := conn.QueryRow(dbCheckCtx, "SELECT 1").Scan(&result)
 	if err != nil {
+		logger.Error(fmt.Errorf("database connection check failed: %w", err))
 		return fmt.Errorf("database connection check failed: %w", err)
 	}
 
 	if result != 1 {
+		logger.Error(fmt.Errorf("unexpected result from connection check: %d", result))
 		return fmt.Errorf("unexpected result from connection check: %d", result)
 	}
 
+	logger.Debug("ensureActiveConnection: Database connection check successful")
 	return nil
 }
 
@@ -71,12 +83,19 @@ func handleRenderWorkspaceNotification(ctx context.Context, payload string) erro
 	defer cancel()
 
 	logger.Debug("Verifying database connection")
+	
+	// Use a separate shorter timeout just for the connection check
+	connCheckCtx, connCheckCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer connCheckCancel()
+	
 	// Verify connection is active before proceeding
-	if err := ensureActiveConnection(timeoutCtx); err != nil {
+	if err := ensureActiveConnection(connCheckCtx); err != nil {
 		logger.Error(fmt.Errorf("connection check failed before processing notification: %w", err))
+		logger.Debug("Continuing despite connection check failure - will use a fresh connection")
 		// Continue anyway, as we're using a fresh connection below
+	} else {
+		logger.Debug("Database connection verified successfully")
 	}
-	logger.Debug("Database connection verified")
 
 	logger.Info("Processing render workspace notification",
 		zap.String("payload", payload),
