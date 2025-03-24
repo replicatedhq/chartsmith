@@ -154,13 +154,13 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 				if input.Command == "view" {
 					if updatedContent == "" {
 						// File doesn't exist yet
-						response = "File does not exist. Use create instead."
+						response = "Error: File does not exist. Use create instead."
 					} else {
 						response = updatedContent
 					}
 				} else if input.Command == "str_replace" {
 					if !strings.Contains(updatedContent, input.OldStr) {
-						response = "Warning: Unable to edit content because: Content mismatch - old_str not found in content"
+						response = "Error: String to replace not found in file"
 					} else {
 						updatedContent = strings.ReplaceAll(updatedContent, input.OldStr, input.NewStr)
 

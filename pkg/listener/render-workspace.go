@@ -48,6 +48,13 @@ func ensureActiveConnection(ctx context.Context) error {
 
 func handleRenderWorkspaceNotification(ctx context.Context, payload string) error {
 	startTime := time.Now()
+	
+	// Add defer for debugging  
+	defer func() {
+		logger.Debug("handleRenderWorkspaceNotification completed", 
+			zap.Duration("duration", time.Since(startTime)),
+			zap.String("payload", payload))
+	}()
 
 	// Create a timeout context to ensure we don't hang indefinitely
 	timeoutCtx, cancel := context.WithTimeout(ctx, 10*time.Minute) // Increased timeout to 10 minutes
@@ -264,6 +271,11 @@ func handleRenderWorkspaceNotification(ctx context.Context, payload string) erro
 func renderChart(ctx context.Context, renderedChart *workspacetypes.RenderedChart, renderedWorkspace *workspacetypes.Rendered, w *workspacetypes.Workspace, usePendingContent bool) error {
 	startTime := time.Now()
 
+	logger.Debug("renderChart function started", 
+		zap.String("chartID", renderedChart.ChartID),
+		zap.String("renderID", renderedWorkspace.ID),
+		zap.String("workspaceID", renderedWorkspace.WorkspaceID))
+
 	logger.Info("Starting chart render",
 		zap.String("chartID", renderedChart.ChartID),
 		zap.String("workspaceID", renderedWorkspace.WorkspaceID),
@@ -343,13 +355,24 @@ func renderChart(ctx context.Context, renderedChart *workspacetypes.RenderedChar
 	done := make(chan error)
 	go func(usePendingContent bool) {
 		files := chart.Files
+		
+		logger.Debug("Starting RenderChartExec",
+			zap.String("chartID", chart.ID),
+			zap.String("chartName", chart.Name),
+			zap.Int("fileCount", len(files)),
+			zap.Bool("usePendingContent", usePendingContent))
 
 		err := helmutils.RenderChartExec(files, "", renderChannels)
 		if err != nil {
+			logger.Debug("RenderChartExec failed", 
+				zap.String("chartID", chart.ID),
+				zap.String("error", err.Error()))
 			done <- err
 			return
 		}
 
+		logger.Debug("RenderChartExec completed successfully",
+			zap.String("chartID", chart.ID))
 		done <- nil
 	}(usePendingContent)
 
@@ -379,9 +402,17 @@ func renderChart(ctx context.Context, renderedChart *workspacetypes.RenderedChar
 
 	renderedFiles := []workspacetypes.RenderedFile{}
 
+	logger.Debug("Beginning render channel processing",
+		zap.String("chartID", renderedChart.ChartID),
+		zap.String("renderID", renderedWorkspace.ID))
+
 	for {
 		select {
 		case err := <-renderChannels.Done:
+			logger.Debug("Received signal from renderChannels.Done", 
+				zap.String("chartID", renderedChart.ChartID),
+				zap.Error(err))
+				
 			isSuccess := true
 			if err != nil {
 				isSuccess = false
@@ -579,7 +610,14 @@ func renderChart(ctx context.Context, renderedChart *workspacetypes.RenderedChar
 }
 
 func parseRenderedFiles(ctx context.Context, stdout string, chartName string, renderedFiles *[]workspacetypes.RenderedFile, workspaceFiles []workspacetypes.File) ([]workspacetypes.RenderedFile, error) {
+	logger.Debug("parseRenderedFiles started",
+		zap.String("chartName", chartName),
+		zap.Int("stdoutLength", len(stdout)),
+		zap.Int("existingRenderedFilesCount", len(*renderedFiles)),
+		zap.Int("workspaceFilesCount", len(workspaceFiles)))
+	
 	if stdout == "" {
+		logger.Debug("Empty stdout, returning empty files list")
 		return []workspacetypes.RenderedFile{}, nil
 	}
 
@@ -593,6 +631,9 @@ func parseRenderedFiles(ctx context.Context, stdout string, chartName string, re
 
 	// Split the stdout into individual YAML documents
 	documents := strings.Split(stdout, "\n---\n")
+	logger.Debug("Split stdout into YAML documents", 
+		zap.String("chartName", chartName),
+		zap.Int("documentCount", len(documents)))
 
 	updatedFiles := []workspacetypes.RenderedFile{}
 
@@ -655,5 +696,10 @@ func parseRenderedFiles(ctx context.Context, stdout string, chartName string, re
 		}
 	}
 
+	logger.Debug("Completed parsing rendered files",
+		zap.String("chartName", chartName),
+		zap.Int("updatedFilesCount", len(updatedFiles)),
+		zap.Int("totalRenderedFilesCount", len(*renderedFiles)))
+		
 	return updatedFiles, nil
 }
