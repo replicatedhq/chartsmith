@@ -24,8 +24,8 @@ type executePlanPayload struct {
 func handleExecutePlanNotification(ctx context.Context, payload string) error {
 	logger.Info("Handling execute plan notification", zap.String("payload", payload))
 
-	conn := persistence.MustGeUunpooledPostgresSession()
-	defer conn.Close(ctx)
+	conn := persistence.MustGetPooledPostgresSession()
+	defer conn.Release()
 
 	var p executePlanPayload
 	if err := json.Unmarshal([]byte(payload), &p); err != nil {

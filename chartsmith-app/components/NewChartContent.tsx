@@ -34,7 +34,7 @@ export function NewChartContent({ session, chatInput, setChatInput, handleSubmit
   };
 
   return (
-    <div className={`h-[calc(100vh-3.5rem)] border-r flex flex-col min-h-0 overflow-hidden transition-all duration-300 ease-in-out w-full relative ${theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"}`}>
+    <div className={`h-[calc(100vh-3.5rem)] flex flex-col min-h-0 overflow-hidden transition-all duration-300 ease-in-out w-full relative ${theme === "dark" ? "border-dark-border" : "border-gray-200"}`}>
       <div className="flex-1 h-full">
         <h1 className="text-2xl font-bold p-4">Create a new Helm chart</h1>
         <ScrollingContent forceScroll={true}>
@@ -50,8 +50,12 @@ export function NewChartContent({ session, chatInput, setChatInput, handleSubmit
             ))}
           </div>
         </ScrollingContent>
-        <div className={`absolute bottom-0 left-0 right-0 ${theme === "dark" ? "bg-dark-surface" : "bg-white"} border-t ${theme === "dark" ? "border-dark-border" : "border-gray-200"}`}>
-          <form onSubmit={handleSubmitChat} className="p-3 relative flex gap-3 items-start">
+        <div className={`absolute bottom-0 left-0 right-0 ${
+          theme === "dark"
+            ? "bg-dark border-t border-gray-800"
+            : "bg-white border-t border-gray-200"
+        }`}>
+          <form onSubmit={handleSubmitChat} className="p-6 relative flex gap-3 items-start max-w-5xl mx-auto">
             <div className="flex-1 relative">
               <textarea
                 value={chatInput}
@@ -67,21 +71,21 @@ export function NewChartContent({ session, chatInput, setChatInput, handleSubmit
                 placeholder="Ask a question or ask for a change..."
                 rows={3}
                 style={{ height: 'auto', minHeight: '72px', maxHeight: '150px' }}
-                className={`w-full px-3 py-1.5 pr-10 text-sm rounded-md border resize-none overflow-hidden ${
+                className={`w-full px-4 py-2 text-sm rounded-lg border resize-none overflow-hidden ${
                   theme === "dark"
-                    ? "bg-dark border-dark-border/60 text-white placeholder-gray-500"
+                    ? "bg-gray-800 border-gray-700 text-white placeholder-gray-500"
                     : "bg-white border-gray-200 text-gray-900 placeholder-gray-400"
-                } focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50`}
+                } focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-all duration-200`}
               />
-              <div className="absolute right-2 top-[18px]">
+              <div className="absolute right-3 top-[18px]">
                 <button
                   type="submit"
                   disabled={isRendering}
-                  className={`p-1.5 rounded-full ${
+                  className={`p-2 rounded-full transition-all duration-200 ${
                     isRendering
                       ? theme === "dark" ? "text-gray-600 cursor-not-allowed" : "text-gray-300 cursor-not-allowed"
                       : theme === "dark"
-                        ? "text-gray-400 hover:text-gray-200 hover:bg-dark-border/40"
+                        ? "text-gray-400 hover:text-gray-200 hover:bg-gray-700"
                         : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
                   }`}
                 >
@@ -93,7 +97,7 @@ export function NewChartContent({ session, chatInput, setChatInput, handleSubmit
               type="button"
               disabled={isRendering || !messages.length}
               onClick={handleCreateChart}
-              className={`px-4 py-2 rounded-md text-sm font-medium self-center whitespace-nowrap ${
+              className={`px-5 py-2 rounded-lg text-sm font-medium self-center whitespace-nowrap transition-all duration-200 ${
                 isRendering || !messages.length
                   ? "bg-gray-300 cursor-not-allowed text-gray-500"
                   : "bg-primary text-white hover:bg-primary/90"

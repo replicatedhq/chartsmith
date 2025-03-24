@@ -19,8 +19,8 @@ type newSummarizePayload struct {
 
 func handleNewSummarizeNotification(ctx context.Context, payload string) error {
 	logger.Info("New summarize notification received", zap.String("payload", payload))
-	conn := persistence.MustGeUunpooledPostgresSession()
-	defer conn.Close(ctx)
+	conn := persistence.MustGetPooledPostgresSession()
+	defer conn.Release()
 
 	var p newSummarizePayload
 	if err := json.Unmarshal([]byte(payload), &p); err != nil {

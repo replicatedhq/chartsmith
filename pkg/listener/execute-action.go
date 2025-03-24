@@ -77,8 +77,8 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 		// Continue anyway, we'll use a fresh connection below
 	}
 
-	conn := persistence.MustGeUunpooledPostgresSession()
-	defer conn.Close(ctx)
+	conn := persistence.MustGetPooledPostgresSession()
+	defer conn.Release()
 
 	var p executeActionPayload
 	if err := json.Unmarshal([]byte(payload), &p); err != nil {
@@ -125,7 +125,7 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	conn.Close(ctx)
+	conn.Release()
 
 	w, err := workspace.GetWorkspace(ctx, plan.WorkspaceID)
 	if err != nil {
@@ -248,12 +248,21 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 }
 
 func finalizeFile(ctx context.Context, finalContent string, updatedPlan *workspacetypes.Plan, p executeActionPayload, w *workspacetypes.Workspace, c workspacetypes.Chart, realtimeRecipient realtimetypes.Recipient) error {
-	if err := workspace.SetFileContentPending(ctx, p.Path, w.CurrentRevision, c.ID, w.ID, finalContent); err != nil {
+	fmt.Printf("DEBUG-CONTENT-PENDING: Finalizing file content for path=%s, length=%d\n", p.Path, len(finalContent))
+	
+	// Create dedicated context with timeout for database operations
+	dbCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	
+	if err := workspace.SetFileContentPending(dbCtx, p.Path, w.CurrentRevision, c.ID, w.ID, finalContent); err != nil {
+		fmt.Printf("DEBUG-CONTENT-PENDING: Failed to set file content pending: %v\n", err)
 		return fmt.Errorf("failed to set file content pending: %w", err)
 	}
+	
+	fmt.Printf("DEBUG-CONTENT-PENDING: Successfully set content_pending in finalizeFile for path=%s\n", p.Path)
 	// update the action file to completed
-	conn := persistence.MustGeUunpooledPostgresSession()
-	defer conn.Close(ctx)
+	conn := persistence.MustGetPooledPostgresSession()
+	defer conn.Release()
 
 	finalUpdateTx, err := conn.Begin(ctx)
 	if err != nil {

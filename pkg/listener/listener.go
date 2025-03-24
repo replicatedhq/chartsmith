@@ -152,7 +152,7 @@ func (l *Listener) Start(ctx context.Context) error {
 			}
 		}
 
-		listenCancel()
+		listenCancel() // Always cancel the context
 
 		if listenErr != nil {
 			return fmt.Errorf("failed to listen on channel %s: %w", channel, listenErr)
@@ -200,45 +200,37 @@ func (l *Listener) processNotifications(ctx context.Context) {
 				if time.Since(lastSuccessTime) > healthCheckInterval*2 {
 					logger.Warn("No notification received in a while, performing health check")
 
-					// Try a ping operation to verify connection
-					if l.conn != nil {
-						// Create a timeout context for the health check query
-						healthCtx, healthCancel := context.WithTimeout(ctx, 5*time.Second)
-						var result int
-						err := l.conn.QueryRow(healthCtx, "SELECT 1").Scan(&result)
+					// Use a dedicated connection for health checks
+					healthCtx, healthCancel := context.WithTimeout(ctx, 5*time.Second)
+					
+					// Create a new connection just for this health check
+					healthConn, err := pgx.Connect(healthCtx, l.pgURI)
+					if err != nil {
+						logger.Error(fmt.Errorf("health check connection failed: %w", err))
 						healthCancel()
+						continue
+					}
+					
+					var result int
+					err = healthConn.QueryRow(healthCtx, "SELECT 1").Scan(&result)
+					
+					// Always close the health check connection
+					healthConn.Close(healthCtx) 
+					healthCancel()
 
-						if err != nil {
-							if strings.Contains(err.Error(), "conn busy") {
-								logger.Warn("Health check found busy connection, waiting before retry")
+					if err != nil {
+						logger.Error(fmt.Errorf("health check query failed: %w", err))
 
-								// Wait a short time and try again with a fresh context
-								time.Sleep(500 * time.Millisecond)
-
-								retryCtx, retryCancel := context.WithTimeout(ctx, 5*time.Second)
-								err = l.conn.QueryRow(retryCtx, "SELECT 1").Scan(&result)
-								retryCancel()
-
-								if err == nil {
-									logger.Info("Connection health check passed on retry")
-									lastSuccessTime = time.Now()
-									continue
-								}
-							}
-
-							logger.Error(fmt.Errorf("health check failed: %w", err))
-
-							// Force a reconnection
-							if reconnectErr := l.reconnect(ctx); reconnectErr != nil {
-								logger.Error(fmt.Errorf("failed to reconnect after health check: %w", reconnectErr))
-							} else {
-								consecutiveErrors = 0        // Reset on successful reconnect
-								lastSuccessTime = time.Now() // Update last success time after reconnect
-							}
+						// Only force main connection reconnect if we can't establish any connection
+						if reconnectErr := l.reconnect(ctx); reconnectErr != nil {
+							logger.Error(fmt.Errorf("failed to reconnect after health check: %w", reconnectErr))
 						} else {
-							logger.Info("Connection health check passed")
-							lastSuccessTime = time.Now() // Update last success time
+							consecutiveErrors = 0        // Reset on successful reconnect
+							lastSuccessTime = time.Now() // Update last success time after reconnect
 						}
+					} else {
+						logger.Info("Connection health check passed")
+						lastSuccessTime = time.Now() // Update last success time
 					}
 				}
 			}
@@ -316,9 +308,19 @@ func (l *Listener) processNotifications(ctx context.Context) {
 			}
 
 			consecutiveErrors++
-			logger.Error(fmt.Errorf("failed to wait for notification: %w", err),
-				zap.Int("consecutiveErrors", consecutiveErrors),
-				zap.String("timeSinceLastSuccess", time.Since(lastSuccessTime).String()))
+			// Check if this is a timeout error (expected during periods of inactivity)
+			if strings.Contains(err.Error(), "context deadline exceeded") || strings.Contains(err.Error(), "timeout") {
+				// Log timeout errors at DEBUG level
+				logger.Debug(fmt.Sprintf("No notification received in %s. This is normal during periods of inactivity.", 2*time.Minute),
+					zap.Error(err),
+					zap.Int("consecutiveErrors", consecutiveErrors),
+					zap.String("timeSinceLastSuccess", time.Since(lastSuccessTime).String()))
+			} else {
+				// Continue logging other errors at ERROR level
+				logger.Error(fmt.Errorf("failed to wait for notification: %w", err),
+					zap.Int("consecutiveErrors", consecutiveErrors),
+					zap.String("timeSinceLastSuccess", time.Since(lastSuccessTime).String()))
+			}
 
 			// Force a reconnection after maxConsecutiveErrors or database termination
 			if consecutiveErrors >= maxConsecutiveErrors ||
@@ -378,17 +380,20 @@ func (l *Listener) processQueue(ctx context.Context, processor *queueProcessor) 
 			// Process immediately on notification
 		}
 
-		// Use a pooled connection for queue operations
-		poolConn, err := pgx.Connect(ctx, l.pgURI)
+		// Create a context with timeout for database operations
+		dbCtx, dbCancel := context.WithTimeout(ctx, 10*time.Second)
+		
+		// PHASE 1: Get queue statistics with a dedicated connection
+		statsConn, err := pgx.Connect(dbCtx, l.pgURI)
 		if err != nil {
-			logger.Error(fmt.Errorf("failed to connect to database for queue processing: %w", err))
+			logger.Error(fmt.Errorf("failed to connect to database for queue stats: %w", err))
+			dbCancel()
 			return
 		}
-		defer poolConn.Close(ctx)
 
-		// First get queue statistics
+		// Get queue statistics
 		var total, inFlight, available int
-		err = poolConn.QueryRow(ctx, fmt.Sprintf(`
+		err = statsConn.QueryRow(dbCtx, fmt.Sprintf(`
 			SELECT
 				COUNT(*) as total,
 				COUNT(CASE WHEN processing_started_at IS NOT NULL AND completed_at IS NULL THEN 1 END) as in_flight,
@@ -396,9 +401,14 @@ func (l *Listener) processQueue(ctx context.Context, processor *queueProcessor) 
 			FROM %s
 			WHERE channel = $1
 			AND completed_at IS NULL`, WorkQueueTable), processor.channel).Scan(&total, &inFlight, &available)
+		
+		// Always close the connection when done
+		statsConn.Close(dbCtx)
 
 		if err != nil {
 			logger.Error(fmt.Errorf("failed to get queue statistics: %w", err))
+			dbCancel()
+			return
 		} else {
 			logger.Info("queue status",
 				zap.String("channel", processor.channel),
@@ -407,8 +417,17 @@ func (l *Listener) processQueue(ctx context.Context, processor *queueProcessor) 
 				zap.Int("available", available))
 		}
 
+		// PHASE 2: Get messages to process with a dedicated connection
+		fetchConn, err := pgx.Connect(dbCtx, l.pgURI)
+		if err != nil {
+			logger.Error(fmt.Errorf("failed to connect to database for message fetching: %w", err))
+			dbCancel()
+			return
+		}
+
 		// Query and lock unprocessed messages atomically
-		rows, err := poolConn.Query(ctx, fmt.Sprintf(`
+		// This SQL's logic has been fixed to NOT increment attempt_count for new messages
+		rows, err := fetchConn.Query(dbCtx, fmt.Sprintf(`
 			WITH next_available_messages AS (
 				SELECT id, payload
 				FROM %s
@@ -424,10 +443,11 @@ func (l *Listener) processQueue(ctx context.Context, processor *queueProcessor) 
 			)
 			UPDATE %s AS wq
 			SET processing_started_at = NOW(),
-				attempt_count = COALESCE(attempt_count, 0) + CASE
-					WHEN processing_started_at IS NOT NULL THEN 1
+				-- Only increment for timed out messages, not for new ones
+				attempt_count = CASE 
+					WHEN wq.processing_started_at IS NOT NULL THEN COALESCE(wq.attempt_count, 0) + 1
 					ELSE 0
-				END
+				END 
 			FROM next_available_messages
 			WHERE wq.id = next_available_messages.id
 			RETURNING wq.id, wq.payload, COALESCE(wq.attempt_count, 0)::int`,
@@ -436,6 +456,8 @@ func (l *Listener) processQueue(ctx context.Context, processor *queueProcessor) 
 
 		if err != nil {
 			logger.Error(fmt.Errorf("failed to query messages: %w", err))
+			fetchConn.Close(dbCtx)
+			dbCancel()
 			return
 		}
 
@@ -459,6 +481,10 @@ func (l *Listener) processQueue(ctx context.Context, processor *queueProcessor) 
 			messages = append(messages, msg)
 		}
 		rows.Close()
+		
+		// Close the fetch connection as soon as we're done with it
+		fetchConn.Close(dbCtx)
+		dbCancel()
 
 		if len(messages) > 0 {
 			logger.Info("processing messages",
@@ -469,10 +495,13 @@ func (l *Listener) processQueue(ctx context.Context, processor *queueProcessor) 
 		// Process the messages
 		for _, msg := range messages {
 			if msg.attemptCount > 0 {
-				logger.Info("retrying message",
+				logger.Info("processing message retry",
 					zap.String("id", msg.id),
 					zap.Int("attempt", msg.attemptCount),
 					zap.Duration("timeout", processor.maxDuration))
+			} else {
+				logger.Debug("processing new message",
+					zap.String("id", msg.id))
 			}
 
 			// Wait for worker slot
@@ -508,38 +537,49 @@ func (l *Listener) processQueue(ctx context.Context, processor *queueProcessor) 
 				}
 
 				// Process message
-				err := processor.handler(notification)
+				handlerErr := processor.handler(notification)
 
-				// Use a new pooled connection for updating the message
-				updateConn, err := pgx.Connect(ctx, l.pgURI)
-				if err != nil {
-					logger.Error(fmt.Errorf("failed to connect to database for message update: %w", err))
+				// Create a new context with timeout for database operations
+				updateCtx, updateCancel := context.WithTimeout(ctx, 10*time.Second)
+				
+				// Use a new pooled connection for updating the message status
+				updateConn, connErr := pgx.Connect(updateCtx, l.pgURI)
+				if connErr != nil {
+					logger.Error(fmt.Errorf("failed to connect to database for message update: %w", connErr))
+					updateCancel()
 					return
 				}
-				defer updateConn.Close(ctx)
-
-				if err != nil {
+				
+				var dbErr error
+				
+				if handlerErr != nil {
 					// If processing failed, mark it as available for retry
-					_, updateErr := updateConn.Exec(ctx, fmt.Sprintf(`
+					_, dbErr = updateConn.Exec(updateCtx, fmt.Sprintf(`
 						UPDATE %s
 						SET processing_started_at = NULL,
 							last_error = $2,
 							attempt_count = attempt_count + 1
 						WHERE id = $1`, WorkQueueTable),
-						messageID, err.Error())
-					if updateErr != nil {
-						logger.Error(fmt.Errorf("failed to mark message %s as failed: %w", messageID, updateErr))
+						messageID, handlerErr.Error())
+					if dbErr != nil {
+						logger.Error(fmt.Errorf("failed to mark message %s as failed: %w", messageID, dbErr))
 					}
-					return
+				} else {
+					// Mark as completed
+					_, dbErr = updateConn.Exec(updateCtx, fmt.Sprintf(`
+						UPDATE %s
+						SET completed_at = NOW()
+						WHERE id = $1`, WorkQueueTable), messageID)
+					if dbErr != nil {
+						logger.Error(fmt.Errorf("failed to mark message %s as completed: %w", messageID, dbErr))
+					}
 				}
-
-				// Mark as completed
-				_, err = updateConn.Exec(ctx, fmt.Sprintf(`
-					UPDATE %s
-					SET completed_at = NOW()
-					WHERE id = $1`, WorkQueueTable), messageID)
-				if err != nil {
-					logger.Error(fmt.Errorf("failed to mark message %s as completed: %w", messageID, err))
+				
+				// Always clean up the database connection
+				updateConn.Close(updateCtx)
+				updateCancel()
+				
+				if handlerErr != nil || dbErr != nil {
 					return
 				}
 

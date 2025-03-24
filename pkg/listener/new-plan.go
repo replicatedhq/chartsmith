@@ -28,8 +28,8 @@ func handleNewPlanNotification(ctx context.Context, payload string) error {
 		return fmt.Errorf("failed to unmarshal payload: %w", err)
 	}
 
-	conn := persistence.MustGeUunpooledPostgresSession()
-	defer conn.Close(ctx)
+	conn := persistence.MustGetPooledPostgresSession()
+	defer conn.Release()
 
 	plan, err := workspace.GetPlan(ctx, nil, p.PlanID)
 	if err != nil {

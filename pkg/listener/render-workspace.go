@@ -29,8 +29,8 @@ type renderWorkspacePayload struct {
 // ensureActiveConnection performs a lightweight operation to ensure database connection is alive
 func ensureActiveConnection(ctx context.Context) error {
 	// Get a fresh connection and perform a simple query to verify connectivity
-	conn := persistence.MustGeUunpooledPostgresSession()
-	defer conn.Close(ctx)
+	conn := persistence.MustGetPooledPostgresSession()
+	defer conn.Release()
 
 	// Perform a simple ping-like query
 	var result int

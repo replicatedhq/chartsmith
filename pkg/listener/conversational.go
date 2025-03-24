@@ -28,8 +28,8 @@ func handleConverationalNotification(ctx context.Context, payload string) error 
 		return fmt.Errorf("failed to unmarshal payload: %w", err)
 	}
 
-	conn := persistence.MustGeUunpooledPostgresSession()
-	defer conn.Close(ctx)
+	conn := persistence.MustGetPooledPostgresSession()
+	defer conn.Release()
 
 	chatMessage, err := workspace.GetChatMessage(ctx, p.ChatMessageID)
 	if err != nil {
@@ -87,12 +87,12 @@ func handleConverationalNotification(ctx context.Context, payload string) error 
 				return fmt.Errorf("error creating initial plan: %w", err)
 			}
 			done = true
-			
+
 			// The message is complete, update the database to mark it as complete
 			if err := workspace.SetChatMessageIntent(ctx, chatMessage.ID, true, true, false, false, false); err != nil {
 				return fmt.Errorf("failed to set chat message intent: %w", err)
 			}
-			
+
 			// Create a render job and associate it with this chat message
 			if err := workspace.EnqueueRenderWorkspaceForRevision(ctx, w.ID, w.CurrentRevision, chatMessage.ID); err != nil {
 				return fmt.Errorf("failed to create render job for non-plan chat message: %w", err)

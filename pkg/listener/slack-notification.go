@@ -9,8 +9,8 @@ import (
 )
 
 func handleNewSlackNotification(ctx context.Context, id string) error {
-	conn := persistence.MustGeUunpooledPostgresSession()
-	defer conn.Close(ctx)
+	conn := persistence.MustGetPooledPostgresSession()
+	defer conn.Release()
 
 	slackNotification, err := slack.GetSlackNotification(ctx, id)
 	if err != nil {

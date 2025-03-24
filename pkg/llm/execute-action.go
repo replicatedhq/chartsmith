@@ -155,11 +155,44 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 					if updatedContent == "" {
 						// File doesn't exist yet
 						response = "File does not exist"
+						fmt.Printf("DEBUG-CONTENT-PENDING: View command - file does not exist\n")
 					} else {
 						response = updatedContent
+						fmt.Printf("DEBUG-CONTENT-PENDING: View command - returning %d bytes\n", len(updatedContent))
 					}
 				} else if input.Command == "str_replace" {
+					fmt.Printf("DEBUG-CONTENT-PENDING: Before str_replace - content length=%d, old_str length=%d, new_str length=%d\n", 
+						len(updatedContent), len(input.OldStr), len(input.NewStr))
+						
+					if !strings.Contains(updatedContent, input.OldStr) {
+						// This is important debugging info to detect content mismatch
+						oldContentSnippet := ""
+						if len(updatedContent) > 100 {
+							oldContentSnippet = updatedContent[:100] + "..."
+						} else {
+							oldContentSnippet = updatedContent
+						}
+						
+						oldStrSnippet := ""
+						if len(input.OldStr) > 100 {
+							oldStrSnippet = input.OldStr[:100] + "..."
+						} else {
+							oldStrSnippet = input.OldStr
+						}
+						
+						fmt.Printf("DEBUG-CONTENT-PENDING: ERROR - old_str not found in content!\n")
+						fmt.Printf("DEBUG-CONTENT-PENDING: Content starts with: %s\n", oldContentSnippet)
+						fmt.Printf("DEBUG-CONTENT-PENDING: Old string starts with: %s\n", oldStrSnippet)
+						
+						// Let's proceed anyway, since this is just diagnostics
+						response = "Warning: Content mismatch - old_str not found in content"
+					}
+					
 					updatedContent = strings.ReplaceAll(updatedContent, input.OldStr, input.NewStr)
+					
+					fmt.Printf("DEBUG-CONTENT-PENDING: After str_replace - new content length=%d\n", len(updatedContent))
+					
+					// Send updated content through the channel
 					interimContentCh <- updatedContent
 					response = "Updated"
 				} else if input.Command == "create" {

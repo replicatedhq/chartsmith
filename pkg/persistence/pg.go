@@ -43,7 +43,7 @@ func InitPostgres(opts PostgresOpts) error {
 	return nil
 }
 
-func MustGeUunpooledPostgresSession() *pgx.Conn {
+func MustGeUnpooledPostgresSession() *pgx.Conn {
 	if connStr == "" {
 		panic("Postgres is not initialized")
 	}
