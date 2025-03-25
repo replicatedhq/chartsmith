@@ -8,11 +8,11 @@ import { Session } from "@/lib/types/session";
 export async function checkWaitlistStatusAction(sess: Session): Promise<string> {
   console.log(sess);
   try {
-    logger.info("Checking waitlist status action", { email: sess.user.email });
+    // logger.info("Checking waitlist status action", { email: sess.user.email });
 
     // const result = await checkWaitlistStatus(sess.user.email);
 
-    return await sessionToken(sess);
+    // return await sessionToken(sess);
 
   } catch (error) {
     console.log(error);

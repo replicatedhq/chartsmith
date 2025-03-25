@@ -68,24 +68,7 @@ export const useSession = (redirectIfNotLoggedIn: boolean = false) => {
           return;
         }
 
-        // Get the isWaitlisted claim from the JWT
-        const tokenPayload = token.split('.')[1];
-        if (tokenPayload) {
-          try {
-            const decodedData = JSON.parse(atob(tokenPayload));
-            // Set the session with waitlist status
-            setSession({
-              ...sess,
-              isWaitlisted: decodedData.isWaitlisted
-            });
-          } catch (err) {
-            logger.error("Failed to decode JWT:", err);
-            setSession(sess);
-          }
-        } else {
-          setSession(sess);
-        }
-        
+        setSession(sess);
         setIsLoading(false);
       } catch (error) {
         logger.error("Session validation failed:", error);

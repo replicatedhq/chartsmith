@@ -17,50 +17,52 @@ export async function upsertUser(email: string, name: string, imageUrl: string):
     return user;
   }
 
+  const acceptingNewUsers = false;
+  if (acceptingNewUsers) {
+    return upsertNewUser(email, name, imageUrl);
+  } else {
+    return upsertWaitlistUser(email, name, imageUrl);
+  }
+}
+
+async function upsertWaitlistUser(email: string, name: string, imageUrl: string): Promise<User> {
   try {
     const db = getDB(await getParam("DB_URI"));
 
-    // Check if we're accepting new users
-    const acceptingNewUsers = false;
+    const id = srs.default({ length: 12, alphanumeric: true });
 
-    if (!acceptingNewUsers) {
-      // Add to waitlist
-      try {
-        await db.query(
-          `INSERT INTO waitlist (email, name, image_url, created_at)
-          VALUES ($1, $2, $3, now())
-          ON CONFLICT (email) DO NOTHING`,
-          [email, name, imageUrl]
-        );
-      } catch (waitlistErr) {
-        logger.error("Error inserting into waitlist", { 
-          error: waitlistErr,
-          email 
-        });
-      }
+    await db.query(
+      `INSERT INTO waitlist (id, email, name, image_url, created_at, last_login_at, last_active_at)
+      VALUES ($1, $2, $3, $4, now(), now(), now()) ON CONFLICT (email) DO NOTHING`,
+      [id, email, name, imageUrl],
+    );
 
-      // Generate a deterministic ID for consistency
-      const id = srs.default({ length: 12, alphanumeric: true });
-      
-      return {
-        id,
-        email,
-        name,
-        imageUrl,
-        createdAt: new Date(),
-        lastLoginAt: new Date(),
-        lastActiveAt: new Date(),
-        isWaitlisted: true,
-        settings: defaultUserSettings,
-      };
-    }
+    return {
+      id,
+      email,
+      name,
+      imageUrl,
+      createdAt: new Date(),
+      lastLoginAt: new Date(),
+      lastActiveAt: new Date(),
+      isWaitlisted: true,
+      settings: await getUserSettings(id),
+    };
+  } catch (err) {
+    logger.error("Failed to upsert user", { err });
+    throw err;
+  }
+}
 
-    // Normal user creation flow
+async function upsertNewUser(email: string, name: string, imageUrl: string): Promise<User> {
+  try {
+    const db = getDB(await getParam("DB_URI"));
+
     const id = srs.default({ length: 12, alphanumeric: true });
 
     await db.query(
       `INSERT INTO chartsmith_user (id, email, name, image_url, created_at, last_login_at, last_active_at)
-      VALUES ($1, $2, $3, $4, now(), now(), now())`,
+      VALUES ($1, $2, $3, $4, now(), now(), now()) ON CONFLICT (email) DO NOTHING`,
       [id, email, name, imageUrl],
     );
 
@@ -317,43 +319,43 @@ export interface CheckWaitlistResult {
 export async function checkWaitlistStatus(email: string): Promise<CheckWaitlistResult> {
   try {
     logger.debug("Checking waitlist status for user", { email });
-    
+
     const db = getDB(await getParam("DB_URI"));
-    
+
     // First check if user exists in chartsmith_user table
     const userResult = await db.query(
       `SELECT id FROM chartsmith_user WHERE email = $1`,
       [email]
     );
-    
+
     // If they exist in the user table, they are not waitlisted
     if (userResult.rows.length > 0) {
       const userId = userResult.rows[0].id;
       logger.info("User exists in chartsmith_user table, not waitlisted", { email, userId });
-      
-      return { 
+
+      return {
         isWaitlisted: false,
         userId,
         email
       };
     }
-    
+
     // Check if they exist in waitlist table
     const waitlistResult = await db.query(
       `SELECT id FROM waitlist WHERE email = $1`,
       [email]
     );
-    
+
     // If they're in the waitlist table, they're waitlisted
     if (waitlistResult.rows.length > 0) {
       logger.info("User exists in waitlist table, still waitlisted", { email });
       return { isWaitlisted: true, email };
     }
-    
+
     // If they're not in either table, something is wrong
     logger.warn("User not found in either users or waitlist tables", { email });
     return { isWaitlisted: true, email };
-    
+
   } catch (error) {
     logger.error("Failed to check waitlist status", { error, email });
     return { isWaitlisted: true };
@@ -364,42 +366,42 @@ export async function approveWaitlistUser(waitlistId: string): Promise<boolean> 
   try {
     logger.info("Approving waitlist user", { waitlistId });
     const db = getDB(await getParam("DB_URI"));
-    
+
     // First, get the waitlist user details
     const waitlistResult = await db.query(
-      `SELECT 
-        id, 
-        email, 
-        name, 
-        image_url, 
+      `SELECT
+        id,
+        email,
+        name,
+        image_url,
         created_at
-      FROM 
+      FROM
         waitlist
-      WHERE 
+      WHERE
         id = $1`,
       [waitlistId]
     );
-    
+
     if (waitlistResult.rows.length === 0) {
       logger.warn("Attempted to approve non-existent waitlist user", { waitlistId });
       return false;
     }
-    
+
     const waitlistUser = waitlistResult.rows[0];
-    
+
     // Begin a transaction
     await db.query("BEGIN");
-    
+
     try {
       // Insert user into chartsmith_user table
       await db.query(
         `INSERT INTO chartsmith_user (
-          id, 
-          email, 
-          name, 
-          image_url, 
-          created_at, 
-          last_login_at, 
+          id,
+          email,
+          name,
+          image_url,
+          created_at,
+          last_login_at,
           last_active_at
         ) VALUES (
           $1, $2, $3, $4, $5, now(), now()
@@ -412,21 +414,21 @@ export async function approveWaitlistUser(waitlistId: string): Promise<boolean> 
           waitlistUser.created_at
         ]
       );
-      
+
       // Delete from waitlist
       await db.query(
         `DELETE FROM waitlist WHERE id = $1`,
         [waitlistId]
       );
-      
+
       // Commit the transaction
       await db.query("COMMIT");
-      
-      logger.info("Successfully approved waitlist user", { 
+
+      logger.info("Successfully approved waitlist user", {
         waitlistId,
         email: waitlistUser.email
       });
-      
+
       return true;
     } catch (error) {
       // Rollback in case of error

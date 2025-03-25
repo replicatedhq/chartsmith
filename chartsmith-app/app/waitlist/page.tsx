@@ -16,25 +16,26 @@ export default function WaitlistPage() {
   useEffect(() => {
     async function checkApprovalStatus() {
       console.log(session);
-      if (!isLoading && session && session.isWaitlisted) {
-        if (!session) return;
+      if (isLoading || !session) return;
 
+        console.log(session);
         try {
           const newJWT = await checkWaitlistStatusAction(session);
+          console.log(newJWT);
 
           const expires = new Date();
           expires.setDate(expires.getDate() + 7);
           document.cookie = `session=${newJWT}; expires=${expires.toUTCString()}; path=/; SameSite=Lax`;
 
           // if the jwt no longer has the isWaitlisted claim, redirect to home
-          if (!session.user.isWaitlisted) {
-            window.location.href = "/";
+          const payload = JSON.parse(atob(newJWT.split('.')[1]));
+          if (!payload.isWaitlisted) {
+            router.push("/");
           }
         } catch (error) {
           console.error("Failed to check waitlist status:", error);
         }
       }
-    }
 
     checkApprovalStatus();
   }, [session, isLoading]);

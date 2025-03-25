@@ -19,11 +19,12 @@ function GoogleCallback() {
       return;
     }
 
+    console.log("exchanging google code for session");
     exchangeGoogleCodeForSession(code)
       .then((jwt) => {
-        // Check if user is waitlisted
         try {
           const payload = JSON.parse(atob(jwt.split('.')[1]));
+          console.log(payload);
           if (payload.isWaitlisted) {
             window.opener?.postMessage({ type: 'google-auth', jwt }, window.location.origin);
             if (window.opener) {
