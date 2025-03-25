@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { useTheme } from "@/contexts/ThemeContext";
 import { checkWaitlistStatusAction } from "@/lib/auth/actions/check-waitlist-status";
 
 export default function WaitlistPage() {
@@ -15,43 +14,45 @@ export default function WaitlistPage() {
   // Check if the user has been approved on page load
   useEffect(() => {
     async function checkApprovalStatus() {
+      console.log(isLoading);
       console.log(session);
       if (isLoading || !session) return;
 
-        console.log(session);
-        try {
-          const newJWT = await checkWaitlistStatusAction(session);
-          console.log(newJWT);
+      console.log(session);
+      try {
+        const newJWT = await checkWaitlistStatusAction(session);
+        console.log(newJWT);
 
-          const expires = new Date();
-          expires.setDate(expires.getDate() + 7);
-          document.cookie = `session=${newJWT}; expires=${expires.toUTCString()}; path=/; SameSite=Lax`;
+        const expires = new Date();
+        expires.setDate(expires.getDate() + 7);
+        document.cookie = `session=${newJWT}; expires=${expires.toUTCString()}; path=/; SameSite=Lax`;
 
-          // if the jwt no longer has the isWaitlisted claim, redirect to home
-          const payload = JSON.parse(atob(newJWT.split('.')[1]));
-          if (!payload.isWaitlisted) {
-            router.push("/");
-          }
-        } catch (error) {
-          console.error("Failed to check waitlist status:", error);
+        // if the jwt no longer has the isWaitlisted claim, redirect to home
+        const payload = JSON.parse(atob(newJWT.split('.')[1]));
+        if (!payload.isWaitlisted) {
+          router.push("/");
         }
+      } catch (error) {
+        console.error("Failed to check waitlist status:", error);
       }
+    }
 
     checkApprovalStatus();
-  }, [session, isLoading]);
+  }, [isLoading, session]);
 
   // Redirect to home if user is not waitlisted
   useEffect(() => {
-    if (!isLoading && session && !session.isWaitlisted) {
+    if (isLoading || !session) return;
+
+    if (session && !session.user.isWaitlisted) {
       router.push("/");
     }
-  }, [session, isLoading, router]);
+  }, [isLoading]);
 
   // Show loading state
   if (isLoading) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-app">
-        <div className="animate-pulse text-text">Loading...</div>
       </div>
     );
   }

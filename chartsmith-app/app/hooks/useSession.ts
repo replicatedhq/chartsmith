@@ -45,7 +45,8 @@ export const useSession = (redirectIfNotLoggedIn: boolean = false) => {
       clearTimeout(activityTimeout);
     };
   }, [extendSessionOnActivity]);
-  const [session, setSession] = useState<(Session & { isWaitlisted?: boolean }) | undefined>(undefined);
+
+  const [session, setSession] = useState<(Session) | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
