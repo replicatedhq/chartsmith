@@ -1,4 +1,5 @@
 import { Message } from "@/components/types";
+import { ChatMessageFromPersona } from "../workspace/workspace";
 
 export interface Workspace {
   id: string;
@@ -132,6 +133,7 @@ export interface ChatMessage {
   isApplying?: boolean;
   isIgnored?: boolean;
   planId?: string;
+  messageFromPersona?: ChatMessageFromPersona;
 }
 
 export interface FollowupAction {

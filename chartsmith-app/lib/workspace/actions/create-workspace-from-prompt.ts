@@ -1,7 +1,7 @@
 "use server";
 
 import { Session } from "@/lib/types/session";
-import { createChatMessage, CreateChatMessageParams, createWorkspace } from "../workspace";
+import { ChatMessageFromPersona, CreateChatMessageParams, createWorkspace } from "../workspace";
 import { Workspace } from "@/lib/types/workspace";
 import { logger } from "@/lib/utils/logger";
 
@@ -10,6 +10,7 @@ export async function createWorkspaceFromPromptAction(session: Session, prompt: 
 
   const createChartMessageParams: CreateChatMessageParams = {
     prompt: prompt,
+    messageFromPersona: ChatMessageFromPersona.AUTO,
   }
   const w = await createWorkspace("prompt", session.user.id, createChartMessageParams);
 

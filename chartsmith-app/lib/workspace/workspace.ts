@@ -139,6 +139,12 @@ export enum ChatMessageIntent {
   CONVERT_K8S_TO_HELM = "convert-k8s-to-helm",
 }
 
+export enum ChatMessageFromPersona {
+  AUTO = "auto",
+  DEVELOPER = "developer",
+  OPERATOR = "operator",
+}
+
 export interface CreateChatMessageParams {
   prompt?: string;
   response?: string;
@@ -146,6 +152,7 @@ export interface CreateChatMessageParams {
   followupActions?: FollowupAction[];
   additionalFiles?: WorkspaceFile[];
   responseRollbackToRevisionNumber?: number;
+  messageFromPersona?: ChatMessageFromPersona;
 }
 
 export async function createChatMessage(userId: string, workspaceId: string, params: CreateChatMessageParams): Promise<ChatMessage> {
@@ -187,11 +194,12 @@ export async function createChatMessage(userId: string, workspaceId: string, par
         response_render_id,
         response_plan_id,
         response_conversion_id,
-        response_rollback_to_revision_number
+        response_rollback_to_revision_number,
+        message_from_persona
       )
       VALUES (
         $1, $2, now(), $3, $4, $5, $6, false,
-        $7, $8, $9, false, false, false, $10, $11, null, null, null, $12
+        $7, $8, $9, false, false, false, $10, $11, null, null, null, $12, $13
       )`;
 
     const values = [
@@ -207,6 +215,7 @@ export async function createChatMessage(userId: string, workspaceId: string, par
       params.knownIntent === ChatMessageIntent.RENDER,
       params.followupActions ? JSON.stringify(params.followupActions) : null,
       params.responseRollbackToRevisionNumber,
+      params.messageFromPersona,
     ];
 
     await client.query(query, values);
@@ -489,7 +498,8 @@ export async function getChatMessage(chatMessageId: string): Promise<ChatMessage
       responseConversionId: result.rows[0].response_conversion_id,
       responseRollbackToRevisionNumber: result.rows[0].response_rollback_to_revision_number,
       revisionNumber: result.rows[0].revision_number,
-      isComplete: true
+      isComplete: true,
+      messageFromPersona: result.rows[0].message_from_persona,
     };
 
     return chatMessage;
