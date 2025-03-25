@@ -92,7 +92,8 @@ func GetChatMessage(ctx context.Context, chatMessageId string) (*types.Chat, err
 		workspace_chat.response_plan_id,
 		workspace_chat.response_conversion_id,
 		workspace_chat.response_rollback_to_revision_number,
-		workspace_chat.revision_number
+		workspace_chat.revision_number,
+		workspace_chat.message_from_persona
 	FROM
 		workspace_chat
 	WHERE
@@ -112,6 +113,7 @@ func GetChatMessage(ctx context.Context, chatMessageId string) (*types.Chat, err
 	var responsePlanID sql.NullString
 	var responseConversionID sql.NullString
 	var responseRollbackToRevisionNumber sql.NullInt64
+	var messageFromPersona sql.NullString
 	err := row.Scan(
 		&chat.ID,
 		&chat.WorkspaceID,
@@ -130,12 +132,18 @@ func GetChatMessage(ctx context.Context, chatMessageId string) (*types.Chat, err
 		&responseConversionID,
 		&responseRollbackToRevisionNumber,
 		&chat.RevisionNumber,
+		&messageFromPersona,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to scan chat message in getChatMessage: %w", err)
 	}
 
 	chat.Response = response.String
+
+	if messageFromPersona.Valid {
+		persona := types.ChatMessageFromPersona(messageFromPersona.String)
+		chat.MessageFromPersona = &persona
+	}
 
 	if chat.IsIntentComplete {
 		chat.Intent = &types.Intent{
@@ -166,7 +174,7 @@ func ListChatMessagesForWorkspace(ctx context.Context, workspaceID string) ([]ty
 
 	query := `SELECT
 id, prompt, response, created_at,
-is_intent_complete, is_intent_conversational, is_intent_plan, is_intent_off_topic, is_intent_chart_developer, is_intent_chart_operator, is_intent_proceed, revision_number
+is_intent_complete, is_intent_conversational, is_intent_plan, is_intent_off_topic, is_intent_chart_developer, is_intent_chart_operator, is_intent_proceed, revision_number, message_from_persona
 FROM workspace_chat
 WHERE workspace_id = $1
 ORDER BY created_at DESC`
@@ -186,7 +194,8 @@ ORDER BY created_at DESC`
 		var isIntentChartDeveloper sql.NullBool
 		var isIntentChartOperator sql.NullBool
 		var isIntentProceed sql.NullBool
-		if err := rows.Scan(&chat.ID, &chat.Prompt, &response, &chat.CreatedAt, &chat.IsIntentComplete, &isIntentConversational, &isIntentPlan, &isIntentOffTopic, &isIntentChartDeveloper, &isIntentChartOperator, &isIntentProceed, &chat.RevisionNumber); err != nil {
+		var messageFromPersona sql.NullString
+		if err := rows.Scan(&chat.ID, &chat.Prompt, &response, &chat.CreatedAt, &chat.IsIntentComplete, &isIntentConversational, &isIntentPlan, &isIntentOffTopic, &isIntentChartDeveloper, &isIntentChartOperator, &isIntentProceed, &chat.RevisionNumber, &messageFromPersona); err != nil {
 			return nil, fmt.Errorf("failed to scan chat message in listChatMessagesForWorkspace: %w", err)
 		}
 
@@ -201,6 +210,11 @@ ORDER BY created_at DESC`
 				IsChartOperator:  isIntentChartOperator.Bool,
 				IsProceed:        isIntentProceed.Bool,
 			}
+		}
+
+		if messageFromPersona.Valid {
+			persona := types.ChatMessageFromPersona(messageFromPersona.String)
+			chat.MessageFromPersona = &persona
 		}
 
 		chats = append(chats, chat)
@@ -233,7 +247,7 @@ func ListChatMessagesAfterPlan(ctx context.Context, planID string) ([]types.Chat
 
 	query = `SELECT
 id, prompt, response, created_at, is_intent_complete, is_intent_conversational, is_intent_plan, is_intent_off_topic, is_intent_chart_developer,
-is_intent_chart_operator, is_intent_proceed, revision_number FROM workspace_chat WHERE workspace_id = $1 AND created_at > $2`
+is_intent_chart_operator, is_intent_proceed, revision_number, message_from_persona FROM workspace_chat WHERE workspace_id = $1 AND created_at > $2`
 	rows, err := conn.Query(ctx, query, workspaceID, mostRecentChatCreatedAt)
 	if err != nil {
 		return nil, err
@@ -250,7 +264,8 @@ is_intent_chart_operator, is_intent_proceed, revision_number FROM workspace_chat
 		var isIntentChartDeveloper sql.NullBool
 		var isIntentChartOperator sql.NullBool
 		var isIntentProceed sql.NullBool
-		err := rows.Scan(&chat.ID, &chat.Prompt, &response, &chat.CreatedAt, &chat.IsIntentComplete, &isIntentConversational, &isIntentPlan, &isIntentOffTopic, &isIntentChartDeveloper, &isIntentChartOperator, &isIntentProceed, &chat.RevisionNumber)
+		var messageFromPersona sql.NullString
+		err := rows.Scan(&chat.ID, &chat.Prompt, &response, &chat.CreatedAt, &chat.IsIntentComplete, &isIntentConversational, &isIntentPlan, &isIntentOffTopic, &isIntentChartDeveloper, &isIntentChartOperator, &isIntentProceed, &chat.RevisionNumber, &messageFromPersona)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan chat message in listChatMessagesAfterPlan: %w", err)
 		}
@@ -266,6 +281,11 @@ is_intent_chart_operator, is_intent_proceed, revision_number FROM workspace_chat
 				IsChartOperator:  isIntentChartOperator.Bool,
 				IsProceed:        isIntentProceed.Bool,
 			}
+		}
+
+		if messageFromPersona.Valid {
+			persona := types.ChatMessageFromPersona(messageFromPersona.String)
+			chat.MessageFromPersona = &persona
 		}
 
 		chats = append(chats, chat)

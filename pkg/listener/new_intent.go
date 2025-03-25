@@ -12,6 +12,7 @@ import (
 	"github.com/replicatedhq/chartsmith/pkg/realtime"
 	realtimetypes "github.com/replicatedhq/chartsmith/pkg/realtime/types"
 	"github.com/replicatedhq/chartsmith/pkg/workspace"
+	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 	"go.uber.org/zap"
 )
 
@@ -33,6 +34,7 @@ func handleNewIntentNotification(ctx context.Context, payload string) error {
 		return fmt.Errorf("failed to get chat message: %w", err)
 	}
 
+	logger.Debug("chat message", zap.Any("chatMessage", chatMessage))
 	w, err := workspace.GetWorkspace(ctx, chatMessage.WorkspaceID)
 	if err != nil {
 		return fmt.Errorf("failed to get workspace: %w", err)
@@ -47,7 +49,7 @@ func handleNewIntentNotification(ctx context.Context, payload string) error {
 		isInitialPrompt = false
 	}
 
-	intent, err := llm.GetChatMessageIntent(ctx, chatMessage.Prompt, isInitialPrompt)
+	intent, err := llm.GetChatMessageIntent(ctx, chatMessage.Prompt, isInitialPrompt, chatMessage.MessageFromPersona)
 	if err != nil {
 		return fmt.Errorf("failed to get conversational and plan intent: %w", err)
 	}
@@ -89,6 +91,96 @@ func handleNewIntentNotification(ctx context.Context, payload string) error {
 		zap.Bool("is_proceed", intent.IsProceed),
 		zap.Bool("is_render", intent.IsRender),
 	)
+
+	// if it's not possible to answer the question using the personal requested, we have an error
+	if chatMessage.MessageFromPersona != nil {
+		fmt.Printf("chatMessage.MessageFromPersona: %v\n", *chatMessage.MessageFromPersona)
+		if *chatMessage.MessageFromPersona == workspacetypes.ChatMessageFromPersonaDeveloper && !intent.IsChartDeveloper {
+			streamCh := make(chan string)
+			doneCh := make(chan error)
+			go func() {
+				if err := llm.FeedbackOnNotDeveloperIntentWhenRequested(ctx, streamCh, doneCh, chatMessage); err != nil {
+					fmt.Printf("Failed to get feedback on not developer intent when requested: %v\n", err)
+				}
+			}()
+
+			var buffer strings.Builder
+			done := false
+			for !done {
+				select {
+				case stream := <-streamCh:
+					buffer.WriteString(stream)
+
+					cleanedResponse := buffer.String()
+
+					cleanedResponse = strings.TrimSpace(cleanedResponse)
+
+					updatedChatMessage.Response = cleanedResponse
+					e := realtimetypes.ChatMessageUpdatedEvent{
+						WorkspaceID: w.ID,
+						ChatMessage: updatedChatMessage,
+					}
+					if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
+						return fmt.Errorf("failed to send chat message update: %w", err)
+					}
+
+					if err := workspace.SetChatMessageResponse(ctx, chatMessage.ID, cleanedResponse); err != nil {
+						return fmt.Errorf("failed to write chat message response to database: %w", err)
+					}
+				case err := <-doneCh:
+					if err != nil {
+						fmt.Printf("Failed to get feedback on ambiguous intent: %v\n", err)
+					}
+					done = true
+				}
+			}
+
+			return nil
+		}
+
+		if *chatMessage.MessageFromPersona == workspacetypes.ChatMessageFromPersonaOperator && !intent.IsChartOperator {
+			streamCh := make(chan string)
+			doneCh := make(chan error)
+			go func() {
+				if err := llm.FeedbackOnNotOperatorIntentWhenRequested(ctx, streamCh, doneCh, chatMessage); err != nil {
+					fmt.Printf("Failed to get feedback on not operator intent when requested: %v\n", err)
+				}
+			}()
+
+			var buffer strings.Builder
+			done := false
+			for !done {
+				select {
+				case stream := <-streamCh:
+					buffer.WriteString(stream)
+
+					cleanedResponse := buffer.String()
+
+					cleanedResponse = strings.TrimSpace(cleanedResponse)
+
+					updatedChatMessage.Response = cleanedResponse
+					e := realtimetypes.ChatMessageUpdatedEvent{
+						WorkspaceID: w.ID,
+						ChatMessage: updatedChatMessage,
+					}
+					if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
+						return fmt.Errorf("failed to send chat message update: %w", err)
+					}
+
+					if err := workspace.SetChatMessageResponse(ctx, chatMessage.ID, cleanedResponse); err != nil {
+						return fmt.Errorf("failed to write chat message response to database: %w", err)
+					}
+				case err := <-doneCh:
+					if err != nil {
+						fmt.Printf("Failed to get feedback on ambiguous intent: %v\n", err)
+					}
+					done = true
+				}
+			}
+
+			return nil
+		}
+	}
 
 	// sometimes we see messages that return false to everything
 	if !intent.IsConversational && !intent.IsPlan && !intent.IsOffTopic && !intent.IsChartDeveloper && !intent.IsChartOperator && !intent.IsProceed && !intent.IsRender {
