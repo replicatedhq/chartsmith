@@ -165,7 +165,7 @@ export function PlanChatMessage({
       const wsId = workspaceId || workspaceToUse?.id;
       if (!session || !wsId) return;
 
-      const chatMessage = await createChatMessageAction(session, wsId, chatInput.trim());
+      const chatMessage = await createChatMessageAction(session, wsId, chatInput.trim(), "auto");
 
       setMessages(prev => [...prev, chatMessage]);
       setChatInput("");

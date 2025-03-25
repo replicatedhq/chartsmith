@@ -12,7 +12,7 @@ export default async function WorkspacesPage() {
   }
 
   // Don't allow waitlisted users to access workspaces
-  const session = await validateSession(sessionToken, false);
+  const session = await validateSession(sessionToken);
   if (!session) {
     // This will redirect to login page or show access denied
     // Client-side code will redirect waitlisted users to /waitlist

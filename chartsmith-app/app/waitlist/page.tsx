@@ -14,14 +14,10 @@ export default function WaitlistPage() {
   // Check if the user has been approved on page load
   useEffect(() => {
     async function checkApprovalStatus() {
-      console.log(isLoading);
-      console.log(session);
       if (isLoading || !session) return;
 
-      console.log(session);
       try {
         const newJWT = await checkWaitlistStatusAction(session);
-        console.log(newJWT);
 
         const expires = new Date();
         expires.setDate(expires.getDate() + 7);
@@ -38,7 +34,7 @@ export default function WaitlistPage() {
     }
 
     checkApprovalStatus();
-  }, [isLoading, session]);
+  }, [isLoading, session, router]);
 
   // Redirect to home if user is not waitlisted
   useEffect(() => {
@@ -47,7 +43,7 @@ export default function WaitlistPage() {
     if (session && !session.user.isWaitlisted) {
       router.push("/");
     }
-  }, [isLoading]);
+  }, [isLoading, router, session]);
 
   // Show loading state
   if (isLoading) {
@@ -61,12 +57,12 @@ export default function WaitlistPage() {
     <div className="flex min-h-screen flex-col items-center justify-center bg-app">
       <Card className="w-full max-w-lg p-8 text-center shadow-lg border-border">
         <div className="mb-6">
-          <h1 className="text-3xl font-bold mb-4 text-text">You're on the waitlist!</h1>
+          <h1 className="text-3xl font-bold mb-4 text-text">You&apos;re on the waitlist!</h1>
           <p className="text-text/80 mb-4">
-            Thank you for your interest in ChartSmith. We're currently in private beta and will reach out to you soon.
+            Thank you for your interest in ChartSmith. We&apos;re currently in private beta and will reach out to you soon.
           </p>
           <p className="text-text/80">
-            We appreciate your patience and can't wait to have you on board.
+            We appreciate your patience and can&apos;t wait to have you on board.
           </p>
         </div>
 

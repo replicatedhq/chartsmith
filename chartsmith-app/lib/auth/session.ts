@@ -133,7 +133,12 @@ export async function extendSession(session: Session): Promise<Session> {
 
 export async function findSession(token: string): Promise<Session | undefined> {
   try {
-    const decoded = jwt.verify(token, process.env.HMAC_SECRET!) as { id: string, email?: string, isWaitlisted?: boolean };
+    const decoded = jwt.verify(token, process.env.HMAC_SECRET!) as {
+      id: string;
+      email?: string;
+      isWaitlisted?: boolean;
+      exp: number;
+    };
     const id = decoded.id;
 
     const db = getDB(await getParam("DB_URI"));

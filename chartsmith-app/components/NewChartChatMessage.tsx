@@ -110,7 +110,7 @@ export function NewChartChatMessage({
     if (chatInput.trim()) {
       if (!session || !workspace) return;
 
-      const chatMessage = await createChatMessageAction(session, workspace.id, chatInput.trim());
+      const chatMessage = await createChatMessageAction(session, workspace.id, chatInput.trim(), "user");
 
       setMessages(prev => [...prev, chatMessage]);
 

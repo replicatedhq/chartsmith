@@ -194,7 +194,7 @@ export function WorkspaceContainerClient({
                             variant="default"
                             size="sm"
                             onClick={async () => {
-                              await createChatMessageAction(session, workspace.id, `Why was the file ${selectedFile.filePath} not included in the rendered output?`);
+                              await createChatMessageAction(session, workspace.id, `Why was the file ${selectedFile.filePath} not included in the rendered output?`, "auto");
                             }}
                             className="bg-primary hover:bg-primary/90 text-white"
                           >

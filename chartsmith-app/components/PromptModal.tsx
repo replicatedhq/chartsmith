@@ -16,16 +16,16 @@ interface PromptModalProps {
 }
 
 export function PromptModal({ isOpen, onClose }: PromptModalProps) {
-  const { isSessionLoading, session } = useSession();
+  const { isLoading, session } = useSession();
   const { theme } = useTheme();
   const router = useRouter();
 
   const [error, setError] = React.useState<string | null>(null);
-  const [isLoading, setIsLoading] = React.useState(false);
+  const [isPageLoading, setIsPageLoading] = React.useState(false);
 
   const handleClose = useCallback(() => {
     setError(null);
-    setIsLoading(false);
+    setIsPageLoading(false);
     onClose();
   }, [onClose]);
 
@@ -49,17 +49,17 @@ export function PromptModal({ isOpen, onClose }: PromptModalProps) {
   useEffect(() => {
     if (!isOpen) {
       setError(null);
-      setIsLoading(false);
+      setIsPageLoading(false);
     }
   }, [isOpen]);
 
-  if (isSessionLoading) {
+  if (isLoading) {
     return null;
   }
 
   const createFromPrompt = async (prompt: string) => {
     try {
-      setIsLoading(true);
+      setIsPageLoading(true);
       setError(null);
 
       if (!session) {
@@ -72,7 +72,7 @@ export function PromptModal({ isOpen, onClose }: PromptModalProps) {
         } catch (error) {
           logger.error("Failed to initiate Google login", { error });
           setError("Failed to initiate Google login. Please try again.");
-          setIsLoading(false);
+          setIsPageLoading(false);
         }
         return;
       }
@@ -84,7 +84,7 @@ export function PromptModal({ isOpen, onClose }: PromptModalProps) {
     } catch (err) {
       logger.error("Failed to create workspace", { err });
       setError(err instanceof Error ? err.message : "Failed to create workspace");
-      setIsLoading(false);  // Only reset loading on error
+      setIsPageLoading(false);  // Only reset loading on error
     }
   };
 
