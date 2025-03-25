@@ -88,7 +88,8 @@ export async function sessionToken(session: Session): Promise<string> {
       email: session.user.email,
       picture: session.user.imageUrl,
       userSettings: session.user.settings,
-      isWaitlisted: session.user.isWaitlisted
+      isWaitlisted: session.user.isWaitlisted,
+      isAdmin: session.user.isAdmin || false
     };
 
     // Generate the JWT using the payload, secret, and options

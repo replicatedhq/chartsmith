@@ -36,3 +36,8 @@ schema:
       type: timestamp
     - name: replicated_token
       type: text
+    - name: is_admin
+      type: boolean
+      constraints:
+        notNull: true
+      default: "false"

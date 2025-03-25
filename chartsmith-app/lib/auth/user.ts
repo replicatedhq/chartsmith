@@ -62,9 +62,9 @@ async function upsertWaitlistUser(email: string, name: string, imageUrl: string)
     lastActiveAt: new Date(),
     isWaitlisted: true,
     settings: userSettings,
+    isAdmin: false,
   };
 }
-
 
 async function upsertRealUser(email: string, name: string, imageUrl: string): Promise<User> {
   const id = srs.default({ length: 12, alphanumeric: true });
@@ -100,6 +100,7 @@ async function upsertRealUser(email: string, name: string, imageUrl: string): Pr
     lastActiveAt: new Date(),
     isWaitlisted: false,
     settings: userSettings,
+    isAdmin: false,
   };
 }
 
@@ -115,7 +116,8 @@ export async function findUser(email: string): Promise<User | undefined> {
                 chartsmith_user.image_url,
                 chartsmith_user.created_at,
                 chartsmith_user.last_login_at,
-                chartsmith_user.last_active_at
+                chartsmith_user.last_active_at,
+                chartsmith_user.is_admin
             FROM
                 chartsmith_user
             WHERE
@@ -147,6 +149,7 @@ export async function findUser(email: string): Promise<User | undefined> {
       lastActiveAt: row.last_active_at,
       isWaitlisted: isWaitlisted,
       settings: await getUserSettings(row.id),
+      isAdmin: row.is_admin,
     };
 
     return user;
@@ -222,7 +225,8 @@ export async function getUser(id: string): Promise<User | undefined> {
                 chartsmith_user.image_url,
                 chartsmith_user.created_at,
                 chartsmith_user.last_login_at,
-                chartsmith_user.last_active_at
+                chartsmith_user.last_active_at,
+                chartsmith_user.is_admin
             FROM
                 chartsmith_user
             WHERE
@@ -254,6 +258,7 @@ export async function getUser(id: string): Promise<User | undefined> {
       lastActiveAt: row.last_active_at,
       isWaitlisted: isWaitlisted,
       settings: await getUserSettings(row.id),
+      isAdmin: row.is_admin,
     };
   } catch (err) {
     logger.error("Failed to get user", { err });
@@ -261,3 +266,104 @@ export async function getUser(id: string): Promise<User | undefined> {
   }
 }
 
+export async function listUsers(): Promise<User[]> {
+  try {
+    const db = getDB(await getParam("DB_URI"));
+    const result = await db.query(
+      `SELECT id, email, name, image_url, created_at, last_login_at, last_active_at, is_admin FROM chartsmith_user ORDER BY created_at ASC`
+    );
+    const users: User[] = [];
+    for (const row of result.rows) {
+      users.push({
+        id: row.id,
+        email: row.email,
+        name: row.name,
+        imageUrl: row.image_url,
+        createdAt: row.created_at,
+        lastLoginAt: row.last_login_at,
+        lastActiveAt: row.last_active_at,
+        isWaitlisted: false,
+        settings: {
+          automaticallyAcceptPatches: false,
+          evalBeforeAccept: false,
+        },
+        isAdmin: row.is_admin,
+      });
+    }
+
+    return users;
+  } catch (err) {
+    logger.error("Failed to list users", { err });
+    throw err;
+  }
+}
+
+export async function listWaitlistUsers(): Promise<User[]> {
+  try {
+    const db = getDB(await getParam("DB_URI"));
+    const result = await db.query(
+      `SELECT id, email, name, image_url, created_at, last_login_at, last_active_at FROM waitlist ORDER BY created_at ASC`
+    );
+
+    const users: User[] = [];
+    for (const row of result.rows) {
+      users.push({
+        id: row.id,
+        email: row.email,
+        name: row.name,
+        imageUrl: row.image_url,
+        createdAt: row.created_at,
+        lastLoginAt: row.last_login_at,
+        lastActiveAt: row.last_active_at,
+        isWaitlisted: true,
+        settings: {
+          automaticallyAcceptPatches: false,
+          evalBeforeAccept: false,
+        },
+        isAdmin: false,
+      });
+    }
+
+    return users;
+  } catch (err) {
+    logger.error("Failed to list waitlist users", { err });
+    throw err;
+  }
+}
+
+export async function approveWaitlistUser(userId: string): Promise<void> {
+  const db = getDB(await getParam("DB_URI"));
+
+  try {
+    await db.query('BEGIN');
+    const result = await db.query(
+      `SELECT id, email, name, image_url, created_at, last_login_at, last_active_at FROM waitlist WHERE id = $1`,
+      [userId]
+    );
+
+    if (result.rows.length === 0) {
+      throw new Error("User not found");
+    }
+
+    const row = result.rows[0];
+
+    await db.query(
+      `INSERT INTO chartsmith_user (id, email, name, image_url, created_at, last_login_at, last_active_at)
+      VALUES ($1, $2, $3, $4, now(), now(), now())
+      ON CONFLICT (email) DO NOTHING
+      `,
+      [row.id, row.email, row.name, row.image_url]
+    );
+
+    await db.query(
+      `DELETE FROM waitlist WHERE id = $1`,
+      [userId]
+    );
+
+    await db.query('COMMIT');
+  } catch (err) {
+    await db.query('ROLLBACK');
+    logger.error("Failed to approve waitlist user", { err });
+    throw err;
+  }
+}

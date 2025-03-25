@@ -7,6 +7,7 @@ export interface User {
   lastLoginAt?: Date;
   lastActiveAt?: Date;
   isWaitlisted: boolean;
+  isAdmin?: boolean;
 
   settings: UserSetting;
 }

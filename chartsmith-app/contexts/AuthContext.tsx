@@ -7,6 +7,7 @@ interface User {
   email: string;
   avatar: string;
   isWaitlisted?: boolean;
+  isAdmin?: boolean;
 }
 
 interface AuthContextType {
@@ -14,6 +15,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isWaitlisted: boolean;
   isAuthLoading: boolean;
+  isAdmin: boolean;
   signOut: () => void;
 }
 
@@ -40,6 +42,7 @@ function parseJwt(token: string) {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isWaitlisted, setIsWaitlisted] = useState<boolean>(false);
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
 
   useEffect(() => {
@@ -54,16 +57,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (payload && payload.exp * 1000 > Date.now()) {
         // Valid JWT that hasn't expired
         const waitlisted = payload.isWaitlisted === true;
+        const admin = payload.isAdmin === true;
         
         setUser({
           id: payload.sub,
           name: payload.name,
           email: payload.email,
           avatar: payload.picture,
-          isWaitlisted: waitlisted
+          isWaitlisted: waitlisted,
+          isAdmin: admin
         });
         
         setIsWaitlisted(waitlisted);
+        setIsAdmin(admin);
         
         // If they're waitlisted and not already on the waitlist page, redirect them
         if (waitlisted && typeof window !== 'undefined' && 
@@ -85,6 +91,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = () => {
     setUser(null);
     setIsWaitlisted(false);
+    setIsAdmin(false);
     // Delete the session and theme cookies by setting them to expire in the past
     document.cookie = "session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax";
     document.cookie = "theme=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax";
@@ -98,6 +105,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         isAuthenticated: !!user,
         isWaitlisted,
+        isAdmin,
         isAuthLoading,
         signOut,
       }}

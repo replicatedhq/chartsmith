@@ -5,13 +5,13 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { usePathname } from "next/navigation";
 import { SettingsModal } from "./SettingsModal";
-import { LogOut, Settings, FolderOpen } from "lucide-react";
+import { LogOut, Settings, FolderOpen, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { useSession } from "@/app/hooks/useSession";
 
 export function UserMenu() {
-  const { user, signOut } = useAuth();
+  const { user, signOut, isAdmin } = useAuth();
   const { theme } = useTheme();
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
@@ -52,6 +52,19 @@ export function UserMenu() {
             <FolderOpen className="w-4 h-4" />
             My Workspaces
           </Link>
+          
+          {/* Only show Admin link if user is an admin */}
+          {isAdmin && (
+            <Link 
+              href="/admin"
+              onClick={() => setIsOpen(false)}
+              className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 ${theme === "dark" ? "text-gray-300 hover:bg-dark-border/40" : "text-gray-700 hover:bg-gray-50"}`}
+            >
+              <ShieldCheck className="w-4 h-4" />
+              Admin Panel
+            </Link>
+          )}
+          
           <button 
             onClick={() => {
               setShowSettings(true);
