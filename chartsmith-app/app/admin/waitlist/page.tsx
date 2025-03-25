@@ -6,8 +6,8 @@ import { useSession } from "@/app/hooks/useSession";
 import { Check, ArrowUpDown, Loader2 } from "lucide-react";
 import Image from "next/image";
 import { User } from "@/lib/types/user";
-import { listWaitlistUsersAction } from "@/lib/admin/actions/list-waitlist";
-import { approveWaitlistUserAction } from "@/lib/admin/actions/approve-waitlist-user";
+import { listWaitlistUsersAction } from "@/lib/auth/actions/list-waitlist-users";
+import { approveWaitlistUserAction } from "@/lib/auth/actions/approve-waitlist-user";
 // Sort directions
 type SortDirection = "asc" | "desc";
 

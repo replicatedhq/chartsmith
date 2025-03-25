@@ -17,10 +17,6 @@ export async function validateSession(token: string, allowWaitlisted: boolean = 
 
     // If waitlisted users aren't allowed and this user is waitlisted, return undefined
     if (!allowWaitlisted && session.user.isWaitlisted) {
-      logger.info("Waitlisted user attempted to access restricted resource", { 
-        userId: session.user.id, 
-        email: session.user.email 
-      });
       return;
     }
 

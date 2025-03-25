@@ -6,11 +6,38 @@ import { Card } from "@/components/ui/Card";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useTheme } from "@/contexts/ThemeContext";
+import { checkWaitlistStatusAction } from "@/lib/auth/actions/check-waitlist-status";
 
 export default function WaitlistPage() {
   const { session, isLoading } = useSession();
   const router = useRouter();
-  const { resolvedTheme } = useTheme();
+
+  // Check if the user has been approved on page load
+  useEffect(() => {
+    async function checkApprovalStatus() {
+      console.log(session);
+      if (!isLoading && session && session.isWaitlisted) {
+        if (!session) return;
+
+        try {
+          const newJWT = await checkWaitlistStatusAction(session);
+
+          const expires = new Date();
+          expires.setDate(expires.getDate() + 7);
+          document.cookie = `session=${newJWT}; expires=${expires.toUTCString()}; path=/; SameSite=Lax`;
+
+          // if the jwt no longer has the isWaitlisted claim, redirect to home
+          if (!session.user.isWaitlisted) {
+            window.location.href = "/";
+          }
+        } catch (error) {
+          console.error("Failed to check waitlist status:", error);
+        }
+      }
+    }
+
+    checkApprovalStatus();
+  }, [session, isLoading]);
 
   // Redirect to home if user is not waitlisted
   useEffect(() => {
