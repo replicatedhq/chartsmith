@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useRef, useEffect } from "react";
-import { Send, Loader2, Users } from "lucide-react";
+import { Send, Loader2, Users, Code, User, Sparkles } from "lucide-react";
 import { useTheme } from "../contexts/ThemeContext";
 import { Session } from "@/lib/types/session";
 import { ChatMessage } from "./ChatMessage";
@@ -145,10 +145,12 @@ export function ChatContainer({ session }: ChatContainerProps) {
                   theme === "dark"
                     ? "text-gray-400 hover:text-gray-200 hover:bg-dark-border/40"
                     : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
-                }`}
-                title="Select perspective"
+                } ${selectedRole !== "auto" ? "bg-blue-500/10" : ""}`}
+                title={`Perspective: ${getRoleLabel(selectedRole)}`}
               >
-                <Users className="w-4 h-4" />
+                {selectedRole === "auto" && <Sparkles className="w-4 h-4" />}
+                {selectedRole === "developer" && <Code className="w-4 h-4" />}
+                {selectedRole === "operator" && <User className="w-4 h-4" />}
               </button>
               
               {/* Role selector dropdown */}
@@ -181,7 +183,12 @@ export function ChatContainer({ session }: ChatContainerProps) {
                             : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
                       }`}
                     >
-                      <span>{getRoleLabel(role)}</span>
+                      <div className="flex items-center gap-2">
+                        {role === "auto" && <Sparkles className="w-4 h-4" />}
+                        {role === "developer" && <Code className="w-4 h-4" />}
+                        {role === "operator" && <User className="w-4 h-4" />}
+                        <span>{getRoleLabel(role)}</span>
+                      </div>
                       {selectedRole === role && (
                         <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                           <path d="M5 13L9 17L19 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
