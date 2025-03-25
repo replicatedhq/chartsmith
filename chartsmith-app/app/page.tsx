@@ -7,6 +7,8 @@ import { CreateChartOptions } from "@/components/CreateChartOptions";
 import { HomeNav } from "@/components/HomeNav";
 import { useSetAtom, useAtomValue } from 'jotai';
 import { messagesAtom, plansAtom, rendersAtom, workspaceAtom, conversionsAtom } from '@/atoms/workspace';
+import { useAuth } from "@/contexts/AuthContext";
+import { useRouter } from "next/navigation";
 
 export default function HomePage() {
   const workspace = useAtomValue(workspaceAtom);
@@ -15,6 +17,15 @@ export default function HomePage() {
   const setPlans = useSetAtom(plansAtom);
   const setRenders = useSetAtom(rendersAtom);
   const setConversions = useSetAtom(conversionsAtom);
+  const { isWaitlisted, isAuthLoading } = useAuth();
+  const router = useRouter();
+
+  // Handle waitlist redirect
+  useEffect(() => {
+    if (!isAuthLoading && isWaitlisted) {
+      router.replace('/waitlist');
+    }
+  }, [isWaitlisted, isAuthLoading, router]);
 
   useEffect(() => {
     if (workspace !== null) {
@@ -25,6 +36,11 @@ export default function HomePage() {
       setConversions([]);
     }
   }, [workspace, setWorkspace, setMessages, setPlans, setRenders, setConversions]);
+
+  // Show loading state or nothing while authentication is being checked
+  if (isAuthLoading || isWaitlisted) {
+    return null; // Don't render anything while loading or if waitlisted (will redirect)
+  }
 
   return (
     <div

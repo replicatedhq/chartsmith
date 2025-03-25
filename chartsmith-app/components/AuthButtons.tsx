@@ -53,7 +53,24 @@ export function AuthButtons() {
           const pendingArtifactHubUrl = sessionStorage.getItem('pendingArtifactHubUrl');
           const pendingPrompt = sessionStorage.getItem('pendingPrompt');
           
-          if (pendingArtifactHubUrl) {
+          // Check if the user is waitlisted based on the JWT
+          const token = event.data.jwt;
+          const payload = token.split('.')[1];
+          let isWaitlisted = false;
+          
+          try {
+            if (payload) {
+              const decoded = JSON.parse(atob(payload));
+              isWaitlisted = decoded.isWaitlisted === true;
+            }
+          } catch (err) {
+            logger.error("Failed to decode JWT payload", { error: err });
+          }
+          
+          if (isWaitlisted) {
+            // If user is waitlisted, always redirect to waitlist page
+            window.location.href = '/waitlist';
+          } else if (pendingArtifactHubUrl) {
             sessionStorage.removeItem('pendingArtifactHubUrl');
             window.location.href = `/artifacthub.io/packages/helm/${encodeURIComponent(pendingArtifactHubUrl)}`;
           } else if (pendingPrompt) {

@@ -6,6 +6,7 @@ export interface User {
   createdAt: Date;
   lastLoginAt?: Date;
   lastActiveAt?: Date;
+  isWaitlisted: boolean;
 
   settings: UserSetting;
 }

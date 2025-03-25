@@ -4,7 +4,7 @@ import { Session } from "@/lib/types/session";
 import { extendSession, findSession } from "../session";
 import { logger } from "@/lib/utils/logger";
 
-export async function validateSession(token: string): Promise<Session | undefined> {
+export async function validateSession(token: string, allowWaitlisted: boolean = true): Promise<Session | undefined> {
   try {
     const session = await findSession(token);
     if (!session) {
@@ -12,6 +12,15 @@ export async function validateSession(token: string): Promise<Session | undefine
     }
 
     if (session.expiresAt < new Date()) {
+      return;
+    }
+
+    // If waitlisted users aren't allowed and this user is waitlisted, return undefined
+    if (!allowWaitlisted && session.user.isWaitlisted) {
+      logger.info("Waitlisted user attempted to access restricted resource", { 
+        userId: session.user.id, 
+        email: session.user.email 
+      });
       return;
     }
 

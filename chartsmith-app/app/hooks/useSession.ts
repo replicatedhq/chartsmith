@@ -45,7 +45,7 @@ export const useSession = (redirectIfNotLoggedIn: boolean = false) => {
       clearTimeout(activityTimeout);
     };
   }, [extendSessionOnActivity]);
-  const [session, setSession] = useState<Session | undefined>(undefined);
+  const [session, setSession] = useState<(Session & { isWaitlisted?: boolean }) | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
@@ -68,7 +68,24 @@ export const useSession = (redirectIfNotLoggedIn: boolean = false) => {
           return;
         }
 
-        setSession(sess);
+        // Get the isWaitlisted claim from the JWT
+        const tokenPayload = token.split('.')[1];
+        if (tokenPayload) {
+          try {
+            const decodedData = JSON.parse(atob(tokenPayload));
+            // Set the session with waitlist status
+            setSession({
+              ...sess,
+              isWaitlisted: decodedData.isWaitlisted
+            });
+          } catch (err) {
+            logger.error("Failed to decode JWT:", err);
+            setSession(sess);
+          }
+        } else {
+          setSession(sess);
+        }
+        
         setIsLoading(false);
       } catch (error) {
         logger.error("Session validation failed:", error);
@@ -83,7 +100,7 @@ export const useSession = (redirectIfNotLoggedIn: boolean = false) => {
   }, [router, redirectIfNotLoggedIn]);
 
   return {
-    isSessionLoading: isLoading,
+    isLoading,
     session,
   };
 };

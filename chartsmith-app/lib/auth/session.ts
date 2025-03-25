@@ -13,48 +13,98 @@ import { logger } from "../utils/logger";
 const sessionDuration = "72h";
 
 export async function createSession(user: User): Promise<Session> {
+  logger.debug("Starting createSession", { userId: user.id, email: user.email });
   try {
     const id = srs.default({ length: 12, alphanumeric: true });
-    const db = getDB(await getParam("DB_URI"));
+    logger.debug("Generated session ID", { sessionId: id });
 
-    await db.query(
-      `
-            INSERT INTO session (id, user_id, expires_at)
-            VALUES ($1, $2, now() + interval '24 hours')
-        `,
-      [id, user.id],
-    );
+    const db = getDB(await getParam("DB_URI"));
+    logger.debug("Got database connection");
+
+    logger.debug("Inserting session into database", { sessionId: id, userId: user.id });
+    try {
+      await db.query(
+        `
+              INSERT INTO session (id, user_id, expires_at)
+              VALUES ($1, $2, now() + interval '24 hours')
+          `,
+        [id, user.id],
+      );
+      logger.debug("Successfully inserted session into database", { sessionId: id, userId: user.id });
+    } catch (dbErr) {
+      logger.error("Error inserting session into database", {
+        error: dbErr,
+        errorMessage: dbErr instanceof Error ? dbErr.message : String(dbErr),
+        sessionId: id,
+        userId: user.id
+      });
+      throw dbErr;
+    }
+
+    const expiresAt = new Date(Date.now() + parse(sessionDuration, "ms")!);
+    logger.info("Session created successfully", {
+      sessionId: id,
+      userId: user.id,
+      email: user.email,
+      expiresAt: expiresAt.toISOString(),
+      isWaitlisted: user.isWaitlisted
+    });
 
     return {
       id,
       user,
-      expiresAt: new Date(Date.now() + parse(sessionDuration, "ms")!),
+      expiresAt,
     };
   } catch (err) {
-    logger.error("Failed to create session", { err });
+    logger.error("Failed to create session", {
+      error: err,
+      errorMessage: err instanceof Error ? err.message : String(err),
+      errorStack: err instanceof Error ? err.stack : undefined,
+      userId: user.id,
+      email: user.email,
+      isWaitlisted: user.isWaitlisted
+    });
     throw err;
   }
 }
 
 export async function sessionToken(session: Session): Promise<string> {
-  const options: jwt.SignOptions = {
-    expiresIn: sessionDuration,
-    subject: session.user.id, // Use user.id as the subject claim
-  };
 
-  // Generate the JWT using the payload, secret, and options
-  const token = jwt.sign(
-    {
+  try {
+    const options: jwt.SignOptions = {
+      expiresIn: sessionDuration,
+      subject: session.user.id, // Use user.id as the subject claim
+    };
+
+    // Check for HMAC_SECRET
+    if (!process.env.HMAC_SECRET) {
+      logger.error("HMAC_SECRET is not defined in environment variables");
+      throw new Error("HMAC_SECRET is not defined");
+    }
+
+    const payload = {
       id: session.id,
       name: session.user.name,
       email: session.user.email,
       picture: session.user.imageUrl,
       userSettings: session.user.settings,
-    },
-    process.env.HMAC_SECRET!,
-    options,
-  );
-  return token;
+      isWaitlisted: session.user.isWaitlisted
+    };
+
+    // Generate the JWT using the payload, secret, and options
+    const token = jwt.sign(payload, process.env.HMAC_SECRET, options);
+
+    return token;
+  } catch (err) {
+    logger.error("Failed to generate JWT token", {
+      error: err,
+      errorMessage: err instanceof Error ? err.message : String(err),
+      errorStack: err instanceof Error ? err.stack : undefined,
+      sessionId: session.id,
+      userId: session.user.id
+    });
+    throw err;
+  }
 }
 
 export async function extendSession(session: Session): Promise<Session> {

@@ -16,30 +16,91 @@ export async function upsertUser(email: string, name: string, imageUrl: string):
   }
 
   try {
-    const db = getDB(await getParam("DB_URI"));
-    const id = srs.default({ length: 12, alphanumeric: true });
-
-    await db.query(
-      `INSERT INTO chartsmith_user (id, email, name, image_url, created_at, last_login_at, last_active_at)
-      VALUES ($1, $2, $3, $4, now(), now(), now())
-        `,
-      [id, email, name, imageUrl],
-    );
-
-    return {
-      id: id,
-      email: email,
-      name: name,
-      imageUrl: imageUrl,
-      createdAt: new Date(),
-      lastLoginAt: new Date(),
-      lastActiveAt: new Date(),
-      settings: await getUserSettings(id),
-    };
+    const acceptingNewUsers = false;
+    if (!acceptingNewUsers) {
+      return upsertWaitlistUser(email, name, imageUrl);
+    } else {
+      return upsertRealUser(email, name, imageUrl);
+    }
   } catch (err) {
     logger.error("Failed to upsert user", { err });
     throw err;
   }
+}
+
+async function upsertWaitlistUser(email: string, name: string, imageUrl: string): Promise<User> {
+  const id = srs.default({ length: 12, alphanumeric: true });
+
+  try {
+    const db = getDB(await getParam("DB_URI"));
+    await db.query(
+      `INSERT INTO waitlist (id, email, name, image_url, created_at, last_login_at, last_active_at)
+      VALUES ($1, $2, $3, $4, now(), now(), now())
+      ON CONFLICT (email) DO NOTHING
+      `,
+      [id, email, name, imageUrl],
+    );
+  } catch (dbErr) {
+    logger.error("Error inserting waitlist into database", {
+      error: dbErr,
+      errorMessage: dbErr instanceof Error ? dbErr.message : String(dbErr),
+      userId: id,
+      email
+    });
+    throw dbErr;
+  }
+
+  const userSettings = await getUserSettings(id);
+
+  return {
+    id: id,
+    email: email,
+    name: name,
+    imageUrl: imageUrl,
+    createdAt: new Date(),
+    lastLoginAt: new Date(),
+    lastActiveAt: new Date(),
+    isWaitlisted: true,
+    settings: userSettings,
+  };
+}
+
+
+async function upsertRealUser(email: string, name: string, imageUrl: string): Promise<User> {
+  const id = srs.default({ length: 12, alphanumeric: true });
+
+  try {
+    const db = getDB(await getParam("DB_URI"));
+    await db.query(
+      `INSERT INTO chartsmith_user (id, email, name, image_url, created_at, last_login_at, last_active_at)
+      VALUES ($1, $2, $3, $4, now(), now(), now())
+      ON CONFLICT (email) DO NOTHING
+      `,
+      [id, email, name, imageUrl],
+    );
+  } catch (dbErr) {
+    logger.error("Error inserting user into database", {
+      error: dbErr,
+      errorMessage: dbErr instanceof Error ? dbErr.message : String(dbErr),
+      userId: id,
+      email
+    });
+    throw dbErr;
+  }
+
+  const userSettings = await getUserSettings(id);
+
+  return {
+    id: id,
+    email: email,
+    name: name,
+    imageUrl: imageUrl,
+    createdAt: new Date(),
+    lastLoginAt: new Date(),
+    lastActiveAt: new Date(),
+    isWaitlisted: false,
+    settings: userSettings,
+  };
 }
 
 export async function findUser(email: string): Promise<User | undefined> {
@@ -69,6 +130,13 @@ export async function findUser(email: string): Promise<User | undefined> {
 
     const row = result.rows[0];
 
+    // Check if this user is on the waitlist
+    const waitlistResult = await db.query(
+      `SELECT email FROM waitlist WHERE email = $1`,
+      [email]
+    );
+    const isWaitlisted = waitlistResult.rows.length > 0;
+
     const user: User = {
       id: row.id,
       email: row.email,
@@ -77,6 +145,7 @@ export async function findUser(email: string): Promise<User | undefined> {
       createdAt: row.created_at,
       lastLoginAt: row.last_login_at,
       lastActiveAt: row.last_active_at,
+      isWaitlisted: isWaitlisted,
       settings: await getUserSettings(row.id),
     };
 
@@ -168,6 +237,13 @@ export async function getUser(id: string): Promise<User | undefined> {
 
     const row = result.rows[0];
 
+    // Check if this user is on the waitlist
+    const waitlistResult = await db.query(
+      `SELECT email FROM waitlist WHERE email = $1`,
+      [row.email]
+    );
+    const isWaitlisted = waitlistResult.rows.length > 0;
+
     return {
       id: row.id,
       email: row.email,
@@ -176,6 +252,7 @@ export async function getUser(id: string): Promise<User | undefined> {
       createdAt: row.created_at,
       lastLoginAt: row.last_login_at,
       lastActiveAt: row.last_active_at,
+      isWaitlisted: isWaitlisted,
       settings: await getUserSettings(row.id),
     };
   } catch (err) {

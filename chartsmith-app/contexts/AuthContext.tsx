@@ -6,11 +6,14 @@ interface User {
   name: string;
   email: string;
   avatar: string;
+  isWaitlisted?: boolean;
 }
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
+  isWaitlisted: boolean;
+  isAuthLoading: boolean;
   signOut: () => void;
 }
 
@@ -36,6 +39,8 @@ function parseJwt(token: string) {
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [isWaitlisted, setIsWaitlisted] = useState<boolean>(false);
+  const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
 
   useEffect(() => {
     // Check for session cookie
@@ -48,21 +53,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (payload && payload.exp * 1000 > Date.now()) {
         // Valid JWT that hasn't expired
+        const waitlisted = payload.isWaitlisted === true;
+        
         setUser({
           id: payload.sub,
           name: payload.name,
           email: payload.email,
           avatar: payload.picture,
+          isWaitlisted: waitlisted
         });
+        
+        setIsWaitlisted(waitlisted);
+        
+        // If they're waitlisted and not already on the waitlist page, redirect them
+        if (waitlisted && typeof window !== 'undefined' && 
+            window.location.pathname !== '/waitlist' && 
+            window.location.pathname !== '/login' && 
+            window.location.pathname !== '/login-with-test-auth') {
+          window.location.href = '/waitlist';
+        }
       } else {
         // Invalid or expired token, clear the cookie
         document.cookie = "session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
       }
     }
+    
+    // Authentication check is complete
+    setIsAuthLoading(false);
   }, []);
 
   const signOut = () => {
     setUser(null);
+    setIsWaitlisted(false);
     // Delete the session and theme cookies by setting them to expire in the past
     document.cookie = "session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax";
     document.cookie = "theme=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax";
@@ -75,6 +97,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       value={{
         user,
         isAuthenticated: !!user,
+        isWaitlisted,
+        isAuthLoading,
         signOut,
       }}
     >
