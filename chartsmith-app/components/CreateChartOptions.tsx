@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Sparkles, Upload, Search, Download, Link, ArrowRight, Loader2 } from "lucide-react";
+import { Sparkles, Upload, Search, Download, Link, ArrowRight, Loader2, AlertCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { PromptModal } from "./PromptModal";
 import { createWorkspaceFromArchiveAction } from "@/lib/workspace/actions/create-workspace-from-archive";
@@ -9,6 +9,9 @@ import { useSession } from "@/app/hooks/useSession";
 import { createWorkspaceFromPromptAction } from "@/lib/workspace/actions/create-workspace-from-prompt";
 import { logger } from "@/lib/utils/logger";
 import { ArtifactHubSearchModal } from "./ArtifactHubSearchModal";
+
+const MAX_CHARS = 512;
+const WARNING_THRESHOLD = 500;
 
 export function CreateChartOptions() {
   const [prompt, setPrompt] = useState('');
@@ -22,11 +25,17 @@ export function CreateChartOptions() {
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
   const [showArtifactHubSearch, setShowArtifactHubSearch] = useState(false);
   const [uploadType, setUploadType] = useState<'helm' | 'k8s' | null>(null);
+  const [isApproachingLimit, setIsApproachingLimit] = useState(false);
 
   useEffect(() => {
     // Focus the textarea on mount
     textareaRef.current?.focus();
   }, []);
+  
+  // Check if input is approaching character limit
+  useEffect(() => {
+    setIsApproachingLimit(prompt.length >= WARNING_THRESHOLD);
+  }, [prompt]);
 
   const handlePromptSubmit = async () => {
     if (!session) {
@@ -106,11 +115,25 @@ export function CreateChartOptions() {
             ref={textareaRef}
             placeholder="Tell me about the application you want to create a Helm chart for"
             value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
+            onChange={(e) => {
+              // Prevent input beyond the character limit
+              if (e.target.value.length <= MAX_CHARS) {
+                setPrompt(e.target.value);
+              }
+            }}
             onKeyDown={handleKeyDown}
             disabled={isPromptLoading}
             className="w-full min-h-[80px] sm:min-h-[120px] bg-transparent text-white placeholder-gray-500 text-base sm:text-lg resize-none focus:outline-none disabled:opacity-50"
+            maxLength={MAX_CHARS}
           />
+          
+          {isApproachingLimit && (
+            <div className="flex items-center mt-2 text-xs text-amber-500/90">
+              <AlertCircle className="w-3.5 h-3.5 mr-1.5 flex-shrink-0" />
+              <span>ChartSmith works best with clear, concise prompts. Start simple and refine through conversation.</span>
+            </div>
+          )}
+          
           {prompt.trim() && (
             <button
               onClick={handlePromptSubmit}
