@@ -12,33 +12,76 @@ import (
 	"go.uber.org/zap"
 )
 
-func GetChatMessageIntent(ctx context.Context, prompt string, isInitialPrompt bool) (*workspacetypes.Intent, error) {
+func GetChatMessageIntent(ctx context.Context, prompt string, isInitialPrompt bool, messageFromPersona *workspacetypes.ChatMessageFromPersona) (*workspacetypes.Intent, error) {
 	logger.Debug("GetChatMessageIntent",
 		zap.String("prompt", prompt),
-		zap.Bool("isInitialPrompt", isInitialPrompt),
-	)
+		zap.Bool("isInitialPrompt", isInitialPrompt))
+
 	client := groq.NewClient(groq.WithAPIKey(param.Get().GroqAPIKey))
 
 	// deepseek r1 recommends no system prompt, include everything in the user prompt
-	userMessage := fmt.Sprintf(`%s
+	userMessage := ""
 
-Given this, my request is:
+	if messageFromPersona == nil || *messageFromPersona == workspacetypes.ChatMessageFromPersonaAuto {
+		userMessage = fmt.Sprintf(`%s
 
-%s
+		Given this, my request is:
 
-Determine if the prompt is a question, a request for information, or a request to perform an action.
+		%s
 
-You will respond with a JSON object containing the following fields:
-- isConversational: true if the prompt is a question or request for information, false otherwise
-- isPlan: true if the prompt is a request to perform an update to the chart templates or files, false otherwise
-- isOffTopic: true if the prompt is off topic, false otherwise
-- isChartDeveloper: true if the question is related to planning a change to the chart, false otherwise
-- isChartOperator: true if the question is about how to use the Helm chart in a Kubernetes cluster, false otherwise
-- isProceed: true if the prompt is a clear request to execute previous instructions with no requsted changes, false otherwise
-- isRender: true if the prompt is a request to render or test or validate the chart, false otherwise
+		Determine if the prompt is a question, a request for information, or a request to perform an action.
 
-Important: Do not respond with anything other than the JSON object.`,
-		commonSystemPrompt, prompt)
+		You will respond with a JSON object containing the following fields:
+		- isConversational: true if the prompt is a question or request for information, false otherwise
+		- isPlan: true if the prompt is a request to perform an update to the chart templates or files, false otherwise
+		- isOffTopic: true if the prompt is off topic, false otherwise
+		- isChartDeveloper: true if the question is related to planning a change to the chart, false otherwise
+		- isChartOperator: true if the question is about how to use the Helm chart in a Kubernetes cluster, false otherwise
+		- isProceed: true if the prompt is a clear request to execute previous instructions with no requsted changes, false otherwise
+		- isRender: true if the prompt is a request to render or test or validate the chart, false otherwise
+
+		Important: Do not respond with anything other than the JSON object.`,
+			commonSystemPrompt, prompt)
+
+	} else if *messageFromPersona == workspacetypes.ChatMessageFromPersonaDeveloper {
+		userMessage = fmt.Sprintf(`%s
+
+		Given this, my request is:
+
+		%s
+
+		Determine if the prompt is a question, a request for information, or a request to perform an action.
+
+		You will respond with a JSON object containing the following fields:
+		- isConversational: true if the prompt is a question or request for information, false otherwise
+		- isPlan: true if the prompt is a request to perform an update to the chart templates or files, false otherwise
+		- isOffTopic: true if the prompt is off topic, false otherwise
+		- isChartDeveloper: true if it's possible to answer this question as if it was asked by the chat developer, false if otherwise
+		- isProceed: true if the prompt is a clear request to execute previous instructions with no requsted changes, false otherwise
+		- isRender: true if the prompt is a request to render or test or validate the chart, false otherwise
+
+		Important: Do not respond with anything other than the JSON object.`,
+			commonSystemPrompt, prompt)
+
+	} else if *messageFromPersona == workspacetypes.ChatMessageFromPersonaOperator {
+		userMessage = fmt.Sprintf(`%s
+
+		Given this, my request is:
+
+		%s
+
+		Determine if the prompt is a question, a request for information, or a request to perform an action.
+
+		You will respond with a JSON object containing the following fields:
+		- isConversational: true if the prompt is a question or request for information, false otherwise
+		- isPlan: true if the prompt is a request to perform an update to the chart templates or files, false otherwise
+		- isOffTopic: true if the prompt is off topic, false otherwise
+		- isChartOperator: true if it's possible to answer this question as if it was asked by the chat operator and can be completed without making any changes to the chart templates or files, false if otherwise
+
+		Important: Do not respond with anything other than the JSON object.`,
+			endUserSystemPrompt, prompt)
+
+	}
 
 	response, err := client.CreateChatCompletion(groq.CompletionCreateParams{
 		Model: "llama-3.3-70b-versatile",
@@ -97,6 +140,72 @@ Important: Do not respond with anything other than the JSON object.`,
 		zap.Any("intent", intent),
 	)
 	return intent, nil
+}
+
+func FeedbackOnNotDeveloperIntentWhenRequested(ctx context.Context, streamCh chan string, doneCh chan error, chatMessage *workspacetypes.Chat) error {
+	logger.Debug("FeedbackOnNotDeveloperIntentWhenRequested",
+		zap.String("prompt", chatMessage.Prompt),
+	)
+	client := groq.NewClient(groq.WithAPIKey(param.Get().GroqAPIKey))
+
+	chatCompletion, err := client.CreateChatCompletion(groq.CompletionCreateParams{
+		Model:  "llama-3.3-70b-versatile",
+		Stream: true,
+		Messages: []groq.Message{
+			{
+				Role:    "system",
+				Content: "You are Chartsmith, an expert Helm chart developer. You are currently pairing with a user who is trying to create a Helm chart. They asked you the following question and asked you to answer it as a developer. However, you are unable to answer the question as a developer. Explain to the user that the message cannot be answered as a chart developer and why.",
+			},
+			{
+				Role:    "user",
+				Content: chatMessage.Prompt,
+			},
+		},
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to get chat message intent: %w", err)
+	}
+
+	for delta := range chatCompletion.Stream {
+		streamCh <- delta.Choices[0].Delta.Content
+	}
+
+	doneCh <- nil
+	return nil
+}
+
+func FeedbackOnNotOperatorIntentWhenRequested(ctx context.Context, streamCh chan string, doneCh chan error, chatMessage *workspacetypes.Chat) error {
+	logger.Debug("FeedbackOnNotOperatorIntentWhenRequested",
+		zap.String("prompt", chatMessage.Prompt),
+	)
+	client := groq.NewClient(groq.WithAPIKey(param.Get().GroqAPIKey))
+
+	chatCompletion, err := client.CreateChatCompletion(groq.CompletionCreateParams{
+		Model:  "llama-3.3-70b-versatile",
+		Stream: true,
+		Messages: []groq.Message{
+			{
+				Role:    "system",
+				Content: "You are Chartsmith, an expert Helm chart developer. You are currently pairing with a user who is trying to create a Helm chart. They asked you the following question and asked you to answer it as an operator. However, you are unable to answer the question as an operator. Explain to the user that the message cannot be answered as a chart operator / end-user and why.",
+			},
+			{
+				Role:    "user",
+				Content: chatMessage.Prompt,
+			},
+		},
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to get chat message intent: %w", err)
+	}
+
+	for delta := range chatCompletion.Stream {
+		streamCh <- delta.Choices[0].Delta.Content
+	}
+
+	doneCh <- nil
+	return nil
 }
 
 func FeedbackOnAmbiguousIntent(ctx context.Context, streamCh chan string, doneCh chan error, chatMessage *workspacetypes.Chat) error {

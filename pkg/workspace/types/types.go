@@ -85,20 +85,29 @@ type ActionFile struct {
 	Status string `json:"status"`
 }
 
+type ChatMessageFromPersona string
+
+const (
+	ChatMessageFromPersonaAuto      ChatMessageFromPersona = "auto"
+	ChatMessageFromPersonaDeveloper ChatMessageFromPersona = "developer"
+	ChatMessageFromPersonaOperator  ChatMessageFromPersona = "operator"
+)
+
 type Chat struct {
-	ID                               string           `json:"id"`
-	WorkspaceID                      string           `json:"-"`
-	Prompt                           string           `json:"prompt"`
-	Response                         string           `json:"response"`
-	CreatedAt                        time.Time        `json:"createdAt"`
-	IsIntentComplete                 bool             `json:"isIntentComplete"`
-	Intent                           *Intent          `json:"0"`
-	FollowupActions                  []FollowupAction `json:"followupActions"`
-	ResponseRenderID                 string           `json:"responseRenderId"`
-	ResponsePlanID                   string           `json:"responsePlanId"`
-	ResponseConversionID             string           `json:"responseConversionId"`
-	ResponseRollbackToRevisionNumber *int             `json:"responseRollbackToRevisionNumber"`
-	RevisionNumber                   int              `json:"revisionNumber"`
+	ID                               string                  `json:"id"`
+	WorkspaceID                      string                  `json:"-"`
+	Prompt                           string                  `json:"prompt"`
+	Response                         string                  `json:"response"`
+	CreatedAt                        time.Time               `json:"createdAt"`
+	IsIntentComplete                 bool                    `json:"isIntentComplete"`
+	Intent                           *Intent                 `json:"0"`
+	FollowupActions                  []FollowupAction        `json:"followupActions"`
+	ResponseRenderID                 string                  `json:"responseRenderId"`
+	ResponsePlanID                   string                  `json:"responsePlanId"`
+	ResponseConversionID             string                  `json:"responseConversionId"`
+	ResponseRollbackToRevisionNumber *int                    `json:"responseRollbackToRevisionNumber"`
+	RevisionNumber                   int                     `json:"revisionNumber"`
+	MessageFromPersona               *ChatMessageFromPersona `json:"messageFromPersona"`
 }
 
 type FollowupAction struct {

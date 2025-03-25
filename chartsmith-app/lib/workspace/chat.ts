@@ -46,7 +46,8 @@ export async function listMessagesForWorkspace(workspaceID: string): Promise<Cha
                 workspace_chat.response_plan_id,
                 workspace_chat.response_conversion_id,
                 workspace_chat.response_rollback_to_revision_number,
-                workspace_chat.revision_number
+                workspace_chat.revision_number,
+                workspace_chat.message_from_persona
             FROM
                 workspace_chat
             WHERE
@@ -81,6 +82,7 @@ export async function listMessagesForWorkspace(workspaceID: string): Promise<Cha
         responseRollbackToRevisionNumber: row.response_rollback_to_revision_number,
         revisionNumber: row.revision_number,
         isComplete: true,
+        messageFromPersona: row.message_from_persona,
       };
 
       messages.push(message);

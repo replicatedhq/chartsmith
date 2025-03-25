@@ -3,7 +3,7 @@
 import { Session } from "@/lib/types/session";
 import { Workspace } from "@/lib/types/workspace";
 import { logger } from "@/lib/utils/logger";
-import { ChatMessageIntent, createChatMessage, CreateChatMessageParams, createWorkspace } from "../workspace";
+import { ChatMessageFromPersona, ChatMessageIntent, CreateChatMessageParams, createWorkspace } from "../workspace";
 import { getChartFromBytes, getFilesFromBytes } from "../archive";
 
 export async function createWorkspaceFromArchiveAction(session: Session, formData: FormData, archiveType: 'helm' | 'k8s'): Promise<Workspace> {
@@ -24,6 +24,7 @@ export async function createWorkspaceFromArchiveAction(session: Session, formDat
       response: `Got it. I found a ${baseChart.name} chart in the ${file.name} file. What's next?`,
       knownIntent: ChatMessageIntent.NON_PLAN,
       responseRollbackToRevisionNumber: 1,
+      messageFromPersona: ChatMessageFromPersona.AUTO,
     }
     const w: Workspace = await createWorkspace("archive", session.user.id, createChartMessageParams, baseChart);
 
@@ -37,6 +38,7 @@ export async function createWorkspaceFromArchiveAction(session: Session, formDat
       knownIntent: ChatMessageIntent.CONVERT_K8S_TO_HELM,
       additionalFiles: looseFiles,
       responseRollbackToRevisionNumber: 1,
+      messageFromPersona: ChatMessageFromPersona.AUTO,
     }
     const w: Workspace = await createWorkspace("archive", session.user.id, createChartMessageParams);
 

@@ -2,7 +2,7 @@
 
 import { Session } from "@/lib/types/session";
 import { ChatMessage } from "@/lib/types/workspace";
-import { ChatMessageIntent, createChatMessage, getChatMessage, getWorkspace, renderWorkspace } from "../workspace";
+import { ChatMessageFromPersona, ChatMessageIntent, createChatMessage, getChatMessage, getWorkspace, renderWorkspace } from "../workspace";
 
 export async function performFollowupAction(session:Session, workspaceId:string, chatMessageId:string, action: string): Promise<ChatMessage|undefined> {
   const workspace = await getWorkspace(workspaceId);
@@ -19,6 +19,7 @@ export async function performFollowupAction(session:Session, workspaceId:string,
     const chatMessage = await createChatMessage(session.user.id, workspaceId, {
       prompt: "Render the chart",
       knownIntent: ChatMessageIntent.RENDER,
+      messageFromPersona: ChatMessageFromPersona.AUTO,
     });
 
     return chatMessage;

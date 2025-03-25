@@ -65,3 +65,5 @@ schema:
       type: jsonb
     - name: response_rollback_to_revision_number
       type: integer
+    - name: message_from_persona
+      type: text

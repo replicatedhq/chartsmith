@@ -1,7 +1,7 @@
 "use server"
 
 import { FollowupAction, Workspace } from "@/lib/types/workspace";
-import {ChatMessageIntent, createChatMessage, CreateChatMessageParams, createWorkspace } from "../workspace";
+import {ChatMessageFromPersona, ChatMessageIntent, createChatMessage, CreateChatMessageParams, createWorkspace } from "../workspace";
 import { Session } from "@/lib/types/session";
 import { logger } from "@/lib/utils/logger";
 import { getArchiveFromUrl } from "../archive";
@@ -24,6 +24,7 @@ export async function createWorkspaceFromUrlAction(session: Session, url: string
       knownIntent: ChatMessageIntent.NON_PLAN,
       followupActions: followupActions,
       responseRollbackToRevisionNumber: 1,
+      messageFromPersona: ChatMessageFromPersona.AUTO,
   }
 
   const w: Workspace = await createWorkspace("chart", session.user.id, createChartMessageParams, baseChart);
