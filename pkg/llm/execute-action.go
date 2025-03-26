@@ -8,11 +8,11 @@ import (
 	"time"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
-	"github.com/tuvistavie/securerandom"
 	llmtypes "github.com/replicatedhq/chartsmith/pkg/llm/types"
 	"github.com/replicatedhq/chartsmith/pkg/logger"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
+	"github.com/tuvistavie/securerandom"
 	"go.uber.org/zap"
 )
 
@@ -22,6 +22,10 @@ const (
 
 	Model_Sonnet37 = "claude-3-7-sonnet-20250219"
 	Model_Sonnet35 = "claude-3-5-sonnet-20241022"
+
+	minFuzzyMatchLen  = 50 // Minimum length for fuzzy matching
+	fuzzyMatchTimeout = 10 * time.Second
+	chunkSize         = 200 // Increased chunk size for better performance
 )
 
 type CreateWorkspaceFromArchiveAction struct {
@@ -49,13 +53,13 @@ type StrReplaceLog struct {
 func logStrReplaceOperation(ctx context.Context, filePath, oldStr, newStr string, fileContent string, found bool) error {
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
-	
+
 	// Generate a random ID for the log entry
 	id, err := securerandom.Hex(16)
 	if err != nil {
 		return fmt.Errorf("failed to generate random ID for str_replace_log: %w", err)
 	}
-	
+
 	// Extract context before/after if available
 	var contextBefore, contextAfter string
 	if strings.Contains(oldStr, "###CONTEXT_BEFORE###") && strings.Contains(oldStr, "###CONTEXT_AFTER###") {
@@ -68,7 +72,7 @@ func logStrReplaceOperation(ctx context.Context, filePath, oldStr, newStr string
 			}
 		}
 	}
-	
+
 	// Insert into the database
 	query := `INSERT INTO str_replace_log (
 		id,
@@ -85,30 +89,30 @@ func logStrReplaceOperation(ctx context.Context, filePath, oldStr, newStr string
 	) VALUES (
 		$1, NOW(), $2, $3, $4, $5, $6, $7, $8, $9, $10
 	) RETURNING id`
-	
+
 	var returnedID string
-	err = conn.QueryRow(ctx, query, 
-		id, 
-		filePath, 
-		found, 
-		oldStr, 
-		newStr, 
+	err = conn.QueryRow(ctx, query,
+		id,
+		filePath,
+		found,
+		oldStr,
+		newStr,
 		fileContent,
-		len(oldStr), 
+		len(oldStr),
 		len(newStr),
 		contextBefore,
 		contextAfter).Scan(&returnedID)
-	
+
 	if err != nil {
 		return fmt.Errorf("failed to insert str_replace_log: %w", err)
 	}
-	
+
 	// Don't log the content of strings to avoid filling logs
-	logger.Debug("Logged str_replace operation to database", 
+	logger.Debug("Logged str_replace operation to database",
 		zap.String("id", returnedID),
 		zap.String("file_path", filePath),
 		zap.Bool("found", found))
-	
+
 	return nil
 }
 
@@ -116,23 +120,23 @@ func logStrReplaceOperation(ctx context.Context, filePath, oldStr, newStr string
 func UpdateStrReplaceLogErrorMessage(ctx context.Context, filePath, oldStr, errorMessage string) error {
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
-	
+
 	query := `
-		UPDATE str_replace_log 
-		SET error_message = $1 
+		UPDATE str_replace_log
+		SET error_message = $1
 		WHERE id IN (
-			SELECT id FROM str_replace_log 
+			SELECT id FROM str_replace_log
 			WHERE file_path = $2 AND old_str = $3 AND found = false
-			ORDER BY created_at DESC 
+			ORDER BY created_at DESC
 			LIMIT 1
 		)
 	`
-	
+
 	_, err := conn.Exec(ctx, query, errorMessage, filePath, oldStr)
 	if err != nil {
 		return fmt.Errorf("failed to update error message in str_replace log: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -140,53 +144,53 @@ func UpdateStrReplaceLogErrorMessage(ctx context.Context, filePath, oldStr, erro
 func GetStrReplaceLogs(ctx context.Context, limit int, foundOnly bool, filePath string) ([]StrReplaceLog, error) {
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
-	
+
 	// Build the query with optional filters
 	queryBuilder := strings.Builder{}
 	queryBuilder.WriteString(`
-		SELECT 
-			id, created_at, file_path, found, old_str, new_str, 
-			updated_content, old_str_len, new_str_len, 
+		SELECT
+			id, created_at, file_path, found, old_str, new_str,
+			updated_content, old_str_len, new_str_len,
 			context_before, context_after, error_message
 		FROM str_replace_log
 		WHERE 1=1
 	`)
-	
+
 	args := []interface{}{}
 	argIdx := 1
-	
+
 	if foundOnly {
 		queryBuilder.WriteString(fmt.Sprintf(" AND found = $%d", argIdx))
 		args = append(args, true)
 		argIdx++
 	}
-	
+
 	if filePath != "" {
 		queryBuilder.WriteString(fmt.Sprintf(" AND file_path = $%d", argIdx))
 		args = append(args, filePath)
 		argIdx++
 	}
-	
+
 	queryBuilder.WriteString(" ORDER BY created_at DESC")
-	
+
 	if limit > 0 {
 		queryBuilder.WriteString(fmt.Sprintf(" LIMIT $%d", argIdx))
 		args = append(args, limit)
 	}
-	
+
 	// Execute the query
 	rows, err := conn.Query(ctx, queryBuilder.String(), args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query str_replace logs: %w", err)
 	}
 	defer rows.Close()
-	
+
 	// Parse the results
 	var logs []StrReplaceLog
 	for rows.Next() {
 		var log StrReplaceLog
 		var contextBefore, contextAfter, errorMessage interface{}
-		
+
 		err := rows.Scan(
 			&log.ID,
 			&log.CreatedAt,
@@ -204,7 +208,7 @@ func GetStrReplaceLogs(ctx context.Context, limit int, foundOnly bool, filePath 
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan str_replace log row: %w", err)
 		}
-		
+
 		// Handle null values
 		if contextBefore != nil {
 			log.ContextBefore = contextBefore.(string)
@@ -215,14 +219,14 @@ func GetStrReplaceLogs(ctx context.Context, limit int, foundOnly bool, filePath 
 		if errorMessage != nil {
 			log.ErrorMessage = errorMessage.(string)
 		}
-		
+
 		logs = append(logs, log)
 	}
-	
+
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("error iterating str_replace log rows: %w", err)
 	}
-	
+
 	return logs, nil
 }
 
@@ -231,23 +235,168 @@ func GetStrReplaceFailures(ctx context.Context, limit int) ([]StrReplaceLog, err
 	return GetStrReplaceLogs(ctx, limit, false, "")
 }
 
-// PerformStringReplacement performs a string replacement operation.
-// It takes the original content, the string to replace, and the replacement string.
-// It returns the updated content, a success flag, and an error if one occurs.
 func PerformStringReplacement(content, oldStr, newStr string) (string, bool, error) {
-	// Check if the old string exists in the content
-	if !strings.Contains(content, oldStr) {
-		return content, false, fmt.Errorf("String to replace not found in file")
+	// First try exact match
+	if strings.Contains(content, oldStr) {
+		updatedContent := strings.ReplaceAll(content, oldStr, newStr)
+		return updatedContent, true, nil
 	}
-	
-	// Perform the replacement
-	updatedContent := strings.ReplaceAll(content, oldStr, newStr)
-	
-	return updatedContent, true, nil
+
+	// Create a context with timeout for fuzzy matching
+	ctx, cancel := context.WithTimeout(context.Background(), fuzzyMatchTimeout)
+	defer cancel()
+
+	// Create a channel for the result
+	resultCh := make(chan struct {
+		start, end int
+		err        error
+	}, 1)
+
+	// Run fuzzy matching in a goroutine
+	go func() {
+		start, end := findBestMatchRegion(content, oldStr, minFuzzyMatchLen)
+		if start == -1 || end == -1 {
+			resultCh <- struct {
+				start, end int
+				err        error
+			}{-1, -1, fmt.Errorf("Approximate match for replacement not found")}
+			return
+		}
+		resultCh <- struct {
+			start, end int
+			err        error
+		}{start, end, nil}
+	}()
+
+	// Wait for result or timeout
+	select {
+	case result := <-resultCh:
+		if result.err != nil {
+			return content, false, result.err
+		}
+		// Replace the matched region with newStr
+		updatedContent := content[:result.start] + newStr + content[result.end:]
+		return updatedContent, false, nil
+	case <-ctx.Done():
+		return content, false, fmt.Errorf("fuzzy matching timed out after %v", fuzzyMatchTimeout)
+	}
+}
+
+func findBestMatchRegion(content, oldStr string, minMatchLen int) (int, int) {
+	// Early return if strings are too small
+	if len(oldStr) < minMatchLen {
+		return -1, -1
+	}
+
+	bestStart := -1
+	bestEnd := -1
+	bestLen := 0
+
+	// Use a sliding window approach with overlapping chunks
+	// This helps catch matches that might span chunk boundaries
+	for i := 0; i < len(oldStr); i += chunkSize / 2 {
+		// Determine the end of this chunk with overlap
+		chunkEnd := i + chunkSize
+		if chunkEnd > len(oldStr) {
+			chunkEnd = len(oldStr)
+		}
+
+		// Get the current chunk
+		chunk := oldStr[i:chunkEnd]
+
+		// Find all occurrences of this chunk in the content
+		start := 0
+		for {
+			idx := strings.Index(content[start:], chunk)
+			if idx == -1 {
+				break
+			}
+			// Adjust index to be relative to the start of content
+			idx += start
+
+			// Try to extend the match forward
+			matchStart := idx
+			matchEnd := idx + len(chunk)
+			matchLen := len(chunk)
+
+			// Try to extend forward
+			for matchEnd < len(content) && (i+matchLen) < len(oldStr) {
+				if content[matchEnd] == oldStr[i+matchLen] {
+					matchEnd++
+					matchLen++
+				} else {
+					break
+				}
+			}
+
+			// Try to extend backward
+			for matchStart > 0 && i > 0 {
+				if content[matchStart-1] == oldStr[i-1] {
+					matchStart--
+					i--
+				} else {
+					break
+				}
+			}
+
+			// Update best match if this one is longer
+			if matchLen > bestLen {
+				bestStart = matchStart
+				bestEnd = matchEnd
+				bestLen = matchLen
+			}
+
+			// Move start position for next search
+			start = idx + 1
+		}
+	}
+
+	if bestLen >= minMatchLen {
+		return bestStart, bestEnd
+	}
+	return -1, -1
 }
 
 func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWithPath, plan *workspacetypes.Plan, currentContent string, interimContentCh chan string) (string, error) {
 	updatedContent := currentContent
+	lastActivity := time.Now()
+
+	// Create a goroutine to monitor for activity timeouts and a channel for errors
+	// This prevents the LLM from silently stopping and causing a parent timeout
+	activityDone := make(chan struct{})
+	errCh := make(chan error, 1)
+
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				// If no activity for 2 minutes, consider the LLM stuck
+				if time.Since(lastActivity) > 2*time.Minute {
+					errMsg := fmt.Sprintf("No activity from LLM for 2 minutes, operation stalled (last activity at %s)",
+						lastActivity.Format(time.RFC3339))
+					logger.Warn(errMsg)
+
+					// Send error to the error channel and exit
+					select {
+					case errCh <- fmt.Errorf(errMsg):
+					default:
+						// Channel already has an error
+					}
+					return
+				}
+			case <-activityDone:
+				return
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	// Make sure to close the activity monitor when we're done
+	defer close(activityDone)
 
 	client, err := newAnthropicClient(ctx)
 	if err != nil {
@@ -332,12 +481,12 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 				return "", err
 			}
 
-			// switch event := event.AsUnion().(type) {
-			// case anthropic.ContentBlockDeltaEvent:
-			// 	if event.Delta.Text != "" {
-			// 		fmt.Printf("%s", event.Delta.Text)
-			// 	}
-			// }
+			switch event := event.AsUnion().(type) {
+			case anthropic.ContentBlockDeltaEvent:
+				if event.Delta.Text != "" {
+					fmt.Printf("%s", event.Delta.Text)
+				}
+			}
 		}
 
 		if stream.Err() != nil {
@@ -365,6 +514,9 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 					return "", err
 				}
 
+				// Update last activity timestamp on each tool use
+				lastActivity = time.Now()
+
 				logger.Info("LLM text_editor tool use",
 					zap.String("command", input.Command),
 					zap.String("path", input.Path),
@@ -381,27 +533,30 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 				} else if input.Command == "str_replace" {
 					// First check if the string is found in the content for logging
 					found := strings.Contains(updatedContent, input.OldStr)
-					
+
 					// Log every str_replace operation, successful or not
 					if err := logStrReplaceOperation(ctx, input.Path, input.OldStr, input.NewStr, updatedContent, found); err != nil {
 						logger.Warn("str_replace logging failed", zap.Error(err))
 					}
-					
+
 					// Perform the actual string replacement with our extracted function
+					logger.Debug("performing string replacement")
 					newContent, success, replaceErr := PerformStringReplacement(updatedContent, input.OldStr, input.NewStr)
-					
+					logger.Debug("string replacement complete", zap.String("success", fmt.Sprintf("%t", success)))
+
 					if !success {
 						// Create error message and update the log
 						errorMsg := "String to replace not found in file"
 						if replaceErr != nil {
 							errorMsg = replaceErr.Error()
 						}
-						
+
 						// Update the error message in the database
+						logger.Debug("updating error message in str_replace log", zap.String("error_msg", errorMsg))
 						if err := UpdateStrReplaceLogErrorMessage(ctx, input.Path, input.OldStr, errorMsg); err != nil {
 							logger.Warn("Failed to update error message in str_replace log", zap.Error(err))
 						}
-						
+
 						response = "Error: String to replace not found in file. Please use smaller, more precise replacements."
 					} else {
 						updatedContent = newContent

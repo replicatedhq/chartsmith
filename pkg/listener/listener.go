@@ -312,7 +312,6 @@ func (l *Listener) processNotifications(ctx context.Context) {
 			if strings.Contains(err.Error(), "context deadline exceeded") || strings.Contains(err.Error(), "timeout") {
 				// Log timeout errors at DEBUG level
 				logger.Debug(fmt.Sprintf("No notification received in %s. This is normal during periods of inactivity.", 2*time.Minute),
-					zap.Error(err),
 					zap.Int("consecutiveErrors", consecutiveErrors),
 					zap.String("timeSinceLastSuccess", time.Since(lastSuccessTime).String()))
 			} else {

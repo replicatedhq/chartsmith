@@ -197,7 +197,7 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 		errCh <- nil
 	}()
 
-	timeout := time.After(5 * time.Minute)
+	timeout := time.After(10 * time.Minute)
 
 	// get the file from the workspace, if it exists
 	files, err := workspace.ListFiles(ctx, w.ID, w.CurrentRevision, c.ID)
@@ -213,10 +213,21 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 		}
 	}
 
+	noActivityTimeout := time.After(3 * time.Minute)
+	lastActivity := time.Now()
+	
 	for {
 		select {
 		case <-timeout:
 			return fmt.Errorf("timeout waiting for action execution")
+			
+		case <-noActivityTimeout:
+			// If we haven't heard from the LLM in 3 minutes, assume it's stalled
+			if time.Since(lastActivity) > 3*time.Minute {
+				return fmt.Errorf("LLM operation stalled - no activity for over 3 minutes")
+			}
+			// Reset the timer for next check
+			noActivityTimeout = time.After(3 * time.Minute)
 
 		case err := <-errCh:
 			if err != nil {
@@ -224,6 +235,9 @@ func handleExecuteActionNotification(ctx context.Context, payload string) error 
 			}
 
 		case interimContent := <-interimContentCh:
+			// Reset activity timer when we get content
+			lastActivity = time.Now()
+			noActivityTimeout = time.After(3 * time.Minute)
 			if file == nil {
 				// we need to create the file since we got content
 				// we doin't do this early b/c sometimes the LLM will expect to
