@@ -1,0 +1,59 @@
+database: chartsmith
+name: str_replace_log
+schema:
+  postgres:
+    primaryKey:
+    - id
+    columns:
+    - name: id
+      type: text
+      constraints:
+        notNull: true
+    - name: created_at
+      type: timestamp without time zone
+      constraints:
+        notNull: true
+    - name: file_path
+      type: text
+      constraints:
+        notNull: true
+    - name: found
+      type: boolean
+      constraints:
+        notNull: true
+    - name: old_str
+      type: text
+      constraints:
+        notNull: true
+    - name: new_str
+      type: text
+      constraints:
+        notNull: true
+    - name: updated_content
+      type: text
+      constraints:
+        notNull: true
+    - name: old_str_len
+      type: integer
+      constraints:
+        notNull: true
+    - name: new_str_len
+      type: integer
+      constraints:
+        notNull: true
+    - name: context_before
+      type: text
+    - name: context_after
+      type: text
+    - name: error_message
+      type: text
+    indexes:
+    - name: str_replace_log_found_idx
+      columns:
+      - found
+    - name: str_replace_log_created_at_idx
+      columns: 
+      - created_at
+    - name: str_replace_log_file_path_idx
+      columns:
+      - file_path
