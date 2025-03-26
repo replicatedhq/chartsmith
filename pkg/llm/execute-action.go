@@ -236,11 +236,27 @@ func GetStrReplaceFailures(ctx context.Context, limit int) ([]StrReplaceLog, err
 }
 
 func PerformStringReplacement(content, oldStr, newStr string) (string, bool, error) {
+	// Add logging to track performance
+	startTime := time.Now()
+	defer func() {
+		logger.Debug("String replacement operation completed", 
+			zap.Duration("time_taken", time.Since(startTime)))
+	}()
+	
+	// Log content sizes for diagnostics
+	logger.Debug("Starting string replacement", 
+		zap.Int("content_size", len(content)), 
+		zap.Int("old_string_size", len(oldStr)),
+		zap.Int("new_string_size", len(newStr)))
+	
 	// First try exact match
 	if strings.Contains(content, oldStr) {
+		logger.Debug("Found exact match, performing replacement")
 		updatedContent := strings.ReplaceAll(content, oldStr, newStr)
 		return updatedContent, true, nil
 	}
+	
+	logger.Debug("No exact match found, attempting fuzzy matching")
 
 	// Create a context with timeout for fuzzy matching
 	ctx, cancel := context.WithTimeout(context.Background(), fuzzyMatchTimeout)
@@ -254,7 +270,16 @@ func PerformStringReplacement(content, oldStr, newStr string) (string, bool, err
 
 	// Run fuzzy matching in a goroutine
 	go func() {
+		logger.Debug("Starting fuzzy match search")
+		fuzzyStartTime := time.Now()
+		
 		start, end := findBestMatchRegion(content, oldStr, minFuzzyMatchLen)
+		
+		logger.Debug("Fuzzy match search completed", 
+			zap.Duration("time_taken", time.Since(fuzzyStartTime)),
+			zap.Int("start_pos", start),
+			zap.Int("end_pos", end))
+			
 		if start == -1 || end == -1 {
 			resultCh <- struct {
 				start, end int
@@ -272,12 +297,21 @@ func PerformStringReplacement(content, oldStr, newStr string) (string, bool, err
 	select {
 	case result := <-resultCh:
 		if result.err != nil {
+			logger.Debug("Fuzzy match failed", zap.Error(result.err))
 			return content, false, result.err
 		}
 		// Replace the matched region with newStr
+		logger.Debug("Found fuzzy match, performing replacement", 
+			zap.Int("match_start", result.start), 
+			zap.Int("match_end", result.end),
+			zap.Int("match_length", result.end - result.start))
+			
 		updatedContent := content[:result.start] + newStr + content[result.end:]
 		return updatedContent, false, nil
 	case <-ctx.Done():
+		logger.Warn("Fuzzy matching timed out", 
+			zap.Duration("timeout", fuzzyMatchTimeout),
+			zap.Duration("time_elapsed", time.Since(startTime)))
 		return content, false, fmt.Errorf("fuzzy matching timed out after %v", fuzzyMatchTimeout)
 	}
 }
@@ -285,16 +319,23 @@ func PerformStringReplacement(content, oldStr, newStr string) (string, bool, err
 func findBestMatchRegion(content, oldStr string, minMatchLen int) (int, int) {
 	// Early return if strings are too small
 	if len(oldStr) < minMatchLen {
+		logger.Debug("String too small for fuzzy matching", 
+			zap.Int("length", len(oldStr)), 
+			zap.Int("min_length", minMatchLen))
 		return -1, -1
 	}
 
 	bestStart := -1
 	bestEnd := -1
 	bestLen := 0
+	
+	// Set a max number of chunks to process to prevent excessive computation
+	maxChunks := 100
+	chunksProcessed := 0
 
 	// Use a sliding window approach with overlapping chunks
 	// This helps catch matches that might span chunk boundaries
-	for i := 0; i < len(oldStr); i += chunkSize / 2 {
+	for i := 0; i < len(oldStr) && chunksProcessed < maxChunks; i += chunkSize / 2 {
 		// Determine the end of this chunk with overlap
 		chunkEnd := i + chunkSize
 		if chunkEnd > len(oldStr) {
@@ -303,14 +344,32 @@ func findBestMatchRegion(content, oldStr string, minMatchLen int) (int, int) {
 
 		// Get the current chunk
 		chunk := oldStr[i:chunkEnd]
-
+		
+		// Skip empty or tiny chunks
+		if len(chunk) < 10 {
+			continue
+		}
+		
+		chunksProcessed++
+		
 		// Find all occurrences of this chunk in the content
 		start := 0
-		for {
+		maxOccurrences := 100  // Limit number of occurrences to check
+		occurrencesChecked := 0
+		
+		logger.Debug("Processing chunk", 
+			zap.Int("chunk_index", i), 
+			zap.Int("chunk_size", len(chunk)),
+			zap.Int("chunks_processed", chunksProcessed))
+		
+		for occurrencesChecked < maxOccurrences {
 			idx := strings.Index(content[start:], chunk)
 			if idx == -1 {
 				break
 			}
+			
+			occurrencesChecked++
+			
 			// Adjust index to be relative to the start of content
 			idx += start
 
@@ -318,6 +377,9 @@ func findBestMatchRegion(content, oldStr string, minMatchLen int) (int, int) {
 			matchStart := idx
 			matchEnd := idx + len(chunk)
 			matchLen := len(chunk)
+			
+			// Store the original i value, we'll need it for backward extension
+			originalI := i
 
 			// Try to extend forward
 			for matchEnd < len(content) && (i+matchLen) < len(oldStr) {
@@ -330,10 +392,12 @@ func findBestMatchRegion(content, oldStr string, minMatchLen int) (int, int) {
 			}
 
 			// Try to extend backward
-			for matchStart > 0 && i > 0 {
-				if content[matchStart-1] == oldStr[i-1] {
+			// Critical fix: don't modify the outer loop variable i here
+			backPos := originalI - 1  // Start one position before chunk
+			for matchStart > 0 && backPos >= 0 {
+				if content[matchStart-1] == oldStr[backPos] {
 					matchStart--
-					i--
+					backPos--
 				} else {
 					break
 				}
@@ -344,6 +408,11 @@ func findBestMatchRegion(content, oldStr string, minMatchLen int) (int, int) {
 				bestStart = matchStart
 				bestEnd = matchEnd
 				bestLen = matchLen
+				
+				logger.Debug("Found better match", 
+					zap.Int("match_length", matchLen),
+					zap.Int("match_start", matchStart),
+					zap.Int("match_end", matchEnd))
 			}
 
 			// Move start position for next search
@@ -352,8 +421,16 @@ func findBestMatchRegion(content, oldStr string, minMatchLen int) (int, int) {
 	}
 
 	if bestLen >= minMatchLen {
+		logger.Debug("Found best match", 
+			zap.Int("best_length", bestLen),
+			zap.Int("best_start", bestStart),
+			zap.Int("best_end", bestEnd))
 		return bestStart, bestEnd
 	}
+	
+	logger.Debug("No match found with minimum length",
+		zap.Int("best_length", bestLen),
+		zap.Int("required_min_length", minMatchLen))
 	return -1, -1
 }
 
