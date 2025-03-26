@@ -351,11 +351,6 @@ func finalizeFile(ctx context.Context, finalContent string, updatedPlan *workspa
 				return fmt.Errorf("failed to send plan update: %w", err)
 			}
 
-			// trigger embeddings for the files in this workspace
-			if err := workspace.NotifyWorkerToCaptureEmbeddings(ctx, finalUpdatePlan.WorkspaceID, w.CurrentRevision); err != nil {
-				return fmt.Errorf("failed to notify worker to capture embeddings: %w", err)
-			}
-
 			// Get the LAST chat message associated with this plan
 			// This ensures we're associating the render with the most recent message
 			var chatMessageID string

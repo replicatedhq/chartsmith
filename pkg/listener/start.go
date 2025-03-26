@@ -20,7 +20,7 @@ func StartListeners(ctx context.Context) error {
 		return nil
 	}, nil)
 
-	l.AddHandler(ctx, "new_summarize", 20, time.Second*10, func(notification *pgconn.Notification) error {
+	l.AddHandler(ctx, "new_summarize", 5, time.Second*10, func(notification *pgconn.Notification) error {
 		if err := handleNewSummarizeNotification(ctx, notification.Payload); err != nil {
 			logger.Error(fmt.Errorf("failed to handle new summarize notification: %w", err))
 			return fmt.Errorf("failed to handle new summarize notification: %w", err)

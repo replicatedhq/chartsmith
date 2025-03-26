@@ -731,6 +731,17 @@ export async function renderWorkspace(workspaceId: string, chatMessageId: string
   }
 }
 
+export async function countFilesWithPendingContent(workspaceId: string, revisionNumber: number): Promise<number> {
+  try {
+    const db = getDB(await getParam("DB_URI"));
+    const result = await db.query(`SELECT count(1) FROM workspace_file WHERE workspace_id = $1 AND revision_number = $2 AND content_pending IS NOT NULL`, [workspaceId, revisionNumber]);
+    return result.rows[0].count;
+  } catch (err) {
+    logger.error("Failed to count files with pending content", { err });
+    throw err;
+  }
+}
+
 export async function getWorkspace(id: string): Promise<Workspace | undefined> {
   try {
     const db = getDB(await getParam("DB_URI"));

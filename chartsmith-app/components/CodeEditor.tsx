@@ -207,7 +207,7 @@ export const CodeEditor = React.memo(function CodeEditor({
         } else {
           try {
             // For permanent IDs, use the server action
-            const updatedFile = await acceptPatchAction(session, selectedFile.id, workspace.currentRevisionNumber);
+            const updatedFile = await acceptPatchAction(session, workspace.id, selectedFile.id, workspace.currentRevisionNumber);
 
             // Update workspace state first
             const updatedWorkspace = {
