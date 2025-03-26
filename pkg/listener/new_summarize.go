@@ -32,6 +32,10 @@ func handleNewSummarizeNotification(ctx context.Context, payload string) error {
 		return fmt.Errorf("failed to get file: %w", err)
 	}
 
+	if fileRevision.Content == "" {
+		return nil
+	}
+
 	embeddings, err := embedding.Embeddings(fileRevision.Content)
 	if err != nil {
 		return fmt.Errorf("failed to get embeddings: %w", err)

@@ -34,7 +34,7 @@ var ErrEmptyContent = errors.New("content is empty")
 // Embeddings generates embeddings and returns them in PostgreSQL vector format
 func Embeddings(content string) (string, error) {
 	if content == "" {
-		return "", ErrEmptyContent
+		return "", nil
 	}
 
 	conn := persistence.MustGetPooledPostgresSession()
