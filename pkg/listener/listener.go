@@ -609,22 +609,9 @@ func (l *Listener) getQueueLock(queueName, lockKey string) chan struct{} {
 
 	lockChan, exists := l.queueLocks[queueName][lockKey]
 	if !exists {
-		// Check if this is the execute_action queue - allow 3 concurrent workers per plan
-		if queueName == "execute_action" {
-			lockChan = make(chan struct{}, 1)
-			lockChan <- struct{}{}
-			l.queueLocks[queueName][lockKey] = lockChan
-
-			// lockChan = make(chan struct{}, 3)
-			// // Initialize with 3 slots
-			// for i := 0; i < 3; i++ {
-			// 	lockChan <- struct{}{}
-			// }
-		} else {
-			// Default to single worker for other queues
-			lockChan = make(chan struct{}, 1)
-			lockChan <- struct{}{}
-		}
+		// Default to single worker per lock for all queues
+		lockChan = make(chan struct{}, 1)
+		lockChan <- struct{}{}
 		l.queueLocks[queueName][lockKey] = lockChan
 	}
 	return lockChan
