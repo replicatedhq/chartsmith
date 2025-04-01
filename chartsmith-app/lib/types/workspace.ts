@@ -11,6 +11,9 @@ export interface Workspace {
   currentRevisionNumber: number;
   incompleteRevisionNumber?: number;
   isCurrentVersionComplete?: boolean;
+  createdByUserName?: string;
+  createdByUserEmail?: string;
+  createdByUserId?: string;
 }
 
 export interface WorkspaceFile {

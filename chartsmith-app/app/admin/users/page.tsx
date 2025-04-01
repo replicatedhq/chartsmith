@@ -2,30 +2,32 @@
 
 import React, { useState, useEffect } from "react";
 import { useSession } from "@/app/hooks/useSession";
-import { listUsersAction } from "@/lib/auth/actions/list-users";
-import { User } from "@/lib/types/user";
-import { ArrowUpDown, Loader2, Shield } from "lucide-react";
+import { listUserAdminAction } from "@/lib/auth/actions/list-users";
+import { UserAdmin } from "@/lib/types/user";
+import { ArrowUpDown, Loader2, Shield, FolderKanban } from "lucide-react";
 import Image from "next/image";
+import Link from "next/link";
 
 // Sort directions
 type SortDirection = "asc" | "desc";
 
 // Sort fields
-type SortField = "name" | "email" | "createdAt" | "lastActive";
+type SortField = "name" | "email" | "createdAt" | "lastActive" | "workspaces";
+
 
 export default function UsersPage() {
   const { session } = useSession();
-  const [users, setUsers] = useState<User[]>([]);
+  const [users, setUsers] = useState<UserAdmin[]>([]);
   const [sortField, setSortField] = useState<SortField>("lastActive");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [loading, setLoading] = useState(true);
-  
-  // Load users
+
+  // Load users and workspace counts
   useEffect(() => {
-    async function loadUsers() {
+    async function loadData() {
       if (session) {
         try {
-          const usersList = await listUsersAction(session);
+          const usersList = await listUserAdminAction(session);
           setUsers(usersList);
         } catch (error) {
           console.error("Failed to load users:", error);
@@ -34,10 +36,10 @@ export default function UsersPage() {
         }
       }
     }
-    
-    loadUsers();
+
+    loadData();
   }, [session]);
-  
+
   // Handle sort change
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -49,11 +51,11 @@ export default function UsersPage() {
       setSortDirection("asc");
     }
   };
-  
+
   // Sort users
   const sortedUsers = [...users].sort((a, b) => {
     let comparison = 0;
-    
+
     switch (sortField) {
       case "name":
         comparison = (a.name || "").localeCompare(b.name || "");
@@ -69,11 +71,14 @@ export default function UsersPage() {
         const bTime = b.lastActiveAt ? new Date(b.lastActiveAt).getTime() : 0;
         comparison = aTime - bTime;
         break;
+      case "workspaces":
+        comparison = a.workspaceCount - b.workspaceCount;
+        break;
     }
-    
+
     return sortDirection === "asc" ? comparison : -comparison;
   });
-  
+
   const formatDate = (date: Date | undefined) => {
     if (!date) return "Never";
     return new Date(date).toLocaleDateString("en-US", {
@@ -88,7 +93,7 @@ export default function UsersPage() {
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold text-text">User Management</h2>
       </div>
-      
+
       <div className="bg-surface p-6 rounded-lg border border-border">
         {loading ? (
           <div className="flex justify-center items-center h-40">
@@ -102,7 +107,7 @@ export default function UsersPage() {
               <thead>
                 <tr className="border-b border-border">
                   <th className="px-4 py-3 text-left text-sm font-medium text-text/70">User</th>
-                  <th 
+                  <th
                     className="px-4 py-3 text-left text-sm font-medium text-text/70 cursor-pointer"
                     onClick={() => handleSort("name")}
                   >
@@ -111,7 +116,7 @@ export default function UsersPage() {
                       <ArrowUpDown className="ml-2 h-4 w-4" />
                     </div>
                   </th>
-                  <th 
+                  <th
                     className="px-4 py-3 text-left text-sm font-medium text-text/70 cursor-pointer"
                     onClick={() => handleSort("email")}
                   >
@@ -120,7 +125,16 @@ export default function UsersPage() {
                       <ArrowUpDown className="ml-2 h-4 w-4" />
                     </div>
                   </th>
-                  <th 
+                  <th
+                    className="px-4 py-3 text-left text-sm font-medium text-text/70 cursor-pointer"
+                    onClick={() => handleSort("workspaces")}
+                  >
+                    <div className="flex items-center">
+                      Workspaces
+                      <ArrowUpDown className="ml-2 h-4 w-4" />
+                    </div>
+                  </th>
+                  <th
                     className="px-4 py-3 text-left text-sm font-medium text-text/70 cursor-pointer"
                     onClick={() => handleSort("createdAt")}
                   >
@@ -129,7 +143,7 @@ export default function UsersPage() {
                       <ArrowUpDown className="ml-2 h-4 w-4" />
                     </div>
                   </th>
-                  <th 
+                  <th
                     className="px-4 py-3 text-left text-sm font-medium text-text/70 cursor-pointer"
                     onClick={() => handleSort("lastActive")}
                   >
@@ -147,11 +161,11 @@ export default function UsersPage() {
                     <td className="px-4 py-3 text-sm">
                       <div className="flex items-center">
                         {user.imageUrl ? (
-                          <Image 
-                            src={user.imageUrl} 
-                            alt={user.name || user.email} 
-                            width={32} 
-                            height={32} 
+                          <Image
+                            src={user.imageUrl}
+                            alt={user.name || user.email}
+                            width={32}
+                            height={32}
                             className="w-8 h-8 rounded-full mr-3"
                           />
                         ) : (
@@ -168,6 +182,15 @@ export default function UsersPage() {
                     </td>
                     <td className="px-4 py-3 text-sm text-text">
                       {user.email}
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      <Link 
+                        href={`/admin/workspaces?userId=${user.id}`} 
+                        className="flex items-center text-primary hover:underline"
+                      >
+                        <FolderKanban className="w-4 h-4 mr-1.5" />
+                        <span>{user.workspaceCount}</span>
+                      </Link>
                     </td>
                     <td className="px-4 py-3 text-sm text-text">
                       {formatDate(user.createdAt)}

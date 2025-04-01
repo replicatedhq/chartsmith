@@ -1,7 +1,7 @@
 'use strict';
 
 import * as srs from "secure-random-string";
-import { User, UserSetting } from "../types/user";
+import { User, UserAdmin, UserSetting } from "../types/user";
 import { getDB } from "../data/db";
 import { getParam } from "../data/param";
 import { logger } from "../utils/logger";
@@ -116,7 +116,14 @@ export async function findUser(email: string): Promise<User | undefined> {
       `SELECT email FROM waitlist WHERE email = $1`,
       [email]
     );
-    const isWaitlisted = waitlistResult.rows.length > 0;
+
+    // Normal users can be waitlisted, but test users never are
+    let isWaitlisted = waitlistResult.rows.length > 0;
+
+    // Special case for test user (playwright)
+    if (email === 'playwright@chartsmith.ai') {
+      isWaitlisted = false;
+    }
 
     const user: User = {
       id: row.id,
@@ -245,13 +252,13 @@ export async function getUser(id: string): Promise<User | undefined> {
   }
 }
 
-export async function listUsers(): Promise<User[]> {
+export async function listUsersAdmin(): Promise<UserAdmin[]> {
   try {
     const db = getDB(await getParam("DB_URI"));
     const result = await db.query(
       `SELECT id, email, name, image_url, created_at, last_login_at, last_active_at, is_admin FROM chartsmith_user ORDER BY created_at ASC`
     );
-    const users: User[] = [];
+    const users: UserAdmin[] = [];
     for (const row of result.rows) {
       users.push({
         id: row.id,
@@ -262,12 +269,17 @@ export async function listUsers(): Promise<User[]> {
         lastLoginAt: row.last_login_at,
         lastActiveAt: row.last_active_at,
         isWaitlisted: false,
-        settings: {
-          automaticallyAcceptPatches: false,
-          evalBeforeAccept: false,
-        },
         isAdmin: row.is_admin,
+        workspaceCount: 0,
       });
+    }
+
+    for (const user of users) {
+      const result2 = await db.query(
+        `SELECT COUNT(*) FROM workspace WHERE created_by_user_id = $1`,
+        [user.id]
+      );
+      user.workspaceCount = parseInt(result2.rows[0].count);
     }
 
     return users;
@@ -319,6 +331,15 @@ export interface CheckWaitlistResult {
 export async function checkWaitlistStatus(email: string): Promise<CheckWaitlistResult> {
   try {
     logger.debug("Checking waitlist status for user", { email });
+
+    // Special case for test user - always not waitlisted
+    if (email === 'playwright@chartsmith.ai') {
+      logger.info("Test user detected, bypassing waitlist", { email });
+      return {
+        isWaitlisted: false,
+        email
+      };
+    }
 
     const db = getDB(await getParam("DB_URI"));
 

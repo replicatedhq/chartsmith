@@ -1,5 +1,16 @@
 "use client";
 
+/**
+ * ScrollingContent - A component that handles automatic scrolling behavior
+ * 
+ * Behavior specs:
+ * 1. Auto-scrolls to bottom when new content is added
+ * 2. Stops auto-scrolling when user manually scrolls up
+ * 3. Shows "Jump to latest" button when user has scrolled up
+ * 4. Re-enables auto-scroll when user clicks button or scrolls to bottom
+ * 5. Never fights with user scroll - user intent always takes precedence
+ */
+
 import React, { useRef, useEffect, useState, useLayoutEffect } from "react";
 import { ChevronDown } from "lucide-react";
 
@@ -16,6 +27,17 @@ export function ScrollingContent({ children, forceScroll = false }: ScrollingCon
   const hasScrolledUpRef = useRef(false);
   const initialScrollCompleteRef = useRef(false);
   const lastContentRef = useRef("");
+  
+  // Update test helpers if in test environment
+  useEffect(() => {
+    if (typeof window !== 'undefined' && process.env.NODE_ENV === 'test') {
+      (window as any).__scrollTestState = {
+        isAutoScrollEnabled: () => shouldAutoScroll,
+        hasScrolledUp: () => hasScrolledUpRef.current,
+        isShowingJumpButton: () => showScrollButton
+      };
+    }
+  }, [shouldAutoScroll, showScrollButton]);
   
   // Simple function to scroll to bottom
   const scrollToBottom = () => {
@@ -188,6 +210,7 @@ export function ScrollingContent({ children, forceScroll = false }: ScrollingCon
         ref={containerRef} 
         className="overflow-auto w-full h-full"
         style={{ scrollBehavior: forceScroll ? 'auto' : 'smooth' }}
+        data-testid="scroll-container"
       >
         {children}
         {/* Extra space to ensure we can scroll past the content */}
@@ -201,6 +224,7 @@ export function ScrollingContent({ children, forceScroll = false }: ScrollingCon
           className="absolute bottom-24 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white dark:bg-gray-950 
                      px-3 py-1.5 rounded-full shadow-xl border border-blue-400/40 dark:border-blue-300/30 flex items-center gap-1.5 text-xs font-medium
                      opacity-100 hover:scale-105 transition-all duration-200 z-30"
+          data-testid="jump-to-latest"
         >
           <ChevronDown className="w-3.5 h-3.5" />
           Jump to latest
@@ -208,4 +232,13 @@ export function ScrollingContent({ children, forceScroll = false }: ScrollingCon
       )}
     </div>
   );
+}
+
+// Expose test helpers for integration testing when in test environment
+if (typeof window !== 'undefined' && process.env.NODE_ENV === 'test') {
+  (window as any).__scrollTestState = {
+    isAutoScrollEnabled: () => false, // Will be properly initialized during component render
+    hasScrolledUp: () => false,       // Will be properly initialized during component render
+    isShowingJumpButton: () => false  // Will be properly initialized during component render
+  };
 }

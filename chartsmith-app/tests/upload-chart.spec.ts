@@ -1,14 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
-
-async function loginTestUser(page: Page) {
-  await page.goto('/login?test-auth=true');
-  // Wait for navigation after login
-  await Promise.all([
-    page.waitForNavigation(),
-    page.waitForTimeout(2000)
-  ]);
-  expect(page.url()).not.toContain('/login'); // Verify successful login
-}
+import { loginTestUser } from './helpers';
 
 test('upload helm chart', async ({ page }) => {
   test.setTimeout(60000); // Increase timeout to 60 seconds
