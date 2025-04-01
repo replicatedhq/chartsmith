@@ -11,7 +11,6 @@ import (
 
 	helmutils "github.com/replicatedhq/chartsmith/helm-utils"
 	"github.com/replicatedhq/chartsmith/pkg/logger"
-	"github.com/replicatedhq/chartsmith/pkg/persistence"
 	"github.com/replicatedhq/chartsmith/pkg/realtime"
 	realtimetypes "github.com/replicatedhq/chartsmith/pkg/realtime/types"
 	"github.com/replicatedhq/chartsmith/pkg/workspace"
@@ -27,31 +26,7 @@ type renderWorkspacePayload struct {
 	UsePendingContent *bool  `json:"usePendingContent"`
 }
 
-// ensureActiveConnection performs a lightweight operation to ensure database connection is alive
-func ensureActiveConnection(ctx context.Context) error {
-	// Create a specific timeout context for this operation
-	dbCheckCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-
-	// Get a fresh connection and perform a simple query to verify connectivity
-	conn := persistence.MustGetPooledPostgresSession()
-	defer conn.Release()
-
-	// Perform a simple ping-like query
-	var result int
-	err := conn.QueryRow(dbCheckCtx, "SELECT 1").Scan(&result)
-	if err != nil {
-		logger.Error(fmt.Errorf("database connection check failed: %w", err))
-		return fmt.Errorf("database connection check failed: %w", err)
-	}
-
-	if result != 1 {
-		logger.Error(fmt.Errorf("unexpected result from connection check: %d", result))
-		return fmt.Errorf("unexpected result from connection check: %d", result)
-	}
-
-	return nil
-}
+// Note: ensureActiveConnection is now defined in heartbeat.go
 
 func handleRenderWorkspaceNotification(ctx context.Context, payload string) error {
 	startTime := time.Now()

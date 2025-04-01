@@ -28,21 +28,21 @@ func applyPlanLockKeyExtractor(payload []byte) (string, error) {
 	if err := json.Unmarshal(payload, &payloadMap); err != nil {
 		return "", fmt.Errorf("failed to unmarshal payload: %w", err)
 	}
-	
+
 	planID, ok := payloadMap["planId"].(string)
 	if !ok || planID == "" {
 		return "", fmt.Errorf("planId not found in payload or is not a string: %v", payloadMap)
 	}
-	
+
 	// Get workspace ID from plan ID
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	
+
 	plan, err := workspace.GetPlan(ctx, nil, planID)
 	if err != nil {
 		return "", fmt.Errorf("error getting workspace ID for plan: %w", err)
 	}
-	
+
 	return plan.WorkspaceID, nil
 }
 
@@ -101,8 +101,8 @@ func handleApplyPlanNotification(ctx context.Context, payload string) error {
 			continue
 		}
 
-		logger.Info("Processing action file", 
-			zap.String("path", actionFile.Path), 
+		logger.Info("Processing action file",
+			zap.String("path", actionFile.Path),
 			zap.String("action", actionFile.Action),
 			zap.Int("index", i),
 			zap.Int("total", len(plan.ActionFiles)))
@@ -133,12 +133,11 @@ func handleApplyPlanNotification(ctx context.Context, payload string) error {
 		}
 	}
 
-	// Mark the plan as complete
+	// First update the status
 	if err := workspace.UpdatePlanStatus(ctx, plan.ID, workspacetypes.PlanStatusApplied); err != nil {
 		return fmt.Errorf("failed to set plan status: %w", err)
 	}
 
-	// Mark the revision as complete
 	if err := workspace.SetRevisionComplete(ctx, w.ID, w.CurrentRevision); err != nil {
 		return fmt.Errorf("failed to mark revision as complete: %w", err)
 	}
@@ -212,11 +211,11 @@ func processActionFile(ctx context.Context, w *workspacetypes.Workspace, plan *w
 	// Get chart and current content
 	currentContent := ""
 	var chartID string
-	
+
 	if len(w.Charts) > 0 {
 		c := w.Charts[0]
 		chartID = c.ID
-		
+
 		for _, file := range c.Files {
 			if file.FilePath == actionFile.Path {
 				currentContent = file.Content
@@ -277,7 +276,7 @@ func processActionFile(ctx context.Context, w *workspacetypes.Workspace, plan *w
 		select {
 		case <-timeout:
 			return fmt.Errorf("timeout waiting for action execution")
-			
+
 		case <-noActivityTimeout:
 			// If we haven't heard from the LLM in 3 minutes, assume it's stalled
 			if time.Since(lastActivity) > 3*time.Minute {
@@ -295,7 +294,7 @@ func processActionFile(ctx context.Context, w *workspacetypes.Workspace, plan *w
 			// Reset activity timer when we get content
 			lastActivity = time.Now()
 			noActivityTimeout = time.After(3 * time.Minute)
-			
+
 			if file == nil {
 				// We need to create the file since we got content
 				err := workspace.AddFileToChart(ctx, chartID, w.ID, w.CurrentRevision, actionFile.Path, "")

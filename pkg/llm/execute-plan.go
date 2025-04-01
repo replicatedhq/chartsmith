@@ -7,7 +7,6 @@ import (
 	anthropic "github.com/anthropics/anthropic-sdk-go"
 	types "github.com/replicatedhq/chartsmith/pkg/llm/types"
 	"github.com/replicatedhq/chartsmith/pkg/logger"
-	"github.com/replicatedhq/chartsmith/pkg/workspace"
 	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 	"go.uber.org/zap"
 )
@@ -100,10 +99,7 @@ func CreateExecutePlan(ctx context.Context, planActionCreatedCh chan types.Actio
 
 	doneCh <- nil
 
-	// mark the plan as complete so that the action executors can know when the final step is and mark the plan status as complete
-	if err := workspace.SetPlanIsComplete(ctx, plan.ID, true); err != nil {
-		return fmt.Errorf("failed to mark plan as complete: %w", err)
-	}
+	// The plan will be set to "applied" status when all actions are complete
 
 	return nil
 }

@@ -55,11 +55,12 @@ export const CodeEditor = React.memo(function CodeEditor({
   const monacoRef = useRef<typeof import("monaco-editor")>(null as unknown as typeof import("monaco-editor"));
 
   const [allFilesWithContentPending] = useAtom(allFilesWithContentPendingAtom);
-  
+
   // Get the most recent plan
-  const mostRecentPlan = plans.length > 0 
+  const mostRecentPlan = plans.length > 0
     ? plans.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0]
     : null;
+
 
   const [acceptDropdownOpen, setAcceptDropdownOpen] = useState(false);
   const [rejectDropdownOpen, setRejectDropdownOpen] = useState(false);
@@ -164,6 +165,7 @@ export const CodeEditor = React.memo(function CodeEditor({
     return null;
   }
 
+  // Always show the diff header when there are pending changes, but the contents will change based on plan status
   const showDiffHeader = allFilesWithContentPending.length > 0;
 
   const handleAcceptThisFile = async () => {
@@ -587,40 +589,42 @@ export const CodeEditor = React.memo(function CodeEditor({
   const renderDiffHeader = () => (
     <div className={`flex items-center justify-end gap-2 p-2 border-b min-h-[36px] pr-4 ${theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"} sticky top-0 z-20`}>
       <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2">
-          <span className={`text-xs font-mono ${
-            theme === "dark" ? "text-gray-400" : "text-gray-500"
-          }`}>
-            Showing {currentFileNumber}/{allFilesWithContentPending.length} files with diffs
-          </span>
-          <div className={`flex rounded overflow-hidden border ${theme === "dark" ? "border-dark-border" : "border-gray-200"}`}>
-            <button
-              className={`p-1 ${
-                theme === "dark"
-                  ? "bg-dark-border/40 text-gray-300 hover:bg-dark-border/60"
-                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-              }`}
-              onClick={handlePrevDiff}
-            >
-              <ChevronUp className="w-3 h-3" />
-            </button>
-            <button
-              className={`p-1 border-l ${
-                theme === "dark"
-                  ? "bg-dark-border/40 text-gray-300 hover:bg-dark-border/60 border-dark-border"
-                  : "bg-gray-100 text-gray-700 hover:bg-gray-200 border-gray-200"
-              }`}
-              onClick={handleNextDiff}
-            >
-              <ChevronDown className="w-3 h-3" />
-            </button>
+        {/* Only show diff navigation when the plan is applied */}
+        {mostRecentPlan?.status === "applied" && (
+          <div className="flex items-center gap-2">
+            <span className={`text-xs font-mono ${
+              theme === "dark" ? "text-gray-400" : "text-gray-500"
+            }`}>
+              Showing {currentFileNumber}/{allFilesWithContentPending.length} files with diffs
+            </span>
+            <div className={`flex rounded overflow-hidden border ${theme === "dark" ? "border-dark-border" : "border-gray-200"}`}>
+              <button
+                className={`p-1 ${
+                  theme === "dark"
+                    ? "bg-dark-border/40 text-gray-300 hover:bg-dark-border/60"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+                onClick={handlePrevDiff}
+              >
+                <ChevronUp className="w-3 h-3" />
+              </button>
+              <button
+                className={`p-1 border-l ${
+                  theme === "dark"
+                    ? "bg-dark-border/40 text-gray-300 hover:bg-dark-border/60 border-dark-border"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200 border-gray-200"
+                }`}
+                onClick={handleNextDiff}
+              >
+                <ChevronDown className="w-3 h-3" />
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         {allFilesWithContentPending.length > 0 && selectedFile?.contentPending && selectedFile.contentPending.length > 0 && (
           <div className="flex items-center gap-2">
-            {/* Only show Accept/Reject buttons when the most recent plan is complete */}
-            {mostRecentPlan?.isComplete && (
+            {mostRecentPlan?.status === "applied" && (
               <>
                 <div ref={acceptButtonRef} className="relative">
                   <div className="flex">
@@ -735,8 +739,8 @@ export const CodeEditor = React.memo(function CodeEditor({
                 </div>
               </>
             )}
-            {/* When the most recent plan is not complete, show a waiting message */}
-            {(mostRecentPlan && !mostRecentPlan.isComplete) && (
+
+            {(mostRecentPlan && mostRecentPlan.status !== "applied") && (
               <div className="text-xs text-gray-500 italic">
                 Waiting for plan to complete before changes can be accepted
               </div>

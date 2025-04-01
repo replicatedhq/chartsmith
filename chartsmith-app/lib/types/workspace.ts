@@ -102,7 +102,6 @@ export interface Plan {
   workspaceId: string;
   chatMessageIds: string[];
   createdAt: Date;
-  isComplete: boolean;
   proceedAt?: Date;
   actionFiles: ActionFile[];
 }
