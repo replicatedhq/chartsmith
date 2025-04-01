@@ -130,7 +130,8 @@ func PublishChart(ctx context.Context, chart *types.Chart, workspaceID string, r
 
 	query := `INSERT INTO workspace_publish
 			(workspace_id, revision_number, chart_name, chart_version, status, created_at, processing_started_at, completed_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (workspace_id, revision_number, chart_name, chart_version) DO UPDATE SET
+			status = $5, completed_at = $8`
 	_, err := conn.Exec(ctx, query,
 		workspaceID, revisionNumber, chart.Name, chartVersion,
 		"completed", time.Now(), time.Now(), time.Now())
