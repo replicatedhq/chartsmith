@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { X, Copy, ExternalLink, AlertCircle, CheckCircle2 } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useSession } from "@/app/hooks/useSession";
@@ -66,10 +66,7 @@ export function TtlshModal({ isOpen, onClose }: TtlshModalProps) {
       if (status) {
         setPublishStatus(status);
 
-        // Only update the repoUrl if it's not the placeholder
-        if (status.repoUrl && status.repoUrl !== "pending") {
-          setRepoUrl(status.repoUrl);
-        }
+        // No need to update repoUrl anymore as we're using a fixed ttl.sh URL
 
         if (status.status === "completed") {
           setIsPublished(true);
@@ -100,10 +97,7 @@ export function TtlshModal({ isOpen, onClose }: TtlshModalProps) {
         if (status) {
           setPublishStatus(status);
 
-          // Always update the repoUrl if we have one, even if still in progress
-          if (status.repoUrl && status.repoUrl !== "pending") {
-            setRepoUrl(status.repoUrl);
-          }
+          // No need to update repoUrl anymore as we're using a fixed ttl.sh URL
 
           if (status.status === "completed") {
             setIsPublished(true);
@@ -175,7 +169,7 @@ export function TtlshModal({ isOpen, onClose }: TtlshModalProps) {
           {!isPublished ? (
             <div className="space-y-4">
               <p className={`text-sm ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
-                Click "Push" to publish your Helm chart to the ttl.sh OCI registry.
+                Click &quot;Push&quot; to publish your Helm chart to the ttl.sh OCI registry.
               </p>
 
               {error && (
@@ -223,7 +217,7 @@ export function TtlshModal({ isOpen, onClose }: TtlshModalProps) {
                 <div>
                   <div className="font-medium">Successfully published!</div>
                   <div className="text-xs mt-1">
-                    Your chart "{publishStatus?.chartName || 'chart'}" v{publishStatus?.chartVersion || '0.1.0'} is now available
+                    Your chart &quot;{publishStatus?.chartName || 'chart'}&quot; v{publishStatus?.chartVersion || '0.1.0'} is now available
                   </div>
                 </div>
               </div>
