@@ -115,9 +115,17 @@ export function TopNav() {
         </div>
 
         <div className="flex items-center space-x-2 min-w-[200px] justify-end">
-          <div onClick={() => setShowTtlshModal(true)}>
-            <StatusDropdown label="Export" items={exportItems} showStatus={false} theme={resolvedTheme} />
-          </div>
+          <StatusDropdown 
+            label="Export" 
+            items={exportItems} 
+            showStatus={false} 
+            theme={resolvedTheme}
+            onItemClick={(item) => {
+              if (item.label === "Push to ttl.sh") {
+                setShowTtlshModal(true);
+              }
+            }} 
+          />
         </div>
       </nav>
 

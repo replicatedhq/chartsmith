@@ -9,7 +9,6 @@ import { enqueueWork } from "@/lib/utils/queue";
 interface PublishResult {
   success: boolean;
   error?: string;
-  repoUrl?: string;
 }
 
 export async function publishToTtlshAction(session: Session, workspaceId: string): Promise<PublishResult> {
@@ -25,32 +24,31 @@ export async function publishToTtlshAction(session: Session, workspaceId: string
       workspaceId: workspaceId
     });
 
-    // Use a deterministic URL based on the workspace ID
-    const repoUrl = `ttl.sh/chartsmith-${workspaceId}:latest`;
+    // Get database connection
+    const db = getDB(await getParam("DB_URI"));
+
+    // Get the current workspace revision
+    const workspaceResult = await db.query(`
+      SELECT current_revision_number FROM workspace
+      WHERE id = $1
+    `, [workspaceId]);
+
+    if (workspaceResult.rows.length === 0) {
+      return { success: false, error: "Workspace not found" };
+    }
+
+    const revision = workspaceResult.rows[0].current_revision_number.toString();
 
     // Enqueue the publish job
     await enqueueWork("publish_workspace", {
       workspaceId,
       userId: session.user.id,
-      repoUrl,
-      timestamp: new Date().toISOString()
+      revision
     });
 
-    // Store the publish event in the database for tracking
-    const db = getDB(await getParam("DB_URI"));
-    await db.query(`
-      INSERT INTO workspace_publish (
-        workspace_id, 
-        user_id, 
-        repository_url, 
-        status, 
-        created_at
-      ) VALUES ($1, $2, $3, $4, NOW())
-    `, [workspaceId, session.user.id, repoUrl, "pending"]);
 
     return {
-      success: true,
-      repoUrl
+      success: true
     };
   } catch (error) {
     logger.error("Failed to publish workspace to ttl.sh", { error, workspaceId });

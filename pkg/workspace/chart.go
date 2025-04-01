@@ -3,10 +3,13 @@ package workspace
 import (
 	"context"
 	"fmt"
+	"time"
 
+	helmutils "github.com/replicatedhq/chartsmith/helm-utils"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 	"github.com/replicatedhq/chartsmith/pkg/workspace/types"
 	"github.com/tuvistavie/securerandom"
+	"gopkg.in/yaml.v2"
 )
 
 func CreateChart(ctx context.Context, workspaceID string, revisionNumber int) (*types.Chart, error) {
@@ -96,8 +99,43 @@ func ListCharts(ctx context.Context, workspaceID string, revisionNumber int) ([]
 	return charts, nil
 }
 
-func PublishChart(ctx context.Context, chartID string, workspaceID string, revisionNumber int) (string, string, string, error) {
-	fmt.Println("publish chart", chartID, workspaceID, revisionNumber)
+func PublishChart(ctx context.Context, chart *types.Chart, workspaceID string, revisionNumber int) (string, string, string, error) {
+	// Use the root ttl.sh URL since that's all that works reliably
+	displayUrl := "ttl.sh"
 
-	return "0.1.0", "converted-chart", "https://chartsmith.com/charts/converted-chart", nil
+	// parse the files, find the chart yaml and get the chart version from it
+	chartVersion := "0.1.0" // Default version if not found
+	for _, file := range chart.Files {
+		if file.FilePath == "Chart.yaml" {
+			// parse the chart yaml
+			var chartYaml map[interface{}]interface{}
+			err := yaml.Unmarshal([]byte(file.Content), &chartYaml)
+			if err != nil {
+				return "", "", "", fmt.Errorf("failed to unmarshal chart yaml: %w", err)
+			}
+			if chartYaml["version"] != nil {
+				chartVersion = chartYaml["version"].(string)
+			}
+		}
+	}
+
+	// Publish the chart
+	if err := helmutils.PublishChartExec(chart.Files, workspaceID, chart.Name); err != nil {
+		return "", "", "", fmt.Errorf("failed to publish chart: %w", err)
+	}
+
+	// Update processing status in database before publishing
+	conn := persistence.MustGetPooledPostgresSession()
+	defer conn.Release()
+
+	query := `INSERT INTO workspace_publish
+			(workspace_id, revision_number, chart_name, chart_version, status, created_at, processing_started_at, completed_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
+	_, err := conn.Exec(ctx, query,
+		workspaceID, revisionNumber, chart.Name, chartVersion,
+		"completed", time.Now(), time.Now(), time.Now())
+	if err != nil {
+		return "", "", "", fmt.Errorf("failed to insert initial publish status: %w", err)
+	}
+	return chartVersion, chart.Name, displayUrl, nil
 }

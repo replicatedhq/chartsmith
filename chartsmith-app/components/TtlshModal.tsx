@@ -30,7 +30,7 @@ export function TtlshModal({ isOpen, onClose }: TtlshModalProps) {
       setIsPublished(false);
       setRepoUrl("");
       setError("");
-      
+
       // Get current workspace ID from URL
       const path = window.location.pathname;
       const match = path.match(/\/workspace\/([a-zA-Z0-9-]+)/);
@@ -59,14 +59,18 @@ export function TtlshModal({ isOpen, onClose }: TtlshModalProps) {
   // Check if there's an existing publish for this workspace
   const checkExistingPublish = async (wsId: string) => {
     if (!session) return;
-    
+
     try {
       const status = await getPublishStatusAction(session, wsId);
-      
+
       if (status) {
         setPublishStatus(status);
-        setRepoUrl(status.repoUrl);
-        
+
+        // Only update the repoUrl if it's not the placeholder
+        if (status.repoUrl && status.repoUrl !== "pending") {
+          setRepoUrl(status.repoUrl);
+        }
+
         if (status.status === "completed") {
           setIsPublished(true);
         } else if (status.status === "pending" || status.status === "processing") {
@@ -86,16 +90,21 @@ export function TtlshModal({ isOpen, onClose }: TtlshModalProps) {
     if (statusPollingInterval) {
       clearInterval(statusPollingInterval);
     }
-    
+
     const interval = setInterval(async () => {
       if (!session) return;
-      
+
       try {
         const status = await getPublishStatusAction(session, wsId);
-        
+
         if (status) {
           setPublishStatus(status);
-          
+
+          // Always update the repoUrl if we have one, even if still in progress
+          if (status.repoUrl && status.repoUrl !== "pending") {
+            setRepoUrl(status.repoUrl);
+          }
+
           if (status.status === "completed") {
             setIsPublished(true);
             setIsPublishing(false);
@@ -112,7 +121,7 @@ export function TtlshModal({ isOpen, onClose }: TtlshModalProps) {
         console.error("Error polling publish status:", err);
       }
     }, 2000); // Poll every 2 seconds
-    
+
     setStatusPollingInterval(interval);
   };
 
@@ -129,9 +138,9 @@ export function TtlshModal({ isOpen, onClose }: TtlshModalProps) {
 
     try {
       const result = await publishToTtlshAction(session, workspaceId);
-      
-      if (result.success && result.repoUrl) {
-        setRepoUrl(result.repoUrl);
+
+      if (result.success) {
+        // Start polling immediately - the repoUrl will be updated as part of the status
         startStatusPolling(workspaceId);
       } else {
         setError(result.error || "Failed to publish. Please try again.");
@@ -168,14 +177,14 @@ export function TtlshModal({ isOpen, onClose }: TtlshModalProps) {
               <p className={`text-sm ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
                 Click "Push" to publish your Helm chart to the ttl.sh OCI registry.
               </p>
-              
+
               {error && (
                 <div className={`p-3 rounded-lg flex items-start gap-2 ${theme === "dark" ? "bg-red-900/20 text-red-400" : "bg-red-50 text-red-600"}`}>
                   <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
                   <div>{error}</div>
                 </div>
               )}
-              
+
               {isPublishing && (
                 <div className={`p-3 rounded-lg flex items-start gap-2 ${theme === "dark" ? "bg-amber-900/20 text-amber-400" : "bg-amber-50 text-amber-700"}`}>
                   <div className="flex items-center gap-2">
@@ -190,7 +199,7 @@ export function TtlshModal({ isOpen, onClose }: TtlshModalProps) {
                   </div>
                 </div>
               )}
-              
+
               {!isPublishing && (
                 <button
                   onClick={handlePublish}
@@ -200,7 +209,7 @@ export function TtlshModal({ isOpen, onClose }: TtlshModalProps) {
                   Publish to OCI Registry
                 </button>
               )}
-              
+
               {!workspaceId && (
                 <p className={`text-sm ${theme === "dark" ? "text-amber-400" : "text-amber-600"}`}>
                   Please open this from a workspace page.
@@ -218,32 +227,17 @@ export function TtlshModal({ isOpen, onClose }: TtlshModalProps) {
                   </div>
                 </div>
               </div>
-              
-              <div className={`rounded-lg p-4 ${theme === "dark" ? "bg-dark/40" : "bg-gray-50"}`}>
-                <h3 className={`text-sm font-medium mb-2 ${theme === "dark" ? "text-gray-300" : "text-gray-700"}`}>Repository URL</h3>
-                <div className="relative">
-                  <pre className={`p-3 rounded-lg font-mono text-sm whitespace-normal break-all ${theme === "dark" ? "bg-dark text-gray-300" : "bg-gray-100 text-gray-700"}`}>
-                    {repoUrl}
-                  </pre>
-                  <button
-                    onClick={() => handleCopy(repoUrl)}
-                    className={`absolute top-2 right-2 p-1 rounded ${theme === "dark" ? "text-gray-400 hover:text-white" : "text-gray-500 hover:text-gray-700"}`}
-                    title="Copy to clipboard"
-                  >
-                    <Copy className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
+
               <div className="space-y-2">
                 <p className={`text-sm ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
                   To pull this Helm chart, use:
                 </p>
                 <div className="relative">
                   <pre className={`p-3 rounded-lg font-mono text-sm whitespace-normal break-all ${theme === "dark" ? "bg-dark text-gray-300" : "bg-gray-100 text-gray-700"}`}>
-                    {`helm pull oci://${repoUrl.replace(':latest', '')} --version ${publishStatus?.chartVersion || '0.1.0'}`}
+                    {`helm pull oci://ttl.sh/${publishStatus?.chartName || 'chart'} --version ${publishStatus?.chartVersion || '0.1.0'}`}
                   </pre>
                   <button
-                    onClick={() => handleCopy(`helm pull oci://${repoUrl.replace(':latest', '')} --version ${publishStatus?.chartVersion || '0.1.0'}`)}
+                    onClick={() => handleCopy(`helm pull oci://ttl.sh/${publishStatus?.chartName || 'chart'} --version ${publishStatus?.chartVersion || '0.1.0'}`)}
                     className={`absolute top-2 right-2 p-1 rounded ${theme === "dark" ? "text-gray-400 hover:text-white" : "text-gray-500 hover:text-gray-700"}`}
                     title="Copy to clipboard"
                   >
@@ -257,10 +251,10 @@ export function TtlshModal({ isOpen, onClose }: TtlshModalProps) {
                 </p>
                 <div className="relative">
                   <pre className={`p-3 rounded-lg font-mono text-sm whitespace-normal break-all ${theme === "dark" ? "bg-dark text-gray-300" : "bg-gray-100 text-gray-700"}`}>
-                    {`helm install my-release oci://${repoUrl.replace(':latest', '')} --version ${publishStatus?.chartVersion || '0.1.0'}`}
+                    {`helm install my-release oci://ttl.sh/${publishStatus?.chartName || 'chart'} --version ${publishStatus?.chartVersion || '0.1.0'}`}
                   </pre>
                   <button
-                    onClick={() => handleCopy(`helm install my-release oci://${repoUrl.replace(':latest', '')} --version ${publishStatus?.chartVersion || '0.1.0'}`)}
+                    onClick={() => handleCopy(`helm install my-release oci://ttl.sh/${publishStatus?.chartName || 'chart'} --version ${publishStatus?.chartVersion || '0.1.0'}`)}
                     className={`absolute top-2 right-2 p-1 rounded ${theme === "dark" ? "text-gray-400 hover:text-white" : "text-gray-500 hover:text-gray-700"}`}
                     title="Copy to clipboard"
                   >

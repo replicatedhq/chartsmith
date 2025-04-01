@@ -16,8 +16,7 @@ import (
 type PublishWorkspacePayload struct {
 	WorkspaceID string `json:"workspaceId"`
 	UserID      string `json:"userId"`
-	RepoURL     string `json:"repoUrl"`
-	Timestamp   string `json:"timestamp"`
+	Revision    string `json:"revision"`
 }
 
 // Chart represents the structure of Chart.yaml
@@ -38,20 +37,10 @@ func handlePublishWorkspaceNotification(ctx context.Context, payload string) err
 	logger.Info("Processing publish workspace request",
 		zap.String("workspaceId", p.WorkspaceID),
 		zap.String("userId", p.UserID),
-		zap.String("repoUrl", p.RepoURL))
+		zap.String("revision", p.Revision))
 
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
-
-	// Update the status to "processing"
-	_, err := conn.Exec(ctx, `
-		UPDATE workspace_publish
-		SET status = $1, processing_started_at = NOW()
-		WHERE workspace_id = $2 AND user_id = $3 AND repository_url = $4
-	`, "processing", p.WorkspaceID, p.UserID, p.RepoURL)
-	if err != nil {
-		return fmt.Errorf("failed to update publish status to processing: %w", err)
-	}
 
 	w, err := workspace.GetWorkspace(ctx, p.WorkspaceID)
 	if err != nil {
@@ -69,38 +58,16 @@ func handlePublishWorkspaceNotification(ctx context.Context, payload string) err
 
 	chart := charts[0]
 
-	version, name, url, err := workspace.PublishChart(ctx, chart.ID, p.WorkspaceID, w.CurrentRevision)
+	version, name, url, err := workspace.PublishChart(ctx, chart, p.WorkspaceID, w.CurrentRevision)
 	if err != nil {
 		return fmt.Errorf("failed to publish chart: %w", err)
 	}
 
-	// Store the chart details in the database for retrieval in the frontend
-	_, err = conn.Exec(ctx, `
-		UPDATE workspace_publish
-		SET
-			chart_version = $1,
-			chart_name = $2,
-			repository_url = $3
-		WHERE workspace_id = $4 AND user_id = $5 AND repository_url = $6
-	`, version, name, url, p.WorkspaceID, p.UserID, p.RepoURL)
-	if err != nil {
-		logger.Warn("Failed to update chart details in database",
-			zap.String("workspaceId", p.WorkspaceID),
-			zap.Error(err))
-	}
-
-	// Update the status to "completed"
-	_, err = conn.Exec(ctx, `
-		UPDATE workspace_publish
-		SET
-			status = $1,
-			completed_at = NOW(),
-			error_message = NULL
-		WHERE workspace_id = $2 AND user_id = $3 AND repository_url = $4
-	`, "completed", p.WorkspaceID, p.UserID, p.RepoURL)
-	if err != nil {
-		return fmt.Errorf("failed to update publish status to completed: %w", err)
-	}
+	logger.Info("Successfully published chart",
+		zap.String("workspaceId", p.WorkspaceID),
+		zap.String("chartName", name),
+		zap.String("chartVersion", version),
+		zap.String("repoUrl", url))
 
 	return nil
 }

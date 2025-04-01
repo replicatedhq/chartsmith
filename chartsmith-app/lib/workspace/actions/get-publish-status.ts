@@ -7,7 +7,6 @@ import { logger } from "@/lib/utils/logger";
 
 export interface PublishStatus {
   status: string;
-  repoUrl: string;
   chartName: string;
   chartVersion: string;
   error?: string;
@@ -27,14 +26,13 @@ export async function getPublishStatusAction(
 
     const db = getDB(await getParam("DB_URI"));
     const result = await db.query(`
-      SELECT 
-        status, 
-        repository_url, 
+      SELECT
+        status,
         chart_name,
         chart_version,
-        error_message, 
-        created_at, 
-        processing_started_at, 
+        error_message,
+        created_at,
+        processing_started_at,
         completed_at
       FROM workspace_publish
       WHERE workspace_id = $1
@@ -47,10 +45,9 @@ export async function getPublishStatusAction(
     }
 
     const row = result.rows[0];
-    
+
     return {
       status: row.status,
-      repoUrl: row.repository_url,
       chartName: row.chart_name || "chart",
       chartVersion: row.chart_version || "0.1.0",
       error: row.error_message,

@@ -17,9 +17,10 @@ interface StatusDropdownProps {
   items: StatusItem[];
   showStatus?: boolean;
   theme?: "light" | "dark";
+  onItemClick?: (item: StatusItem) => void;
 }
 
-export function StatusDropdown({ label, items, showStatus = true, theme = "dark" }: StatusDropdownProps) {
+export function StatusDropdown({ label, items, showStatus = true, theme = "dark", onItemClick }: StatusDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<StatusItem | null>(null);
   const [showPublishModal, setShowPublishModal] = useState(false);
@@ -42,12 +43,18 @@ export function StatusDropdown({ label, items, showStatus = true, theme = "dark"
 
   const handleItemClick = (item: StatusItem) => {
     setIsOpen(false);
+    
+    // If a callback is provided, call it first
+    if (onItemClick) {
+      onItemClick(item);
+      return; // Let the parent component handle the item click entirely
+    }
+    
+    // Default handling if no callback provided
     if (item.label === "Publish to Replicated") {
       setShowPublishModal(true);
     } else if (item.label === "Work in CLI") {
       setShowWorkInCliModal(true);
-    } else if (item.label === "Push to ttl.sh") {
-      setShowPublishModal(true); // Reusing the publish modal for ttl.sh for now
     } else if (item.status) {
       setSelectedItem(item);
     }
