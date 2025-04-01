@@ -431,8 +431,7 @@ export function useCentrifugo({
       const plan = message.data.plan!;
       handlePlanUpdated({
         ...plan,
-        createdAt: new Date(plan.createdAt),
-        isComplete: plan.isComplete || false
+        createdAt: new Date(plan.createdAt)
       });
     } else if (eventType === 'chatmessage-updated') {
       handleChatMessageUpdated(message.data);
