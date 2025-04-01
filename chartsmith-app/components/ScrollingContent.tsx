@@ -32,7 +32,7 @@ export function ScrollingContent({ children, forceScroll = false }: ScrollingCon
     }
   };
   
-  // Set up scroll detection
+  // Set up scroll detection with stronger user intent detection
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -49,16 +49,18 @@ export function ScrollingContent({ children, forceScroll = false }: ScrollingCon
       
       // Only update scroll state if initial scroll is complete
       if (initialScrollCompleteRef.current) {
-        setShouldAutoScroll(isAtBottom);
-        
-        // If user scrolls up and we were auto-scrolling, mark as scrolled up
-        if (!isAtBottom && wasAutoScrolling) {
-          hasScrolledUpRef.current = true;
-          setShowScrollButton(true);
-        }
-        
-        // If user scrolls to bottom, hide the button
-        if (isAtBottom) {
+        // If user is scrolling manually (not by auto-scroll)
+        if (!isAtBottom) {
+          // Disable auto-scroll when user manually scrolls up
+          if (wasAutoScrolling) {
+            setShouldAutoScroll(false);
+            hasScrolledUpRef.current = true;
+            setShowScrollButton(true);
+          }
+        } else if (isAtBottom) {
+          // If user scrolls to bottom manually, re-enable auto-scroll and hide button
+          setShouldAutoScroll(true);
+          hasScrolledUpRef.current = false;
           setShowScrollButton(false);
         }
       }
@@ -93,22 +95,32 @@ export function ScrollingContent({ children, forceScroll = false }: ScrollingCon
     return () => clearTimeout(initialTimer);
   }, []);
 
-  // Auto-scroll when children change
+  // Auto-scroll when children change - more responsive but honors user scroll position
   useLayoutEffect(() => {
+    // Don't try to scroll if user has explicitly scrolled up or is actively scrolling
+    if (hasScrolledUpRef.current || isUserScrollingRef.current) return;
+    
+    // Only scroll if auto-scroll is enabled or if force scroll is set
     if (shouldAutoScroll || forceScroll) {
-      // Don't scroll if user is actively scrolling
-      if (isUserScrollingRef.current) return;
-      
       // Scroll immediately
       scrollToBottom();
       
-      // Try scrolling with just one delay to reduce jumpiness
-      // This ensures content has time to render
-      setTimeout(() => {
-        if (!isUserScrollingRef.current && (shouldAutoScroll || forceScroll)) {
-          scrollToBottom();
-        }
-      }, 100);
+      // For more responsive scrolling, try multiple quick scrolls
+      // This ensures we catch up with rapidly changing content
+      const quickScroll = (attempts = 0) => {
+        // Stop if we've made enough attempts, user is scrolling, or user has scrolled up
+        if (attempts >= 3 || isUserScrollingRef.current || hasScrolledUpRef.current) return;
+        
+        setTimeout(() => {
+          // Only continue if conditions are still right for auto-scrolling
+          if (!isUserScrollingRef.current && !hasScrolledUpRef.current && (shouldAutoScroll || forceScroll)) {
+            scrollToBottom();
+            quickScroll(attempts + 1);
+          }
+        }, 50); // Faster interval between scrolls
+      };
+      
+      quickScroll();
     }
   }, [children, shouldAutoScroll, forceScroll]);
 
@@ -116,25 +128,37 @@ export function ScrollingContent({ children, forceScroll = false }: ScrollingCon
   useEffect(() => {
     if (!containerRef.current) return;
     
-    // Keep track of mutations to batch them
-    let contentChanged = false;
-    let timeoutId: NodeJS.Timeout | null = null;
+    // More responsive mutation handling for smoother scrolling
+    let scrolling = false;
+    let pendingScrolls = 0;
+    const maxPendingScrolls = 3; // Limit rapid scrolls
     
     const handleContentChange = () => {
-      if (!contentChanged) return;
-      contentChanged = false;
+      if (scrolling || pendingScrolls >= maxPendingScrolls) return;
       
       const container = containerRef.current;
       if (!container) return;
       
-      // Only auto-scroll if user isn't actively scrolling
-      if (!isUserScrollingRef.current && (shouldAutoScroll || forceScroll)) {
+      // Only auto-scroll if:
+      // 1. User isn't actively scrolling
+      // 2. User hasn't explicitly scrolled up
+      // 3. Auto-scroll is enabled or force scroll is set
+      if (!isUserScrollingRef.current && !hasScrolledUpRef.current && (shouldAutoScroll || forceScroll)) {
+        scrolling = true;
+        pendingScrolls++;
+        
         scrollToBottom();
+        
+        // Reset scrolling flag quickly to allow more scroll attempts
+        setTimeout(() => {
+          scrolling = false;
+          pendingScrolls = Math.max(0, pendingScrolls - 1);
+        }, 30);
       }
     };
     
     const observer = new MutationObserver((mutations) => {
-      // Only care about actual content changes
+      // Immediately check for text changes and scroll
       const hasTextChanges = mutations.some(mutation => 
         mutation.type === 'characterData' || 
         mutation.addedNodes.length > 0 ||
@@ -142,11 +166,8 @@ export function ScrollingContent({ children, forceScroll = false }: ScrollingCon
       );
       
       if (hasTextChanges) {
-        contentChanged = true;
-        
-        // Debounce scrolling to avoid too many scroll events
-        if (timeoutId) clearTimeout(timeoutId);
-        timeoutId = setTimeout(handleContentChange, 100);
+        // Call immediately for faster response
+        handleContentChange();
       }
     });
     
@@ -158,7 +179,6 @@ export function ScrollingContent({ children, forceScroll = false }: ScrollingCon
     
     return () => {
       observer.disconnect();
-      if (timeoutId) clearTimeout(timeoutId);
     };
   }, [shouldAutoScroll, forceScroll]);
 
@@ -167,11 +187,11 @@ export function ScrollingContent({ children, forceScroll = false }: ScrollingCon
       <div 
         ref={containerRef} 
         className="overflow-auto w-full h-full"
-        style={{ scrollBehavior: 'smooth' }}
+        style={{ scrollBehavior: forceScroll ? 'auto' : 'smooth' }}
       >
         {children}
         {/* Extra space to ensure we can scroll past the content */}
-        <div style={{ height: '10px', width: '100%' }} />
+        <div style={{ height: '20px', width: '100%' }} />
       </div>
       
       {/* Jump to latest button - positioned above the chat input */}
