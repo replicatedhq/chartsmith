@@ -28,9 +28,9 @@ export default function TermsOfServicePage() {
           <section className="mb-8">
             <h2 className="text-2xl font-semibold mb-4">1. Agreement to Terms</h2>
             <p>
-              These Terms of Service ("Terms") constitute a legally binding agreement between you and Replicated ChartSmith 
-              ("ChartSmith," "we," "our," or "us") governing your access to and use of the ChartSmith website and services 
-              (collectively, the "Service").
+              These Terms of Service (&ldquo;Terms&rdquo;) constitute a legally binding agreement between you and Replicated ChartSmith 
+              (&ldquo;ChartSmith,&rdquo; &ldquo;we,&rdquo; &ldquo;our,&rdquo; or &ldquo;us&rdquo;) governing your access to and use of the ChartSmith website and services 
+              (collectively, the &ldquo;Service&rdquo;).
             </p>
             <p>
               By accessing or using the Service, you agree to be bound by these Terms. If you disagree with any part of the 
@@ -124,7 +124,7 @@ export default function TermsOfServicePage() {
           <section className="mb-8">
             <h2 className="text-2xl font-semibold mb-4">8. Disclaimer</h2>
             <p>
-              THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING, 
+              THE SERVICE IS PROVIDED &ldquo;AS IS&rdquo; AND &ldquo;AS AVAILABLE&rdquo; WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING, 
               BUT NOT LIMITED TO, IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, NON-INFRINGEMENT, OR COURSE 
               OF PERFORMANCE.
             </p>

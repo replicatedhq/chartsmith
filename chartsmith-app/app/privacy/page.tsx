@@ -28,7 +28,7 @@ export default function PrivacyPolicyPage() {
           <section className="mb-8">
             <h2 className="text-2xl font-semibold mb-4">Introduction</h2>
             <p>
-              Replicated ChartSmith ("ChartSmith," "we," "our," or "us") is committed to protecting your privacy. 
+              Replicated ChartSmith (&ldquo;ChartSmith,&rdquo; &ldquo;we,&rdquo; &ldquo;our,&rdquo; or &ldquo;us&rdquo;) is committed to protecting your privacy. 
               This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you 
               visit our website or use our services.
             </p>
@@ -126,7 +126,7 @@ export default function PrivacyPolicyPage() {
             <h2 className="text-2xl font-semibold mb-4">Changes to this Privacy Policy</h2>
             <p>
               We may update this Privacy Policy from time to time. We will notify you of any changes by posting 
-              the new Privacy Policy on this page and updating the "Last Updated" date. You are advised to review 
+              the new Privacy Policy on this page and updating the &ldquo;Last Updated&rdquo; date. You are advised to review 
               this Privacy Policy periodically for any changes.
             </p>
           </section>

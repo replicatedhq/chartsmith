@@ -19,7 +19,7 @@ export default async function WorkspacesPage() {
     return null;
   }
 
-  const workspaces = await listWorkspacesAction(session);
+  const result = await listWorkspacesAction(session);
 
-  return <WorkspacesList initialWorkspaces={workspaces} />;
+  return <WorkspacesList initialWorkspaces={result.workspaces} />;
 }
