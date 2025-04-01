@@ -59,6 +59,14 @@ func StartListeners(ctx context.Context) error {
 		}
 		return nil
 	}, executeActionLockKeyExtractor)
+	
+	l.AddHandler(ctx, "apply_plan", 10, time.Minute*10, func(notification *pgconn.Notification) error {
+		if err := handleApplyPlanNotification(ctx, notification.Payload); err != nil {
+			logger.Error(fmt.Errorf("failed to handle apply plan notification: %w", err))
+			return fmt.Errorf("failed to handle apply plan notification: %w", err)
+		}
+		return nil
+	}, applyPlanLockKeyExtractor)
 
 	l.AddHandler(ctx, "render_workspace", 5, time.Second*10, func(notification *pgconn.Notification) error {
 		if err := handleRenderWorkspaceNotification(ctx, notification.Payload); err != nil {
