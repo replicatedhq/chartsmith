@@ -52,8 +52,6 @@ func StartListeners(ctx context.Context) error {
 		return nil
 	}, nil)
 
-	// execute_action handler has been replaced by apply_plan
-	
 	l.AddHandler(ctx, "apply_plan", 10, time.Minute*10, func(notification *pgconn.Notification) error {
 		if err := handleApplyPlanNotification(ctx, notification.Payload); err != nil {
 			logger.Error(fmt.Errorf("failed to handle apply plan notification: %w", err))
@@ -122,8 +120,6 @@ func conversionFileLockKeyExtractor(payload []byte) (string, error) {
 	}
 	return conversionID, nil
 }
-
-// executeActionLockKeyExtractor has been replaced by applyPlanLockKeyExtractor
 
 func handleConversionNextFileNotificationWithLock(ctx context.Context, payload string) error {
 	return handleConversionNextFileNotification(ctx, payload)
