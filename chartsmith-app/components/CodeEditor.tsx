@@ -6,7 +6,7 @@ import { Check, X, ChevronUp, ChevronDown } from "lucide-react";
 
 // atoms
 import { selectedFileAtom, currentDiffIndexAtom, updateCurrentDiffIndexAtom, updateFileContentAtom } from "@/atoms/workspace";
-import { allFilesBeforeApplyingContentPendingAtom, allFilesWithContentPendingAtom, workspaceAtom, addFileToWorkspaceAtom } from "@/atoms/workspace";
+import { allFilesBeforeApplyingContentPendingAtom, allFilesWithContentPendingAtom, workspaceAtom, addFileToWorkspaceAtom, plansAtom } from "@/atoms/workspace";
 
 // types
 import type { editor } from "monaco-editor";
@@ -48,12 +48,18 @@ export const CodeEditor = React.memo(function CodeEditor({
   const [selectedFile, setSelectedFile] = useAtom(selectedFileAtom);
   const [workspace, setWorkspace] = useAtom(workspaceAtom);
   const [, addFileToWorkspace] = useAtom(addFileToWorkspaceAtom);
+  const [plans] = useAtom(plansAtom);
 
   // References for Monaco - Use non-null assertion to satisfy TypeScript
   const editorRef = useRef<editor.IStandaloneCodeEditor>(null as unknown as editor.IStandaloneCodeEditor);
   const monacoRef = useRef<typeof import("monaco-editor")>(null as unknown as typeof import("monaco-editor"));
 
   const [allFilesWithContentPending] = useAtom(allFilesWithContentPendingAtom);
+  
+  // Get the most recent plan
+  const mostRecentPlan = plans.length > 0 
+    ? plans.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0]
+    : null;
 
   const [acceptDropdownOpen, setAcceptDropdownOpen] = useState(false);
   const [rejectDropdownOpen, setRejectDropdownOpen] = useState(false);
@@ -613,8 +619,8 @@ export const CodeEditor = React.memo(function CodeEditor({
 
         {allFilesWithContentPending.length > 0 && selectedFile?.contentPending && selectedFile.contentPending.length > 0 && (
           <div className="flex items-center gap-2">
-            {/* Only show Accept/Reject buttons when workspace doesn't have an incomplete revision and current version is complete */}
-            {!workspace.incompleteRevisionNumber && workspace.isCurrentVersionComplete && (
+            {/* Only show Accept/Reject buttons when the most recent plan is complete */}
+            {mostRecentPlan?.isComplete && (
               <>
                 <div ref={acceptButtonRef} className="relative">
                   <div className="flex">
@@ -729,8 +735,8 @@ export const CodeEditor = React.memo(function CodeEditor({
                 </div>
               </>
             )}
-            {/* When there's an incomplete revision, show a message instead of the buttons */}
-            {(workspace.incompleteRevisionNumber || !workspace.isCurrentVersionComplete) && (
+            {/* When the most recent plan is not complete, show a waiting message */}
+            {(mostRecentPlan && !mostRecentPlan.isComplete) && (
               <div className="text-xs text-gray-500 italic">
                 Waiting for plan to complete before changes can be accepted
               </div>

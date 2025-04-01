@@ -146,8 +146,6 @@ export function useCentrifugo({
   };
 
   const handleArtifactUpdated = useCallback((data: CentrifugoMessageData) => {
-    console.log('handleArtifactUpdated', data);
-
     if (!data.file || !data.workspaceId) return;
 
     const artifactFile = data.file;
@@ -227,7 +225,6 @@ export function useCentrifugo({
         // After updating the workspace, select the file in the editor
         // Use a longer timeout to ensure the workspace update is fully processed
         setTimeout(() => {
-          console.log("Selecting file after artifact update:", artifactFile.filePath);
           // First reset selection to force a re-render
           setSelectedFile(undefined);
 
@@ -429,6 +426,7 @@ export function useCentrifugo({
 
   const handleCentrifugoMessage = useCallback((message: { data: CentrifugoMessageData }) => {
     const eventType = message.data.eventType;
+
     if (eventType === 'plan-updated') {
       const plan = message.data.plan!;
       handlePlanUpdated({
