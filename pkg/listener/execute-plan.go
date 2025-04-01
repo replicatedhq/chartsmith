@@ -152,16 +152,20 @@ func handleExecutePlanNotification(ctx context.Context, payload string) error {
 				return fmt.Errorf("failed to send plan update: %w", err)
 			}
 
-			if err := persistence.EnqueueWork(ctx, "execute_action", map[string]interface{}{
-				"planId": currentPlan.ID,
-				"path":   actionPlanWithPath.Path,
-			}); err != nil {
-				return fmt.Errorf("failed to enqueue execute action: %w", err)
-			}
+			// We'll let the apply_plan handler process these actions later
+			// No need to enqueue individual execute_action jobs
 
 		case err := <-detailedPlanDoneCh:
 			if err != nil {
 				return fmt.Errorf("error creating initial plan: %w", err)
+			}
+
+			// Enqueue a single apply_plan job after all action files are collected
+			// This is what starts the actual processing
+			if err := persistence.EnqueueWork(ctx, "apply_plan", map[string]interface{}{
+				"planId": plan.ID,
+			}); err != nil {
+				return fmt.Errorf("failed to enqueue apply plan: %w", err)
 			}
 
 			done = true

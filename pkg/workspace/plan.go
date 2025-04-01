@@ -76,7 +76,6 @@ func listPlans(ctx context.Context, workspaceID string) ([]types.Plan, error) {
 		version,
 		status,
 		description,
-		is_complete,
 		proceed_at
 	FROM workspace_plan WHERE workspace_id = $1 ORDER BY created_at DESC`
 
@@ -100,7 +99,6 @@ func listPlans(ctx context.Context, workspaceID string) ([]types.Plan, error) {
 			&plan.Version,
 			&plan.Status,
 			&description,
-			&plan.IsComplete,
 			&proceedAt,
 		)
 		if err != nil {
@@ -152,7 +150,6 @@ func GetPlan(ctx context.Context, tx pgx.Tx, planID string) (*types.Plan, error)
 		version,
 		status,
 		description,
-		is_complete,
 		proceed_at
 	FROM workspace_plan WHERE id = $1`
 
@@ -170,7 +167,6 @@ func GetPlan(ctx context.Context, tx pgx.Tx, planID string) (*types.Plan, error)
 		&plan.Version,
 		&plan.Status,
 		&description,
-		&plan.IsComplete,
 		&proceedAt,
 	)
 	if err != nil {
@@ -276,17 +272,7 @@ func UpdatePlanActionFiles(ctx context.Context, tx pgx.Tx, planID string, action
 	return nil
 }
 
-func SetPlanIsComplete(ctx context.Context, planID string, isComplete bool) error {
-	conn := persistence.MustGetPooledPostgresSession()
-	defer conn.Release()
-
-	query := `UPDATE workspace_plan SET is_complete = $1 WHERE id = $2`
-	_, err := conn.Exec(ctx, query, isComplete, planID)
-	if err != nil {
-		return fmt.Errorf("error updating plan is complete: %w", err)
-	}
-	return nil
-}
+// SetPlanIsComplete - Deprecated - Use UpdatePlanStatus with PlanStatusApplied instead
 
 func CreatePlan(ctx context.Context, chatMessageID string, workspaceID string, enqueue bool) (*types.Plan, error) {
 	logger.Info("creating plan", zap.String("chat_message_id", chatMessageID), zap.String("workspace_id", workspaceID))
@@ -306,10 +292,10 @@ func CreatePlan(ctx context.Context, chatMessageID string, workspaceID string, e
 
 	chatMessageIDs := []string{chatMessageID}
 	query := `INSERT INTO workspace_plan
-(id, workspace_id, chat_message_ids, created_at, updated_at, version, status, description, is_complete, proceed_at)
+(id, workspace_id, chat_message_ids, created_at, updated_at, version, status, description, proceed_at)
 VALUES
-($1, $2, $3, $4, $5, $6, $7, $8, $9, null)`
-	_, err = tx.Exec(ctx, query, id, workspaceID, chatMessageIDs, time.Now(), time.Now(), 1, types.PlanStatusPending, "", false)
+($1, $2, $3, $4, $5, $6, $7, $8, null)`
+	_, err = tx.Exec(ctx, query, id, workspaceID, chatMessageIDs, time.Now(), time.Now(), 1, types.PlanStatusPending, "")
 	if err != nil {
 		return nil, fmt.Errorf("error creating plan: %w", err)
 	}

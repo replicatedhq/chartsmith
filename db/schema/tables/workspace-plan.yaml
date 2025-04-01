@@ -37,8 +37,3 @@ schema:
       type: text[]
     - name: proceed_at
       type: timestamp
-    - name: is_complete
-      type: boolean
-      constraints:
-        notNull: true
-      default: "false" # remove after migration

@@ -75,7 +75,6 @@ type Plan struct {
 	Version        int          `json:"version"`
 	Status         PlanStatus   `json:"status"`
 	ActionFiles    []ActionFile `json:"actionFiles"`
-	IsComplete     bool         `json:"isComplete"`
 	ProceedAt      *time.Time   `json:"proceedAt"`
 }
 
