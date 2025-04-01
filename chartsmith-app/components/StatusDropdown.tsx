@@ -46,6 +46,8 @@ export function StatusDropdown({ label, items, showStatus = true, theme = "dark"
       setShowPublishModal(true);
     } else if (item.label === "Work in CLI") {
       setShowWorkInCliModal(true);
+    } else if (item.label === "Push to ttl.sh") {
+      setShowPublishModal(true); // Reusing the publish modal for ttl.sh for now
     } else if (item.status) {
       setSelectedItem(item);
     }

@@ -49,3 +49,55 @@ func AddFileToChart(ctx context.Context, chartID string, workspaceID string, rev
 
 	return nil
 }
+
+func ListCharts(ctx context.Context, workspaceID string, revisionNumber int) ([]*types.Chart, error) {
+	conn := persistence.MustGetPooledPostgresSession()
+	defer conn.Release()
+
+	query := `SELECT id, name FROM workspace_chart WHERE workspace_id = $1 AND revision_number = $2`
+	rows, err := conn.Query(ctx, query, workspaceID, revisionNumber)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list charts: %w", err)
+	}
+	defer rows.Close()
+
+	charts := []*types.Chart{}
+	for rows.Next() {
+		var chart types.Chart
+		err := rows.Scan(&chart.ID, &chart.Name)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan chart: %w", err)
+		}
+		charts = append(charts, &chart)
+	}
+
+	rows.Close()
+
+	for _, chart := range charts {
+		query = `SELECT id, file_path, content FROM workspace_file WHERE chart_id = $1 AND workspace_id = $2 AND revision_number = $3`
+		rows, err := conn.Query(ctx, query, chart.ID, workspaceID, revisionNumber)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list files: %w", err)
+		}
+		defer rows.Close()
+
+		files := []types.File{}
+		for rows.Next() {
+			var file types.File
+			err := rows.Scan(&file.ID, &file.FilePath, &file.Content)
+			if err != nil {
+				return nil, fmt.Errorf("failed to scan file: %w", err)
+			}
+			files = append(files, file)
+		}
+		chart.Files = files
+	}
+
+	return charts, nil
+}
+
+func PublishChart(ctx context.Context, chartID string, workspaceID string, revisionNumber int) (string, string, string, error) {
+	fmt.Println("publish chart", chartID, workspaceID, revisionNumber)
+
+	return "0.1.0", "converted-chart", "https://chartsmith.com/charts/converted-chart", nil
+}

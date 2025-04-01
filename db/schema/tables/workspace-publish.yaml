@@ -1,0 +1,60 @@
+database: chartsmith
+name: workspace_publish
+schema:
+  postgres:
+    primaryKey:
+    - workspace_id
+    - user_id
+    - repository_url
+    columns:
+    - name: workspace_id
+      type: text
+      constraints:
+        notNull: true
+      foreignKeys:
+      - name: fk_workspace_publish_workspace
+        columns: [workspace_id]
+        referenceTable: workspace
+        referenceColumns: [id]
+    - name: user_id
+      type: text
+      constraints:
+        notNull: true
+      foreignKeys:
+      - name: fk_workspace_publish_user
+        columns: [user_id]
+        referenceTable: chartsmith_user
+        referenceColumns: [id]
+    - name: repository_url
+      type: text
+      constraints:
+        notNull: true
+    - name: chart_name
+      type: text
+      defaultValue: "'chart'"
+    - name: chart_version
+      type: text
+      defaultValue: "'0.1.0'"
+    - name: status
+      type: text
+      constraints:
+        notNull: true
+      defaultValue: "'pending'"
+    - name: processing_started_at
+      type: timestamp
+    - name: completed_at
+      type: timestamp
+    - name: error_message
+      type: text
+    - name: created_at
+      type: timestamp
+      constraints:
+        notNull: true
+      defaultValue: "NOW()"
+    indexes:
+    - name: workspace_publish_workspace_id_idx
+      columns: [workspace_id]
+    - name: workspace_publish_user_id_idx
+      columns: [user_id]
+    - name: workspace_publish_status_idx
+      columns: [status]

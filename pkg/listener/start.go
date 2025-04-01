@@ -100,6 +100,15 @@ func StartListeners(ctx context.Context) error {
 		return nil
 	}, nil)
 
+	// Add handler for workspace publishing with high concurrency (20 concurrent workers)
+	l.AddHandler(ctx, "publish_workspace", 20, time.Minute*5, func(notification *pgconn.Notification) error {
+		if err := handlePublishWorkspaceNotification(ctx, notification.Payload); err != nil {
+			logger.Error(fmt.Errorf("failed to handle publish workspace notification: %w", err))
+			return fmt.Errorf("failed to handle publish workspace notification: %w", err)
+		}
+		return nil
+	}, nil)
+
 	l.Start(ctx)
 	defer l.Stop(ctx)
 
