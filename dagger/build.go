@@ -14,6 +14,10 @@ func buildAndPush(
 	opServiceAccount *dagger.Secret,
 	newVersion string,
 ) error {
+	// Init dagger client and credential cache
+	client := dagger.Connect()
+	ecrCredsCache := make(map[string]ecrCredentials)
+
 	stagingAccountID := mustGetNonSensitiveSecret(ctx, opServiceAccount, "Chartsmith - Staging Push", "account_id")
 	productionAccountID := mustGetNonSensitiveSecret(ctx, opServiceAccount, "Chartsmith - Production Push", "account_id")
 
@@ -46,7 +50,7 @@ func buildAndPush(
 
 		// publish all containers
 		fmt.Printf("Pushing worker container staging\n")
-		ref, err := pushContainer(ctx, workerContainer, PushContainerOpts{
+		ref, err := pushContainer(ctx, client, ecrCredsCache, workerContainer, PushContainerOpts{
 			Name:      "chartsmith-worker",
 			Tag:       newVersion,
 			AccountID: stagingAccountID,
@@ -65,7 +69,7 @@ func buildAndPush(
 		defer wg.Done()
 
 		fmt.Printf("Pushing worker container production\n")
-		ref, err := pushContainer(ctx, workerContainer, PushContainerOpts{
+		ref, err := pushContainer(ctx, client, ecrCredsCache, workerContainer, PushContainerOpts{
 			Name:      "chartsmith-worker",
 			Tag:       newVersion,
 			AccountID: productionAccountID,
@@ -84,7 +88,7 @@ func buildAndPush(
 		defer wg.Done()
 
 		fmt.Printf("Pushing worker container self-hosted\n")
-		ref, err := pushContainer(ctx, workerContainer, PushContainerOpts{
+		ref, err := pushContainer(ctx, client, ecrCredsCache, workerContainer, PushContainerOpts{
 			Name: "chartsmith-worker",
 			Tag:  newVersion,
 
@@ -101,7 +105,7 @@ func buildAndPush(
 		defer wg.Done()
 
 		fmt.Printf("Pushing app container staging\n")
-		ref, err := pushContainer(ctx, appContainer, PushContainerOpts{
+		ref, err := pushContainer(ctx, client, ecrCredsCache, appContainer, PushContainerOpts{
 			Name:      "chartsmith-app",
 			Tag:       newVersion,
 			AccountID: stagingAccountID,
@@ -120,7 +124,7 @@ func buildAndPush(
 		defer wg.Done()
 
 		fmt.Printf("Pushing app container production\n")
-		ref, err := pushContainer(ctx, appContainer, PushContainerOpts{
+		ref, err := pushContainer(ctx, client, ecrCredsCache, appContainer, PushContainerOpts{
 			Name:      "chartsmith-app",
 			Tag:       newVersion,
 			AccountID: productionAccountID,
@@ -139,7 +143,7 @@ func buildAndPush(
 		defer wg.Done()
 
 		fmt.Printf("Pushing app container self-hosted\n")
-		ref, err := pushContainer(ctx, appContainer, PushContainerOpts{
+		ref, err := pushContainer(ctx, client, ecrCredsCache, appContainer, PushContainerOpts{
 			Name: "chartsmith-app",
 			Tag:  newVersion,
 
