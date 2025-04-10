@@ -25,12 +25,19 @@ type PushContainerOpts struct {
 	DockerhubPassword *dagger.Secret
 }
 
-func getECRAuth(ctx context.Context, opts PushContainerOpts, secretAccessKey string) (string, string, error) {
+func getECRAuth(ctx context.Context, opts PushContainerOpts) (string, string, error) {
+	fmt.Printf("getECRAuth: %+v\n", opts)
+	fmt.Printf("accessKeyID: %s\n", opts.AccessKeyID)
+	secretAccessKeyPlaintext, err := opts.SecretAccessKey.Plaintext(ctx)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to get secret access key: %w", err)
+	}
+	fmt.Printf("secretAccessKey: %s\n", secretAccessKeyPlaintext)
 	cfg, err := config.LoadDefaultConfig(ctx,
 		config.WithRegion(opts.Region),
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
 			opts.AccessKeyID,
-			secretAccessKey,
+			secretAccessKeyPlaintext,
 			"", // No session token needed
 		)),
 	)
@@ -89,13 +96,7 @@ func pushContainerECR(ctx context.Context, container *dagger.Container, opts Pus
 	hostname := fmt.Sprintf("%s.dkr.ecr.%s.amazonaws.com", opts.AccountID, opts.Region)
 	fullImageName := fmt.Sprintf("%s/%s:%s", hostname, opts.Name, opts.Tag)
 
-	// Get the secret access key as a string
-	secretAccessKey, err := opts.SecretAccessKey.Plaintext(ctx)
-	if err != nil {
-		return "", fmt.Errorf("failed to get secret access key: %w", err)
-	}
-
-	username, password, err := getECRAuth(ctx, opts, secretAccessKey)
+	username, password, err := getECRAuth(ctx, opts)
 	if err != nil {
 		return "", fmt.Errorf("failed to get ECR auth: %w", err)
 	}
