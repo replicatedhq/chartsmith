@@ -1,0 +1,7 @@
+apiVersion: kots.io/v1beta1
+kind: Application
+metadata:
+  name: chartsmith
+spec:
+  title: ChartSmith
+  requireMinimalRBACPrivileges: true

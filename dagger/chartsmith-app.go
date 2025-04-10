@@ -60,7 +60,7 @@ func unitTestChartsmithApp(
 	}, nil
 }
 
-func buildChartsmithApp(ctx context.Context, source *dagger.Directory, opServiceAccount *dagger.Secret, version string) (*dagger.Container, *dagger.Container, error) {
+func buildChartsmithApp(ctx context.Context, source *dagger.Directory, opServiceAccount *dagger.Secret, version string) (*dagger.Container, *dagger.Container, *dagger.Container, error) {
 	source = updateDebugPage(ctx, source, version)
 
 	buildContainer := buildEnvChartsmithApp(source, opServiceAccount)
@@ -73,7 +73,7 @@ func buildChartsmithApp(ctx context.Context, source *dagger.Directory, opService
 		WithExec([]string{"npm", "run", "build"})
 	stdout, err := stagingBuildContainer.Stdout(context.Background())
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	fmt.Printf("Staging build container stdout:\n%s\n", stdout)
@@ -111,7 +111,7 @@ NEXT_PUBLIC_REPLICATED_REDIRECT_URI=%s
 		WithExec([]string{"npm", "run", "build"})
 	stdout, err = prodBuildContainer.Stdout(context.Background())
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	fmt.Printf("Production build container stdout:\n%s\n", stdout)
 	prodStandalone := prodBuildContainer.Directory("/src/.next/standalone")
@@ -138,7 +138,7 @@ NEXT_PUBLIC_CENTRIFUGO_ADDRESS=%s
 		mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Production - Chartsmith Centrifugo", "client_address"),
 	))
 
-	return stagingReleaseContainer, prodReleaseContainer, nil
+	return stagingReleaseContainer, prodReleaseContainer, nil, nil
 }
 
 func buildEnvChartsmithApp(source *dagger.Directory, opServiceAccount *dagger.Secret) *dagger.Container {
