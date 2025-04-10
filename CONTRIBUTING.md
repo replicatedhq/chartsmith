@@ -1,6 +1,6 @@
 # Contributing
 
-This doc is a guide for how engineers at Replicated contribute to this project.
+This doc is a development guide for how engineers at Replicated can contribute to this project.
 
 ## Development Environment Setup
 
@@ -9,25 +9,28 @@ This doc is a guide for how engineers at Replicated contribute to this project.
 - macOS
 - Docker Desktop
 - Go 1.24 or later
-- Node.js 18
+- Node.js 18 and nvm 
 - npm
-- [Schemahero](https://schemahero.io/docs/installation/) (but rename the binary to schemahero and put on path)
+- [Schemahero](https://schemahero.io/docs/installation/) (must rename the binary to `schemahero` and put on path)
+- A SQL DB editor available. Confider Beekeeper Studio if you don't already have one available
 
 ### Required Secrets
 
 Before starting, ensure you have the following secrets configured locally on your mac:
 
-- `ANTHROPIC_API_KEY`: Get your own key
-- `GROQ_API_KEY`: Get your own key
-- `VOYAGE_API_KEY`: Get your own key
+- `ANTHROPIC_API_KEY`: Get your own key (Create a new API key in Anthropic Console)
+- `GROQ_API_KEY`: Get your own key (Get invited to Replicated team. Generate new key)
+- `VOYAGE_API_KEY`: Get your own key (Get invited to Replicated team. Generate new key)
 - `CHARTSMITH_PG_URI=postgresql://postgres:password@localhost:5432/chartsmith?sslmode=disable`
 - `CHARTSMITH_CENTRIFUGO_ADDRESS=http://localhost:8000/api`
-- `CHARTSMITH_CENTRIFUGO_API_KEY=api_key`
-- `CHARTSMITH_TOKEN_ENCRYPTION=`
-- `CHARTSMITH_SLACK_TOKEN=`
-- `CHARTSMITH_SLACK_CHANNEL=`
+- `CHARTSMITH_CENTRIFUGO_API_KEY=api_key` (Already set)
+- `CHARTSMITH_TOKEN_ENCRYPTION=` (Can ignore)
+- `CHARTSMITH_SLACK_TOKEN=` (Can ignore)
+- `CHARTSMITH_SLACK_CHANNEL=` (Can ignore)
 
-You should also create a .env.local file in the chartsmith-app directory with some of the same content:
+You should also create a .env.local file in the `chartsmith-app` directory with some of the same content:
+
+You'll need access to the `Developer Automation` folder in 1password. Update the Google Client Secret, and add your Anthropic API key.
 
 ```
 NEXT_PUBLIC_GOOGLE_CLIENT_ID=730758876435-8v7frmnqtt7k7v65edpc6u3hso9olqbe.apps.googleusercontent.com
