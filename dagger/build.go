@@ -4,6 +4,7 @@ import (
 	"context"
 	"dagger/chartsmith/internal/dagger"
 	"fmt"
+	"sync"
 )
 
 func buildAndPush(
@@ -33,86 +34,116 @@ func buildAndPush(
 		return err
 	}
 
-	// publish all containers
-	fmt.Printf("Pushing worker container staging\n")
-	ref, err := pushContainer(ctx, workerContainerStaging, PushContainerOpts{
-		Name:      "chartsmith-worker",
-		Tag:       newVersion,
-		AccountID: stagingAccountID,
-		Region:    "us-east-1",
+	// push all containers in parallel to speed up the release
+	wg := sync.WaitGroup{}
+	wg.Add(6)
 
-		AccessKeyID:     stagingAccessKeyID,
-		SecretAccessKey: stagingSecretAccessKey,
-	})
-	if err != nil {
-		return err
-	}
-	fmt.Printf("Pushed worker container staging: %s\n", ref)
+	go func() {
+		defer wg.Done()
 
-	fmt.Printf("Pushing worker container production\n")
-	ref, err = pushContainer(ctx, workerContainerProd, PushContainerOpts{
-		Name:      "chartsmith-worker",
-		Tag:       newVersion,
-		AccountID: productionAccountID,
-		Region:    "us-east-1",
+		// publish all containers
+		fmt.Printf("Pushing worker container staging\n")
+		ref, err := pushContainer(ctx, workerContainerStaging, PushContainerOpts{
+			Name:      "chartsmith-worker",
+			Tag:       newVersion,
+			AccountID: stagingAccountID,
+			Region:    "us-east-1",
 
-		AccessKeyID:     productionAccessKeyID,
-		SecretAccessKey: productionSecretAccessKey,
-	})
-	if err != nil {
-		return err
-	}
-	fmt.Printf("Pushed worker container production: %s\n", ref)
+			AccessKeyID:     stagingAccessKeyID,
+			SecretAccessKey: stagingSecretAccessKey,
+		})
+		if err != nil {
+			panic(err)
+		}
+		fmt.Printf("Pushed worker container staging: %s\n", ref)
+	}()
 
-	fmt.Printf("Pushing worker container self-hosted\n")
-	ref, err = pushContainer(ctx, workerContainerSelfHosted, PushContainerOpts{
-		Name: "chartsmith-worker",
-		Tag:  newVersion,
-	})
-	if err != nil {
-		return err
-	}
-	fmt.Printf("Pushed worker container self-hosted: %s\n", ref)
+	go func() {
+		defer wg.Done()
 
-	fmt.Printf("Pushing app container staging\n")
-	ref, err = pushContainer(ctx, appContainerStaging, PushContainerOpts{
-		Name:      "chartsmith-app",
-		Tag:       newVersion,
-		AccountID: stagingAccountID,
-		Region:    "us-east-1",
+		fmt.Printf("Pushing worker container production\n")
+		ref, err := pushContainer(ctx, workerContainerProd, PushContainerOpts{
+			Name:      "chartsmith-worker",
+			Tag:       newVersion,
+			AccountID: productionAccountID,
+			Region:    "us-east-1",
 
-		AccessKeyID:     stagingAccessKeyID,
-		SecretAccessKey: stagingSecretAccessKey,
-	})
-	if err != nil {
-		return err
-	}
-	fmt.Printf("Pushed app container staging: %s\n", ref)
+			AccessKeyID:     productionAccessKeyID,
+			SecretAccessKey: productionSecretAccessKey,
+		})
+		if err != nil {
+			panic(err)
+		}
+		fmt.Printf("Pushed worker container production: %s\n", ref)
+	}()
 
-	fmt.Printf("Pushing app container production\n")
-	ref, err = pushContainer(ctx, appContainerProd, PushContainerOpts{
-		Name:      "chartsmith-app",
-		Tag:       newVersion,
-		AccountID: productionAccountID,
-		Region:    "us-east-1",
+	go func() {
+		defer wg.Done()
 
-		AccessKeyID:     productionAccessKeyID,
-		SecretAccessKey: productionSecretAccessKey,
-	})
-	if err != nil {
-		return err
-	}
-	fmt.Printf("Pushed app container production: %s\n", ref)
+		fmt.Printf("Pushing worker container self-hosted\n")
+		ref, err := pushContainer(ctx, workerContainerSelfHosted, PushContainerOpts{
+			Name: "chartsmith-worker",
+			Tag:  newVersion,
+		})
+		if err != nil {
+			panic(err)
+		}
+		fmt.Printf("Pushed worker container self-hosted: %s\n", ref)
+	}()
 
-	fmt.Printf("Pushing app container self-hosted\n")
-	ref, err = pushContainer(ctx, appContainerSelfHosted, PushContainerOpts{
-		Name: "chartsmith-app",
-		Tag:  newVersion,
-	})
-	if err != nil {
-		return err
-	}
-	fmt.Printf("Pushed app container self-hosted: %s\n", ref)
+	go func() {
+		defer wg.Done()
+
+		fmt.Printf("Pushing app container staging\n")
+		ref, err := pushContainer(ctx, appContainerStaging, PushContainerOpts{
+			Name:      "chartsmith-app",
+			Tag:       newVersion,
+			AccountID: stagingAccountID,
+			Region:    "us-east-1",
+
+			AccessKeyID:     stagingAccessKeyID,
+			SecretAccessKey: stagingSecretAccessKey,
+		})
+		if err != nil {
+			panic(err)
+		}
+		fmt.Printf("Pushed app container staging: %s\n", ref)
+	}()
+
+	go func() {
+		defer wg.Done()
+
+		fmt.Printf("Pushing app container production\n")
+		ref, err := pushContainer(ctx, appContainerProd, PushContainerOpts{
+			Name:      "chartsmith-app",
+			Tag:       newVersion,
+			AccountID: productionAccountID,
+			Region:    "us-east-1",
+
+			AccessKeyID:     productionAccessKeyID,
+			SecretAccessKey: productionSecretAccessKey,
+		})
+		if err != nil {
+			panic(err)
+		}
+		fmt.Printf("Pushed app container production: %s\n", ref)
+	}()
+
+	go func() {
+		defer wg.Done()
+
+		fmt.Printf("Pushing app container self-hosted\n")
+		ref, err := pushContainer(ctx, appContainerSelfHosted, PushContainerOpts{
+			Name: "chartsmith-app",
+			Tag:  newVersion,
+		})
+		if err != nil {
+			panic(err)
+		}
+		fmt.Printf("Pushed app container self-hosted: %s\n", ref)
+	}()
+
+	wg.Wait()
 
 	return nil
 }
