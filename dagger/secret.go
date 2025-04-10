@@ -8,7 +8,8 @@ import (
 	onepassword "github.com/1password/onepassword-sdk-go"
 )
 
-const vaultUUID = "ikfulaksdrbqtjgybu2vkcggeu" // Developer Automation
+// const vaultUUID = "ikfulaksdrbqtjgybu2vkcggeu"           // Developer Automation
+const vaultUUID = "4r7lasfjeevrao4qi4wsqgnn6e" // Developer Automation Production
 
 func mustGetItemUUID(ctx context.Context, opServiceAccount *dagger.Secret, itemName string) string {
 	opServiceAccountPlaintext, err := opServiceAccount.Plaintext(ctx)

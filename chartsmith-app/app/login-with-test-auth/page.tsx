@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { validateTestAuth } from "@/lib/auth/actions/test-auth";
 import { Loader2 } from "lucide-react";
@@ -8,10 +8,26 @@ import { Card } from "@/components/ui/Card";
 
 export default function TestAuthPage() {
   const router = useRouter();
+  const [publicEnv, setPublicEnv] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const res = await fetch("/api/config");
+        if (!res.ok) throw new Error("Failed to fetch config");
+        const data = await res.json();
+        setPublicEnv(data);
+      } catch (err) {
+        console.error("Failed to load public env config:", err);
+      }
+    };
+
+    fetchConfig();
+  }, []);
 
   useEffect(() => {
     async function handleTestAuth() {
-      if (process.env.NEXT_PUBLIC_ENABLE_TEST_AUTH !== 'true') {
+      if (publicEnv.NEXT_PUBLIC_ENABLE_TEST_AUTH !== 'true') {
         console.log("Test auth is not enabled, pushing to home");
         router.push('/');
         return;

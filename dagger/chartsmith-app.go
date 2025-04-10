@@ -60,85 +60,37 @@ func unitTestChartsmithApp(
 	}, nil
 }
 
-func buildChartsmithApp(ctx context.Context, source *dagger.Directory, opServiceAccount *dagger.Secret, version string) (*dagger.Container, *dagger.Container, error) {
+func buildChartsmithApp(ctx context.Context, source *dagger.Directory, opServiceAccount *dagger.Secret, version string) (*dagger.Container, error) {
 	source = updateDebugPage(ctx, source, version)
 
-	buildContainer := buildEnvChartsmithApp(source, opServiceAccount)
+	nodeModulesCache := dag.CacheVolume("chartsmith-node-modules")
 
-	stagingBuildContainer := buildContainer.
-		WithEnvVariable("NEXT_PUBLIC_GOOGLE_CLIENT_ID", mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Staging - Chartsmith Oauth Credentials", "client_id")).
-		WithEnvVariable("NEXT_PUBLIC_GOOGLE_REDIRECT_URI", mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Staging - Chartsmith Oauth Credentials", "redirect_uri")).
-		WithEnvVariable("NEXT_PUBLIC_CENTRIFUGO_ADDRESS", mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Staging - Chartsmith Centrifugo", "client_address")).
-		WithEnvVariable("NEXT_PUBLIC_REPLICATED_REDIRECT_URI", mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Staging - Chartsmith", "replicated_redirect_uri")).
+	baseBuildContainer := buildEnvChartsmithApp(source, opServiceAccount).
+		WithMountedCache("/src/node_modules", nodeModulesCache).
+		WithExec([]string{"npm", "ci"})
+
+	container := baseBuildContainer.
 		WithExec([]string{"npm", "run", "build"})
-	stdout, err := stagingBuildContainer.Stdout(context.Background())
+
+	stdout, err := container.Stdout(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, fmt.Errorf("build error: %w", err)
 	}
+	fmt.Printf("Build container stdout:\n%s\n", stdout)
 
-	fmt.Printf("Staging build container stdout:\n%s\n", stdout)
-	stagingStandalone := stagingBuildContainer.Directory("/src/.next/standalone")
-	stagingStatic := stagingBuildContainer.Directory("/src/.next/static")
-	stagingStandalone = stagingStandalone.WithDirectory("/.next/static", stagingStatic)
+	standalone := container.Directory("/src/.next/standalone")
+	static := container.Directory("/src/.next/static")
+	standalone = standalone.WithDirectory("/.next/static", static)
 
-	stagingReleaseContainer := dag.Container(dagger.ContainerOpts{
+	result := dag.Container(dagger.ContainerOpts{
 		Platform: dagger.Platform("linux/amd64"),
-	}).From("node:18")
-	stagingReleaseContainer = stagingReleaseContainer.WithDirectory("/app", stagingStandalone)
-	stagingReleaseContainer = stagingReleaseContainer.WithWorkdir("/")
-	stagingReleaseContainer = stagingReleaseContainer.WithEntrypoint([]string{
-		"node",
-	})
-	stagingReleaseContainer = stagingReleaseContainer.WithDefaultArgs([]string{
-		"/app/server.js",
-	})
-	stagingReleaseContainer = stagingReleaseContainer.WithNewFile("/app/.env.local", fmt.Sprintf(
-		`NEXT_PUBLIC_GOOGLE_CLIENT_ID=%s
-NEXT_PUBLIC_GOOGLE_REDIRECT_URI=%s
-NEXT_PUBLIC_CENTRIFUGO_ADDRESS=%s
-NEXT_PUBLIC_REPLICATED_REDIRECT_URI=%s
-`, mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Staging - Chartsmith Oauth Credentials", "client_id"),
-		mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Staging - Chartsmith Oauth Credentials", "redirect_uri"),
-		mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Staging - Chartsmith Centrifugo", "client_address"),
-		mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Staging - Chartsmith", "replicated_redirect_uri"),
-	))
+	}).From("node:18").
+		WithDirectory("/app", standalone).
+		WithWorkdir("/").
+		WithEntrypoint([]string{"node"}).
+		WithDefaultArgs([]string{"/app/server.js"})
 
-	prodBuildContainer := buildContainer.
-		WithEnvVariable("NEXT_PUBLIC_GOOGLE_CLIENT_ID", mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Production - Chartsmith Oauth Credentials", "client_id")).
-		WithEnvVariable("NEXT_PUBLIC_GOOGLE_REDIRECT_URI", mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Production - Chartsmith Oauth Credentials", "redirect_uri")).
-		WithEnvVariable("NEXT_PUBLIC_CENTRIFUGO_ADDRESS", mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Production - Chartsmith Centrifugo", "client_address")).
-		WithEnvVariable("NEXT_PUBLIC_REPLICATED_REDIRECT_URI", mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Production - Chartsmith", "replicated_redirect_uri")).
-		WithExec([]string{"npm", "run", "build"})
-	stdout, err = prodBuildContainer.Stdout(context.Background())
-	if err != nil {
-		return nil, nil, err
-	}
-	fmt.Printf("Production build container stdout:\n%s\n", stdout)
-	prodStandalone := prodBuildContainer.Directory("/src/.next/standalone")
-	prodStatic := prodBuildContainer.Directory("/src/.next/static")
-	prodStandalone = prodStandalone.WithDirectory("/.next/static", prodStatic)
-
-	prodReleaseContainer := dag.Container(dagger.ContainerOpts{
-		Platform: dagger.Platform("linux/amd64"),
-	}).From("node:18")
-	prodReleaseContainer = prodReleaseContainer.WithDirectory("/app", prodStandalone)
-	prodReleaseContainer = prodReleaseContainer.WithWorkdir("/")
-	prodReleaseContainer = prodReleaseContainer.WithEntrypoint([]string{
-		"node",
-	})
-	prodReleaseContainer = prodReleaseContainer.WithDefaultArgs([]string{
-		"/app/server.js",
-	})
-	prodReleaseContainer = prodReleaseContainer.WithNewFile("/app/.env.local", fmt.Sprintf(
-		`NEXT_PUBLIC_GOOGLE_CLIENT_ID=%s
-NEXT_PUBLIC_GOOGLE_REDIRECT_URI=%s
-NEXT_PUBLIC_CENTRIFUGO_ADDRESS=%s
-`, mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Production - Chartsmith Oauth Credentials", "client_id"),
-		mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Production - Chartsmith Oauth Credentials", "redirect_uri"),
-		mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Production - Chartsmith Centrifugo", "client_address"),
-	))
-
-	return stagingReleaseContainer, prodReleaseContainer, nil
+	return result, nil
 }
 
 func buildEnvChartsmithApp(source *dagger.Directory, opServiceAccount *dagger.Secret) *dagger.Container {

@@ -5,7 +5,7 @@ import (
 	"dagger/chartsmith/internal/dagger"
 )
 
-func buildWorker(ctx context.Context, source *dagger.Directory) (*dagger.Container, *dagger.Container, error) {
+func buildWorker(ctx context.Context, source *dagger.Directory) (*dagger.Container, error) {
 	binary := buildEnvWorker(source).
 		WithExec([]string{"make", "build"}).
 		File("bin/chartsmith-worker")
@@ -21,7 +21,7 @@ func buildWorker(ctx context.Context, source *dagger.Directory) (*dagger.Contain
 		"/chartsmith-worker",
 	})
 
-	return releaseContainer, releaseContainer, nil
+	return releaseContainer, nil
 }
 
 func testWorker(source *dagger.Directory) (*ValidateResult, error) {

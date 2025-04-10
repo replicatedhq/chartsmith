@@ -8,10 +8,31 @@ import { validateTestAuth } from "@/lib/auth/actions/test-auth";
 export default function LoginPage() {
   const { theme } = useTheme();
 
+  const [publicEnv, setPublicEnv] = React.useState<Record<string, string>>({});
+
   React.useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const res = await fetch("/api/config");
+        if (!res.ok) throw new Error("Failed to fetch config");
+        const data = await res.json();
+        setPublicEnv(data);
+      } catch (err) {
+        console.error("Failed to load public env config:", err);
+      }
+    };
+
+    fetchConfig();
+  }, []);
+
+  React.useEffect(() => {
+    if (!publicEnv.NEXT_PUBLIC_ENABLE_TEST_AUTH) {
+      return;
+    }
+
     // Only run in development/test environment
     if (process.env.NODE_ENV !== 'production' &&
-        process.env.NEXT_PUBLIC_ENABLE_TEST_AUTH === 'true') {
+        publicEnv.NEXT_PUBLIC_ENABLE_TEST_AUTH === 'true') {
       // Check for test auth parameter
       const params = new URLSearchParams(window.location.search);
       if (params.get('test-auth') === 'true') {

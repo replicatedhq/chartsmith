@@ -1,5 +1,5 @@
 "use client";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
@@ -12,17 +12,37 @@ export function AuthButtons() {
   const { isAuthenticated } = useAuth();
   const { theme } = useTheme();
   const { toast } = useToast();
+  const [publicEnv, setPublicEnv] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const res = await fetch("/api/config");
+        if (!res.ok) throw new Error("Failed to fetch config");
+        const data = await res.json();
+        setPublicEnv(data);
+      } catch (err) {
+        console.error("Failed to load public env config:", err);
+      }
+    };
+
+    fetchConfig();
+  }, []);
 
   const handleLogin = () => {
+    if (!publicEnv.NEXT_PUBLIC_GOOGLE_CLIENT_ID) {
+      return;
+    }
+
     try {
-      const authUrl = getGoogleAuthUrl();
-      
+      const authUrl = getGoogleAuthUrl(publicEnv.NEXT_PUBLIC_GOOGLE_CLIENT_ID, publicEnv.NEXT_PUBLIC_GOOGLE_REDIRECT_URI);
+
       // Open popup window
       const width = 500;
       const height = 600;
       const left = window.screenX + (window.outerWidth - width) / 2;
       const top = window.screenY + (window.outerHeight - height) / 2;
-      
+
       const popup = window.open(
         authUrl,
         "Google Sign In",
@@ -34,7 +54,7 @@ export function AuthButtons() {
         if (event.data?.type === 'google-auth') {
           window.removeEventListener('message', messageHandler);
           if (popup) popup.close();
-          
+
           if (event.data.error) {
             toast({
               title: "Error",
@@ -52,12 +72,12 @@ export function AuthButtons() {
           // Handle any pending actions
           const pendingArtifactHubUrl = sessionStorage.getItem('pendingArtifactHubUrl');
           const pendingPrompt = sessionStorage.getItem('pendingPrompt');
-          
+
           // Check if the user is waitlisted based on the JWT
           const token = event.data.jwt;
           const payload = token.split('.')[1];
           let isWaitlisted = false;
-          
+
           try {
             if (payload) {
               const decoded = JSON.parse(atob(payload));
@@ -66,7 +86,7 @@ export function AuthButtons() {
           } catch (err) {
             logger.error("Failed to decode JWT payload", { error: err });
           }
-          
+
           if (isWaitlisted) {
             // If user is waitlisted, always redirect to waitlist page
             window.location.href = '/waitlist';

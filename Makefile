@@ -70,7 +70,19 @@ release:
 	dagger call release \
 		--version $(version) \
 		--github-token env:GITHUB_TOKEN \
-		--op-service-account env:OP_SERVICE_ACCOUNT \
+		--op-service-account env:OP_SERVICE_ACCOUNT_PRODUCTION \
+		--progress plain
+
+.PHONY: replicated
+replicated:
+	dagger call release \
+		--version $(version) \
+		--build=false \
+		--staging=false \
+		--production=false \
+		--replicated=true \
+		--github-token env:GITHUB_TOKEN \
+		--op-service-account env:OP_SERVICE_ACCOUNT_PRODUCTION \
 		--progress plain
 
 .PHONY: production
@@ -80,6 +92,7 @@ production:
 		--build=false \
 		--staging=false \
 		--production=true \
+		--replicated=false \
 		--github-token env:GITHUB_TOKEN \
-		--op-service-account env:OP_SERVICE_ACCOUNT \
+		--op-service-account env:OP_SERVICE_ACCOUNT_PRODUCTION \
 		--progress plain
