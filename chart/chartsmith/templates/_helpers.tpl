@@ -48,6 +48,7 @@ Selector labels
 {{- define "chartsmith.selectorLabels" -}}
 app.kubernetes.io/name: {{ include "chartsmith.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/component: {{ .Values.component }}
 {{- end }}
 
 {{/*

@@ -168,7 +168,12 @@ func (m *Chartsmith) Release(
 	}
 
 	if replicated {
-		panic("not implemented")
+		releaseSequence, err := createReplicatedRelease(ctx, source, newVersion, opServiceAccount)
+		if err != nil {
+			return err
+		}
+
+		fmt.Printf("Replicated release sequence: %d\n", releaseSequence)
 	}
 
 	if build {

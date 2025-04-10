@@ -1,9 +1,10 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "chartsmith.fullname" . }}
+  name: {{ include "chartsmith.fullname" . }}-app
   labels:
     {{- include "chartsmith.labels" . | nindent 4 }}
+    app.kubernetes.io/component: app
 spec:
   type: {{ .Values.service.type }}
   ports:
@@ -12,4 +13,6 @@ spec:
       protocol: TCP
       name: http
   selector:
-    {{- include "chartsmith.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/name: {{ include "chartsmith.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: app
