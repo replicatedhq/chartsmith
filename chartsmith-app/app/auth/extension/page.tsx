@@ -86,7 +86,7 @@ export default function ExtensionAuthPage() {
 
           {isAuthorized ? (
             <p className={`text-sm ${resolvedTheme === "dark" ? "text-gray-300" : "text-gray-600"}`}>
-              The VS Code extension has been successfully authorized. This window will close automatically.
+              The VS Code extension has been successfully authorized. You can now close this window.
             </p>
           ) : (
             <p className={`text-sm ${resolvedTheme === "dark" ? "text-gray-300" : "text-gray-600"}`}>
