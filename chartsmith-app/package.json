@@ -20,7 +20,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
     "@monaco-editor/react": "^4.7.0",
-    "@radix-ui/react-toast": "^1.2.6",
+    "@radix-ui/react-toast": "^1.2.7",
     "@tailwindcss/typography": "^0.5.16",
     "@types/diff": "^7.0.1",
     "autoprefixer": "^10.4.20",
@@ -53,8 +53,8 @@
     "unified-diff": "^5.0.0"
   },
   "devDependencies": {
-    "@eslint/eslintrc": "^3.2.0",
-    "@playwright/test": "^1.51.0",
+    "@eslint/eslintrc": "^3.3.1",
+    "@playwright/test": "^1.51.1",
     "@testing-library/react": "^16.2.0",
     "@types/diff-match-patch": "^1.0.36",
     "@types/gunzip-maybe": "^1.4.2",
