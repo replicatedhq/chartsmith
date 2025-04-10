@@ -1,7 +1,7 @@
 "use server";
 
 import { Session } from "@/lib/types/session";
-import { setUserReplicatedToken } from "../token";
+import { setUserReplicatedToken } from "../replicated-token";
 import { logger } from "@/lib/utils/logger";
 
 export async function exchangeReplicatedAuth(session: Session, nonce: string, exchange: string): Promise<boolean> {

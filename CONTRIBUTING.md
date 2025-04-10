@@ -45,6 +45,7 @@ NEXT_PUBLIC_REPLICATED_REDIRECT_URI=https://vendor-web-<youruser>.okteto.repldev
 ANTHROPIC_API_KEY=
 NEXT_PUBLIC_ENABLE_TEST_AUTH=true
 ENABLE_TEST_AUTH=true
+NEXT_PUBLIC_API_ENDPOINT=http://localhost:3000/api
 
 ```
 

@@ -53,6 +53,8 @@ spec:
                 secretKeyRef:
                   name: chartsmith-secrets
                   key: ANTHROPIC_API_KEY
+            - name: NEXT_PUBLIC_API_ENDPOINT
+              value: https://staging.chartsmith.ai/api
           resources:
             requests:
               cpu: 100m
