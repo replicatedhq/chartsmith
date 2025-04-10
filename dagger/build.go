@@ -23,6 +23,9 @@ func buildAndPush(
 	productionAccessKeyID := mustGetNonSensitiveSecret(ctx, opServiceAccount, "Chartsmith - Production Push", "access_key_id")
 	productionSecretAccessKey := mustGetSecret(ctx, opServiceAccount, "Chartsmith - Production Push", "secret_access_key")
 
+	dockerhubUsername := mustGetNonSensitiveSecret(ctx, opServiceAccount, "DockerHub ChartSmith Release", "username")
+	dockerhubPassword := mustGetSecret(ctx, opServiceAccount, "DockerHub ChartSmith Release", "password")
+
 	// build all containers
 	workerContainerStaging, workerContainerProd, workerContainerSelfHosted, err := buildWorker(ctx, source)
 	if err != nil {
@@ -84,6 +87,9 @@ func buildAndPush(
 		ref, err := pushContainer(ctx, workerContainerSelfHosted, PushContainerOpts{
 			Name: "chartsmith-worker",
 			Tag:  newVersion,
+
+			DockerhubUsername: dockerhubUsername,
+			DockerhubPassword: dockerhubPassword,
 		})
 		if err != nil {
 			panic(err)
@@ -136,6 +142,9 @@ func buildAndPush(
 		ref, err := pushContainer(ctx, appContainerSelfHosted, PushContainerOpts{
 			Name: "chartsmith-app",
 			Tag:  newVersion,
+
+			DockerhubUsername: dockerhubUsername,
+			DockerhubPassword: dockerhubPassword,
 		})
 		if err != nil {
 			panic(err)

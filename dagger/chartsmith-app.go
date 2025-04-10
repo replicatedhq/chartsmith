@@ -5,6 +5,7 @@ import (
 	"dagger/chartsmith/internal/dagger"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -63,82 +64,183 @@ func unitTestChartsmithApp(
 func buildChartsmithApp(ctx context.Context, source *dagger.Directory, opServiceAccount *dagger.Secret, version string) (*dagger.Container, *dagger.Container, *dagger.Container, error) {
 	source = updateDebugPage(ctx, source, version)
 
-	buildContainer := buildEnvChartsmithApp(source, opServiceAccount)
+	nodeModulesCache := dag.CacheVolume("chartsmith-node-modules")
 
-	stagingBuildContainer := buildContainer.
-		WithEnvVariable("NEXT_PUBLIC_GOOGLE_CLIENT_ID", mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Staging - Chartsmith Oauth Credentials", "client_id")).
-		WithEnvVariable("NEXT_PUBLIC_GOOGLE_REDIRECT_URI", mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Staging - Chartsmith Oauth Credentials", "redirect_uri")).
-		WithEnvVariable("NEXT_PUBLIC_CENTRIFUGO_ADDRESS", mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Staging - Chartsmith Centrifugo", "client_address")).
-		WithEnvVariable("NEXT_PUBLIC_REPLICATED_REDIRECT_URI", mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Staging - Chartsmith", "replicated_redirect_uri")).
-		WithExec([]string{"npm", "run", "build"})
-	stdout, err := stagingBuildContainer.Stdout(context.Background())
-	if err != nil {
-		return nil, nil, nil, err
-	}
+	baseBuildContainer := buildEnvChartsmithApp(source, opServiceAccount).
+		WithMountedCache("/src/node_modules", nodeModulesCache).
+		WithExec([]string{"npm", "ci"})
 
-	fmt.Printf("Staging build container stdout:\n%s\n", stdout)
-	stagingStandalone := stagingBuildContainer.Directory("/src/.next/standalone")
-	stagingStatic := stagingBuildContainer.Directory("/src/.next/static")
-	stagingStandalone = stagingStandalone.WithDirectory("/.next/static", stagingStatic)
+	var (
+		stagingReleaseContainer    *dagger.Container
+		prodReleaseContainer       *dagger.Container
+		selfHostedReleaseContainer *dagger.Container
+		buildErr                   error
+		mu                         sync.Mutex
+		wg                         sync.WaitGroup
+	)
 
-	stagingReleaseContainer := dag.Container(dagger.ContainerOpts{
-		Platform: dagger.Platform("linux/amd64"),
-	}).From("node:18")
-	stagingReleaseContainer = stagingReleaseContainer.WithDirectory("/app", stagingStandalone)
-	stagingReleaseContainer = stagingReleaseContainer.WithWorkdir("/")
-	stagingReleaseContainer = stagingReleaseContainer.WithEntrypoint([]string{
-		"node",
-	})
-	stagingReleaseContainer = stagingReleaseContainer.WithDefaultArgs([]string{
-		"/app/server.js",
-	})
-	stagingReleaseContainer = stagingReleaseContainer.WithNewFile("/app/.env.local", fmt.Sprintf(
-		`NEXT_PUBLIC_GOOGLE_CLIENT_ID=%s
+	wg.Add(3)
+
+	go func() {
+		defer wg.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				mu.Lock()
+				buildErr = fmt.Errorf("staging build panicked: %v", r)
+				mu.Unlock()
+			}
+		}()
+
+		container := baseBuildContainer.
+			WithEnvVariable("NEXT_PUBLIC_GOOGLE_CLIENT_ID", mustGetNonSensitiveSecret(ctx, opServiceAccount, "Staging - Chartsmith Oauth Credentials", "client_id")).
+			WithEnvVariable("NEXT_PUBLIC_GOOGLE_REDIRECT_URI", mustGetNonSensitiveSecret(ctx, opServiceAccount, "Staging - Chartsmith Oauth Credentials", "redirect_uri")).
+			WithEnvVariable("NEXT_PUBLIC_CENTRIFUGO_ADDRESS", mustGetNonSensitiveSecret(ctx, opServiceAccount, "Staging - Chartsmith Centrifugo", "client_address")).
+			WithEnvVariable("NEXT_PUBLIC_REPLICATED_REDIRECT_URI", mustGetNonSensitiveSecret(ctx, opServiceAccount, "Staging - Chartsmith", "replicated_redirect_uri")).
+			WithExec([]string{"npm", "run", "build"})
+
+		stdout, err := container.Stdout(ctx)
+		if err != nil {
+			mu.Lock()
+			buildErr = fmt.Errorf("staging build error: %w", err)
+			mu.Unlock()
+			return
+		}
+		fmt.Printf("Staging build container stdout:\n%s\n", stdout)
+
+		standalone := container.Directory("/src/.next/standalone")
+		static := container.Directory("/src/.next/static")
+		standalone = standalone.WithDirectory("/.next/static", static)
+
+		result := dag.Container(dagger.ContainerOpts{
+			Platform: dagger.Platform("linux/amd64"),
+		}).From("node:18").
+			WithDirectory("/app", standalone).
+			WithWorkdir("/").
+			WithEntrypoint([]string{"node"}).
+			WithDefaultArgs([]string{"/app/server.js"}).
+			WithNewFile("/app/.env.local", fmt.Sprintf(`NEXT_PUBLIC_GOOGLE_CLIENT_ID=%s
 NEXT_PUBLIC_GOOGLE_REDIRECT_URI=%s
 NEXT_PUBLIC_CENTRIFUGO_ADDRESS=%s
 NEXT_PUBLIC_REPLICATED_REDIRECT_URI=%s
-`, mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Staging - Chartsmith Oauth Credentials", "client_id"),
-		mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Staging - Chartsmith Oauth Credentials", "redirect_uri"),
-		mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Staging - Chartsmith Centrifugo", "client_address"),
-		mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Staging - Chartsmith", "replicated_redirect_uri"),
-	))
+`, mustGetNonSensitiveSecret(ctx, opServiceAccount, "Staging - Chartsmith Oauth Credentials", "client_id"),
+				mustGetNonSensitiveSecret(ctx, opServiceAccount, "Staging - Chartsmith Oauth Credentials", "redirect_uri"),
+				mustGetNonSensitiveSecret(ctx, opServiceAccount, "Staging - Chartsmith Centrifugo", "client_address"),
+				mustGetNonSensitiveSecret(ctx, opServiceAccount, "Staging - Chartsmith", "replicated_redirect_uri"),
+			))
 
-	prodBuildContainer := buildContainer.
-		WithEnvVariable("NEXT_PUBLIC_GOOGLE_CLIENT_ID", mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Production - Chartsmith Oauth Credentials", "client_id")).
-		WithEnvVariable("NEXT_PUBLIC_GOOGLE_REDIRECT_URI", mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Production - Chartsmith Oauth Credentials", "redirect_uri")).
-		WithEnvVariable("NEXT_PUBLIC_CENTRIFUGO_ADDRESS", mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Production - Chartsmith Centrifugo", "client_address")).
-		WithEnvVariable("NEXT_PUBLIC_REPLICATED_REDIRECT_URI", mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Production - Chartsmith", "replicated_redirect_uri")).
-		WithExec([]string{"npm", "run", "build"})
-	stdout, err = prodBuildContainer.Stdout(context.Background())
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	fmt.Printf("Production build container stdout:\n%s\n", stdout)
-	prodStandalone := prodBuildContainer.Directory("/src/.next/standalone")
-	prodStatic := prodBuildContainer.Directory("/src/.next/static")
-	prodStandalone = prodStandalone.WithDirectory("/.next/static", prodStatic)
+		mu.Lock()
+		stagingReleaseContainer = result
+		mu.Unlock()
+	}()
 
-	prodReleaseContainer := dag.Container(dagger.ContainerOpts{
-		Platform: dagger.Platform("linux/amd64"),
-	}).From("node:18")
-	prodReleaseContainer = prodReleaseContainer.WithDirectory("/app", prodStandalone)
-	prodReleaseContainer = prodReleaseContainer.WithWorkdir("/")
-	prodReleaseContainer = prodReleaseContainer.WithEntrypoint([]string{
-		"node",
-	})
-	prodReleaseContainer = prodReleaseContainer.WithDefaultArgs([]string{
-		"/app/server.js",
-	})
-	prodReleaseContainer = prodReleaseContainer.WithNewFile("/app/.env.local", fmt.Sprintf(
-		`NEXT_PUBLIC_GOOGLE_CLIENT_ID=%s
+	go func() {
+		defer wg.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				mu.Lock()
+				buildErr = fmt.Errorf("prod build panicked: %v", r)
+				mu.Unlock()
+			}
+		}()
+
+		container := baseBuildContainer.
+			WithEnvVariable("NEXT_PUBLIC_GOOGLE_CLIENT_ID", mustGetNonSensitiveSecret(ctx, opServiceAccount, "Production - Chartsmith Oauth Credentials", "client_id")).
+			WithEnvVariable("NEXT_PUBLIC_GOOGLE_REDIRECT_URI", mustGetNonSensitiveSecret(ctx, opServiceAccount, "Production - Chartsmith Oauth Credentials", "redirect_uri")).
+			WithEnvVariable("NEXT_PUBLIC_CENTRIFUGO_ADDRESS", mustGetNonSensitiveSecret(ctx, opServiceAccount, "Production - Chartsmith Centrifugo", "client_address")).
+			WithEnvVariable("NEXT_PUBLIC_REPLICATED_REDIRECT_URI", mustGetNonSensitiveSecret(ctx, opServiceAccount, "Production - Chartsmith", "replicated_redirect_uri")).
+			WithExec([]string{"npm", "run", "build"})
+
+		stdout, err := container.Stdout(ctx)
+		if err != nil {
+			mu.Lock()
+			buildErr = fmt.Errorf("production build error: %w", err)
+			mu.Unlock()
+			return
+		}
+		fmt.Printf("Production build container stdout:\n%s\n", stdout)
+
+		standalone := container.Directory("/src/.next/standalone")
+		static := container.Directory("/src/.next/static")
+		standalone = standalone.WithDirectory("/.next/static", static)
+
+		result := dag.Container(dagger.ContainerOpts{
+			Platform: dagger.Platform("linux/amd64"),
+		}).From("node:18").
+			WithDirectory("/app", standalone).
+			WithWorkdir("/").
+			WithEntrypoint([]string{"node"}).
+			WithDefaultArgs([]string{"/app/server.js"}).
+			WithNewFile("/app/.env.local", fmt.Sprintf(`NEXT_PUBLIC_GOOGLE_CLIENT_ID=%s
 NEXT_PUBLIC_GOOGLE_REDIRECT_URI=%s
 NEXT_PUBLIC_CENTRIFUGO_ADDRESS=%s
-`, mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Production - Chartsmith Oauth Credentials", "client_id"),
-		mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Production - Chartsmith Oauth Credentials", "redirect_uri"),
-		mustGetNonSensitiveSecret(context.Background(), opServiceAccount, "Production - Chartsmith Centrifugo", "client_address"),
-	))
+`, mustGetNonSensitiveSecret(ctx, opServiceAccount, "Production - Chartsmith Oauth Credentials", "client_id"),
+				mustGetNonSensitiveSecret(ctx, opServiceAccount, "Production - Chartsmith Oauth Credentials", "redirect_uri"),
+				mustGetNonSensitiveSecret(ctx, opServiceAccount, "Production - Chartsmith Centrifugo", "client_address"),
+			))
 
-	return stagingReleaseContainer, prodReleaseContainer, nil, nil
+		mu.Lock()
+		prodReleaseContainer = result
+		mu.Unlock()
+	}()
+
+	go func() {
+		defer wg.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				mu.Lock()
+				buildErr = fmt.Errorf("self-hosted build panicked: %v", r)
+				mu.Unlock()
+			}
+		}()
+
+		container := baseBuildContainer.
+			WithEnvVariable("NEXT_PUBLIC_GOOGLE_CLIENT_ID", "").
+			WithEnvVariable("NEXT_PUBLIC_GOOGLE_REDIRECT_URI", "").
+			WithEnvVariable("NEXT_PUBLIC_CENTRIFUGO_ADDRESS", "").
+			WithEnvVariable("NEXT_PUBLIC_REPLICATED_REDIRECT_URI", "").
+			WithExec([]string{"npm", "run", "build"})
+
+		stdout, err := container.Stdout(ctx)
+		if err != nil {
+			mu.Lock()
+			buildErr = fmt.Errorf("production build error: %w", err)
+			mu.Unlock()
+			return
+		}
+		fmt.Printf("Self-hosted build container stdout:\n%s\n", stdout)
+
+		standalone := container.Directory("/src/.next/standalone")
+		static := container.Directory("/src/.next/static")
+		standalone = standalone.WithDirectory("/.next/static", static)
+
+		result := dag.Container(dagger.ContainerOpts{
+			Platform: dagger.Platform("linux/amd64"),
+		}).From("node:18").
+			WithDirectory("/app", standalone).
+			WithWorkdir("/").
+			WithEntrypoint([]string{"node"}).
+			WithDefaultArgs([]string{"/app/server.js"}).
+			WithNewFile("/app/.env.local", fmt.Sprintf(`NEXT_PUBLIC_GOOGLE_CLIENT_ID=%s
+NEXT_PUBLIC_GOOGLE_REDIRECT_URI=%s
+NEXT_PUBLIC_CENTRIFUGO_ADDRESS=%s
+`,
+				"",
+				"",
+				"",
+			))
+
+		mu.Lock()
+		selfHostedReleaseContainer = result
+		mu.Unlock()
+	}()
+
+	wg.Wait()
+
+	if buildErr != nil {
+		return nil, nil, nil, buildErr
+	}
+
+	return stagingReleaseContainer, prodReleaseContainer, selfHostedReleaseContainer, nil
 }
 
 func buildEnvChartsmithApp(source *dagger.Directory, opServiceAccount *dagger.Secret) *dagger.Container {

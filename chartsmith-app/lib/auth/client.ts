@@ -1,3 +1,4 @@
+import { getPublicEnv } from "../utils/env";
 import { AppError } from "../utils/error";
 import { GoogleUserProfile } from "./types";
 
@@ -7,15 +8,17 @@ export async function fetchGoogleProfile(code: string): Promise<GoogleUserProfil
       throw new AppError("Invalid authorization code", "INVALID_CODE");
     }
 
+    const publicEnv = getPublicEnv();
+
     // Exchange code for access token
     const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         code,
-        client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
+        client_id: publicEnv.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
         client_secret: process.env.GOOGLE_CLIENT_SECRET,
-        redirect_uri: process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_URI,
+        redirect_uri: publicEnv.NEXT_PUBLIC_GOOGLE_REDIRECT_URI,
         grant_type: "authorization_code",
       }),
     });

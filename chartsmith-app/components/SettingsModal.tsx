@@ -30,6 +30,22 @@ export function SettingsModal({ isOpen, onClose, session }: SettingsModalProps) 
   const [apiToken, setApiToken] = useState('');
   const [savingAutoAccept, setSavingAutoAccept] = useState(false);
   const [savingValidate, setSavingValidate] = useState(false);
+  const [publicEnv, setPublicEnv] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const res = await fetch("/api/config");
+        if (!res.ok) throw new Error("Failed to fetch config");
+        const data = await res.json();
+        setPublicEnv(data);
+      } catch (err) {
+        console.error("Failed to load public env config:", err);
+      }
+    };
+
+    fetchConfig();
+  }, []);
 
   useEffect(() => {
     if (session.user?.settings) {
@@ -56,7 +72,12 @@ export function SettingsModal({ isOpen, onClose, session }: SettingsModalProps) 
   };
 
   const handleReplicatedConnect = () => {
-    const redirectUri = process.env.NEXT_PUBLIC_REPLICATED_REDIRECT_URI || "";
+    if (!publicEnv.NEXT_PUBLIC_REPLICATED_REDIRECT_URI) {
+      console.log(`Failed to get Replicated redirect URI`);
+      return;
+    }
+
+    const redirectUri = publicEnv.NEXT_PUBLIC_REPLICATED_REDIRECT_URI;
     window.location.href = redirectUri;
   };
 

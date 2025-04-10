@@ -21,7 +21,7 @@ func buildWorker(ctx context.Context, source *dagger.Directory) (*dagger.Contain
 		"/chartsmith-worker",
 	})
 
-	return releaseContainer, releaseContainer, nil, nil
+	return releaseContainer, releaseContainer, releaseContainer, nil
 }
 
 func testWorker(source *dagger.Directory) (*ValidateResult, error) {

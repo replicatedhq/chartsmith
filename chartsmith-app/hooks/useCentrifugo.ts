@@ -55,6 +55,22 @@ export function useCentrifugo({
   const [, handleConversionFileUpdated] = useAtom(handleConversionFileUpdatedAtom)
   const [, handlePlanUpdated] = useAtom(handlePlanUpdatedAtom);
   const [, setActiveRenderIds] = useAtom(activeRenderIdsAtom);
+  const [publicEnv, setPublicEnv] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const res = await fetch("/api/config");
+        if (!res.ok) throw new Error("Failed to fetch config");
+        const data = await res.json();
+        setPublicEnv(data);
+      } catch (err) {
+        console.error("Failed to load public env config:", err);
+      }
+    };
+
+    fetchConfig();
+  }, []);
 
   const handleRevisionCreated = useCallback(async (revision: any) => {
     if (!session || !revision.workspaceId) return;
@@ -492,7 +508,12 @@ export function useCentrifugo({
         return;
       }
 
-      const centrifuge = new Centrifuge(process.env.NEXT_PUBLIC_CENTRIFUGO_ADDRESS!, {
+      if (!publicEnv.NEXT_PUBLIC_CENTRIFUGO_ADDRESS) {
+        console.log(`Failed to get Centrifugo address`);
+        return;
+      }
+
+      const centrifuge = new Centrifuge(publicEnv.NEXT_PUBLIC_CENTRIFUGO_ADDRESS!, {
         timeout: 5000,
         token,
         getToken: async () => {

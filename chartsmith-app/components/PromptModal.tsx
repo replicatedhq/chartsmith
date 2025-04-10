@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { X, Sparkles } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { PromptInput } from "./PromptInput";
@@ -22,6 +22,23 @@ export function PromptModal({ isOpen, onClose }: PromptModalProps) {
 
   const [error, setError] = React.useState<string | null>(null);
   const [isPageLoading, setIsPageLoading] = React.useState(false);
+
+  const [publicEnv, setPublicEnv] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const res = await fetch("/api/config");
+        if (!res.ok) throw new Error("Failed to fetch config");
+        const data = await res.json();
+        setPublicEnv(data);
+      } catch (err) {
+        console.error("Failed to load public env config:", err);
+      }
+    };
+
+    fetchConfig();
+  }, []);
 
   const handleClose = useCallback(() => {
     setError(null);
@@ -58,6 +75,10 @@ export function PromptModal({ isOpen, onClose }: PromptModalProps) {
   }
 
   const createFromPrompt = async (prompt: string) => {
+    if (!publicEnv.NEXT_PUBLIC_GOOGLE_CLIENT_ID) {
+      return;
+    }
+
     try {
       setIsPageLoading(true);
       setError(null);
@@ -67,7 +88,7 @@ export function PromptModal({ isOpen, onClose }: PromptModalProps) {
           // Store the prompt before redirecting to auth
           localStorage.setItem('pendingPrompt', prompt);
           // Redirect to Google Auth using the proper OAuth URL
-          const authUrl = getGoogleAuthUrl();
+          const authUrl = getGoogleAuthUrl(publicEnv.NEXT_PUBLIC_GOOGLE_CLIENT_ID, publicEnv.NEXT_PUBLIC_GOOGLE_REDIRECT_URI);
           window.location.href = authUrl;
         } catch (error) {
           logger.error("Failed to initiate Google login", { error });

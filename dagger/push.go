@@ -13,12 +13,16 @@ import (
 )
 
 type PushContainerOpts struct {
-	Name            string
-	Tag             string
+	Name string
+	Tag  string
+
 	AccountID       string
 	Region          string
 	AccessKeyID     string
 	SecretAccessKey *dagger.Secret
+
+	DockerhubUsername string
+	DockerhubPassword *dagger.Secret
 }
 
 func getECRAuth(ctx context.Context, opts PushContainerOpts, secretAccessKey string) (string, string, error) {
@@ -69,12 +73,10 @@ func pushContainer(ctx context.Context, container *dagger.Container, opts PushCo
 func pushContainerDockerHub(ctx context.Context, container *dagger.Container, opts PushContainerOpts) (string, error) {
 	fullImageName := fmt.Sprintf("chartsmith/%s:%s", opts.Name, opts.Tag)
 
-	dockerhubUsername := mustGetNonSensitiveSecret(ctx, opts.SecretAccessKey, "DockerHub ChartSmith Release", "username")
-	dockerhubPassword := mustGetSecret(ctx, opts.SecretAccessKey, "DockerHub ChartSmith Release", "password")
-
+	fmt.Printf("opts: %+v\n", opts)
 	hostname := "index.docker.io"
 	ref, err := container.
-		WithRegistryAuth(hostname, dockerhubUsername, dockerhubPassword).
+		WithRegistryAuth(hostname, opts.DockerhubUsername, opts.DockerhubPassword).
 		Publish(ctx, fullImageName)
 	if err != nil {
 		return "", fmt.Errorf("push failed: hostname=%s, image=%s, error=%w", hostname, fullImageName, err)
@@ -104,6 +106,7 @@ func pushContainerECR(ctx context.Context, container *dagger.Container, opts Pus
 	client := dagger.Connect()
 	secretPassword := client.SetSecret("ecr-password", password)
 
+	fmt.Printf("opts: %+v\n", opts)
 	ref, err := container.
 		WithRegistryAuth(hostname, username, secretPassword).
 		Publish(ctx, fullImageName)

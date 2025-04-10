@@ -1,4 +1,6 @@
-import React from "react";
+"use client"
+
+import React, { useEffect, useState } from "react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useToast } from "./toast/use-toast";
 import { getGoogleAuthUrl } from "@/lib/auth/google";
@@ -8,17 +10,37 @@ import { logger } from "@/lib/utils/logger";
 export function GoogleButton() {
   const { theme } = useTheme();
   const { toast } = useToast();
+  const [publicEnv, setPublicEnv] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const res = await fetch("/api/config");
+        if (!res.ok) throw new Error("Failed to fetch config");
+        const data = await res.json();
+        setPublicEnv(data);
+      } catch (err) {
+        console.error("Failed to load public env config:", err);
+      }
+    };
+
+    fetchConfig();
+  }, []);
 
   const handleGoogleSignIn = () => {
+    if (!publicEnv.NEXT_PUBLIC_GOOGLE_CLIENT_ID) {
+      return;
+    }
+
     try {
-      const authUrl = getGoogleAuthUrl();
-      
+      const authUrl = getGoogleAuthUrl(publicEnv.NEXT_PUBLIC_GOOGLE_CLIENT_ID, publicEnv.NEXT_PUBLIC_GOOGLE_REDIRECT_URI);
+
       // Open popup window
       const width = 500;
       const height = 600;
       const left = window.screenX + (window.outerWidth - width) / 2;
       const top = window.screenY + (window.outerHeight - height) / 2;
-      
+
       const popup = window.open(
         authUrl,
         "Google Sign In",
@@ -30,7 +52,7 @@ export function GoogleButton() {
         if (event.data?.type === 'google-auth') {
           window.removeEventListener('message', messageHandler);
           if (popup) popup.close();
-          
+
           if (event.data.error) {
             toast({
               title: "Error",
@@ -48,7 +70,7 @@ export function GoogleButton() {
           // Handle any pending actions
           const pendingArtifactHubUrl = sessionStorage.getItem('pendingArtifactHubUrl');
           const pendingPrompt = sessionStorage.getItem('pendingPrompt');
-          
+
           if (pendingArtifactHubUrl) {
             sessionStorage.removeItem('pendingArtifactHubUrl');
             window.location.href = `/artifacthub.io/packages/helm/${encodeURIComponent(pendingArtifactHubUrl)}`;
