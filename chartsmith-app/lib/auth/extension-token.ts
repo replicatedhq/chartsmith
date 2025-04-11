@@ -19,3 +19,17 @@ export async function createExtensionToken(userId: string): Promise<string> {
     throw new Error("Failed to create extension token")
   }
 }
+
+export async function userIdFromExtensionToken(token: string): Promise<string | null> {
+  try {
+    const db = getDB(await getParam("DB_URI"))
+
+    const query = `SELECT user_id FROM extension_token WHERE token = $1`
+    const result = await db.query(query, [token])
+
+    return result.rows[0].user_id
+  } catch (err) {
+    console.error(err)
+    return null
+  }
+}

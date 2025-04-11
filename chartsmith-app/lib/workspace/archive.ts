@@ -182,22 +182,38 @@ async function filesInArchive(extractPath: string): Promise<WorkspaceFile[]> {
     filePath: file.filePath.substring(commonPrefix.length),
   }));
 
+  // Improved binary detection
+  const filesWithoutBinary = filesWithoutCommonPrefix.filter(file => {
+    const buffer = Buffer.from(file.content, 'utf-8');
+    const isBinary = buffer.some(byte => (byte < 32 && ![9, 10, 13].includes(byte)) || byte === 65533);
+    return !isBinary;
+  });
+
   // remove anything in a "charts" directory
-  const filesWithoutCharts = filesWithoutCommonPrefix.filter(file => !file.filePath.includes("charts/"));
+  const filesWithoutCharts = filesWithoutBinary.filter(file => !file.filePath.includes("charts/"));
   return filesWithoutCharts;
 }
 
 async function chartNameFromFiles(files: WorkspaceFile[]): Promise<string> {
   // find the Chart.yaml with the shortest path, look for the name attribute in that yaml
-  const chartYaml = files.find(file => file.filePath.endsWith("Chart.yaml"));
-  if (!chartYaml) {
+  const chartYamls = files.filter(file => file.filePath.endsWith("Chart.yaml"));
+  if (!chartYamls) {
     throw new Error("No Chart.yaml found");
   }
-  const chartYamlContent = chartYaml.content;
 
-  // parse the yaml
-  const parsedYaml = yaml.parse(chartYamlContent);
-  return parsedYaml.name;
+
+  for (const chartYaml of chartYamls) {
+    const chartYamlContent = chartYaml.content;
+
+    // parse the yaml
+    const parsedYaml = yaml.parse(chartYamlContent);
+
+    if (parsedYaml.name) {
+      return parsedYaml.name;
+    }
+  }
+
+  throw new Error("No name found in Chart.yaml");
 }
 
 

@@ -6,7 +6,7 @@ import { logger } from "@/lib/utils/logger";
 import { ChatMessageFromPersona, ChatMessageIntent, CreateChatMessageParams, createWorkspace } from "../workspace";
 import { getChartFromBytes, getFilesFromBytes } from "../archive";
 
-export async function createWorkspaceFromArchiveAction(session: Session, formData: FormData, archiveType: 'helm' | 'k8s'): Promise<Workspace> {
+export async function createWorkspaceFromArchiveAction(userId: string, formData: FormData, archiveType: 'helm' | 'k8s'): Promise<Workspace> {
   const file = formData.get('file') as File;
   if (!file) {
     throw new Error('No file provided');
@@ -26,7 +26,7 @@ export async function createWorkspaceFromArchiveAction(session: Session, formDat
       responseRollbackToRevisionNumber: 1,
       messageFromPersona: ChatMessageFromPersona.AUTO,
     }
-    const w: Workspace = await createWorkspace("archive", session.user.id, createChartMessageParams, baseChart);
+    const w: Workspace = await createWorkspace("archive", userId, createChartMessageParams, baseChart);
 
     return w;
   } else if (archiveType === 'k8s') {
@@ -40,7 +40,7 @@ export async function createWorkspaceFromArchiveAction(session: Session, formDat
       responseRollbackToRevisionNumber: 1,
       messageFromPersona: ChatMessageFromPersona.AUTO,
     }
-    const w: Workspace = await createWorkspace("archive", session.user.id, createChartMessageParams);
+    const w: Workspace = await createWorkspace("archive", userId, createChartMessageParams);
 
     return w;
   }

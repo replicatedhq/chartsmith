@@ -51,11 +51,17 @@ export async function createWorkspace(createdType: string, userId: string, creat
         for (const file of baseChart.files) {
           // TODO we need to add summary and embeddings here since we don't have a bootstrap_file
           const fileId = srs.default({ length: 12, alphanumeric: true });
+
+          try {
           await client.query(
             `INSERT INTO workspace_file (id, revision_number, chart_id, workspace_id, file_path, content, embeddings)
             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
             [fileId, initialRevisionNumber, chartId, id, file.filePath, file.content, null],
-          );
+            );
+          } catch (err) {
+            logger.error("Failed to insert workspace file", { err });
+            throw err;
+          }
         }
       } else if (createdType !== "archive") {
         // Fallback to bootstrap charts if baseChart is not provided
