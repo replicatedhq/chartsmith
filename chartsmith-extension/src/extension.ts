@@ -477,11 +477,19 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
             
             outputChannel.appendLine(`Found ${mappings.length} workspace mappings`);
             
-            // Update webview with mapping status
+            // Get workspace folders information to help with relative paths
+            const workspaceFolders = vscode.workspace.workspaceFolders || [];
+            const workspaceFoldersInfo = workspaceFolders.map(folder => ({
+              name: folder.name,
+              path: folder.uri.fsPath
+            }));
+
+            // Update webview with mapping status and workspace folders
             webviewView.webview.postMessage({
               type: 'workspaceMappingsUpdate',
               hasMappings,
-              mappings
+              mappings,
+              workspaceFolders: workspaceFoldersInfo
             });
             
             // If we have mappings, fetch messages for the first workspace
@@ -541,10 +549,18 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
       
       // If we have a webview reference, update it to show the chat interface
       if (webviewGlobal) {
+        // Get workspace folders information to help with relative paths
+        const workspaceFolders = vscode.workspace.workspaceFolders || [];
+        const workspaceFoldersInfo = workspaceFolders.map(folder => ({
+          name: folder.name,
+          path: folder.uri.fsPath
+        }));
+
         webviewGlobal.postMessage({
           type: 'workspaceMappingsUpdate',
           hasMappings: true,
-          mappings: currentMappings
+          mappings: currentMappings,
+          workspaceFolders: workspaceFoldersInfo
         });
         outputChannel.appendLine('Updated webview with new workspace mapping status');
         
@@ -1744,17 +1760,22 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
           .chat-messages {
             flex: 1;
             overflow-y: auto;
-            padding: 10px;
+            padding: 16px;
+            padding-top: 54px; /* Space for the header */
             background-color: var(--vscode-editor-background);
             border: 1px solid var(--vscode-editorWidget-border);
-            border-radius: 4px;
+            border-radius: 6px;
             margin-bottom: 10px;
             position: absolute;
             top: 0;
-            bottom: 50px;
+            bottom: 60px; /* Give more space for input */
             left: 0;
             right: 0;
             overflow-y: auto;
+            scroll-behavior: smooth;
+            box-shadow: inset 0 2px 8px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
           }
           .chat-input-container {
             position: absolute;
@@ -1762,58 +1783,109 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
             left: 0;
             right: 0;
             display: flex;
+            padding: 10px 14px 14px 14px;
+            background: var(--vscode-activityBar-background, #333);
+            background-image: linear-gradient(to top, rgba(255,255,255,0.03) 0%, rgba(0,0,0,0.05) 100%);
+            border-bottom-left-radius: 6px;
+            border-bottom-right-radius: 6px;
+            box-shadow: 0 -1px 3px rgba(0,0,0,0.15);
+            border-top: 1px solid rgba(255,255,255,0.05);
+            transition: all 0.3s ease;
           }
           .chat-input {
             flex: 1;
-            padding: 8px 40px 8px 12px;
-            border: 1px solid var(--vscode-input-border);
-            background-color: var(--vscode-input-background);
-            color: var(--vscode-input-foreground);
-            border-radius: 4px;
+            padding: 10px 45px 10px 14px;
+            border: 1px solid rgba(255,255,255,0.12);
+            background-color: rgba(0,0,0,0.2);
+            color: var(--vscode-activityBar-foreground, #fff);
+            border-radius: 8px;
             font-family: var(--vscode-font-family);
             width: 100%;
-            height: 36px;
+            height: 40px;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1) inset, 0 1px 0 rgba(255,255,255,0.03);
+            font-size: 13px;
+          }
+          .chat-input:focus {
+            outline: none;
+            background-color: rgba(0,0,0,0.25);
+            border-color: var(--vscode-focusBorder, #007fd4);
+            box-shadow: 0 0 0 2px rgba(0,127,212,0.2), 0 1px 2px rgba(0,0,0,0.1) inset;
+            transform: translateY(-1px);
+          }
+          .chat-input::placeholder {
+            color: rgba(255,255,255,0.5);
           }
           .chat-send-button {
             position: absolute;
-            right: 8px;
-            top: 8px;
-            width: 24px;
-            height: 24px;
-            background: transparent;
+            right: 18px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 30px;
+            height: 30px;
+            background: var(--vscode-button-background, #0e639c);
             border: none;
+            border-radius: 6px;
             cursor: pointer;
             padding: 0;
             margin: 0;
             display: flex;
             align-items: center;
             justify-content: center;
+            transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+            z-index: 2;
           }
           .chat-send-button:hover {
-            opacity: 0.8;
+            background: var(--vscode-button-hoverBackground, #1177bb);
+            transform: translateY(-50%) scale(1.05);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.25);
+          }
+          .chat-send-button:active {
+            transform: translateY(-50%) scale(0.95);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+          }
+          .chat-send-button:focus {
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(0,127,212,0.4), 0 2px 4px rgba(0,0,0,0.2);
           }
           .chat-send-button svg {
-            fill: var(--vscode-button-background);
-            width: 16px;
-            height: 16px;
+            fill: #fff;
+            width: 18px;
+            height: 18px;
+            margin-left: 2px; /* Slight adjustment for the airplane icon */
+            filter: drop-shadow(0 1px 1px rgba(0,0,0,0.2));
           }
           .message {
-            margin-bottom: 8px;
-            padding: 8px;
-            border-radius: 4px;
+            margin-bottom: 12px;
+            padding: 10px 12px;
+            border-radius: 8px;
             max-width: 80%;
+            position: relative;
+            line-height: 1.4;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+            word-break: break-word;
+            transition: transform 0.2s ease;
+            display: block;
+          }
+          .message:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.15);
           }
           .user-message {
-            background-color: var(--vscode-badge-background);
-            color: var(--vscode-badge-foreground);
+            background-color: var(--vscode-button-background, #0e639c);
+            color: var(--vscode-button-foreground, #fff);
             align-self: flex-end;
             margin-left: auto;
+            border-bottom-right-radius: 2px;
           }
           .assistant-message {
-            background-color: var(--vscode-editor-lineHighlightBackground);
+            background-color: var(--vscode-editor-lineHighlightBackground, rgba(255,255,255,0.08));
             color: var(--vscode-editor-foreground);
             align-self: flex-start;
             margin-right: auto;
+            border-bottom-left-radius: 2px;
+            border-left: 2px solid var(--vscode-activityBarBadge-background, #007ACC);
           }
           .system-message {
             background-color: var(--vscode-editorError-background, rgba(255, 0, 0, 0.1));
@@ -1826,6 +1898,60 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
             margin: 5px 0;
           }
           .chat-header {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            padding: 12px 14px;
+            background-color: var(--vscode-activityBar-background, #333);
+            background-image: linear-gradient(to bottom, rgba(255,255,255,0.03) 0%, rgba(0,0,0,0.05) 100%);
+            border-top-left-radius: 6px;
+            border-top-right-radius: 6px;
+            z-index: 10;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            transition: all 0.3s ease;
+          }
+          .chart-path-container {
+            display: flex;
+            align-items: center;
+            font-size: 12px;
+            position: relative;
+            padding-left: 20px;
+          }
+          .chart-path-container:before {
+            content: "";
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 16px;
+            height: 16px;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2364D2FF'%3E%3Cpath d='M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z'/%3E%3C/svg%3E");
+            background-size: contain;
+            background-repeat: no-repeat;
+            filter: drop-shadow(0 1px 1px rgba(0,0,0,0.3));
+          }
+          .chart-path-label {
+            font-weight: bold;
+            margin-right: 8px;
+            color: var(--vscode-activityBar-foreground, #fff);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 10px;
+          }
+          .chart-path {
+            font-family: var(--vscode-editor-font-family, monospace);
+            color: var(--vscode-activityBar-foreground, #fff);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            background-color: rgba(255,255,255,0.1);
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+          }
+          .message-header {
             font-weight: bold;
             margin-bottom: 5px;
           }
@@ -1863,6 +1989,12 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
             
             <!-- Chat Interface (hidden by default, only shown when a workspace is mapped) -->
             <div id="chat-container" class="chat-container" style="display: none;">
+              <div class="chat-header">
+                <div class="chart-path-container">
+                  <span class="chart-path-label">Chart:</span>
+                  <span id="chart-local-path" class="chart-path">Loading chart path...</span>
+                </div>
+              </div>
               <div id="chat-messages" class="chat-messages">
                 <!-- Messages will be inserted here dynamically -->
               </div>
@@ -2054,6 +2186,44 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
                 // Hide action buttons since we already have a linked workspace
                 if (actionButtons) {
                   actionButtons.style.display = 'none';
+                }
+                
+                // Display the first workspace's local path in the chart path element
+                if (message.mappings && message.mappings.length > 0) {
+                  var chartPathElement = document.getElementById('chart-local-path');
+                  if (chartPathElement) {
+                    var localPath = message.mappings[0].localPath;
+                    
+                    // Try to create a relative path from the absolute path
+                    try {
+                      // Get workspace folders from message if available
+                      if (message.workspaceFolders && Array.isArray(message.workspaceFolders)) {
+                        // Check each workspace folder
+                        for (var i = 0; i < message.workspaceFolders.length; i++) {
+                          var folder = message.workspaceFolders[i];
+                          // Check if the path starts with this workspace folder
+                          if (localPath.startsWith(folder.path)) {
+                            // Get relative path by removing the workspace folder path
+                            var relativePath = folder.name + localPath.substring(folder.path.length);
+                            chartPathElement.textContent = relativePath;
+                            chartPathElement.title = localPath; // Keep full path in tooltip
+                            console.log('Showing relative path: ' + relativePath);
+                            break;
+                          }
+                        }
+                      } else {
+                        // If no workspace folders available, try to shorten the path
+                        var pathParts = localPath.split('/');
+                        var shortPath = pathParts.slice(-2).join('/'); // Just last two segments
+                        chartPathElement.textContent = '.../' + shortPath;
+                        chartPathElement.title = localPath; // Keep full path in tooltip
+                      }
+                    } catch (e) {
+                      console.error('Error creating relative path: ' + e);
+                      chartPathElement.textContent = localPath;
+                      chartPathElement.title = localPath;
+                    }
+                  }
                 }
               } else {
                 console.log('No workspace mappings found, hiding chat interface and showing buttons');
