@@ -86,7 +86,7 @@ export function CreateChartOptions() {
       formData.append('file', file);
       formData.append('type', uploadType || 'helm'); // Send the upload type to the backend
 
-      const workspace = await createWorkspaceFromArchiveAction(session, formData, uploadType || 'helm');
+      const workspace = await createWorkspaceFromArchiveAction(session.id, formData, uploadType || 'helm');
       router.replace(`/workspace/${workspace.id}`);
     } catch (error) {
       console.error('Error uploading:', error);

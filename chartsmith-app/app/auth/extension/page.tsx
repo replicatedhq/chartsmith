@@ -7,9 +7,9 @@ import { useSearchParams } from "next/navigation";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useSession } from "@/app/hooks/useSession";
 import { authorizeExtensionAction } from "@/lib/auth/actions/authorize-extension";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 
-export default function ExtensionAuthPage() {
+function ExtensionAuthContent() {
   const { resolvedTheme } = useTheme();
   const { session } = useSession();
   const searchParams = useSearchParams();
@@ -102,5 +102,13 @@ export default function ExtensionAuthPage() {
         </div>
       </Card>
     </div>
+  );
+}
+
+export default function ExtensionAuthPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <ExtensionAuthContent />
+    </Suspense>
   );
 }
