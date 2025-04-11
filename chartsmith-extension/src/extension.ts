@@ -17,6 +17,7 @@ interface WorkspaceMapping {
 interface AuthData {
   token: string;
   apiEndpoint: string;
+  pushEndpoint: string;
 }
 
 let authData: AuthData | null = null;
@@ -26,10 +27,12 @@ let webviewGlobal: vscode.Webview | null = null;
 let outputChannel: vscode.OutputChannel;
 let secretStorage: vscode.SecretStorage;
 let context: vscode.ExtensionContext;
+let pushToken: string | null = null; // Session-specific push token
 
 // Storage keys
 const AUTH_TOKEN_KEY = 'chartsmith.authToken';
 const API_ENDPOINT_KEY = 'chartsmith.apiEndpoint';
+const PUSH_ENDPOINT_KEY = 'chartsmith.pushEndpoint';
 const WORKSPACE_MAPPINGS_KEY = 'chartsmith.workspaceMappings'; // Used for global state
 
 export async function activate(extensionContext: vscode.ExtensionContext) {
@@ -44,15 +47,22 @@ export async function activate(extensionContext: vscode.ExtensionContext) {
   try {
     const storedToken = await secretStorage.get(AUTH_TOKEN_KEY);
     const storedApiEndpoint = await secretStorage.get(API_ENDPOINT_KEY);
+    const storedPushEndpoint = await secretStorage.get(PUSH_ENDPOINT_KEY);
     
     if (storedToken && storedApiEndpoint) {
       outputChannel.appendLine('Found stored authentication data');
       authData = { 
         token: storedToken,
-        apiEndpoint: storedApiEndpoint 
+        apiEndpoint: storedApiEndpoint,
+        pushEndpoint: storedPushEndpoint || '' // Use empty string if not found
       };
       isLoggedIn = true;
       outputChannel.appendLine(`API endpoint: ${storedApiEndpoint}`);
+      if (storedPushEndpoint) {
+        outputChannel.appendLine(`Push endpoint: ${storedPushEndpoint}`);
+      } else {
+        outputChannel.appendLine('No push endpoint found (older login)');
+      }
     } else if (storedToken) {
       // Handle case where we have token but not endpoint
       outputChannel.appendLine('Found token but missing API endpoint');
@@ -117,6 +127,7 @@ function startAuthServer(): number {
           // Extract token - handle both formats {"token": "xyz"} and {"token": {"token": "xyz"}}
           let tokenValue = null;
           let apiEndpointValue = null;
+          let pushEndpointValue = null;
           
           if (parsedData.token) {
             // Check if token is an object with a token property
@@ -134,6 +145,12 @@ function startAuthServer(): number {
             apiEndpointValue = parsedData.apiEndpoint;
           }
           
+          // Extract Push endpoint
+          if (parsedData.pushEndpoint) {
+            pushEndpointValue = parsedData.pushEndpoint;
+            outputChannel.appendLine(`Found push endpoint: ${pushEndpointValue}`);
+          }
+          
           if (tokenValue && apiEndpointValue) {
             outputChannel.appendLine('Valid auth data found in response');
             outputChannel.appendLine(`API endpoint: ${apiEndpointValue}`);
@@ -141,7 +158,8 @@ function startAuthServer(): number {
             // Store the auth data in memory
             authData = { 
               token: tokenValue,
-              apiEndpoint: apiEndpointValue 
+              apiEndpoint: apiEndpointValue,
+              pushEndpoint: pushEndpointValue || '' // Use empty string if not provided
             };
             isLoggedIn = true;
             
@@ -149,6 +167,9 @@ function startAuthServer(): number {
             try {
               await secretStorage.store(AUTH_TOKEN_KEY, tokenValue);
               await secretStorage.store(API_ENDPOINT_KEY, apiEndpointValue);
+              if (pushEndpointValue) {
+                await secretStorage.store(PUSH_ENDPOINT_KEY, pushEndpointValue);
+              }
               outputChannel.appendLine('Auth data stored securely');
             } catch (storageError) {
               outputChannel.appendLine(`Error storing auth data: ${storageError}`);
@@ -247,6 +268,7 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
             try {
               await secretStorage.delete(AUTH_TOKEN_KEY);
               await secretStorage.delete(API_ENDPOINT_KEY);
+              await secretStorage.delete(PUSH_ENDPOINT_KEY); // Also delete push endpoint
               outputChannel.appendLine('Auth data removed from secure storage');
               
               // Update the state
@@ -2358,6 +2380,29 @@ export async function getApiEndpoint(): Promise<string | undefined> {
       }
     } catch (error) {
       outputChannel.appendLine(`Error retrieving API endpoint from storage: ${error}`);
+    }
+  }
+  
+  // Not logged in or endpoint not found
+  return undefined;
+}
+
+// Helper function to get the Push endpoint
+export async function getPushEndpoint(): Promise<string | undefined> {
+  // First check if we have it in memory
+  if (authData && authData.pushEndpoint) {
+    return authData.pushEndpoint;
+  }
+  
+  // If not in memory but we're supposed to be logged in, try to get it from storage
+  if (isLoggedIn) {
+    try {
+      const endpoint = await secretStorage.get(PUSH_ENDPOINT_KEY);
+      if (endpoint) {
+        return endpoint;
+      }
+    } catch (error) {
+      outputChannel.appendLine(`Error retrieving Push endpoint from storage: ${error}`);
     }
   }
   

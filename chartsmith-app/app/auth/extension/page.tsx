@@ -53,6 +53,7 @@ function ExtensionAuthContent() {
         body: JSON.stringify({
           token,
           apiEndpoint: process.env.NEXT_PUBLIC_API_ENDPOINT,
+          pushEndpoint: process.env.NEXT_PUBLIC_CENTRIFUGO_ADDRESS,
         }),
       })
       .then(response => response.json())
