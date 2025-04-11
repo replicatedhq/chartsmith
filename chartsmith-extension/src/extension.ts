@@ -20,6 +20,8 @@ interface AuthData {
   token: string;
   apiEndpoint: string;
   pushEndpoint: string;
+  userId: string;
+  wwwEndpoint: string;
 }
 
 // Connection status for Centrifugo
@@ -49,6 +51,8 @@ let connectionStatus: ConnectionStatus = ConnectionStatus.DISCONNECTED; // Conne
 const AUTH_TOKEN_KEY = 'chartsmith.authToken';
 const API_ENDPOINT_KEY = 'chartsmith.apiEndpoint';
 const PUSH_ENDPOINT_KEY = 'chartsmith.pushEndpoint';
+const USER_ID_KEY = 'chartsmith.userId';
+const WWW_ENDPOINT_KEY = 'chartsmith.wwwEndpoint';
 const WORKSPACE_MAPPINGS_KEY = 'chartsmith.workspaceMappings'; // Used for global state
 
 export async function activate(extensionContext: vscode.ExtensionContext) {
@@ -64,13 +68,17 @@ export async function activate(extensionContext: vscode.ExtensionContext) {
     const storedToken = await secretStorage.get(AUTH_TOKEN_KEY);
     const storedApiEndpoint = await secretStorage.get(API_ENDPOINT_KEY);
     const storedPushEndpoint = await secretStorage.get(PUSH_ENDPOINT_KEY);
+    const storedUserId = await secretStorage.get(USER_ID_KEY);
+    const storedWwwEndpoint = await secretStorage.get(WWW_ENDPOINT_KEY);
     
     if (storedToken && storedApiEndpoint) {
       outputChannel.appendLine('Found stored authentication data');
       authData = { 
         token: storedToken,
         apiEndpoint: storedApiEndpoint,
-        pushEndpoint: storedPushEndpoint || '' // Use empty string if not found
+        pushEndpoint: storedPushEndpoint || '', // Use empty string if not found
+        userId: storedUserId || '', // Use empty string if not found
+        wwwEndpoint: storedWwwEndpoint || '' // Use empty string if not found
       };
       isLoggedIn = true;
       outputChannel.appendLine(`API endpoint: ${storedApiEndpoint}`);
@@ -78,6 +86,16 @@ export async function activate(extensionContext: vscode.ExtensionContext) {
         outputChannel.appendLine(`Push endpoint: ${storedPushEndpoint}`);
       } else {
         outputChannel.appendLine('No push endpoint found (older login)');
+      }
+      if (storedUserId) {
+        outputChannel.appendLine(`User ID: ${storedUserId}`);
+      } else {
+        outputChannel.appendLine('No user ID found (older login)');
+      }
+      if (storedWwwEndpoint) {
+        outputChannel.appendLine(`WWW endpoint: ${storedWwwEndpoint}`);
+      } else {
+        outputChannel.appendLine('No WWW endpoint found (older login)');
       }
     } else if (storedToken) {
       // Handle case where we have token but not endpoint
@@ -144,6 +162,8 @@ function startAuthServer(): number {
           let tokenValue = null;
           let apiEndpointValue = null;
           let pushEndpointValue = null;
+          let userIdValue = null;
+          let wwwEndpointValue = null;
           
           if (parsedData.token) {
             // Check if token is an object with a token property
@@ -167,6 +187,18 @@ function startAuthServer(): number {
             outputChannel.appendLine(`Found push endpoint: ${pushEndpointValue}`);
           }
           
+          // Extract User ID
+          if (parsedData.userId) {
+            userIdValue = parsedData.userId;
+            outputChannel.appendLine(`Found user ID: ${userIdValue}`);
+          }
+          
+          // Extract WWW endpoint
+          if (parsedData.wwwEndpoint) {
+            wwwEndpointValue = parsedData.wwwEndpoint;
+            outputChannel.appendLine(`Found WWW endpoint: ${wwwEndpointValue}`);
+          }
+          
           if (tokenValue && apiEndpointValue) {
             outputChannel.appendLine('Valid auth data found in response');
             outputChannel.appendLine(`API endpoint: ${apiEndpointValue}`);
@@ -175,7 +207,9 @@ function startAuthServer(): number {
             authData = { 
               token: tokenValue,
               apiEndpoint: apiEndpointValue,
-              pushEndpoint: pushEndpointValue || '' // Use empty string if not provided
+              pushEndpoint: pushEndpointValue || '', // Use empty string if not provided
+              userId: userIdValue || '', // Use empty string if not provided
+              wwwEndpoint: wwwEndpointValue || '' // Use empty string if not provided
             };
             isLoggedIn = true;
             
@@ -185,6 +219,14 @@ function startAuthServer(): number {
               await secretStorage.store(API_ENDPOINT_KEY, apiEndpointValue);
               if (pushEndpointValue) {
                 await secretStorage.store(PUSH_ENDPOINT_KEY, pushEndpointValue);
+              }
+              if (userIdValue) {
+                await secretStorage.store(USER_ID_KEY, userIdValue);
+                outputChannel.appendLine(`Stored user ID: ${userIdValue}`);
+              }
+              if (wwwEndpointValue) {
+                await secretStorage.store(WWW_ENDPOINT_KEY, wwwEndpointValue);
+                outputChannel.appendLine(`Stored WWW endpoint: ${wwwEndpointValue}`);
               }
               outputChannel.appendLine('Auth data stored securely');
             } catch (storageError) {
@@ -285,7 +327,13 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
               await secretStorage.delete(AUTH_TOKEN_KEY);
               await secretStorage.delete(API_ENDPOINT_KEY);
               await secretStorage.delete(PUSH_ENDPOINT_KEY); // Also delete push endpoint
+              await secretStorage.delete(USER_ID_KEY);
+              await secretStorage.delete(WWW_ENDPOINT_KEY);
               outputChannel.appendLine('Auth data removed from secure storage');
+              
+              // Clear workspace mappings
+              context.globalState.update(WORKSPACE_MAPPINGS_KEY, []);
+              outputChannel.appendLine('Workspace mappings cleared');
               
               // Update the state
               authData = null;
@@ -503,6 +551,48 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
             outputChannel.appendLine('Download chart command received');
             // For now, just show a notification since we'll implement this later
             vscode.window.showInformationMessage('Import chart from ChartSmith feature coming soon!');
+            break;
+          }
+          case 'openInChartSmith': {
+            const workspaceId = message.workspaceId;
+            if (workspaceId) {
+              outputChannel.appendLine(`Opening workspace in ChartSmith: ${workspaceId}`);
+              
+              // Get the WWW endpoint
+              getWwwEndpoint().then(wwwEndpoint => {
+                // Use wwwEndpoint if available, otherwise fall back to chartsmith.ai
+                const baseUrl = wwwEndpoint || 'https://chartsmith.ai';
+                outputChannel.appendLine(`Using WWW endpoint: ${baseUrl}`);
+                
+                // Construct the URL
+                const chartsmithUrl = `${baseUrl}/workspace/${workspaceId}`;
+                outputChannel.appendLine(`Opening URL: ${chartsmithUrl}`);
+                
+                // Open in default browser
+                vscode.env.openExternal(vscode.Uri.parse(chartsmithUrl));
+              }).catch(error => {
+                outputChannel.appendLine(`Error getting WWW endpoint: ${error}`);
+                // Fall back to chartsmith.ai if there's an error
+                const chartsmithUrl = `https://chartsmith.ai/workspace/${workspaceId}`;
+                vscode.env.openExternal(vscode.Uri.parse(chartsmithUrl));
+              });
+            } else {
+              outputChannel.appendLine('No workspace ID provided');
+              vscode.window.showErrorMessage('No workspace ID available to open in ChartSmith');
+            }
+            break;
+          }
+          case 'logError': {
+            // Log errors from the webview
+            const errorText = message.text;
+            outputChannel.appendLine(`ERROR FROM WEBVIEW: ${errorText}`);
+            outputChannel.show(); // Show the output channel to make the error visible
+            break;
+          }
+          case 'logDebug': {
+            // Log debug information from the webview
+            const debugText = message.text;
+            outputChannel.appendLine(`DEBUG FROM WEBVIEW: ${debugText}`);
             break;
           }
           case 'sendChatMessage': {
@@ -834,7 +924,8 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
       }
       
       // Construct the API URL for sending messages
-      const sendUrl = this.constructApiUrl(apiEndpoint, `workspace/${workspaceId}/messages`);
+      // Use singular 'message' not 'messages'
+      const sendUrl = this.constructApiUrl(apiEndpoint, `workspace/${workspaceId}/message`);
       outputChannel.appendLine(`Sending message to: ${sendUrl}`);
       
       // Create the request to send the message
@@ -864,56 +955,79 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
           });
           
           res.on('end', () => {
-            outputChannel.appendLine(`Response status: ${res.statusCode}`);
-            outputChannel.appendLine(`Response data: ${responseData}`);
+            outputChannel.appendLine(`========== CHAT API RESPONSE ==========`);
+            outputChannel.appendLine(`Status code: ${res.statusCode}`);
+            outputChannel.appendLine(`Raw response data: ${responseData}`);
+            
+            // Log headers
+            const headersLog = Object.entries(res.headers).map(([key, value]) => `${key}: ${value}`).join('\n  ');
+            outputChannel.appendLine(`Response headers:\n  ${headersLog}`);
+            outputChannel.appendLine(`=======================================`);
             
             if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
               try {
                 // Parse response data
                 const responseJson = JSON.parse(responseData);
                 
-                // Log the full response for debugging
-                outputChannel.appendLine("Received chat response from server");
+                // Log the full parsed response
+                outputChannel.appendLine(`Parsed response: ${JSON.stringify(responseJson, null, 2)}`);
                 
-                // Extract the response content
-                let responseText = '';
+                // No need to extract response text - instead use the direct API response for chat messages
+                // We'll let the Centrifugo updates handle the actual chat display
                 
-                // Check various possible response formats
-                if (responseJson.response !== undefined) {
-                  responseText = typeof responseJson.response === 'string' 
-                    ? responseJson.response 
-                    : typeof responseJson.response === 'object' && responseJson.response.text 
-                      ? responseJson.response.text 
-                      : JSON.stringify(responseJson.response);
-                } else if (responseJson.message !== undefined) {
-                  responseText = typeof responseJson.message === 'string' 
-                    ? responseJson.message 
-                    : JSON.stringify(responseJson.message);
-                } else if (responseJson.content !== undefined) {
-                  responseText = typeof responseJson.content === 'string' 
-                    ? responseJson.content 
-                    : JSON.stringify(responseJson.content);
-                } else if (responseJson.text !== undefined) {
-                  responseText = typeof responseJson.text === 'string' 
-                    ? responseJson.text 
-                    : JSON.stringify(responseJson.text);
+                // Store the message ID - we'll get updates via Centrifugo
+                if (responseJson.id) {
+                  outputChannel.appendLine(`Received message ID: ${responseJson.id}`);
+                  
+                  // Send initial message to UI if it has a prompt (even if response is null)
+                  if (responseJson.prompt) {
+                    webview.postMessage({
+                      type: 'chatMessageUpdated',
+                      message: responseJson
+                    });
+                    outputChannel.appendLine('Sent initial message to webview via chatMessageUpdated');
+                  }
                 } else {
-                  // Fallback to stringifying the whole response
-                  responseText = JSON.stringify(responseJson);
+                  // Legacy format fallback - shouldn't happen with new API
+                  let responseText = "Waiting for response...";
+                  
+                  // Check various possible response formats
+                  if (responseJson.response !== undefined) {
+                    if (responseJson.response === null) {
+                      responseText = "Waiting for response...";
+                    } else if (typeof responseJson.response === 'string') {
+                      responseText = responseJson.response;
+                    } else if (typeof responseJson.response === 'object' && responseJson.response && responseJson.response.text) {
+                      responseText = responseJson.response.text;
+                    } else {
+                      responseText = JSON.stringify(responseJson.response);
+                    }
+                  } else if (responseJson.message !== undefined) {
+                    responseText = typeof responseJson.message === 'string' 
+                      ? responseJson.message 
+                      : JSON.stringify(responseJson.message);
+                  } else if (responseJson.content !== undefined) {
+                    responseText = typeof responseJson.content === 'string' 
+                      ? responseJson.content 
+                      : JSON.stringify(responseJson.content);
+                  } else if (responseJson.text !== undefined) {
+                    responseText = typeof responseJson.text === 'string' 
+                      ? responseJson.text 
+                      : JSON.stringify(responseJson.text);
+                  } else {
+                    // Fallback to stringifying the whole response
+                    responseText = JSON.stringify(responseJson);
+                  }
+                  
+                  // Send legacy response to the webview
+                  webview.postMessage({ 
+                    type: 'chatResponse', 
+                    text: responseText 
+                  });
+                  outputChannel.appendLine('Sent legacy response to webview via chatResponse');
                 }
                 
-                // If responseText is empty or only whitespace, use a fallback message
-                if (!responseText || responseText.trim() === '') {
-                  responseText = "Received empty response from server.";
-                }
-                
-                // Send the found response to the webview
-                webview.postMessage({ 
-                  type: 'chatResponse', 
-                  text: responseText 
-                });
-                
-                outputChannel.appendLine(`Sent chat response to webview: ${responseText}`);
+                // No need to log responseText as it's handled differently now
                 
                 resolve();
               } catch (error) {
@@ -946,11 +1060,12 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
           reject(error);
         });
         
-        // Write message data
+        // Write message data - use 'prompt' as the key
         const messageData = JSON.stringify({
-          message: message
+          prompt: message
         });
         
+        outputChannel.appendLine(`Sending message with payload: ${messageData}`);
         req.write(messageData);
         req.end();
       });
@@ -1703,6 +1818,21 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
             transform: translateY(-1px);
             box-shadow: 0 2px 4px rgba(0,0,0,0.15);
           }
+          .message-container {
+            display: flex;
+            flex-direction: column;
+          }
+          .message-text {
+            margin-bottom: 4px;
+          }
+          .message-timestamp-debug {
+            font-size: 9px;
+            opacity: 0.7;
+            font-family: monospace;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            padding-top: 2px;
+            margin-top: 2px;
+          }
           .user-message {
             background-color: var(--vscode-button-background, #0e639c);
             color: var(--vscode-button-foreground, #fff);
@@ -1743,8 +1873,33 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
             border-bottom: 1px solid rgba(255,255,255,0.05);
             transition: all 0.3s ease;
             display: flex;
-            align-items: center;
             justify-content: space-between;
+            align-items: center;
+          }
+          .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+          }
+          .icon-button {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            padding: 0;
+            margin: 0;
+            background-color: transparent;
+            border-radius: 4px;
+            border: 1px solid rgba(255,255,255,0.1);
+            color: var(--vscode-activityBar-foreground, #fff);
+            cursor: pointer;
+            box-shadow: none;
+          }
+          .icon-button:hover {
+            background-color: rgba(255,255,255,0.1);
+            transform: translateY(0);
+            box-shadow: none;
           }
           .chart-path-container {
             display: flex;
@@ -1862,9 +2017,18 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
                   <span class="chart-path-label">Chart:</span>
                   <span id="chart-local-path" class="chart-path">Loading chart path...</span>
                 </div>
-                <div id="connection-status-container">
-                  <div id="connection-status" class="connection-status disconnected" title="Disconnected"></div>
-                  <div id="connection-debug" style="display: none; margin-left: 5px; cursor: pointer; font-size: 10px; color: rgba(255,255,255,0.5);" title="Debug: Toggle connection status">⚙️</div>
+                <div class="header-actions">
+                  <button id="open-in-chartsmith" class="icon-button" title="Open in ChartSmith">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M8.5 2H2.5C1.67157 2 1 2.67157 1 3.5V12.5C1 13.3284 1.67157 14 2.5 14H12.5C13.3284 14 14 13.3284 14 12.5V8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                      <path d="M7.5 8.5L14 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                      <path d="M10 2H14V6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                  <div id="connection-status-container">
+                    <div id="connection-status" class="connection-status disconnected" title="Disconnected"></div>
+                    <div id="connection-debug" style="display: none; margin-left: 5px; cursor: pointer; font-size: 10px; color: rgba(255,255,255,0.5);" title="Debug: Toggle connection status">⚙️</div>
+                  </div>
                 </div>
               </div>
               <div id="chat-messages" class="chat-messages">
@@ -1903,6 +2067,7 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
           const chatInput = document.getElementById('chat-input');
           const chatSendButton = document.getElementById('chat-send-button');
           const chatMessages = document.getElementById('chat-messages');
+          const openInChartsmithButton = document.getElementById('open-in-chartsmith');
           
           // Initialize by checking auth status
           vscode.postMessage({
@@ -1913,6 +2078,16 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
           vscode.postMessage({
             command: 'checkWorkspaceMappings'
           });
+          
+          // Variable to store current workspace ID
+          let currentWorkspaceId = null;
+          
+          // Function to clear workspace state
+          function clearWorkspaceState() {
+            // Clear workspace ID
+            currentWorkspaceId = null;
+            console.log('Workspace state cleared');
+          }
           
           // Login button click handler
           if (loginButton) {
@@ -1928,6 +2103,8 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
           if (logoutButton) {
             logoutButton.addEventListener('click', function() {
               console.log('Logout button clicked');
+              // Clear workspace state when logging out
+              clearWorkspaceState();
               vscode.postMessage({
                 command: 'logout'
               });
@@ -1967,15 +2144,402 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
           }
           
           // Function to add a message to the chat
-          function addMessage(text, isUser) {
+          function addMessage(text, isUser, messageId, timestamp) {
             const messageElement = document.createElement('div');
             messageElement.classList.add('message');
             messageElement.classList.add(isUser ? 'user-message' : 'assistant-message');
-            messageElement.textContent = text;
+            
+            // Create message container with timestamp display
+            const messageContainer = document.createElement('div');
+            messageContainer.classList.add('message-container');
+            
+            // Add the actual message text
+            const messageText = document.createElement('div');
+            messageText.classList.add('message-text');
+            messageText.textContent = text;
+            messageContainer.appendChild(messageText);
+            
+            // Use provided timestamp or current time in ISO format
+            // For current time, we'll use UTC to match server timestamps
+            const now = timestamp || (new Date().toISOString());
+            const timestampEl = document.createElement('div');
+            timestampEl.classList.add('message-timestamp-debug');
+            // Display timestamp in the format: "2025-04-12 01:49:50" (UTC)
+            timestampEl.textContent = "ID: " + (messageId || 'none') + " | Time: " + now.slice(0, 19).replace('T', ' ') + " (UTC)" + (timestamp ? " (server)" : " (client)");
+            messageContainer.appendChild(timestampEl);
+            
+            // Add container to message
+            messageElement.appendChild(messageContainer);
+            
+            // Add data-id attribute if messageId is provided
+            if (messageId) {
+              messageElement.setAttribute('data-message-id', messageId);
+            }
+            
+            // Add timestamp attribute in ISO format
+            messageElement.setAttribute('data-timestamp', now);
+            
+            // If this is a user message, store the text content for later matching
+            if (isUser && text) {
+              messageElement.setAttribute('data-message-text', text);
+            }
+            
+            // Add to chat
             chatMessages.appendChild(messageElement);
             
-            // Scroll to the bottom of the chat
+            // Scroll to the bottom immediately
             chatMessages.scrollTop = chatMessages.scrollHeight;
+            
+            return messageElement;
+          }
+          
+          // Function to find a message by ID
+          function findMessageById(messageId) {
+            if (!messageId) return null;
+            
+            const messages = chatMessages.querySelectorAll('.message[data-message-id]');
+            for (let i = 0; i < messages.length; i++) {
+              if (messages[i].getAttribute('data-message-id') === messageId) {
+                return messages[i];
+              }
+            }
+            return null;
+          }
+          
+          // Function to update or add a chat message
+          function updateOrAddChatMessage(message) {
+            if (!message) return;
+            
+            // Check if we have a valid message ID
+            if (!message.id) {
+              console.error("ERROR: Received message without ID field");
+              console.error("Message payload:", JSON.stringify(message));
+              vscode.postMessage({
+                command: 'logError',
+                text: 'Received chat message without ID field: ' + JSON.stringify(message)
+              });
+              return;
+            }
+            
+            // Log the message details for debugging
+            console.log("Processing message update for ID: " + message.id);
+            console.log("Message timestamp: " + (message.createdAt || "none"));
+            console.log("Message full object:", JSON.stringify(message));
+            vscode.postMessage({
+              command: 'logDebug',
+              text: "Message update - ID: " + message.id + ", Timestamp: " + (message.createdAt || "none")
+            });
+            
+            // Try to find existing message by its ID
+            // We store messages with suffix -prompt for user input and -response for assistant response
+            let userMsgElement = findMessageById(message.id + '-prompt');
+            const responseMsgElement = findMessageById(message.id + '-response');
+            
+            // If we can't find the user message by ID, try to find it by text content
+            // This helps match temporary messages created when user sends a message
+            if (!userMsgElement && message.prompt) {
+              // Find all user messages and look for matching text
+              const allUserMessages = chatMessages.querySelectorAll('.user-message');
+              for (let i = 0; i < allUserMessages.length; i++) {
+                const msgEl = allUserMessages[i];
+                const promptText = msgEl.getAttribute('data-message-text');
+                
+                // If this message has the same text as our prompt, it's likely our temp message
+                if (promptText === message.prompt) {
+                  console.log("Found matching temp message by text:", promptText);
+                  userMsgElement = msgEl;
+                  
+                  // Update the ID to match the server-assigned ID
+                  userMsgElement.setAttribute('data-message-id', message.id + '-prompt');
+                  
+                  // Also update the timestamp display
+                  if (message.createdAt) {
+                    userMsgElement.setAttribute('data-timestamp', message.createdAt);
+                    const timestampEl = userMsgElement.querySelector('.message-timestamp-debug');
+                    if (timestampEl) {
+                      timestampEl.textContent = "ID: " + message.id + "-prompt | Time: " + 
+                        message.createdAt.slice(0, 19).replace('T', ' ') + " (UTC) (server)";
+                    }
+                  }
+                  
+                  break;
+                }
+              }
+            }
+            
+            if (responseMsgElement) {
+              // Update existing response
+              console.log('Updating existing response message');
+              
+              // Update the response text
+              const messageTextElement = responseMsgElement.querySelector('.message-text');
+              
+              // Handle null response appropriately
+              const displayText = message.response === null ? 
+                "Waiting for response..." : 
+                (message.response || '');
+              
+              if (messageTextElement) {
+                // Just update the content directly without animations
+                // This prevents visual disruption when streaming responses
+                if (messageTextElement.textContent !== displayText) {
+                  messageTextElement.textContent = displayText;
+                }
+              } else {
+                responseMsgElement.textContent = displayText;
+              }
+              
+              // Update timestamp element with server time
+              const timestampElement = responseMsgElement.querySelector('.message-timestamp-debug');
+              if (timestampElement && message.createdAt) {
+                timestampElement.textContent = "ID: " + message.id + "-response | Time: " + message.createdAt.slice(0, 19).replace('T', ' ') + " (UTC) (server)";
+              }
+              
+              // Update the timestamp attribute
+              if (message.createdAt) {
+                responseMsgElement.setAttribute('data-timestamp', message.createdAt);
+                
+                // Debug server timestamp
+                console.log("Updated timestamp for message " + message.id + " to " + message.createdAt);
+                vscode.postMessage({
+                  command: 'logDebug',
+                  text: "Updated timestamp: " + message.id + " to " + message.createdAt
+                });
+              }
+            } else if (userMsgElement) {
+              // Found user message but no response - add the response
+              console.log('Adding response to existing message');
+              
+              // Handle null response appropriately
+              const displayText = message.response === null ? 
+                "Waiting for response..." : 
+                (message.response || '');
+              
+              const responseElement = addMessage(displayText, false, message.id + '-response', message.createdAt);
+              
+              // Set the timestamp from the server
+              if (message.createdAt) {
+                responseElement.setAttribute('data-timestamp', message.createdAt);
+                
+                // Update the timestamp display
+                const timestampElement = responseElement.querySelector('.message-timestamp-debug');
+                if (timestampElement) {
+                  timestampElement.textContent = "ID: " + message.id + "-response | Time: " + message.createdAt.slice(0, 19).replace('T', ' ') + " (server)";
+                }
+              }
+            } else {
+              // Neither found - add both as new messages
+              console.log('Adding new message pair');
+              
+              // Add user message (prompt)
+              const userElement = addMessage(message.prompt || '', true, message.id + '-prompt', message.createdAt);
+              
+              // Add response message (even if null)
+              // Handle null response appropriately
+              const displayText = message.response === null ? 
+                "Waiting for response..." : 
+                (message.response || '');
+              
+              const responseElement = addMessage(displayText, false, message.id + '-response', message.createdAt);
+              
+              // Set timestamps from server
+              if (message.createdAt) {
+                userElement.setAttribute('data-timestamp', message.createdAt);
+                responseElement.setAttribute('data-timestamp', message.createdAt);
+                
+                // Update timestamp displays
+                const userTimestampElement = userElement.querySelector('.message-timestamp-debug');
+                const responseTimestampElement = responseElement.querySelector('.message-timestamp-debug');
+                
+                if (userTimestampElement) {
+                  userTimestampElement.textContent = "ID: " + message.id + "-prompt | Time: " + message.createdAt.slice(0, 19).replace('T', ' ') + " (UTC) (server)";
+                }
+                
+                if (responseTimestampElement) {
+                  responseTimestampElement.textContent = "ID: " + message.id + "-response | Time: " + message.createdAt.slice(0, 19).replace('T', ' ') + " (UTC) (server)";
+                }
+              }
+            }
+            
+            // Sort messages by timestamp if needed
+            sortMessagesByTimestamp();
+          }
+          
+          // Function to sort messages by timestamp
+          function sortMessagesByTimestamp() {
+            // Log start of sorting for debugging
+            console.log("SORTING MESSAGES BY TIMESTAMP");
+            vscode.postMessage({
+              command: 'logDebug',
+              text: 'Starting message sort by timestamp'
+            });
+            
+            // Get all messages with timestamps
+            const messages = Array.from(chatMessages.querySelectorAll('.message[data-timestamp]'));
+            
+            // Log found messages
+            console.log("Found " + messages.length + " messages with timestamps");
+            
+            // Debug log all messages and their timestamps
+            messages.forEach((msg, index) => {
+              const id = msg.getAttribute('data-message-id') || 'unknown';
+              const timestamp = msg.getAttribute('data-timestamp') || 'none';
+              console.log("Message " + index + ": ID=" + id + ", timestamp=" + timestamp);
+              vscode.postMessage({
+                command: 'logDebug',
+                text: "Before sort - Message " + index + ": ID=" + id + ", timestamp=" + timestamp
+              });
+            });
+            
+            // SIMPLIFIED SORTING APPROACH
+            // 1. Group messages by their base ID (without -prompt or -response)
+            // 2. Sort groups strictly by their actual ISO timestamps as strings
+            // 3. Within each group, ensure prompts come before responses
+            
+            // Group messages by conversation ID (removing -prompt or -response suffixes)
+            const messageGroups = {};
+            messages.forEach(msg => {
+              const fullId = msg.getAttribute('data-message-id') || '';
+              // Extract the base message ID without -prompt or -response
+              const baseId = fullId.split('-')[0];
+              
+              if (baseId) {
+                if (!messageGroups[baseId]) {
+                  messageGroups[baseId] = [];
+                }
+                messageGroups[baseId].push(msg);
+              }
+            });
+            
+            // Sort the groups by the timestamp of the prompt message
+            const sortedGroupIds = Object.keys(messageGroups).sort((a, b) => {
+              const groupA = messageGroups[a];
+              const groupB = messageGroups[b];
+              
+              // Find prompt messages from each group
+              const promptMsgA = groupA.find(msg => (msg.getAttribute('data-message-id') || '').endsWith('-prompt'));
+              const promptMsgB = groupB.find(msg => (msg.getAttribute('data-message-id') || '').endsWith('-prompt'));
+              
+              // Get timestamps (or empty string if not found)
+              const timestampA = promptMsgA ? promptMsgA.getAttribute('data-timestamp') || '' : '';
+              const timestampB = promptMsgB ? promptMsgB.getAttribute('data-timestamp') || '' : '';
+              
+              // Direct string comparison for ISO timestamps (works because of YYYY-MM-DD format)
+              return timestampA.localeCompare(timestampB);
+            });
+            
+            // Create a document fragment to batch DOM changes
+            // This reduces reflow and repaint, leading to smoother updates
+            const fragment = document.createDocumentFragment();
+            
+            // Remove all messages from the DOM first
+            messages.forEach(message => message.remove());
+            
+            // Then prepare to re-insert in sorted order
+            let sortIndex = 0;
+            
+            // For debug - log the sorted group IDs
+            console.log("Sorted group IDs:", sortedGroupIds);
+            
+            sortedGroupIds.forEach(groupId => {
+              const group = messageGroups[groupId];
+              
+              // Log the group
+              console.log("Group " + groupId + ":", group.map(msg => {
+                return {
+                  id: msg.getAttribute('data-message-id'),
+                  timestamp: msg.getAttribute('data-timestamp')
+                };
+              }));
+              
+              // For each group, always show prompt before response
+              const promptMsg = group.find(msg => (msg.getAttribute('data-message-id') || '').endsWith('-prompt'));
+              const responseMsg = group.find(msg => (msg.getAttribute('data-message-id') || '').endsWith('-response'));
+              
+              // Add prompt to DOM if it exists
+              if (promptMsg) {
+                sortIndex++;
+                fragment.appendChild(promptMsg);
+                
+                // Add debug information
+                const id = promptMsg.getAttribute('data-message-id') || 'unknown';
+                const timestamp = promptMsg.getAttribute('data-timestamp') || 'none';
+                console.log("Sorted message " + sortIndex + ": ID=" + id + ", timestamp=" + timestamp);
+                
+                vscode.postMessage({
+                  command: 'logDebug',
+                  text: "After sort - Message " + sortIndex + ": ID=" + id + ", timestamp=" + timestamp
+                });
+                
+                const timestampEl = promptMsg.querySelector('.message-timestamp-debug');
+                if (timestampEl) {
+                  timestampEl.textContent = timestampEl.textContent + " | Sort: " + sortIndex + "/" + messages.length;
+                }
+              }
+              
+              // Add response to DOM if it exists
+              if (responseMsg) {
+                sortIndex++;
+                fragment.appendChild(responseMsg);
+                
+                // Add debug information
+                const id = responseMsg.getAttribute('data-message-id') || 'unknown';
+                const timestamp = responseMsg.getAttribute('data-timestamp') || 'none';
+                console.log("Sorted message " + sortIndex + ": ID=" + id + ", timestamp=" + timestamp);
+                
+                vscode.postMessage({
+                  command: 'logDebug',
+                  text: "After sort - Message " + sortIndex + ": ID=" + id + ", timestamp=" + timestamp
+                });
+                
+                const timestampEl = responseMsg.querySelector('.message-timestamp-debug');
+                if (timestampEl) {
+                  timestampEl.textContent = timestampEl.textContent + " | Sort: " + sortIndex + "/" + messages.length;
+                }
+              }
+            });
+            
+            // Add any ungrouped messages at the end (those without IDs or temporary messages)
+            const ungroupedMessages = messages.filter(msg => {
+              const fullId = msg.getAttribute('data-message-id') || '';
+              const baseId = fullId.split('-')[0];
+              return !baseId || !messageGroups[baseId];
+            });
+            
+            // Sort ungrouped messages by timestamp
+            ungroupedMessages.sort((a, b) => {
+              const timestampA = a.getAttribute('data-timestamp') || '';
+              const timestampB = b.getAttribute('data-timestamp') || '';
+              return timestampA.localeCompare(timestampB);
+            });
+            
+            ungroupedMessages.forEach(message => {
+              sortIndex++;
+              fragment.appendChild(message);
+              
+              // Add debug information
+              const id = message.getAttribute('data-message-id') || 'unknown';
+              const timestamp = message.getAttribute('data-timestamp') || 'none';
+              console.log("Ungrouped message " + sortIndex + ": ID=" + id + ", timestamp=" + timestamp);
+              
+              const timestampEl = message.querySelector('.message-timestamp-debug');
+              if (timestampEl) {
+                timestampEl.textContent = timestampEl.textContent + " | Sort: " + sortIndex + "/" + messages.length;
+              }
+            });
+            
+            // Now add the entire fragment to the DOM in one operation
+            // This is much more efficient than adding elements one by one
+            chatMessages.appendChild(fragment);
+            
+            // Always scroll to the bottom, but with a small delay to allow DOM updates
+            setTimeout(() => {
+              // Directly set scrollTop - this is more reliable than scrollTo for staying at the bottom
+              chatMessages.scrollTop = chatMessages.scrollHeight;
+            }, 10);
+            
+            // Log completion of sorting
+            console.log("MESSAGE SORTING COMPLETE");
           }
           
           // Function to send a message
@@ -1983,13 +2547,20 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
             const messageText = chatInput.value.trim();
             if (!messageText) return;
             
-            // Add user message to chat
-            addMessage(messageText, true);
+            // Generate a temporary element ID for the message (will be replaced when we get server response)
+            const tempId = 'temp-' + new Date().getTime();
+            
+            // Add user message to chat with a temporary ID
+            const messageElement = addMessage(messageText, true, tempId + '-prompt');
+            
+            // Store the message text as a data attribute to facilitate future matching
+            messageElement.setAttribute('data-message-text', messageText);
             
             // Send message to extension
             vscode.postMessage({
               command: 'sendChatMessage',
-              text: messageText
+              text: messageText,
+              tempId: tempId
             });
             
             // Clear input field
@@ -2010,6 +2581,21 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
             chatInput.addEventListener('keypress', function(e) {
               if (e.key === 'Enter') {
                 sendMessage();
+              }
+            });
+          }
+          
+          // Open in ChartSmith button click handler
+          if (openInChartsmithButton) {
+            openInChartsmithButton.addEventListener('click', function() {
+              console.log('Open in ChartSmith button clicked');
+              if (currentWorkspaceId) {
+                vscode.postMessage({
+                  command: 'openInChartSmith',
+                  workspaceId: currentWorkspaceId
+                });
+              } else {
+                console.log('No workspace ID available');
               }
             });
           }
@@ -2084,6 +2670,8 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
               if (loggedInContainer) loggedInContainer.style.display = 'block';
             } else if (message.type === 'auth-logout') {
               console.log('Logged out! Updating UI');
+              // Clear workspace state on logout
+              clearWorkspaceState();
               if (loginContainer) loginContainer.style.display = 'block';
               if (loggedInContainer) loggedInContainer.style.display = 'none';
             } else if (message.type === 'auth-status') {
@@ -2095,8 +2683,19 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
                 if (loginContainer) loginContainer.style.display = 'block';
                 if (loggedInContainer) loggedInContainer.style.display = 'none';
               }
+            } else if (message.type === 'chatMessageUpdated') {
+              console.log('Received chat message update:', message.message);
+              // Process the chat message update
+              updateOrAddChatMessage(message.message);
+              
+              // Re-enable input after receiving response
+              if (chatInput) chatInput.disabled = false;
+              if (chatSendButton) chatSendButton.disabled = false;
+              
+              // Focus the input field for convenience
+              if (chatInput) chatInput.focus();
             } else if (message.type === 'chatResponse') {
-              // Add assistant message to chat
+              // Legacy format - Add assistant message to chat
               addMessage(message.text, false);
               
               // Re-enable input after receiving response
@@ -2124,6 +2723,10 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
                   var chartPathElement = document.getElementById('chart-local-path');
                   if (chartPathElement) {
                     var localPath = message.mappings[0].localPath;
+                    
+                    // Store the workspace ID for use with the "Open in ChartSmith" button
+                    currentWorkspaceId = message.mappings[0].workspaceId;
+                    console.log('Stored workspace ID: ' + currentWorkspaceId);
                     
                     // Try to create a relative path from the absolute path
                     try {
@@ -2188,15 +2791,25 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
                   if (msg.prompt !== undefined && msg.response !== undefined) {
                     console.log('Found ChartSmith message format with prompt/response');
                     
-                    // First add the user message (prompt)
-                    var promptContent = msg.prompt;
-                    console.log('Adding user message from prompt:', promptContent);
-                    addMessage(promptContent, true);
+                    // Check for missing ID
+                    if (!msg.id) {
+                      console.error("ERROR: Historical message without ID field");
+                      console.error("Message payload:", JSON.stringify(msg));
+                      vscode.postMessage({
+                        command: 'logError',
+                        text: 'Historical message without ID field: ' + JSON.stringify(msg)
+                      });
+                      return; // Skip this message
+                    }
                     
-                    // Then add the system response
-                    var responseContent = msg.response;
-                    console.log('Adding assistant message from response:', responseContent);
-                    addMessage(responseContent, false);
+                    // Use the updateOrAddChatMessage function to properly handle message IDs
+                    console.log("Processing message with ID: " + msg.id);
+                    updateOrAddChatMessage({
+                      id: msg.id,
+                      prompt: msg.prompt,
+                      response: msg.response,
+                      createdAt: msg.createdAt || new Date().toISOString()
+                    });
                     
                     // Skip the rest of the processing since we've already added both messages
                     return;
@@ -2224,10 +2837,29 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
                     content = 'No content available';
                   }
                   
+                  // Check for missing ID
+                  if (!msg.id) {
+                    console.error("ERROR: Standard format message without ID field");
+                    console.error("Message payload:", JSON.stringify(msg));
+                    vscode.postMessage({
+                      command: 'logError',
+                      text: 'Standard format message without ID field: ' + JSON.stringify(msg)
+                    });
+                    return; // Skip this message
+                  }
+                    
                   // Add the message to the UI
                   console.log('Adding message:', content);
-                  addMessage(content, isUser);
+                  const msgElement = addMessage(content, isUser, msg.id);
+                  
+                  // Add timestamp if available
+                  if (msg.timestamp || msg.createdAt) {
+                    msgElement.setAttribute('data-timestamp', msg.timestamp || msg.createdAt);
+                  }
                 });
+                
+                // Sort messages by timestamp
+                sortMessagesByTimestamp();
                 
                 // Scroll to the bottom
                 chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -2289,6 +2921,29 @@ export async function getApiEndpoint(): Promise<string | undefined> {
       }
     } catch (error) {
       outputChannel.appendLine(`Error retrieving API endpoint from storage: ${error}`);
+    }
+  }
+  
+  // Not logged in or endpoint not found
+  return undefined;
+}
+
+// Helper function to get the WWW endpoint
+export async function getWwwEndpoint(): Promise<string | undefined> {
+  // First check if we have it in memory
+  if (authData && authData.wwwEndpoint) {
+    return authData.wwwEndpoint;
+  }
+  
+  // If not in memory but we're supposed to be logged in, try to get it from storage
+  if (isLoggedIn) {
+    try {
+      const endpoint = await secretStorage.get(WWW_ENDPOINT_KEY);
+      if (endpoint) {
+        return endpoint;
+      }
+    } catch (error) {
+      outputChannel.appendLine(`Error retrieving WWW endpoint from storage: ${error}`);
     }
   }
   
@@ -2469,6 +3124,178 @@ async function connectToCentrifugo(pushEndpoint: string, token: string): Promise
         clearTimeout(reconnectTimer);
         reconnectTimer = null;
       }
+      
+      // Subscribe to workspace messages
+      try {
+        // Get current workspace mappings with proper typing
+        const mappings: WorkspaceMapping[] = context.globalState.get(WORKSPACE_MAPPINGS_KEY, []);
+        
+        if (mappings && mappings.length > 0) {
+          const workspaceId = mappings[0].workspaceId;
+          
+          // Create channel name for this workspace with userId
+          // Use workspaceId#userId format as the channel name
+          let userId = '';
+          try {
+            // Try to get the userId from the JWT token
+            if (pushToken) {
+              const tokenData = decodeJwt(pushToken);
+              if (tokenData && tokenData.payload && tokenData.payload.sub) {
+                userId = tokenData.payload.sub;
+                outputChannel.appendLine(`Found user ID in token: ${userId}`);
+              } else if (tokenData && tokenData.payload && tokenData.payload.userId) {
+                userId = tokenData.payload.userId;
+                outputChannel.appendLine(`Found user ID in token: ${userId}`);
+              }
+            }
+          } catch (e) {
+            outputChannel.appendLine(`Error extracting userId from token: ${e}`);
+          }
+          
+          // Fall back to a random ID if we couldn't get a real one
+          if (!userId) {
+            userId = `anon-${Math.random().toString(36).substring(2, 9)}`;
+            outputChannel.appendLine(`Using generated user ID: ${userId}`);
+          }
+          
+          // Format: workspaceId#userId
+          const channelName = `${workspaceId}#${userId}`;
+          outputChannel.appendLine(`Subscribing to Centrifugo channel: ${channelName}`);
+          
+          // Make sure centrifuge exists
+          if (centrifuge) {
+            // Basic subscription without events
+            outputChannel.appendLine(`Setting up subscription for channel ${channelName}`);
+            
+            try {
+              // Create a subscription object first
+              const sub = centrifuge.newSubscription(channelName);
+              
+              // Set up message handler on the subscription
+              sub.on('publication', function(ctx: any) {
+                // Log every received message
+                outputChannel.appendLine('========== CENTRIFUGO MESSAGE RECEIVED ==========');
+                outputChannel.appendLine(`Channel: ${channelName}`);
+                outputChannel.appendLine(`Message: ${JSON.stringify(ctx, null, 2)}`);
+                if (ctx.data) {
+                  outputChannel.appendLine(`Message data: ${JSON.stringify(ctx.data, null, 2)}`);
+                }
+                outputChannel.appendLine('================================================');
+                
+                // Process the message if it has data
+                if (ctx.data) {
+                  // Verify workspaceId if present
+                  const msgWorkspaceId = ctx.data.workspaceId;
+                  
+                  // Check if workspaceId matches our current one, or skip if not present
+                  if (msgWorkspaceId) {
+                    // Get current workspace mappings
+                    const mappings: WorkspaceMapping[] = context.globalState.get(WORKSPACE_MAPPINGS_KEY, []);
+                    
+                    // Check if this workspace is one we're tracking
+                    const matchingMapping = mappings.find(mapping => mapping.workspaceId === msgWorkspaceId);
+                    
+                    if (!matchingMapping) {
+                      outputChannel.appendLine(`Ignoring message for unknown workspace: ${msgWorkspaceId}`);
+                      return;
+                    }
+                    
+                    outputChannel.appendLine(`Processing message for workspace: ${msgWorkspaceId}`);
+                  }
+                  
+                  // Check for eventType
+                  if (ctx.data.eventType) {
+                    outputChannel.appendLine(`Event type: ${ctx.data.eventType}`);
+                    
+                    // Handle different event types
+                    switch (ctx.data.eventType) {
+                      case 'chatmessage-updated': {
+                        if (ctx.data.chatMessage && webviewGlobal) {
+                          // Handle the nested structure from Centrifugo
+                          const chatMessage = ctx.data.chatMessage;
+                          
+                          // Clean up the message object by removing the numbered properties (e.g., "0")
+                          // while preserving the main message fields
+                          const cleanedMessage = {
+                            id: chatMessage.id,
+                            prompt: chatMessage.prompt,
+                            response: chatMessage.response,
+                            createdAt: chatMessage.createdAt,
+                            isIntentComplete: chatMessage.isIntentComplete,
+                            isCanceled: chatMessage.isCanceled || false,
+                            followupActions: chatMessage.followupActions,
+                            responseRenderId: chatMessage.responseRenderId,
+                            responsePlanId: chatMessage.responsePlanId,
+                            responseConversionId: chatMessage.responseConversionId,
+                            responseRollbackToRevisionNumber: chatMessage.responseRollbackToRevisionNumber,
+                            revisionNumber: chatMessage.revisionNumber,
+                            isComplete: chatMessage.isComplete || false
+                          };
+                          
+                          outputChannel.appendLine(`Chat message updated: ${cleanedMessage.id}`);
+                          outputChannel.appendLine(`Prompt: ${cleanedMessage.prompt}`);
+                          outputChannel.appendLine(`Response: ${cleanedMessage.response}`);
+                          
+                          // Forward to webview
+                          webviewGlobal.postMessage({
+                            type: 'chatMessageUpdated',
+                            message: cleanedMessage
+                          });
+                          outputChannel.appendLine('Forwarded chat message update to webview');
+                        }
+                        break;
+                      }
+                      default: {
+                        outputChannel.appendLine(`Unhandled event type: ${ctx.data.eventType}`);
+                      }
+                    }
+                  }
+                  
+                  // Backward compatibility for old response format
+                  else if (ctx.data.response) {
+                    if (webviewGlobal) {
+                      webviewGlobal.postMessage({
+                        type: 'chatResponse',
+                        text: ctx.data.response
+                      });
+                      outputChannel.appendLine('Forwarded response to webview (legacy format)');
+                    }
+                  }
+                }
+              });
+              
+              // Set up error handler
+              sub.on('error', function(ctx: any) {
+                outputChannel.appendLine(`Subscription error for channel ${channelName}: ${JSON.stringify(ctx)}`);
+              });
+              
+              // Set up subscription success handler
+              sub.on('subscribed', function(ctx: any) {
+                outputChannel.appendLine(`Successfully subscribed to channel ${channelName}`);
+                outputChannel.appendLine(`Subscription details: ${JSON.stringify(ctx)}`);
+              });
+              
+              // Set up unsubscribe handler
+              sub.on('unsubscribed', function(ctx: any) {
+                outputChannel.appendLine(`Unsubscribed from channel ${channelName}: ${JSON.stringify(ctx)}`);
+              });
+              
+              // Subscribe
+              sub.subscribe();
+              
+              outputChannel.appendLine(`Subscription created for channel ${channelName} using newSubscription method`);
+            } catch (subError) {
+              outputChannel.appendLine(`Error creating subscription: ${subError}`);
+            }
+          } else {
+            outputChannel.appendLine(`Cannot subscribe: Centrifuge client is null`);
+          }
+        } else {
+          outputChannel.appendLine('No workspace mappings found, cannot subscribe to channels');
+        }
+      } catch (error) {
+        outputChannel.appendLine(`Error setting up channel subscriptions: ${error}`);
+      }
     });
     
     centrifuge.on('disconnected', function(ctx: any) {
@@ -2537,6 +3364,9 @@ async function connectToCentrifugo(pushEndpoint: string, token: string): Promise
     
     // Instead of using transport events directly, use the built-in events
     // and add more extensive logging
+    
+    // Removed global publication handler - we now handle messages at the subscription level
+    // since publications are tied to specific subscriptions in Centrifuge v5
     
     // Handle connection errors with more detail
     centrifuge.on('error', function(ctx: any) {

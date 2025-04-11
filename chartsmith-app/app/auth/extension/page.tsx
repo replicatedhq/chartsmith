@@ -44,6 +44,8 @@ function ExtensionAuthContent() {
     const token = await authorizeExtensionAction(session)
 
     if (next) {
+      // www endpoint is the api endpoint without the /api part
+      const wwwEndpoint = publicEnv.NEXT_PUBLIC_API_ENDPOINT.replace("/api", "");
       // Send auth data to the VS Code extension's local server
       fetch(next, {
         method: "POST",
@@ -52,8 +54,10 @@ function ExtensionAuthContent() {
         },
         body: JSON.stringify({
           token,
-          apiEndpoint: process.env.NEXT_PUBLIC_API_ENDPOINT,
-          pushEndpoint: process.env.NEXT_PUBLIC_CENTRIFUGO_ADDRESS,
+          userId: session.user.id,
+          apiEndpoint: publicEnv.NEXT_PUBLIC_API_ENDPOINT,
+          pushEndpoint: publicEnv.NEXT_PUBLIC_CENTRIFUGO_ADDRESS,
+          wwwEndpoint: wwwEndpoint,
         }),
       })
       .then(response => response.json())

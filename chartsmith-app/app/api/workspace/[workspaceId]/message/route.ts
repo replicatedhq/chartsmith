@@ -1,5 +1,5 @@
 import { userIdFromExtensionToken } from "@/lib/auth/extension-token";
-import { createChatMessage } from "@/lib/workspace/workspace";
+import { createChatMessage, CreateChatMessageParams } from "@/lib/workspace/workspace";
 import { NextRequest, NextResponse } from "next/server";
 
 
@@ -27,9 +27,13 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { message } = body;
+    const { prompt } = body;
 
-    const chatMessage = await createChatMessage(workspaceId, userId, message);
+    const createChatMessageParams: CreateChatMessageParams = {
+      prompt,
+    };
+
+    const chatMessage = await createChatMessage(userId, workspaceId, createChatMessageParams);
 
     return NextResponse.json(chatMessage);
 
