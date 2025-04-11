@@ -6,6 +6,8 @@ import * as path from 'path';
 import * as os from 'os';
 import * as child_process from 'child_process';
 import * as url from 'url';
+import { Centrifuge } from 'centrifuge';
+import WebSocket = require('ws');
 
 // Interface for storing workspace mapping information
 interface WorkspaceMapping {
@@ -20,6 +22,18 @@ interface AuthData {
   pushEndpoint: string;
 }
 
+// Connection status for Centrifugo
+enum ConnectionStatus {
+  DISCONNECTED = 'disconnected',
+  CONNECTING = 'connecting',
+  CONNECTED = 'connected',
+  RECONNECTING = 'reconnecting'  // Added reconnecting state
+}
+
+// Reconnection parameters
+let reconnectAttempt = 0;
+let reconnectTimer: NodeJS.Timeout | null = null;
+
 let authData: AuthData | null = null;
 let isLoggedIn = false;
 let authServer: http.Server | null = null;
@@ -28,6 +42,8 @@ let outputChannel: vscode.OutputChannel;
 let secretStorage: vscode.SecretStorage;
 let context: vscode.ExtensionContext;
 let pushToken: string | null = null; // Session-specific push token
+let centrifuge: Centrifuge | null = null; // Centrifugo client
+let connectionStatus: ConnectionStatus = ConnectionStatus.DISCONNECTED; // Connection status
 
 // Storage keys
 const AUTH_TOKEN_KEY = 'chartsmith.authToken';
@@ -275,6 +291,15 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
               authData = null;
               isLoggedIn = false;
               
+              // Disconnect from Centrifugo if connected
+              if (centrifuge) {
+                outputChannel.appendLine('Disconnecting from Centrifugo during logout');
+                disconnectFromCentrifugo();
+              }
+              
+              // Clear push token
+              pushToken = null;
+              
               // Update the webview
               if (webviewGlobal) {
                 webviewGlobal.postMessage({ type: 'auth-logout' });
@@ -294,6 +319,23 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
               type: 'auth-status', 
               isLoggedIn: isLoggedIn
             });
+            break;
+          }
+          case 'testConnection': {
+            outputChannel.appendLine('Test connection command received');
+            
+            // Toggle through connection states for testing
+            if (connectionStatus === ConnectionStatus.DISCONNECTED) {
+              forceConnectionStatus(ConnectionStatus.CONNECTING);
+            } else if (connectionStatus === ConnectionStatus.CONNECTING) {
+              forceConnectionStatus(ConnectionStatus.CONNECTED);
+            } else {
+              forceConnectionStatus(ConnectionStatus.DISCONNECTED);
+            }
+            
+            // Show message in output
+            outputChannel.appendLine(`Connection status toggled to: ${connectionStatus}`);
+            outputChannel.show();
             break;
           }
           case 'createChart': {
@@ -399,27 +441,13 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
                         // Upload the chart
                         const uploadResponse = await this.uploadChartToServer(uploadUrl, path, token);
                         
-                        // Log detailed response information
-                        outputChannel.appendLine(`\n==== CHART UPLOAD RESPONSE ====`);
-                        outputChannel.appendLine(`Status: Success`);
+                        // Log basic response information
+                        outputChannel.appendLine(`Chart upload successful`);
                         
                         if (typeof uploadResponse === 'object') {
-                          // Pretty print the response with indentation for better readability
-                          const prettyJson = JSON.stringify(uploadResponse, null, 2);
-                          outputChannel.appendLine(`Response data:\n${prettyJson}`);
-                          
-                          // Log specific fields if they exist
+                          // Log chart ID if available
                           if (uploadResponse.id) {
                             outputChannel.appendLine(`Chart ID: ${uploadResponse.id}`);
-                          }
-                          if (uploadResponse.name) {
-                            outputChannel.appendLine(`Chart Name: ${uploadResponse.name}`);
-                          }
-                          if (uploadResponse.version) {
-                            outputChannel.appendLine(`Chart Version: ${uploadResponse.version}`);
-                          }
-                          if (uploadResponse.url) {
-                            outputChannel.appendLine(`Chart URL: ${uploadResponse.url}`);
                           }
                           
                           // Extract the workspaceId from the response and save the mapping
@@ -429,19 +457,14 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
                             // Save the mapping between local directory and ChartSmith workspace
                             this.saveWorkspaceMapping(chartDir, uploadResponse.workspaceId);
                             
-                            // Log all mappings for debugging
                             const allMappings = this.getAllWorkspaceMappings();
                             outputChannel.appendLine(`Total workspace mappings: ${allMappings.length}`);
-                            allMappings.forEach((mapping, index) => {
-                              outputChannel.appendLine(`  ${index + 1}. ${mapping.localPath} -> ${mapping.workspaceId} (${mapping.lastUpdated})`);
-                            });
                           } else {
                             outputChannel.appendLine(`Warning: No workspaceId received from server`);
                           }
                         } else {
-                          outputChannel.appendLine(`Response data: ${uploadResponse}`);
+                          outputChannel.appendLine(`Response received (non-object type)`);
                         }
-                        outputChannel.appendLine(`==== END RESPONSE ====\n`);
                         
                         // Show success message with option to view details
                         vscode.window.showInformationMessage(
@@ -519,6 +542,26 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
               const firstMapping = mappings[0];
               outputChannel.appendLine(`Loading messages for workspace: ${firstMapping.workspaceId}`);
               
+              // Fetch push token for this session
+              fetchPushToken().then(token => {
+                if (token) {
+                  pushToken = token;
+                  outputChannel.appendLine(`Stored push token for session`);
+                  
+                  // Connect to Centrifugo using the push token (JWT)
+                  // The pushToken contains the JWT for authentication
+                  // The pushEndpoint from authData is where the WebSocket server is running
+                  const pushEndpoint = authData?.pushEndpoint;
+                  if (pushEndpoint) {
+                    connectToCentrifugo(pushEndpoint, token);
+                  } else {
+                    outputChannel.appendLine(`Cannot connect to Centrifugo: missing push endpoint`);
+                  }
+                }
+              }).catch(error => {
+                outputChannel.appendLine(`Error fetching push token: ${error}`);
+              });
+              
               // Fetch messages for this workspace
               this.fetchWorkspaceMessages(firstMapping.workspaceId, webviewView.webview);
             }
@@ -585,6 +628,26 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
           workspaceFolders: workspaceFoldersInfo
         });
         outputChannel.appendLine('Updated webview with new workspace mapping status');
+        
+        // Fetch push token for this session
+        fetchPushToken().then(token => {
+          if (token) {
+            pushToken = token;
+            outputChannel.appendLine(`Stored push token for session`);
+            
+            // Connect to Centrifugo using the push token (JWT)
+            // The pushToken contains the JWT for authentication
+            // The pushEndpoint from authData is where the WebSocket server is running
+            const pushEndpoint = authData?.pushEndpoint;
+            if (pushEndpoint) {
+              connectToCentrifugo(pushEndpoint, token);
+            } else {
+              outputChannel.appendLine(`Cannot connect to Centrifugo: missing push endpoint`);
+            }
+          }
+        }).catch(error => {
+          outputChannel.appendLine(`Error fetching push token: ${error}`);
+        });
         
         // Fetch messages for this workspace
         this.fetchWorkspaceMessages(workspaceId, webviewGlobal);
@@ -690,70 +753,6 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
                 // Parse response data
                 const messages = JSON.parse(responseData);
                 outputChannel.appendLine(`Received ${Array.isArray(messages) ? messages.length : 0} messages`);
-                
-                // Log detailed message structure to help debug rendering issues
-                outputChannel.appendLine(`Message structure details:`);
-                if (Array.isArray(messages)) {
-                  outputChannel.appendLine(`MESSAGES ARRAY RECEIVED: ${JSON.stringify(messages)}`);
-                  messages.forEach((msg, idx) => {
-                    outputChannel.appendLine(`Message ${idx + 1}:`);
-                    outputChannel.appendLine(`  Full message: ${JSON.stringify(msg)}`);
-                    
-                    // Log specific properties we're interested in
-                    if (msg.role) outputChannel.appendLine(`  Role: ${msg.role}`);
-                    if (msg.content) {
-                      outputChannel.appendLine(`  Content: ${msg.content}`);
-                      outputChannel.appendLine(`  Content type: ${typeof msg.content}`);
-                      
-                      // Check if content is an object
-                      if (typeof msg.content === 'object') {
-                        outputChannel.appendLine(`  Content is an object, keys: ${Object.keys(msg.content).join(', ')}`);
-                        
-                        // Check if content contains a text property
-                        if (msg.content.text) {
-                          outputChannel.appendLine(`  Content.text: ${msg.content.text}`);
-                        }
-                        
-                        // Check if content contains a parts property (common in some APIs)
-                        if (Array.isArray(msg.content.parts)) {
-                          outputChannel.appendLine(`  Content.parts is an array with ${msg.content.parts.length} elements`);
-                          msg.content.parts.forEach((part: any, partIdx: number) => {
-                            outputChannel.appendLine(`    Part ${partIdx + 1}: ${JSON.stringify(part)}`);
-                          });
-                        }
-                      } else {
-                        outputChannel.appendLine(`  Content length: ${msg.content.length}`);
-                      }
-                    } else {
-                      outputChannel.appendLine(`  Content is null or undefined`);
-                      
-                      // Check for alternative content fields
-                      if (msg.text) outputChannel.appendLine(`  Text field found: ${msg.text}`);
-                      if (msg.message) outputChannel.appendLine(`  Message field found: ${msg.message}`);
-                    }
-                    
-                    // Log all properties on the message object
-                    outputChannel.appendLine(`  All properties:`);
-                    Object.keys(msg).forEach(key => {
-                      const value = msg[key];
-                      const valuePreview = typeof value === 'object' ? 
-                        `[${typeof value}] with keys: ${Object.keys(value || {}).join(', ')}` : 
-                        JSON.stringify(value);
-                      outputChannel.appendLine(`    ${key}: ${valuePreview}`);
-                    });
-                  });
-                } else {
-                  outputChannel.appendLine(`Messages is not an array: ${typeof messages}`);
-                  outputChannel.appendLine(`Messages content: ${JSON.stringify(messages)}`);
-                  
-                  // Check if messages is an object with a 'messages' property (nested structure)
-                  if (messages && typeof messages === 'object' && messages.messages) {
-                    outputChannel.appendLine(`Found nested 'messages' property: ${JSON.stringify(messages.messages)}`);
-                    if (Array.isArray(messages.messages)) {
-                      outputChannel.appendLine(`Nested messages is an array with ${messages.messages.length} elements`);
-                    }
-                  }
-                }
                 
                 // Send messages to webview
                 webview.postMessage({
@@ -874,228 +873,38 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
                 const responseJson = JSON.parse(responseData);
                 
                 // Log the full response for debugging
-                outputChannel.appendLine(`\n==== FULL CHAT RESPONSE ====`);
-                outputChannel.appendLine(`Full response JSON: ${JSON.stringify(responseJson)}`);
-                outputChannel.appendLine(`Response type: ${typeof responseJson}`);
+                outputChannel.appendLine("Received chat response from server");
                 
-                // Try to find the response content
+                // Extract the response content
                 let responseText = '';
                 
-                // Check various possible response formats with detailed logging
-                outputChannel.appendLine(`Response top-level keys: ${Object.keys(responseJson).join(', ')}`);
-                
-                // Case 1: Direct response field
+                // Check various possible response formats
                 if (responseJson.response !== undefined) {
-                  const responseType = typeof responseJson.response;
-                  outputChannel.appendLine(`Found 'response' field (type: ${responseType})`);
-                  
-                  if (responseType === 'string') {
-                    responseText = responseJson.response;
-                    outputChannel.appendLine(`Using string from 'response' field: ${responseText}`);
-                  } else if (responseType === 'object') {
-                    // It could be a nested object, try to find text in it
-                    outputChannel.appendLine(`'response' is an object with keys: ${Object.keys(responseJson.response || {}).join(', ')}`);
-                    
-                    const respObj = responseJson.response;
-                    if (respObj && respObj.text) {
-                      responseText = respObj.text;
-                      outputChannel.appendLine(`Using text from response.text: ${responseText}`);
-                    } else if (respObj && respObj.content) {
-                      responseText = typeof respObj.content === 'string' ? respObj.content : JSON.stringify(respObj.content);
-                      outputChannel.appendLine(`Using content from response.content: ${responseText}`);
-                    } else {
-                      // Just stringify the object
-                      responseText = JSON.stringify(responseJson.response);
-                      outputChannel.appendLine(`Using stringified response object: ${responseText}`);
-                    }
-                  } else {
-                    // Convert to string
-                    responseText = String(responseJson.response);
-                    outputChannel.appendLine(`Converting non-string response to string: ${responseText}`);
-                  }
+                  responseText = typeof responseJson.response === 'string' 
+                    ? responseJson.response 
+                    : typeof responseJson.response === 'object' && responseJson.response.text 
+                      ? responseJson.response.text 
+                      : JSON.stringify(responseJson.response);
+                } else if (responseJson.message !== undefined) {
+                  responseText = typeof responseJson.message === 'string' 
+                    ? responseJson.message 
+                    : JSON.stringify(responseJson.message);
+                } else if (responseJson.content !== undefined) {
+                  responseText = typeof responseJson.content === 'string' 
+                    ? responseJson.content 
+                    : JSON.stringify(responseJson.content);
+                } else if (responseJson.text !== undefined) {
+                  responseText = typeof responseJson.text === 'string' 
+                    ? responseJson.text 
+                    : JSON.stringify(responseJson.text);
+                } else {
+                  // Fallback to stringifying the whole response
+                  responseText = JSON.stringify(responseJson);
                 }
-                // Case 2: Message field
-                else if (responseJson.message !== undefined) {
-                  const messageType = typeof responseJson.message;
-                  outputChannel.appendLine(`Found 'message' field (type: ${messageType})`);
-                  
-                  if (messageType === 'string') {
-                    responseText = responseJson.message;
-                    outputChannel.appendLine(`Using string from 'message' field: ${responseText}`);
-                  } else if (messageType === 'object') {
-                    // Could be a message object
-                    outputChannel.appendLine(`'message' is an object with keys: ${Object.keys(responseJson.message || {}).join(', ')}`);
-                    
-                    const msgObj = responseJson.message;
-                    if (msgObj && msgObj.content) {
-                      const contentType = typeof msgObj.content;
-                      outputChannel.appendLine(`Found message.content (type: ${contentType})`);
-                      
-                      if (contentType === 'string') {
-                        responseText = msgObj.content;
-                      } else if (contentType === 'object' && msgObj.content.text) {
-                        responseText = msgObj.content.text;
-                        outputChannel.appendLine(`Using text from message.content.text: ${responseText}`);
-                      } else {
-                        responseText = JSON.stringify(msgObj.content);
-                        outputChannel.appendLine(`Using stringified message.content: ${responseText}`);
-                      }
-                    } else if (msgObj && msgObj.text) {
-                      responseText = msgObj.text;
-                      outputChannel.appendLine(`Using text from message.text: ${responseText}`);
-                    } else {
-                      responseText = JSON.stringify(responseJson.message);
-                      outputChannel.appendLine(`Using stringified message object: ${responseText}`);
-                    }
-                  } else {
-                    responseText = String(responseJson.message);
-                    outputChannel.appendLine(`Converting non-string message to string: ${responseText}`);
-                  }
-                }
-                // Case 3: Content field
-                else if (responseJson.content !== undefined) {
-                  const contentType = typeof responseJson.content;
-                  outputChannel.appendLine(`Found 'content' field (type: ${contentType})`);
-                  
-                  if (contentType === 'string') {
-                    responseText = responseJson.content;
-                    outputChannel.appendLine(`Using string from 'content' field: ${responseText}`);
-                  } else if (contentType === 'object') {
-                    outputChannel.appendLine(`'content' is an object with keys: ${Object.keys(responseJson.content || {}).join(', ')}`);
-                    
-                    const contentObj = responseJson.content;
-                    if (contentObj && contentObj.text) {
-                      responseText = contentObj.text;
-                      outputChannel.appendLine(`Using text from content.text: ${responseText}`);
-                    } else if (contentObj && Array.isArray(contentObj.parts) && contentObj.parts.length > 0) {
-                      // Handle parts array (common in some APIs)
-                      responseText = contentObj.parts.map((part: any) => 
-                        typeof part === 'string' ? part : JSON.stringify(part)
-                      ).join(' ');
-                      outputChannel.appendLine(`Using joined parts from content.parts: ${responseText}`);
-                    } else {
-                      responseText = JSON.stringify(responseJson.content);
-                      outputChannel.appendLine(`Using stringified content object: ${responseText}`);
-                    }
-                  } else {
-                    responseText = String(responseJson.content);
-                    outputChannel.appendLine(`Converting non-string content to string: ${responseText}`);
-                  }
-                }
-                // Case 4: Text field
-                else if (responseJson.text !== undefined) {
-                  responseText = typeof responseJson.text === 'string' ? 
-                    responseJson.text : JSON.stringify(responseJson.text);
-                  outputChannel.appendLine(`Using value from 'text' field: ${responseText}`);
-                }
-                // Case 5: Result field
-                else if (responseJson.result !== undefined) {
-                  responseText = typeof responseJson.result === 'string' ? 
-                    responseJson.result : JSON.stringify(responseJson.result);
-                  outputChannel.appendLine(`Using value from 'result' field: ${responseText}`);
-                }
-                // Case 6: Data field
-                else if (responseJson.data !== undefined) {
-                  // Check if data contains a message or response
-                  const dataObj = responseJson.data;
-                  outputChannel.appendLine(`Found 'data' field, type: ${typeof dataObj}`);
-                  
-                  if (typeof dataObj === 'object') {
-                    outputChannel.appendLine(`'data' object keys: ${Object.keys(dataObj || {}).join(', ')}`);
-                    
-                    if (dataObj.text) {
-                      responseText = dataObj.text;
-                      outputChannel.appendLine(`Using text from data.text: ${responseText}`);
-                    } else if (dataObj.message) {
-                      responseText = typeof dataObj.message === 'string' ? 
-                        dataObj.message : JSON.stringify(dataObj.message);
-                      outputChannel.appendLine(`Using message from data.message: ${responseText}`);
-                    } else if (dataObj.content) {
-                      responseText = typeof dataObj.content === 'string' ? 
-                        dataObj.content : JSON.stringify(dataObj.content);
-                      outputChannel.appendLine(`Using content from data.content: ${responseText}`);
-                    } else if (dataObj.response) {
-                      responseText = typeof dataObj.response === 'string' ? 
-                        dataObj.response : JSON.stringify(dataObj.response);
-                      outputChannel.appendLine(`Using response from data.response: ${responseText}`);
-                    } else {
-                      // Use the full data object as last resort
-                      responseText = JSON.stringify(dataObj);
-                      outputChannel.appendLine(`Using stringified data object: ${responseText}`);
-                    }
-                  } else {
-                    responseText = String(dataObj);
-                    outputChannel.appendLine(`Using data field converted to string: ${responseText}`);
-                  }
-                }
-                // Case 7: No direct match, look in all properties
-                else {
-                  // Log all top-level properties to help identify where the response might be
-                  outputChannel.appendLine(`No standard fields found. All response properties:`);
-                  Object.keys(responseJson).forEach(key => {
-                    const value = responseJson[key];
-                    const valuePreview = typeof value === 'object' ? 
-                      `[${typeof value}] with keys: ${Object.keys(value || {}).join(', ')}` : 
-                      JSON.stringify(value);
-                    outputChannel.appendLine(`  Property '${key}': ${valuePreview}`);
-                    
-                    // Check if this property contains a message-like structure
-                    if (value && typeof value === 'object') {
-                      const obj = value;
-                      if (obj.content || obj.message || obj.text || obj.response) {
-                        outputChannel.appendLine(`  Property '${key}' contains a potential message object`);
-                        
-                        // Try to extract usable text
-                        if (!responseText) {
-                          if (obj.text) {
-                            responseText = typeof obj.text === 'string' ? obj.text : JSON.stringify(obj.text);
-                            outputChannel.appendLine(`  Using text from ${key}.text: ${responseText}`);
-                          } else if (obj.content) {
-                            responseText = typeof obj.content === 'string' ? obj.content : JSON.stringify(obj.content);
-                            outputChannel.appendLine(`  Using content from ${key}.content: ${responseText}`);
-                          } else if (obj.message) {
-                            responseText = typeof obj.message === 'string' ? obj.message : JSON.stringify(obj.message);
-                            outputChannel.appendLine(`  Using message from ${key}.message: ${responseText}`);
-                          } else if (obj.response) {
-                            responseText = typeof obj.response === 'string' ? obj.response : JSON.stringify(obj.response);
-                            outputChannel.appendLine(`  Using response from ${key}.response: ${responseText}`);
-                          }
-                        }
-                      }
-                    }
-                  });
-                  
-                  // If still no response found, use the entire response as a last resort
-                  if (!responseText) {
-                    // First, look for any properties that are strings of reasonable length
-                    const stringProps = Object.entries(responseJson)
-                      .filter(([, v]) => typeof v === 'string' && v.length > 0 && v.length < 1000);
-                    
-                    if (stringProps.length > 0) {
-                      // Use the longest string property as it's most likely to be content
-                      const stringPropsWithDefinedType: Array<[string, string]> = stringProps as Array<[string, string]>;
-                      const longestEntry = stringPropsWithDefinedType.reduce((longest, current) => 
-                        (current[1].length > longest[1].length) ? current : longest,
-                        ['', ''] as [string, string]
-                      );
-                      const key = longestEntry[0];
-                      const value = longestEntry[1];
-                      responseText = value;
-                      outputChannel.appendLine(`Using longest string property '${key}': ${responseText}`);
-                    } else {
-                      // No suitable string properties, use a generic message
-                      responseText = "Message sent, but could not find response content in server reply.";
-                      outputChannel.appendLine(`No suitable content found, using generic message`);
-                    }
-                  }
-                }
-                
-                outputChannel.appendLine(`==== END CHAT RESPONSE ANALYSIS ====\n`);
                 
                 // If responseText is empty or only whitespace, use a fallback message
                 if (!responseText || responseText.trim() === '') {
                   responseText = "Received empty response from server.";
-                  outputChannel.appendLine(`Response text was empty, using fallback message`);
                 }
                 
                 // Send the found response to the webview
@@ -1933,6 +1742,9 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
             box-shadow: 0 1px 3px rgba(0,0,0,0.2);
             border-bottom: 1px solid rgba(255,255,255,0.05);
             transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
           }
           .chart-path-container {
             display: flex;
@@ -1940,6 +1752,40 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
             font-size: 12px;
             position: relative;
             padding-left: 20px;
+            flex-grow: 1;
+          }
+          .connection-status {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-left: 8px;
+            transition: all 0.3s ease;
+          }
+          .connection-status.connected {
+            background-color: #4CAF50; /* Green */
+            box-shadow: 0 0 5px #4CAF50;
+          }
+          .connection-status.connecting {
+            background-color: #FFC107; /* Yellow */
+            box-shadow: 0 0 5px #FFC107;
+          }
+          .connection-status.reconnecting {
+            background-color: #FF9800; /* Orange */
+            box-shadow: 0 0 5px #FF9800;
+            animation: pulse 1.5s infinite;
+          }
+          .connection-status.disconnected {
+            background-color: #F44336; /* Red */
+            box-shadow: 0 0 5px #F44336;
+          }
+          @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+          }
+          #connection-status-container {
+            display: flex;
+            align-items: center;
           }
           .chart-path-container:before {
             content: "";
@@ -2015,6 +1861,10 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
                 <div class="chart-path-container">
                   <span class="chart-path-label">Chart:</span>
                   <span id="chart-local-path" class="chart-path">Loading chart path...</span>
+                </div>
+                <div id="connection-status-container">
+                  <div id="connection-status" class="connection-status disconnected" title="Disconnected"></div>
+                  <div id="connection-debug" style="display: none; margin-left: 5px; cursor: pointer; font-size: 10px; color: rgba(255,255,255,0.5);" title="Debug: Toggle connection status">⚙️</div>
                 </div>
               </div>
               <div id="chat-messages" class="chat-messages">
@@ -2164,12 +2014,71 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
             });
           }
           
+          // Function to update connection status indicator
+          function updateConnectionStatusUI(status) {
+            var connectionStatusElement = document.getElementById('connection-status');
+            if (!connectionStatusElement) return;
+            
+            // Remove all status classes
+            connectionStatusElement.classList.remove('connected', 'connecting', 'disconnected');
+            
+            // Add the appropriate class
+            connectionStatusElement.classList.add(status);
+            
+            // Update the tooltip
+            switch(status) {
+              case 'connected':
+                connectionStatusElement.title = 'Connected to server';
+                break;
+              case 'connecting':
+                connectionStatusElement.title = 'Connecting to server...';
+                break;
+              case 'reconnecting':
+                connectionStatusElement.title = 'Attempting to reconnect...';
+                break;
+              case 'disconnected':
+              default:
+                connectionStatusElement.title = 'Disconnected';
+                break;
+            }
+            
+            console.log('Connection status updated:', status);
+          }
+          
+          // Set up the debug connection status button (hidden by default)
+          document.addEventListener('DOMContentLoaded', function() {
+            var connectionStatus = document.getElementById('connection-status');
+            var connectionDebug = document.getElementById('connection-debug');
+            
+            if (connectionStatus) {
+              // Show debug button on right-click
+              connectionStatus.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+                if (connectionDebug) {
+                  connectionDebug.style.display = connectionDebug.style.display === 'none' ? 'block' : 'none';
+                }
+              });
+            }
+            
+            if (connectionDebug) {
+              // Add click handler for debug button
+              connectionDebug.addEventListener('click', function() {
+                console.log('Debug: toggle connection status');
+                vscode.postMessage({
+                  command: 'testConnection'
+                });
+              });
+            }
+          });
+          
           // Message handler
           window.addEventListener('message', function(event) {
             var message = event.data;
             console.log('Received message:', message);
             
-            if (message.type === 'auth-success') {
+            if (message.type === 'connectionStatus') {
+              updateConnectionStatusUI(message.status);
+            } else if (message.type === 'auth-success') {
               console.log('Auth success! Updating UI');
               if (loginContainer) loginContainer.style.display = 'none';
               if (loggedInContainer) loggedInContainer.style.display = 'block';
@@ -2415,11 +2324,463 @@ export function isAuthenticated(): boolean {
   return isLoggedIn;
 }
 
+// Helper function to get the session-specific push token
+export function getPushToken(): string | null {
+  return pushToken;
+}
+
+/**
+ * Connect to the Centrifugo server for real-time updates
+ * @param pushEndpoint The push endpoint URL 
+ * @param token The JWT token for authentication
+ * 
+ * Common issues:
+ * 1. WebSocket URL construction - must correctly convert HTTP to WS
+ * 2. JWT token format - must be valid and properly formatted
+ * 3. CORS issues - server must allow WebSocket connection
+ * 4. Network/firewall issues - WebSockets might be blocked
+ */
+async function connectToCentrifugo(pushEndpoint: string, token: string): Promise<void> {
+  outputChannel.appendLine('Connecting to Centrifugo server...');
+  
+  try {
+    // Disconnect existing client if there is one
+    if (centrifuge) {
+      outputChannel.appendLine('Disconnecting existing Centrifugo client');
+      await disconnectFromCentrifugo();
+    }
+    
+    // Update connection status to connecting
+    connectionStatus = ConnectionStatus.CONNECTING;
+    updateConnectionStatus();
+    
+    // Parse the push endpoint URL but use it as-is (just converting http→ws protocol)
+    let parsedUrl = new URL(pushEndpoint);
+    
+    // Just convert the protocol from HTTP to WebSocket, keep everything else the same
+    const protocol = parsedUrl.protocol === 'https:' ? 'wss:' : 'ws:';
+    
+    // Build the WebSocket URL using the original endpoint, only changing the protocol
+    const wsEndpoint = pushEndpoint.replace(/^http/, 'ws');
+    
+    // Log detailed connection information
+    outputChannel.appendLine('----------------------------------------------------------');
+    outputChannel.appendLine('DETAILED WEBSOCKET CONNECTION INFO:');
+    outputChannel.appendLine(`Original push endpoint: ${pushEndpoint}`);
+    outputChannel.appendLine(`WebSocket URL: ${wsEndpoint}`);
+    outputChannel.appendLine(`Protocol conversion: ${parsedUrl.protocol} → ${protocol}`);
+    outputChannel.appendLine('----------------------------------------------------------');
+    
+    // First, try to check if the HTTP endpoint is reachable
+    const infoEndpoint = pushEndpoint.replace(/\/connection\/websocket$/, '/info');
+    outputChannel.appendLine(`Testing connection with info endpoint: ${infoEndpoint}`);
+    
+    try {
+      // Create an HTTP/HTTPS request to test the endpoint
+      const testRequest = (parsedUrl.protocol === 'https:' ? https : http).request(infoEndpoint, {
+        method: 'GET',
+        timeout: 5000
+      }, (res) => {
+        outputChannel.appendLine(`Info endpoint response: status=${res.statusCode}`);
+        let data = '';
+        res.on('data', (chunk) => { data += chunk; });
+        res.on('end', () => {
+          outputChannel.appendLine(`Info endpoint data: ${data.substring(0, 200)}`);
+        });
+      });
+      
+      testRequest.on('error', (error) => {
+        outputChannel.appendLine(`WARNING: Info endpoint error: ${error.message}. This MAY be normal if the endpoint doesn't support /info.`);
+      });
+      
+      testRequest.end();
+    } catch (error) {
+      outputChannel.appendLine(`Error testing endpoint: ${error}`);
+    }
+    
+    outputChannel.appendLine(`Original push endpoint: ${pushEndpoint}`);
+    outputChannel.appendLine(`Centrifugo websocket endpoint: ${wsEndpoint}`);
+    outputChannel.appendLine(`Token length: ${token.length}`);
+    outputChannel.appendLine(`Token preview: ${token.substring(0, 10)}...${token.substring(token.length - 10)}`);
+    
+    // Decode and log the JWT token for debugging
+    const decoded = decodeJwt(token);
+    if (decoded) {
+      outputChannel.appendLine(`JWT Header: ${JSON.stringify(decoded.header)}`);
+      outputChannel.appendLine(`JWT Payload (partial): ${JSON.stringify(decoded.payload, null, 2).substring(0, 300)}...`);
+      
+      // Check if the token has expired
+      if (decoded.payload.exp) {
+        const expTime = new Date(decoded.payload.exp * 1000);
+        const now = new Date();
+        outputChannel.appendLine(`Token expires at: ${expTime.toISOString()} (${now > expTime ? 'EXPIRED' : 'valid'})`);
+      }
+    } else {
+      outputChannel.appendLine(`WARNING: Could not decode JWT token. It may not be properly formatted.`);
+    }
+    
+    // Create a new Centrifugo client with more robust configuration
+    try {
+      // Configure Centrifuge with basic options 
+      // Only using options confirmed to be supported in this version
+      centrifuge = new Centrifuge(wsEndpoint, {
+        token: token,
+        debug: true,             // Enable debug mode for more logs
+        minReconnectDelay: 1000, // Start with 1s delay (minimum)
+        maxReconnectDelay: 30000, // Maximum 30s between reconnection attempts
+        timeout: 10000,          // Connection timeout after 10s
+        websocket: WebSocket     // Provide the WebSocket implementation
+        // Using our custom reconnection logic instead of built-in options
+      });
+      
+      outputChannel.appendLine(`Created Centrifuge client with debug enabled`);
+    } catch (error) {
+      outputChannel.appendLine(`Error creating Centrifuge client: ${error}`);
+      connectionStatus = ConnectionStatus.DISCONNECTED;
+      updateConnectionStatus();
+      return; // Exit the function if we can't create the client
+    }
+    
+    // Safety check - exit if client wasn't created
+    if (!centrifuge) {
+      outputChannel.appendLine(`Failed to create Centrifuge client for unknown reason`);
+      connectionStatus = ConnectionStatus.DISCONNECTED;
+      updateConnectionStatus();
+      return;
+    }
+    
+    // Set up event handlers with proper typing
+    centrifuge.on('connecting', function(ctx: any) {
+      outputChannel.appendLine(`Centrifugo connecting: ${JSON.stringify(ctx)}`);
+      connectionStatus = ConnectionStatus.CONNECTING;
+      updateConnectionStatus();
+    });
+    
+    centrifuge.on('connected', function(ctx: any) {
+      outputChannel.appendLine(`Centrifugo connected: ${JSON.stringify(ctx)}`);
+      connectionStatus = ConnectionStatus.CONNECTED;
+      updateConnectionStatus();
+      
+      // Reset reconnection attempt counter when successfully connected
+      reconnectAttempt = 0;
+      
+      // Clear any pending reconnection timers
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+    });
+    
+    centrifuge.on('disconnected', function(ctx: any) {
+      outputChannel.appendLine(`Centrifugo disconnected: ${JSON.stringify(ctx)}`);
+      connectionStatus = ConnectionStatus.DISCONNECTED;
+      updateConnectionStatus();
+      
+      // Handle reconnection with exponential backoff
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+      
+      // Increment attempt counter
+      reconnectAttempt++;
+      
+      // Calculate delay with exponential backoff
+      // baseDelay * factor^attempt, maxed at maxDelay
+      const baseDelay = 1000; // 1 second
+      const maxDelay = 60000; // 1 minute
+      const factor = 1.5;
+      
+      const delay = Math.min(baseDelay * Math.pow(factor, reconnectAttempt), maxDelay);
+      
+      outputChannel.appendLine(`Scheduling reconnection attempt ${reconnectAttempt} in ${delay/1000} seconds...`);
+      
+      // Only attempt reconnect if we haven't exceeded maximum attempts
+      if (reconnectAttempt <= 5) {
+        connectionStatus = ConnectionStatus.RECONNECTING;
+        updateConnectionStatus();
+        
+        reconnectTimer = setTimeout(() => {
+          // Only try to reconnect if we're still in RECONNECTING state
+          if (connectionStatus === ConnectionStatus.RECONNECTING) {
+            outputChannel.appendLine(`Attempting reconnection #${reconnectAttempt}...`);
+            try {
+              // Check if centrifuge client still exists
+              if (centrifuge) {
+                connectionStatus = ConnectionStatus.CONNECTING;
+                updateConnectionStatus();
+                centrifuge.connect();
+              } else {
+                outputChannel.appendLine(`Cannot reconnect: Centrifuge client no longer exists`);
+                connectionStatus = ConnectionStatus.DISCONNECTED;
+                updateConnectionStatus();
+              }
+            } catch (e) {
+              outputChannel.appendLine(`Error during reconnection attempt: ${e}`);
+              connectionStatus = ConnectionStatus.DISCONNECTED;
+              updateConnectionStatus();
+            }
+          }
+        }, delay);
+      } else {
+        outputChannel.appendLine(`Maximum reconnection attempts reached (${reconnectAttempt}). Giving up.`);
+        connectionStatus = ConnectionStatus.DISCONNECTED;
+        updateConnectionStatus();
+      }
+    });
+    
+    centrifuge.on('error', function(ctx: any) {
+      outputChannel.appendLine(`Centrifugo error: ${JSON.stringify(ctx)}`);
+      connectionStatus = ConnectionStatus.DISCONNECTED;
+      updateConnectionStatus();
+    });
+    
+    // Instead of using transport events directly, use the built-in events
+    // and add more extensive logging
+    
+    // Handle connection errors with more detail
+    centrifuge.on('error', function(ctx: any) {
+      outputChannel.appendLine(`Centrifugo error with more details: ${JSON.stringify(ctx)}`);
+      if (ctx && ctx.transport) {
+        outputChannel.appendLine(`Transport details: ${JSON.stringify(ctx.transport)}`);
+      }
+    });
+    
+    // Log connection attempts with more detail
+    centrifuge.on('connecting', function(ctx: any) {
+      outputChannel.appendLine(`Centrifugo connecting with more details: ${JSON.stringify(ctx)}`);
+      // Note: The Centrifuge client doesn't have a getTransport method in this version
+      outputChannel.appendLine(`Connection attempt in progress...`);
+    });
+    
+    // Log successful connections with more detail
+    centrifuge.on('connected', function(ctx: any) {
+      outputChannel.appendLine(`WebSocket connection established successfully`);
+      // Access the client ID from the context if available
+      if (ctx && ctx.client) {
+        outputChannel.appendLine(`Client info: ${JSON.stringify(ctx.client)}`);
+      }
+    });
+    
+    // Connect to the server
+    centrifuge.connect();
+    
+    outputChannel.appendLine('Centrifugo client initialized and connecting');
+  } catch (error) {
+    outputChannel.appendLine(`Error connecting to Centrifugo: ${error}`);
+    connectionStatus = ConnectionStatus.DISCONNECTED;
+    updateConnectionStatus();
+  }
+}
+
+/**
+ * Disconnect from the Centrifugo server
+ */
+async function disconnectFromCentrifugo(): Promise<void> {
+  // Clear any reconnection timers
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  
+  // Reset reconnection counter
+  reconnectAttempt = 0;
+  
+  if (centrifuge) {
+    outputChannel.appendLine('Disconnecting from Centrifugo server...');
+    try {
+      centrifuge.disconnect();
+    } catch (e) {
+      outputChannel.appendLine(`Error during disconnect: ${e}`);
+    }
+    centrifuge = null;
+    connectionStatus = ConnectionStatus.DISCONNECTED;
+    updateConnectionStatus();
+  }
+}
+
+/**
+ * Decode a JWT token to see its contents (for debugging)
+ * @param token The JWT token to decode 
+ */
+function decodeJwt(token: string): { header: any, payload: any } | null {
+  try {
+    // Split the token into its parts
+    const parts = token.split('.');
+    if (parts.length !== 3) {
+      outputChannel.appendLine(`JWT token does not have three parts: ${parts.length}`);
+      return null;
+    }
+    
+    // Base64 URL decoding function for Node.js environment
+    const base64UrlDecode = (str: string): string => {
+      try {
+        // Convert Base64URL to Base64
+        let base64 = str.replace(/-/g, '+').replace(/_/g, '/');
+        // Add padding if needed
+        while (base64.length % 4) {
+          base64 += '=';
+        }
+        
+        // Use Buffer for Node.js environment
+        const decoded = Buffer.from(base64, 'base64').toString('utf-8');
+        return decoded;
+      } catch (error) {
+        outputChannel.appendLine(`Base64 decode error: ${error}`);
+        return '';
+      }
+    };
+    
+    // Safely parse JSON with a fallback for formatting errors
+    const safeJsonParse = (jsonStr: string): any => {
+      try {
+        return JSON.parse(jsonStr);
+      } catch (e) {
+        outputChannel.appendLine(`Error parsing JSON: ${e}`);
+        return { error: "Invalid JSON" };
+      }
+    };
+    
+    // Decode and parse header and payload
+    try {
+      const header = safeJsonParse(base64UrlDecode(parts[0]));
+      const payload = safeJsonParse(base64UrlDecode(parts[1]));
+      return { header, payload };
+    } catch (decodeError) {
+      outputChannel.appendLine(`Error during base64 decoding: ${decodeError}`);
+      return null;
+    }
+  } catch (error) {
+    outputChannel.appendLine(`Error decoding JWT: ${error}`);
+    return null;
+  }
+}
+
+/**
+ * Force connection status for testing purposes
+ * @param status The status to force
+ */
+function forceConnectionStatus(status: ConnectionStatus): void {
+  connectionStatus = status;
+  updateConnectionStatus();
+  outputChannel.appendLine(`FORCED connection status to: ${status}`);
+}
+
+/**
+ * Update the connection status indicator in the UI
+ */
+function updateConnectionStatus(): void {
+  if (webviewGlobal) {
+    webviewGlobal.postMessage({
+      type: 'connectionStatus',
+      status: connectionStatus
+    });
+    outputChannel.appendLine(`Updated connection status: ${connectionStatus}`);
+  }
+}
+
+/**
+ * Fetches a push token from the API's /push endpoint
+ * This token is only valid for the current session
+ */
+async function fetchPushToken(): Promise<string | null> {
+  outputChannel.appendLine('Fetching push token from API...');
+  
+  if (!isLoggedIn || !authData) {
+    outputChannel.appendLine('Cannot fetch push token: not logged in');
+    return null;
+  }
+  
+  try {
+    // Get auth token 
+    const token = await getAuthToken();
+    const apiEndpoint = await getApiEndpoint(); // Use API endpoint, not push endpoint
+    
+    if (!token || !apiEndpoint) {
+      outputChannel.appendLine('Missing token or API endpoint');
+      return null;
+    }
+    
+    // Construct the push URL - this should be at the apiEndpoint, not pushEndpoint
+    const pushUrl = `${apiEndpoint}/push`;
+    outputChannel.appendLine(`Fetching push token from: ${pushUrl}`);
+    
+    // Make the HTTP request
+    return new Promise((resolve, reject) => {
+      const parsedUrl = url.parse(pushUrl);
+      const isHttps = parsedUrl.protocol === 'https:';
+      
+      const options = {
+        method: 'GET',
+        hostname: parsedUrl.hostname,
+        port: parsedUrl.port || (isHttps ? 443 : 80),
+        path: parsedUrl.path,
+        headers: {
+          'Authorization': `Token ${token}`,
+          'User-Agent': 'ChartSmith-VSCode-Extension'
+        }
+      };
+      
+      const req = (isHttps ? https : http).request(options, (res) => {
+        let responseData = '';
+        
+        res.on('data', (chunk) => {
+          responseData += chunk.toString();
+        });
+        
+        res.on('end', () => {
+          outputChannel.appendLine(`Push token response status: ${res.statusCode}`);
+          
+          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+            try {
+              const response = JSON.parse(responseData);
+              if (response.pushToken) {
+                outputChannel.appendLine('Successfully fetched push token');
+                resolve(response.pushToken);
+              } else {
+                outputChannel.appendLine('Response did not contain push token');
+                resolve(null);
+              }
+            } catch (error) {
+              outputChannel.appendLine(`Error parsing push token response: ${error}`);
+              resolve(null);
+            }
+          } else {
+            outputChannel.appendLine(`Failed to fetch push token: ${responseData}`);
+            resolve(null);
+          }
+        });
+      });
+      
+      req.on('error', (error) => {
+        outputChannel.appendLine(`Error fetching push token: ${error}`);
+        resolve(null);
+      });
+      
+      req.end();
+    });
+  } catch (error) {
+    outputChannel.appendLine(`Exception fetching push token: ${error}`);
+    return null;
+  }
+}
+
 export function deactivate() {
   outputChannel.appendLine('Extension deactivating');
+  
+  // Close the auth server if it's running
   if (authServer) {
     outputChannel.appendLine('Closing auth server');
     authServer.close();
     authServer = null;
   }
+  
+  // Disconnect from Centrifugo if connected
+  if (centrifuge) {
+    outputChannel.appendLine('Disconnecting from Centrifugo');
+    disconnectFromCentrifugo();
+  }
+  
+  // Clear session data
+  pushToken = null;
 }
