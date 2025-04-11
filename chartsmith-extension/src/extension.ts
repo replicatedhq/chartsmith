@@ -1826,6 +1826,7 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
             margin-bottom: 4px;
           }
           .message-timestamp-debug {
+            display: none; /* Hide all timestamp debug elements */
             font-size: 9px;
             opacity: 0.7;
             font-family: monospace;
@@ -2159,14 +2160,16 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
             messageText.textContent = text;
             messageContainer.appendChild(messageText);
             
-            // Use provided timestamp or current time in ISO format
-            // For current time, we'll use UTC to match server timestamps
+            // Store timestamp for sorting purposes but don't display it visually
             const now = timestamp || (new Date().toISOString());
-            const timestampEl = document.createElement('div');
-            timestampEl.classList.add('message-timestamp-debug');
-            // Display timestamp in the format: "2025-04-12 01:49:50" (UTC)
-            timestampEl.textContent = "ID: " + (messageId || 'none') + " | Time: " + now.slice(0, 19).replace('T', ' ') + " (UTC)" + (timestamp ? " (server)" : " (client)");
-            messageContainer.appendChild(timestampEl);
+            messageElement.setAttribute('data-timestamp', now);
+            
+            // Hide any existing debug footers
+            setTimeout(() => {
+              document.querySelectorAll('.message-timestamp-debug').forEach(el => {
+                el.style.display = 'none';
+              });
+            }, 50);
             
             // Add container to message
             messageElement.appendChild(messageContainer);
@@ -2255,11 +2258,7 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
                   // Also update the timestamp display
                   if (message.createdAt) {
                     userMsgElement.setAttribute('data-timestamp', message.createdAt);
-                    const timestampEl = userMsgElement.querySelector('.message-timestamp-debug');
-                    if (timestampEl) {
-                      timestampEl.textContent = "ID: " + message.id + "-prompt | Time: " + 
-                        message.createdAt.slice(0, 19).replace('T', ' ') + " (UTC) (server)";
-                    }
+                    // No longer updating timestamp elements - they're hidden
                   }
                   
                   break;
@@ -2289,11 +2288,7 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
                 responseMsgElement.textContent = displayText;
               }
               
-              // Update timestamp element with server time
-              const timestampElement = responseMsgElement.querySelector('.message-timestamp-debug');
-              if (timestampElement && message.createdAt) {
-                timestampElement.textContent = "ID: " + message.id + "-response | Time: " + message.createdAt.slice(0, 19).replace('T', ' ') + " (UTC) (server)";
-              }
+              // No longer updating timestamp elements - they're hidden
               
               // Update the timestamp attribute
               if (message.createdAt) {
@@ -2321,11 +2316,7 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
               if (message.createdAt) {
                 responseElement.setAttribute('data-timestamp', message.createdAt);
                 
-                // Update the timestamp display
-                const timestampElement = responseElement.querySelector('.message-timestamp-debug');
-                if (timestampElement) {
-                  timestampElement.textContent = "ID: " + message.id + "-response | Time: " + message.createdAt.slice(0, 19).replace('T', ' ') + " (server)";
-                }
+                // No longer updating timestamp elements - they're hidden
               }
             } else {
               // Neither found - add both as new messages
@@ -2347,17 +2338,7 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
                 userElement.setAttribute('data-timestamp', message.createdAt);
                 responseElement.setAttribute('data-timestamp', message.createdAt);
                 
-                // Update timestamp displays
-                const userTimestampElement = userElement.querySelector('.message-timestamp-debug');
-                const responseTimestampElement = responseElement.querySelector('.message-timestamp-debug');
-                
-                if (userTimestampElement) {
-                  userTimestampElement.textContent = "ID: " + message.id + "-prompt | Time: " + message.createdAt.slice(0, 19).replace('T', ' ') + " (UTC) (server)";
-                }
-                
-                if (responseTimestampElement) {
-                  responseTimestampElement.textContent = "ID: " + message.id + "-response | Time: " + message.createdAt.slice(0, 19).replace('T', ' ') + " (UTC) (server)";
-                }
+                // No longer updating timestamp elements - they're hidden
               }
             }
             
@@ -2432,8 +2413,15 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
             // This reduces reflow and repaint, leading to smoother updates
             const fragment = document.createDocumentFragment();
             
-            // Remove all messages from the DOM first
-            messages.forEach(message => message.remove());
+            // Clean up any existing debug sort info in all messages before removing them
+            messages.forEach(message => {
+              const timestampEl = message.querySelector('.message-timestamp-debug');
+              if (timestampEl && timestampEl.textContent && timestampEl.textContent.includes(" | Sort: ")) {
+                timestampEl.textContent = timestampEl.textContent.split(" | Sort: ")[0];
+              }
+              // Then remove them from the DOM
+              message.remove();
+            });
             
             // Then prepare to re-insert in sorted order
             let sortIndex = 0;
@@ -2471,10 +2459,7 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
                   text: "After sort - Message " + sortIndex + ": ID=" + id + ", timestamp=" + timestamp
                 });
                 
-                const timestampEl = promptMsg.querySelector('.message-timestamp-debug');
-                if (timestampEl) {
-                  timestampEl.textContent = timestampEl.textContent + " | Sort: " + sortIndex + "/" + messages.length;
-                }
+                // No longer adding debug sorting information
               }
               
               // Add response to DOM if it exists
@@ -2492,10 +2477,7 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
                   text: "After sort - Message " + sortIndex + ": ID=" + id + ", timestamp=" + timestamp
                 });
                 
-                const timestampEl = responseMsg.querySelector('.message-timestamp-debug');
-                if (timestampEl) {
-                  timestampEl.textContent = timestampEl.textContent + " | Sort: " + sortIndex + "/" + messages.length;
-                }
+                // No longer adding debug sorting information
               }
             });
             
@@ -2522,10 +2504,7 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
               const timestamp = message.getAttribute('data-timestamp') || 'none';
               console.log("Ungrouped message " + sortIndex + ": ID=" + id + ", timestamp=" + timestamp);
               
-              const timestampEl = message.querySelector('.message-timestamp-debug');
-              if (timestampEl) {
-                timestampEl.textContent = timestampEl.textContent + " | Sort: " + sortIndex + "/" + messages.length;
-              }
+              // No longer adding debug sorting information
             });
             
             // Now add the entire fragment to the DOM in one operation
