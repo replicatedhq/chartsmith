@@ -1,10 +1,15 @@
 // This file contains the client-side code for the webview
 // It will be bundled into dist/webview.js
 
+// Import state management
+import { store, actions } from './state/store';
+import { messagesAtom, workspaceIdAtom, connectionStatusAtom, rendersAtom } from './state/atoms';
+
 // Define global interfaces
 interface Window {
   vscodeWebviewContext: any;
   acquireVsCodeApi(): any;
+  jotaiStore: any;
 }
 
 // When running in a webview inside VS Code
@@ -34,6 +39,14 @@ function initUI() {
     renderLoginView(app);
   }
 
+  // Initialize the store with context values
+  if (context.workspaceId) {
+    actions.setWorkspaceId(context.workspaceId);
+  }
+  if (context.connectionStatus) {
+    actions.setConnectionStatus(context.connectionStatus);
+  }
+  
   // Set up message listeners
   window.addEventListener('message', (event) => {
     const message = event.data;
@@ -44,22 +57,42 @@ function initUI() {
         console.log('DEBUG FROM EXTENSION:', message.message);
         break;
       case 'connectionStatus':
+        actions.setConnectionStatus(message.status);
         updateConnectionStatus(message.status);
         break;
       case 'newMessage':
-        addMessage(message.message);
+        actions.addMessage(message.message);
+        renderAllMessages(); // Re-render from store
         break;
       case 'messages':
         console.log('Received messages from extension:', message.messages);
-        displayMessages(message.messages || []);
+        actions.setMessages(message.messages || []);
+        renderAllMessages(); // Re-render from store
+        break;
+      case 'renders':
+        console.log('Received renders from extension:', message.renders);
+        actions.setRenders(message.renders || []);
+        // No UI rendering needed at this point, just store in atom
+        break;
+      case 'newRender':
+        console.log('Received new render from extension:', message.render);
+        actions.addRender(message.render);
+        // No UI rendering needed at this point, just store in atom
         break;
       case 'workspaceChanged':
         // Update the context and fetch messages for the new workspace
         console.log(`Workspace changed event received - new ID: ${message.workspaceId}`);
         context.workspaceId = message.workspaceId;
+        actions.setWorkspaceId(message.workspaceId);
         console.log(`Fetching messages for changed workspace ID: ${message.workspaceId}`);
         vscode.postMessage({ 
           command: 'fetchMessages',
+          workspaceId: message.workspaceId
+        });
+        
+        // Also fetch renders for the workspace
+        vscode.postMessage({
+          command: 'fetchRenders',
           workspaceId: message.workspaceId
         });
         break;
@@ -75,7 +108,6 @@ function renderLoggedInView(container: HTMLElement) {
         <h2>ChartSmith</h2>
         <div class="header-actions">
           ${context.workspaceId ? `
-            <button id="home-btn" class="icon-button" title="Home">🏠</button>
             <div class="connection-status ${context.connectionStatus}">
               ${context.connectionStatus}
             </div>
@@ -96,21 +128,30 @@ function renderLoggedInView(container: HTMLElement) {
     vscode.postMessage({ command: 'logout' });
   });
   
-  // Add home button event listener
-  document.getElementById('home-btn')?.addEventListener('click', () => {
-    // Clear workspace ID in context and switch to action buttons
-    context.workspaceId = '';
-    vscode.postMessage({ command: 'goHome' });
-    renderLoggedInView(container);
-  });
+  // Initialize Jotai store from context
+  if (context.workspaceId) {
+    actions.setWorkspaceId(context.workspaceId);
+  }
   
   // Only fetch messages if we have a workspace ID
-  if (context.workspaceId) {
+  const workspaceId = store.get(workspaceIdAtom);
+  if (workspaceId) {
     // Show messages for the selected workspace
-    console.log(`Webview requesting messages for workspace ID: ${context.workspaceId}`);
+    console.log(`Webview requesting messages for workspace ID: ${workspaceId}`);
+    
+    // Render any existing messages from the store
+    renderAllMessages();
+    
+    // Then fetch fresh messages and renders from the server
     vscode.postMessage({ 
       command: 'fetchMessages',
-      workspaceId: context.workspaceId
+      workspaceId: workspaceId
+    });
+    
+    // Also fetch renders
+    vscode.postMessage({
+      command: 'fetchRenders',
+      workspaceId: workspaceId
     });
   } else {
     // No workspace selected, show the action buttons
@@ -166,6 +207,8 @@ function renderLoginView(container: HTMLElement) {
 }
 
 function updateConnectionStatus(status: string) {
+  actions.setConnectionStatus(status);
+  
   const statusEl = document.querySelector('.connection-status');
   if (statusEl) {
     statusEl.className = `connection-status ${status}`;
@@ -174,38 +217,15 @@ function updateConnectionStatus(status: string) {
 }
 
 function addMessage(message: any) {
-  const messagesContainer = document.getElementById('messages-container');
-  if (!messagesContainer) return;
-
-  console.log('Adding new message:', message);
-
-  // If it's a user message (prompt)
-  if (message.prompt) {
-    const userMessageEl = document.createElement('div');
-    userMessageEl.className = 'message user-message';
-    userMessageEl.innerHTML = `
-      <div class="message-content">${message.prompt}</div>
-    `;
-    messagesContainer.appendChild(userMessageEl);
-  }
-
-  // If it has a response, add the agent's message
-  if (message.response) {
-    const agentMessageEl = document.createElement('div');
-    agentMessageEl.className = 'message agent-message';
-    agentMessageEl.innerHTML = `
-      <div class="message-content">${message.response}</div>
-    `;
-    messagesContainer.appendChild(agentMessageEl);
-  }
-
-  messagesContainer.scrollTop = messagesContainer.scrollHeight;
+  console.log('Adding new message to store:', message);
+  actions.addMessage(message);
+  renderAllMessages();
 }
 
-function displayMessages(messages: any[]) {
-  console.log('Displaying messages:', messages);
+function renderAllMessages() {
+  const messages = store.get(messagesAtom);
+  console.log('Rendering messages from store:', messages);
   const messagesContainer = document.getElementById('messages-container');
-  console.log('Messages container:', messagesContainer);
   if (!messagesContainer) return;
   
   // Clear the container first
@@ -236,6 +256,12 @@ function displayMessages(messages: any[]) {
   
   // Scroll to the bottom
   messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
+
+// Keep for backward compatibility, but use store-based rendering
+function displayMessages(messages: any[]) {
+  actions.setMessages(messages);
+  renderAllMessages();
 }
 
 // Add more UI functionality as needed

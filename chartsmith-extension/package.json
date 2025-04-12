@@ -59,6 +59,7 @@
   },
   "dependencies": {
     "centrifuge": "^5.3.4",
+    "jotai": "^2.12.2",
     "marked": "^15.0.8",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

@@ -4,6 +4,7 @@ import { initAuth, loadAuthData } from '../auth';
 import { initWebSocket, connectToCentrifugo } from '../webSocket';
 import { initWorkspace } from '../workspace';
 import { initChat } from '../chat';
+import { initRenders } from '../renders';
 import { getHtmlForWebview } from '../ui';
 
 let outputChannel: vscode.OutputChannel;
@@ -34,6 +35,7 @@ export async function activate(extensionContext: vscode.ExtensionContext): Promi
   initWebSocket(globalState);
   initWorkspace(context);
   initChat(globalState);
+  initRenders(globalState);
 
   // Try to load auth data
   const authData = await loadAuthData();
@@ -140,6 +142,14 @@ function registerCommands(context: vscode.ExtensionContext): void {
             globalState.authData.token
           );
           
+          // Directly fetch renders for this workspace
+          try {
+            // Use the command to ensure consistent handling
+            vscode.commands.executeCommand('chartsmith.fetchRenders', uploadResponse.workspaceId);
+          } catch (error) {
+            console.error('Error executing fetchRenders command:', error);
+          }
+          
           // Notify the webview of the workspace change
           if (globalState.webviewGlobal) {
             globalState.webviewGlobal.postMessage({
@@ -187,8 +197,55 @@ function registerCommands(context: vscode.ExtensionContext): void {
             workspaceId: workspaceId
           });
         }
+        
+        // Also fetch renders for this workspace
+        try {
+          // We'll fetch renders automatically when fetching messages to ensure both are loaded
+          vscode.commands.executeCommand('chartsmith.fetchRenders', workspaceId);
+        } catch (error) {
+          console.error('Error executing fetchRenders command:', error);
+        }
       } catch (error) {
         vscode.window.showErrorMessage(`Failed to fetch messages: ${error}`);
+      }
+    })
+  );
+  
+  // Register fetch renders command
+  context.subscriptions.push(
+    vscode.commands.registerCommand('chartsmith.fetchRenders', async (workspaceId: string) => {
+      if (!globalState.authData) {
+        vscode.window.showErrorMessage('Please log in to ChartSmith first.');
+        return;
+      }
+
+      try {
+        // Import renders module dynamically
+        const renders = await import('../renders');
+        console.log(`Fetching renders for workspace: ${workspaceId}`);
+        const workspaceRenders = await renders.fetchWorkspaceRenders(
+          globalState.authData,
+          workspaceId
+        );
+
+        console.log(`Got ${workspaceRenders ? workspaceRenders.length : 0} renders from fetchWorkspaceRenders`);
+        console.log('Renders from API:', workspaceRenders);
+
+        if (globalState.webviewGlobal) {
+          console.log('Sending renders to webview');
+          // Send API response to webview console for debugging
+          globalState.webviewGlobal.postMessage({
+            command: 'debug',
+            message: `API Renders Response: ${JSON.stringify(workspaceRenders)}`
+          });
+          globalState.webviewGlobal.postMessage({
+            command: 'renders',
+            renders: workspaceRenders,
+            workspaceId: workspaceId
+          });
+        }
+      } catch (error) {
+        vscode.window.showErrorMessage(`Failed to fetch renders: ${error}`);
       }
     })
   );
