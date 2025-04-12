@@ -1585,6 +1585,21 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>ChartSmith</title>
+        <!-- Add marked.js for markdown rendering -->
+        <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+        <script>
+          // Configure marked.js options for security and rendering
+          marked.setOptions({
+            gfm: true,               // GitHub flavored markdown
+            breaks: true,            // Convert line breaks to <br>
+            headerIds: false,        // Don't add IDs to headers (more secure)
+            mangle: false,           // Don't mangle email addresses
+            silent: true,            // Ignore errors
+            sanitize: false,         // Use DOMPurify instead (below)
+          });
+        </script>
+        <!-- Add DOMPurify for sanitizing HTML from markdown -->
+        <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
         <style>
           body {
             padding: 10px;
@@ -1824,6 +1839,63 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
           }
           .message-text {
             margin-bottom: 4px;
+            text-align: left;
+          }
+          
+          /* Markdown styling for message text */
+          .message-text p {
+            margin: 0 0 10px 0;
+          }
+          .message-text p:last-child {
+            margin-bottom: 0;
+          }
+          .message-text pre {
+            background-color: rgba(0, 0, 0, 0.1);
+            padding: 8px;
+            border-radius: 4px;
+            overflow-x: auto;
+            margin: 8px 0;
+          }
+          .message-text code {
+            font-family: var(--vscode-editor-font-family, monospace);
+            font-size: 90%;
+            background-color: rgba(0, 0, 0, 0.1);
+            padding: 2px 4px;
+            border-radius: 3px;
+          }
+          .message-text pre code {
+            background-color: transparent;
+            padding: 0;
+            border-radius: 0;
+          }
+          .message-text a {
+            color: var(--vscode-textLink-foreground, #3794ff);
+            text-decoration: none;
+          }
+          .message-text a:hover {
+            text-decoration: underline;
+          }
+          .message-text ul, .message-text ol {
+            margin-top: 4px;
+            margin-bottom: 4px;
+            padding-left: 24px;
+          }
+          .message-text blockquote {
+            border-left: 3px solid rgba(127, 127, 127, 0.5);
+            margin: 8px 0;
+            padding-left: 12px;
+            color: var(--vscode-descriptionForeground);
+          }
+          .message-text table {
+            border-collapse: collapse;
+            margin: 8px 0;
+          }
+          .message-text th, .message-text td {
+            border: 1px solid rgba(127, 127, 127, 0.3);
+            padding: 6px 8px;
+          }
+          .message-text th {
+            background-color: rgba(0, 0, 0, 0.1);
           }
           .message-timestamp-debug {
             display: none; /* Hide all timestamp debug elements */
@@ -1840,6 +1912,7 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
             align-self: flex-end;
             margin-left: auto;
             border-bottom-right-radius: 2px;
+            text-align: left;
           }
           .assistant-message {
             background-color: var(--vscode-editor-lineHighlightBackground, rgba(255,255,255,0.08));
@@ -1847,6 +1920,7 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
             align-self: flex-start;
             margin-right: auto;
             border-bottom-left-radius: 2px;
+            text-align: left;
             border-left: 2px solid var(--vscode-activityBarBadge-background, #007ACC);
           }
           .system-message {
@@ -2157,7 +2231,10 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
             // Add the actual message text
             const messageText = document.createElement('div');
             messageText.classList.add('message-text');
-            messageText.textContent = text;
+            // Store the raw text for future comparisons
+            messageText.setAttribute('data-raw-text', text);
+            // Render markdown and sanitize HTML
+            messageText.innerHTML = DOMPurify.sanitize(marked.parse(text));
             messageContainer.appendChild(messageText);
             
             // Store timestamp for sorting purposes but don't display it visually
@@ -2281,11 +2358,21 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
               if (messageTextElement) {
                 // Just update the content directly without animations
                 // This prevents visual disruption when streaming responses
-                if (messageTextElement.textContent !== displayText) {
-                  messageTextElement.textContent = displayText;
+                // Compare the raw text content for change detection
+                const currentText = messageTextElement.getAttribute('data-raw-text') || '';
+                if (currentText !== displayText) {
+                  // Store the raw text for future comparisons
+                  messageTextElement.setAttribute('data-raw-text', displayText);
+                  // Render markdown and sanitize HTML
+                  messageTextElement.innerHTML = DOMPurify.sanitize(marked.parse(displayText));
                 }
               } else {
-                responseMsgElement.textContent = displayText;
+                // Create a message text element if it doesn't exist
+                const newMessageText = document.createElement('div');
+                newMessageText.classList.add('message-text');
+                newMessageText.setAttribute('data-raw-text', displayText);
+                newMessageText.innerHTML = DOMPurify.sanitize(marked.parse(displayText));
+                responseMsgElement.appendChild(newMessageText);
               }
               
               // No longer updating timestamp elements - they're hidden

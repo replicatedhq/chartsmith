@@ -1,11 +1,10 @@
 import { getDB } from "../data/db";
 import { getParam } from "../data/param";
-import { Session } from "../types/session";
 import { RenderedChart, RenderedFile, RenderedWorkspace } from "../types/workspace";
 import { logger } from "../utils/logger";
 import { getWorkspace } from "./workspace";
 
-export async function listWorkspaceRenders(session: Session, workspaceId: string): Promise<RenderedWorkspace[]> {
+export async function listWorkspaceRenders(workspaceId: string): Promise<RenderedWorkspace[]> {
   logger.debug("Listing workspace renders", { workspaceId });
   try {
     const db = getDB(await getParam("DB_URI"));
