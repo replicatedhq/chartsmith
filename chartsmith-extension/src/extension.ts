@@ -2939,6 +2939,18 @@ class ChartSmithViewProvider implements vscode.WebviewViewProvider {
                 errorElement.textContent = 'Could not load previous messages: ' + message.error;
                 chatMessages.appendChild(errorElement);
               }
+            } else if (message.type === 'workspaceRendersLoaded') {
+              console.log('Received renders for workspace:', message.workspaceId, message.renders);
+              
+              // Store renders in jotaiStore (if available)
+              if (window.jotaiStore) {
+                const setWorkspaceRendersAction = {
+                  workspaceId: message.workspaceId,
+                  renders: message.renders
+                };
+                // Invoke the setWorkspaceRendersAction
+                window.jotaiStore.set('setWorkspaceRendersAction', setWorkspaceRendersAction);
+              }
             }
           });
         </script>
@@ -3198,6 +3210,9 @@ async function connectToCentrifugo(pushEndpoint: string, token: string): Promise
         
         if (mappings && mappings.length > 0) {
           const workspaceId = mappings[0].workspaceId;
+          
+          // Fetch renders for this workspace
+          fetchWorkspaceRenders(workspaceId);
           
           // Create channel name for this workspace with userId
           // Use workspaceId#userId format as the channel name
@@ -3572,6 +3587,84 @@ function updateConnectionStatus(): void {
       status: connectionStatus
     });
     outputChannel.appendLine(`Updated connection status: ${connectionStatus}`);
+  }
+}
+
+/**
+ * Fetches renders for a workspace
+ * @param workspaceId The ID of the workspace to fetch renders for
+ */
+async function fetchWorkspaceRenders(workspaceId: string): Promise<void> {
+  outputChannel.appendLine(`Fetching renders for workspace: ${workspaceId}`);
+  
+  try {
+    // Get auth token 
+    const token = await getAuthToken();
+    const apiEndpoint = await getApiEndpoint();
+    
+    if (!token || !apiEndpoint) {
+      outputChannel.appendLine('Missing token or API endpoint for fetching renders');
+      return;
+    }
+    
+    // Construct the URL for fetching workspace renders
+    const rendersUrl = `${apiEndpoint}/workspace/${workspaceId}/renders`;
+    outputChannel.appendLine(`Fetching renders from: ${rendersUrl}`);
+    
+    // Make the HTTP request
+    const parsedUrl = url.parse(rendersUrl);
+    const isHttps = parsedUrl.protocol === 'https:';
+    
+    const options = {
+      method: 'GET',
+      hostname: parsedUrl.hostname,
+      port: parsedUrl.port || (isHttps ? 443 : 80),
+      path: parsedUrl.path,
+      headers: {
+        'Authorization': `Token ${token}`,
+        'User-Agent': 'ChartSmith-VSCode-Extension'
+      }
+    };
+    
+    const req = (isHttps ? https : http).request(options, (res) => {
+      let responseData = '';
+      
+      res.on('data', (chunk) => {
+        responseData += chunk.toString();
+      });
+      
+      res.on('end', () => {
+        outputChannel.appendLine(`Renders response status: ${res.statusCode}`);
+        
+        if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+          try {
+            const response = JSON.parse(responseData);
+            outputChannel.appendLine(`Successfully fetched renders: ${responseData}`);
+            
+            // Send the renders to the webview
+            if (webviewGlobal) {
+              webviewGlobal.postMessage({
+                type: 'workspaceRendersLoaded',
+                workspaceId,
+                renders: response
+              });
+            }
+          } catch (error) {
+            outputChannel.appendLine(`Error parsing renders response: ${error}`);
+          }
+        } else {
+          outputChannel.appendLine(`Failed to fetch renders: ${responseData}`);
+        }
+      });
+    });
+    
+    req.on('error', (error) => {
+      outputChannel.appendLine(`Error fetching renders: ${error}`);
+    });
+    
+    req.end();
+  } catch (error) {
+    outputChannel.appendLine(`Exception fetching workspace renders: ${error}`);
   }
 }
 
