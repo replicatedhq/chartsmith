@@ -14,7 +14,9 @@ export function setOnMessageCallback(callback: (message: any) => void): void {
   onMessageCallback = callback;
 }
 
-export function connectToCentrifugo(endpoint: string, token: string): void {
+export async function connectToCentrifugo(endpoint: string, token: string): Promise<void> {
+  console.log('connectToCentrifugo called with endpoint:', endpoint);
+  
   if (globalState.centrifuge) {
     disconnectFromCentrifugo();
   }
@@ -109,9 +111,9 @@ function scheduleReconnect(): void {
 
   console.log(`Scheduling reconnect in ${delay}ms (attempt ${globalState.reconnectAttempt}/${reconnectMaxAttempts})`);
   
-  globalState.reconnectTimer = setTimeout(() => {
+  globalState.reconnectTimer = setTimeout(async () => {
     if (globalState.authData) {
-      connectToCentrifugo(
+      await connectToCentrifugo(
         globalState.authData.pushEndpoint,
         globalState.authData.token
       );

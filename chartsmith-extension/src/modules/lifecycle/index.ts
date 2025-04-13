@@ -18,13 +18,15 @@ let globalState: GlobalState = {
   authData: null,
   isLoggedIn: false,
   authServer: null,
-  pushToken: null
+  centrifugoJwt: null
 };
 
 // Make global state accessible to other modules
 (global as any).chartsmithGlobalState = globalState;
 
 export async function activate(extensionContext: vscode.ExtensionContext): Promise<void> {
+  console.log('CHARTSMITH EXTENSION ACTIVATING');
+  
   context = extensionContext;
 
   // Initialize output channel
@@ -39,14 +41,17 @@ export async function activate(extensionContext: vscode.ExtensionContext): Promi
 
   // Try to load auth data
   const authData = await loadAuthData();
+  if (authData) {
+    // Store auth data in global state
+    globalState.authData = authData;
+    console.log('Auth data loaded successfully');
+  }
 
   // Register commands and views
   registerCommands(context);
   registerViews(context);
-
-  // We'll only connect to WebSocket when a workspace is opened, not on initial login
-  // Connecting will happen in the uploadChart command
 }
+
 
 export function deactivate(): void {
   // Cleanup on extension deactivation
@@ -147,13 +152,9 @@ function registerCommands(context: vscode.ExtensionContext): void {
           }
         }
         
-        // After uploading, connect to WebSocket and show messages if we have a workspace ID
-        if (uploadResponse.workspaceId && globalState.authData && globalState.authData.pushEndpoint) {
-          const webSocket = await import('../webSocket');
-          webSocket.connectToCentrifugo(
-            globalState.authData.pushEndpoint,
-            globalState.authData.token
-          );
+        // After uploading, fetch renders for this workspace
+        if (uploadResponse.workspaceId && globalState.authData) {
+          console.log(`Workspace ID: ${uploadResponse.workspaceId}`);
           
           // Directly fetch renders for this workspace
           try {
@@ -244,6 +245,31 @@ function registerCommands(context: vscode.ExtensionContext): void {
           });
         }
         
+        // Call /push API
+        try {
+          const api = await import('../api');
+          outputChannel.appendLine(`Calling /push API endpoint`);
+          const pushResponse = await api.fetchApi(
+            globalState.authData,
+            '/push',
+            'GET'
+          );
+          outputChannel.appendLine('Push API Response: ' + JSON.stringify(pushResponse, null, 2));
+          
+          // Store the push token in memory
+          if (pushResponse && pushResponse.pushToken) {
+            globalState.centrifugoJwt = pushResponse.pushToken;
+            outputChannel.appendLine('Stored Centrifugo JWT: ' + globalState.centrifugoJwt);
+          } else {
+            outputChannel.appendLine('No push token found in response');
+          }
+          
+          outputChannel.show();
+        } catch (error) {
+          outputChannel.appendLine('Error fetching push data: ' + error);
+          outputChannel.show();
+        }
+        
         // Also fetch renders for this workspace
         try {
           // We'll fetch renders automatically when fetching messages to ensure both are loaded
@@ -290,6 +316,31 @@ function registerCommands(context: vscode.ExtensionContext): void {
             workspaceId: workspaceId
           });
         }
+        
+        // Call /push API
+        try {
+          const api = await import('../api');
+          outputChannel.appendLine(`Calling /push API endpoint`);
+          const pushResponse = await api.fetchApi(
+            globalState.authData,
+            '/push',
+            'GET'
+          );
+          outputChannel.appendLine('Push API Response: ' + JSON.stringify(pushResponse, null, 2));
+          
+          // Store the push token in memory
+          if (pushResponse && pushResponse.pushToken) {
+            globalState.centrifugoJwt = pushResponse.pushToken;
+            outputChannel.appendLine('Stored Centrifugo JWT: ' + globalState.centrifugoJwt);
+          } else {
+            outputChannel.appendLine('No push token found in response');
+          }
+          
+          outputChannel.show();
+        } catch (error) {
+          outputChannel.appendLine('Error fetching push data: ' + error);
+          outputChannel.show();
+        }
       } catch (error) {
         vscode.window.showErrorMessage(`Failed to fetch renders: ${error}`);
       }
@@ -326,6 +377,7 @@ function registerCommands(context: vscode.ExtensionContext): void {
       }
     })
   );
+
 
 
   // Register logout command

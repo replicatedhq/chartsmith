@@ -32,5 +32,5 @@ export interface GlobalState {
   authData: AuthData | null;
   isLoggedIn: boolean;
   authServer: http.Server | null;
-  pushToken: string | null;
+  centrifugoJwt: string | null;
 }

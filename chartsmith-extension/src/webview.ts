@@ -72,8 +72,10 @@ function initUI() {
       case 'renders':
         console.log('Received renders from extension:', message.renders);
         actions.setRenders(message.renders || []);
+        
         // Force re-render of messages to update render displays
         renderAllMessages();
+        
         break;
       case 'newRender':
         console.log('Received new render from extension:', message.render);
