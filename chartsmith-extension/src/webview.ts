@@ -363,18 +363,31 @@ function renderAllMessages() {
         if (matchingRender && matchingRender.charts && matchingRender.charts.length > 0) {
           // Iterate through each chart
           matchingRender.charts.forEach((chart, index) => {
-            // Add a blank line between commands if not the first one
+            // Add a blank line between chart sections if not the first one
             if (index > 0) {
-              terminalHTML += `\n`;
+              terminalHTML += `\n\n`;
             }
             
             // Add the command line for this chart
             const depUpdateCommand = chart.depUpdateCommand || '';
-            terminalHTML += `<span class="terminal-prompt">$</span>${depUpdateCommand ? ` <span class="terminal-command">${depUpdateCommand}</span>` : ''}`;
+            const escapedCommand = depUpdateCommand ? escapeHtml(depUpdateCommand) : '';
+            terminalHTML += `<span class="terminal-prompt">$</span>${escapedCommand ? ` <span class="terminal-command">${escapedCommand}</span>` : ''}`;
+            
+            // Add stdout if available
+            if (chart.depUpdateStdout) {
+              const escapedStdout = escapeHtml(chart.depUpdateStdout);
+              terminalHTML += `\n<span class="terminal-stdout">${escapedStdout}</span>`;
+            }
+            
+            // Add stderr if available
+            if (chart.depUpdateStderr) {
+              const escapedStderr = escapeHtml(chart.depUpdateStderr);
+              terminalHTML += `\n<span class="terminal-stderr">${escapedStderr}</span>`;
+            }
           });
           
-          // Add cursor at the end of the last command
-          terminalHTML += `<span class="terminal-cursor"></span>`;
+          // Add cursor at the end
+          terminalHTML += `\n<span class="terminal-prompt">$</span><span class="terminal-cursor"></span>`;
         } else {
           // No charts found, just show a prompt
           terminalHTML += `<span class="terminal-prompt">$</span><span class="terminal-cursor"></span>`;
@@ -400,6 +413,16 @@ function renderAllMessages() {
 function displayMessages(messages: any[]) {
   actions.setMessages(messages);
   renderAllMessages();
+}
+
+// Helper function to escape HTML content for safety
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
 // Add more UI functionality as needed

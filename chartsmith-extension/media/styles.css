@@ -351,6 +351,18 @@ button:hover {
   margin-left: 4px;
 }
 
+.terminal-stdout {
+  color: var(--vscode-terminal-foreground, #cccccc);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.terminal-stderr {
+  color: var(--vscode-errorForeground, #f44747);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .terminal-cursor {
   display: inline-block;
   width: 6px;
