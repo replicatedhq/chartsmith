@@ -251,6 +251,16 @@ function renderAllMessages() {
         <div class="message-content">${message.response}</div>
       `;
       messagesContainer.appendChild(agentMessageEl);
+      
+      // If there's a responseRenderId, show a RENDER indicator
+      if (message.responseRenderId) {
+        const renderIndicatorEl = document.createElement('div');
+        renderIndicatorEl.className = 'message render-indicator';
+        renderIndicatorEl.innerHTML = `
+          <div class="message-content">RENDER</div>
+        `;
+        messagesContainer.appendChild(renderIndicatorEl);
+      }
     }
   });
   

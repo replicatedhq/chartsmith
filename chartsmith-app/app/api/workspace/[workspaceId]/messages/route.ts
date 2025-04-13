@@ -26,7 +26,6 @@ export async function GET(req: NextRequest) {
 
     const messages = await listMessagesForWorkspace(workspaceId);
 
-    console.log(messages);
     return NextResponse.json(messages);
 
   } catch (err) {

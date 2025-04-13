@@ -173,6 +173,18 @@ button:hover {
   border-bottom-left-radius: 4px;
 }
 
+.render-indicator {
+  align-self: flex-start;
+  background-color: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+  font-weight: bold;
+  padding: 8px 12px;
+  max-width: 60%;
+  margin-top: 4px;
+  border-radius: 8px;
+  font-size: 0.9em;
+}
+
 .message-content {
   word-break: break-word;
 }

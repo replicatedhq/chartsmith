@@ -7,6 +7,7 @@ export interface ChatMessage {
   response?: string;
   createdAt: string;
   isComplete?: boolean;
+  responseRenderId?: string;
 }
 
 // Define render type
