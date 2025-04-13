@@ -72,12 +72,14 @@ function initUI() {
       case 'renders':
         console.log('Received renders from extension:', message.renders);
         actions.setRenders(message.renders || []);
-        // No UI rendering needed at this point, just store in atom
+        // Force re-render of messages to update render displays
+        renderAllMessages();
         break;
       case 'newRender':
         console.log('Received new render from extension:', message.render);
         actions.addRender(message.render);
-        // No UI rendering needed at this point, just store in atom
+        // Force re-render of messages to update render displays
+        renderAllMessages();
         break;
       case 'workspaceChanged':
         // Update the context and fetch messages for the new workspace
@@ -215,6 +217,7 @@ function renderLoggedInView(container: HTMLElement) {
   // Initialize Jotai store from context
   if (context.workspaceId) {
     actions.setWorkspaceId(context.workspaceId);
+    console.log(`Initialized with workspaceId: ${context.workspaceId}`);
   }
   
   // Only fetch messages if we have a workspace ID
@@ -309,6 +312,11 @@ function addMessage(message: any) {
 function renderAllMessages() {
   const messages = store.get(messagesAtom);
   console.log('Rendering messages from store:', messages);
+  
+  // Debug: Check renders state
+  const renders = store.get(rendersAtom);
+  console.log('Current renders in store:', renders);
+  
   const messagesContainer = document.getElementById('messages-container');
   if (!messagesContainer) return;
   
@@ -338,9 +346,26 @@ function renderAllMessages() {
       
       // If there's a responseRenderId, show a terminal-like RENDER indicator
       if (message.responseRenderId) {
+        // Make sure we have the workspace ID in the store
+        const workspaceId = store.get(workspaceIdAtom);
+        if (!workspaceId && context.workspaceId) {
+          console.log('Setting missing workspaceId in store:', context.workspaceId);
+          actions.setWorkspaceId(context.workspaceId);
+        }
+        
         // Find the matching render in the rendersAtom
         const renders = store.get(rendersAtom);
-        const matchingRender = renders.find(render => render.id === message.responseRenderId);
+        console.log(`Looking for render ID ${message.responseRenderId} among ${renders.length} renders`);
+        let matchingRender = renders.find(render => render.id === message.responseRenderId);
+        
+        // If render not found, try to fetch it
+        if (!matchingRender && context.workspaceId) {
+          console.log(`Render not found, fetching renders for workspace ${context.workspaceId}`);
+          vscode.postMessage({
+            command: 'fetchRenders',
+            workspaceId: context.workspaceId
+          });
+        }
         
         // Create terminal container element
         const renderIndicatorEl = document.createElement('div');

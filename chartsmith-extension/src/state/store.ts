@@ -1,7 +1,13 @@
 import { createStore } from 'jotai';
 import { messagesAtom, workspaceIdAtom, connectionStatusAtom, rendersAtom } from './atoms';
 
+// Create a store that will persist data
 export const store = createStore();
+
+// Track store changes for debugging
+store.sub(rendersAtom, () => {
+  console.log('Renders atom changed:', store.get(rendersAtom));
+});
 
 // Initialize the store with default values
 store.set(messagesAtom, []);
