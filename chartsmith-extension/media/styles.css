@@ -117,10 +117,13 @@ body {
 
 .content {
   flex: 1;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
   padding: 10px;
   width: 100%;
+  height: calc(100vh - 120px); /* Account for header, footer, and chart path */
   box-sizing: border-box;
+  overflow: hidden; /* Let child elements handle overflow */
 }
 
 .full-width {
@@ -235,9 +238,10 @@ button:hover {
 }
 
 #messages-container {
-  max-height: 300px;
+  flex: 1; /* Take up all available space */
+  height: 100%;
   overflow-y: auto;
-  margin-bottom: 20px;
+  margin-bottom: 0; /* Remove margin to maximize space */
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -263,6 +267,8 @@ button:hover {
   background-color: var(--vscode-editor-inactiveSelectionBackground);
   color: var(--vscode-foreground);
   border-bottom-left-radius: 4px;
+  max-width: 90%; /* Increase width for markdown content */
+  width: auto;    /* Allow width to adjust based on content */
 }
 
 .render-indicator {
@@ -382,8 +388,109 @@ button:hover {
   word-break: break-word;
 }
 
+/* Markdown styling for agent messages */
+.markdown-content {
+  line-height: 1.5;
+}
+
+.markdown-content p {
+  margin: 0.5em 0;
+}
+
+.markdown-content p:first-child {
+  margin-top: 0;
+}
+
+.markdown-content p:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-content pre {
+  background-color: var(--vscode-editor-inactiveSelectionBackground);
+  padding: 0.5em;
+  border-radius: 4px;
+  overflow-x: auto;
+  margin: 0.5em 0;
+}
+
+.markdown-content code {
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+  font-size: 0.9em;
+  background-color: var(--vscode-editor-inactiveSelectionBackground);
+  padding: 0.2em 0.4em;
+  border-radius: 3px;
+}
+
+.markdown-content pre code {
+  background-color: transparent;
+  padding: 0;
+  border-radius: 0;
+}
+
+.markdown-content ul, .markdown-content ol {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+
+.markdown-content blockquote {
+  margin: 0.5em 0;
+  padding-left: 1em;
+  border-left: 3px solid var(--vscode-editor-lineHighlightBorder);
+  color: var(--vscode-descriptionForeground);
+}
+
+.markdown-content a {
+  color: var(--vscode-textLink-foreground);
+  text-decoration: none;
+}
+
+.markdown-content a:hover {
+  text-decoration: underline;
+}
+
+.markdown-content img {
+  max-width: 100%;
+  border-radius: 4px;
+}
+
+.markdown-content h1, .markdown-content h2, .markdown-content h3, 
+.markdown-content h4, .markdown-content h5, .markdown-content h6 {
+  margin: 0.8em 0 0.4em;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.markdown-content h1 {
+  font-size: 1.5em;
+}
+
+.markdown-content h2 {
+  font-size: 1.3em;
+}
+
+.markdown-content h3 {
+  font-size: 1.1em;
+}
+
+.markdown-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.5em 0;
+}
+
+.markdown-content th, .markdown-content td {
+  border: 1px solid var(--vscode-panel-border);
+  padding: 0.4em 0.6em;
+  text-align: left;
+}
+
+.markdown-content th {
+  background-color: var(--vscode-editor-inactiveSelectionBackground);
+  font-weight: 600;
+}
+
 #renders-container {
-  margin-top: 20px;
+  /* No margin needed as the messages will be displayed inside the #messages-container */
 }
 
 .no-workspace {

@@ -14,6 +14,7 @@ export interface ChatMessage {
 export interface Render {
   id: string;
   charts: RenderedChart[];
+  isAutorender: boolean;
 }
 
 export interface RenderedChart {

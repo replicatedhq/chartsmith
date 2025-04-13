@@ -1,13 +1,19 @@
 import { Centrifuge } from 'centrifuge';
 import WebSocket = require('ws');
 import { GlobalState, ConnectionStatus } from '../../types';
+import * as vscode from 'vscode';
 
 let globalState: GlobalState;
 let onMessageCallback: ((message: any) => void) | null = null;
 let reconnectMaxAttempts = 10;
+let outputChannel: vscode.OutputChannel;
 
 export function initWebSocket(state: GlobalState): void {
   globalState = state;
+  // Initialize the output channel if it doesn't exist
+  if (!outputChannel) {
+    outputChannel = vscode.window.createOutputChannel('ChartSmith WebSocket');
+  }
 }
 
 export function setOnMessageCallback(callback: (message: any) => void): void {
@@ -53,11 +59,14 @@ export async function connectToCentrifugo(endpoint: string, token: string): Prom
 
   centrifuge.on('connecting', () => {
     console.log('Connecting to Centrifugo...');
+    outputChannel.appendLine('Connecting to Centrifugo...');
     updateConnectionStatus(ConnectionStatus.CONNECTING);
   });
 
   centrifuge.on('connected', (ctx) => {
     console.log('Connected to Centrifugo', ctx);
+    outputChannel.appendLine('Connected to Centrifugo: ' + JSON.stringify(ctx, null, 2));
+    outputChannel.show();
     updateConnectionStatus(ConnectionStatus.CONNECTED);
     globalState.reconnectAttempt = 0;
     clearReconnectTimer();
@@ -65,21 +74,30 @@ export async function connectToCentrifugo(endpoint: string, token: string): Prom
 
   centrifuge.on('disconnected', () => {
     console.log('Disconnected from Centrifugo');
+    outputChannel.appendLine('Disconnected from Centrifugo');
     updateConnectionStatus(ConnectionStatus.DISCONNECTED);
     scheduleReconnect();
   });
 
   centrifuge.on('error', (ctx) => {
     console.error('Centrifugo connection error:', ctx);
+    outputChannel.appendLine('Centrifugo connection error: ' + JSON.stringify(ctx, null, 2));
+    outputChannel.show();
   });
 
   // Subscribe to personal channel
   if (globalState.authData?.userId) {
     const channel = `user#${globalState.authData.userId}`;
+    outputChannel.appendLine(`Subscribing to channel: ${channel}`);
     const sub = centrifuge.newSubscription(channel);
 
     sub.on('publication', (ctx) => {
       console.log('Received message from server:', ctx.data);
+      outputChannel.appendLine('CENTRIFUGO MESSAGE RECEIVED:');
+      outputChannel.appendLine(JSON.stringify(ctx.data, null, 2));
+      outputChannel.appendLine('---------------------------------');
+      outputChannel.show();
+      
       if (onMessageCallback) {
         onMessageCallback(ctx.data);
       }
@@ -87,6 +105,8 @@ export async function connectToCentrifugo(endpoint: string, token: string): Prom
 
     sub.on('error', (ctx) => {
       console.error('Subscription error:', ctx);
+      outputChannel.appendLine('Subscription error: ' + JSON.stringify(ctx, null, 2));
+      outputChannel.show();
     });
 
     sub.subscribe();

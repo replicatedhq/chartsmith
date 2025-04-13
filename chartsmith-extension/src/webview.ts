@@ -4,6 +4,7 @@
 // Import state management
 import { store, actions } from './state/store';
 import { messagesAtom, workspaceIdAtom, connectionStatusAtom, rendersAtom } from './state/atoms';
+import { marked } from 'marked';
 
 // Define global interfaces
 interface Window {
@@ -341,12 +342,30 @@ function renderAllMessages() {
     if (message.response) {
       const agentMessageEl = document.createElement('div');
       agentMessageEl.className = 'message agent-message';
-      agentMessageEl.innerHTML = `
-        <div class="message-content">${message.response}</div>
-      `;
+      
+      // Render agent message as Markdown
+      try {
+        // Configure marked options to handle code blocks properly
+        marked.setOptions({
+          breaks: true,       // Add line breaks on single line breaks
+          gfm: true           // Enable GitHub Flavored Markdown
+        });
+        
+        // Render markdown and put in content div
+        agentMessageEl.innerHTML = `
+          <div class="message-content markdown-content">${marked.parse(message.response)}</div>
+        `;
+      } catch (error) {
+        // Fallback to plain text if markdown parsing fails
+        console.error('Error parsing markdown:', error);
+        agentMessageEl.innerHTML = `
+          <div class="message-content">${escapeHtml(message.response)}</div>
+        `;
+      }
+      
       messagesContainer.appendChild(agentMessageEl);
       
-      // If there's a responseRenderId, show a terminal-like RENDER indicator
+      // If there's a responseRenderId, check if we should show a terminal-like RENDER indicator
       if (message.responseRenderId) {
         // Make sure we have the workspace ID in the store
         const workspaceId = store.get(workspaceIdAtom);
@@ -368,6 +387,12 @@ function renderAllMessages() {
             workspaceId: context.workspaceId
           });
         }
+        
+        // Skip auto-rendered items
+        if (matchingRender && matchingRender.isAutorender === true) {
+          console.log(`Skipping auto-rendered item: ${message.responseRenderId}`);
+          // Don't render this indicator, but continue with the loop
+        } else {
         
         // Create terminal container element
         const renderIndicatorEl = document.createElement('div');
@@ -428,6 +453,7 @@ function renderAllMessages() {
         
         renderIndicatorEl.innerHTML = terminalHTML;
         messagesContainer.appendChild(renderIndicatorEl);
+        } // Close the else block
       }
     }
   });
