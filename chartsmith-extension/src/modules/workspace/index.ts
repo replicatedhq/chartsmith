@@ -96,3 +96,11 @@ export async function removeWorkspaceMappingByPath(localPath: string): Promise<v
   const filteredMappings = mappings.filter(m => m.localPath !== localPath);
   await globalStorage.update(WORKSPACE_MAPPINGS_KEY, filteredMappings);
 }
+
+/**
+ * Helper function to construct a channel name from workspaceId and userId
+ * Format: {workspaceId}#{userId}
+ */
+export function constructChannelName(workspaceId: string, userId: string): string {
+  return `${workspaceId}#${userId}`;
+}

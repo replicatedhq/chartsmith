@@ -85,31 +85,72 @@ export async function connectToCentrifugo(endpoint: string, token: string): Prom
     outputChannel.show();
   });
 
-  // Subscribe to personal channel
+  // Subscribe to workspace-specific channel
+  // We need both userId and workspaceId to construct the channel name
   if (globalState.authData?.userId) {
-    const channel = `user#${globalState.authData.userId}`;
-    outputChannel.appendLine(`Subscribing to channel: ${channel}`);
-    const sub = centrifuge.newSubscription(channel);
-
-    sub.on('publication', (ctx) => {
-      console.log('Received message from server:', ctx.data);
-      outputChannel.appendLine('CENTRIFUGO MESSAGE RECEIVED:');
-      outputChannel.appendLine(JSON.stringify(ctx.data, null, 2));
-      outputChannel.appendLine('---------------------------------');
-      outputChannel.show();
-      
-      if (onMessageCallback) {
-        onMessageCallback(ctx.data);
+    // Get the active workspace ID from the global state
+    const workspace = async () => {
+      try {
+        const workspaceModule = await import('../workspace');
+        return await workspaceModule.getActiveWorkspaceId();
+      } catch (error) {
+        outputChannel.appendLine(`Error getting active workspace ID: ${error}`);
+        return null;
       }
-    });
+    };
+    
+    workspace().then(async (workspaceId) => {
+      if (!workspaceId) {
+        outputChannel.appendLine('No active workspace ID found, cannot subscribe to channel');
+        return;
+      }
+      
+      // Import the workspace module to use the helper function
+      const workspaceModule = await import('../workspace');
+      
+      // Create the workspace/user specific channel
+      const channel = workspaceModule.constructChannelName(
+        workspaceId, 
+        globalState.authData?.userId || ''
+      );
+      outputChannel.appendLine(`Subscribing to channel: ${channel}`);
+      const sub = centrifuge.newSubscription(channel);
 
-    sub.on('error', (ctx) => {
-      console.error('Subscription error:', ctx);
-      outputChannel.appendLine('Subscription error: ' + JSON.stringify(ctx, null, 2));
+      sub.on('publication', (ctx) => {
+        console.log('Received message from server:', ctx.data);
+        outputChannel.appendLine('==========================================');
+        outputChannel.appendLine(`CENTRIFUGO MESSAGE RECEIVED ON CHANNEL: ${channel}`);
+        outputChannel.appendLine('==========================================');
+        outputChannel.appendLine(JSON.stringify(ctx.data, null, 2));
+        outputChannel.appendLine('==========================================');
+        outputChannel.show();
+        
+        if (onMessageCallback) {
+          onMessageCallback(ctx.data);
+        }
+      });
+
+      sub.on('error', (ctx) => {
+        console.error('Subscription error:', ctx);
+        outputChannel.appendLine(`Subscription error on channel ${channel}: ${JSON.stringify(ctx, null, 2)}`);
+        outputChannel.show();
+      });
+
+      // Add subscription handler
+      sub.on('subscribed', (ctx) => {
+        outputChannel.appendLine(`Successfully subscribed to channel: ${channel}`);
+        outputChannel.appendLine(`Subscription context: ${JSON.stringify(ctx, null, 2)}`);
+        outputChannel.show();
+      });
+
+      sub.subscribe();
+      
+      outputChannel.appendLine(`Subscription request sent for channel: ${channel}`);
+      outputChannel.show();
+    }).catch(error => {
+      outputChannel.appendLine(`Error subscribing to channel: ${error}`);
       outputChannel.show();
     });
-
-    sub.subscribe();
   }
 
   centrifuge.connect();
