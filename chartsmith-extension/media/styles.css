@@ -296,10 +296,14 @@ button:hover {
   margin-top: 12px;
   margin-bottom: 12px;
   border-radius: 8px;
-  overflow: hidden;
+  overflow: visible;
   font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
   box-sizing: border-box;
+  position: relative;
+  z-index: 5;
+  display: block;
+  min-height: 100px;
 }
 
 .terminal-window {
@@ -307,7 +311,11 @@ button:hover {
   background-color: var(--vscode-terminal-background, #1e1e1e);
   color: var(--vscode-terminal-foreground, #cccccc);
   border-radius: 8px;
-  overflow: hidden;
+  overflow: visible;
+  position: relative;
+  z-index: 1;
+  min-height: 50px;
+  display: block;
 }
 
 .terminal-header {
@@ -363,6 +371,10 @@ button:hover {
   line-height: 1.5;
   white-space: pre;
   display: block;
+  min-height: 30px;
+  position: relative;
+  z-index: 2;
+  background-color: var(--vscode-terminal-background, #1e1e1e);
 }
 
 .terminal-prompt {

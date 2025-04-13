@@ -579,13 +579,13 @@ function renderAllMessages() {
 
         // Append the content div to the plan container
         planContainer.appendChild(planContentDiv);
-        
+
         // Check if plan status is "review" and add a Proceed button
         if (matchingPlan.status && matchingPlan.status.toLowerCase() === 'review') {
           // Create a button container div
           const buttonContainer = document.createElement('div');
           buttonContainer.style.cssText = 'margin-top: 15px; padding-top: 10px; border-top: 1px solid var(--vscode-panel-border); text-align: right;';
-          
+
           // Create the Proceed button
           const proceedButton = document.createElement('button');
           proceedButton.textContent = 'Proceed';
@@ -599,24 +599,24 @@ function renderAllMessages() {
             cursor: pointer;
             font-size: 13px;
           `;
-          
+
           // Append button to container and container to plan
           buttonContainer.appendChild(proceedButton);
           planContentDiv.appendChild(buttonContainer);
-          
+
           // Log that we added a proceed button
           console.log('Added Proceed button to plan with review status');
         }
       } else {
         console.log('No matching plan found for ID:', planId);
-        
+
         // Create a content div for the "not found" message
         const notFoundDiv = document.createElement('div');
         notFoundDiv.className = 'message-content';
         notFoundDiv.style.cssText = 'position: relative; min-height: 30px;';
         notFoundDiv.textContent = `Plan data not loaded yet. Plan ID: ${planId}`;
         planContainer.appendChild(notFoundDiv);
-        
+
         // Try to fetch plans if we have a workspace ID
         if (context.workspaceId) {
           console.log(`Fetching plans for workspace ${context.workspaceId}`);
@@ -657,6 +657,7 @@ function renderAllMessages() {
       }
 
       // Skip auto-rendered items
+      console.log(matchingRender);
       if (matchingRender && matchingRender.isAutorender === true) {
         console.log(`Skipping auto-rendered item: ${message.responseRenderId}`);
         // Don't render this indicator, but continue with the loop
@@ -665,6 +666,7 @@ function renderAllMessages() {
       // Create terminal container element
       const renderIndicatorEl = document.createElement('div');
       renderIndicatorEl.className = 'message render-indicator';
+      renderIndicatorEl.style.cssText = 'position: relative; z-index: 5; display: block; width: 100%; min-height: 100px; margin: 15px 0; clear: both;';
 
       // Start building terminal HTML
       let terminalHTML = `
@@ -680,6 +682,7 @@ function renderAllMessages() {
           <div class="terminal-content">`;
 
       // Check if the render has charts
+      console.log(matchingRender);
       if (matchingRender && matchingRender.charts && matchingRender.charts.length > 0) {
         // Iterate through each chart
         matchingRender.charts.forEach((chart, index) => {
@@ -720,7 +723,10 @@ function renderAllMessages() {
       `;
 
       renderIndicatorEl.innerHTML = terminalHTML;
+
+      console.log('Render indicator element created:', renderIndicatorEl);
       messagesContainer.appendChild(renderIndicatorEl);
+      console.log('Render indicator element added to DOM');
       } // Close the else block
     }
   });
