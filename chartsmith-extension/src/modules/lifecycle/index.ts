@@ -465,6 +465,16 @@ function registerCommands(context: vscode.ExtensionContext): void {
             plans: workspacePlans,
             workspaceId: workspaceId
           });
+          
+          // Force re-render of messages to make sure plans are displayed
+          setTimeout(() => {
+            if (globalState.webviewGlobal) {
+              console.log('Triggering message re-render after plans loaded');
+              globalState.webviewGlobal.postMessage({
+                command: 'renderMessages'
+              });
+            }
+          }, 200);
         }
       } catch (error) {
         vscode.window.showErrorMessage(`Failed to fetch plans: ${error}`);

@@ -23,20 +23,33 @@ export async function fetchWorkspacePlans(
     console.log('API response for plans:', response);
     console.log('RAW API RESPONSE for plans: ' + JSON.stringify(response));
     
+    let plans: Plan[] = [];
+    
     // Handle different response structures
     if (Array.isArray(response)) {
       console.log(`Found ${response.length} plans in direct array response`);
-      return response;
+      plans = response;
     }
-    
     // If the API returns an object with a plans property
-    if (response.plans) {
+    else if (response && response.plans) {
       console.log(`Found ${response.plans.length} plans in response.plans`);
-      return response.plans;
+      plans = response.plans;
+    }
+    else {
+      console.log('No plans found in response or unexpected response format');
     }
     
-    console.log('No plans found in response');
-    return [];
+    // Log each plan ID for debugging
+    if (plans.length > 0) {
+      console.log('Plan IDs received:');
+      plans.forEach(plan => {
+        console.log(`- Plan ID: ${plan.id}, Status: ${plan.status}`);
+      });
+    } else {
+      console.log('No plans received from API');
+    }
+    
+    return plans;
   } catch (error) {
     console.error('Error fetching workspace plans:', error);
     return [];

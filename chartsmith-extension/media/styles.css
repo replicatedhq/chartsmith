@@ -34,6 +34,7 @@ body {
   flex-direction: column;
   height: 100vh;
   overflow: hidden;  /* Prevent scrolling at container level */
+  position: relative; /* Create proper stacking context */
 }
 
 .header {
@@ -138,6 +139,7 @@ body {
   width: 100%;
   box-sizing: border-box;
   overflow: hidden; /* Let child elements handle overflow */
+  position: relative; /* Create a stacking context */
 }
 
 .full-width {
@@ -259,6 +261,8 @@ button:hover {
   display: flex;
   flex-direction: column;
   width: 100%;
+  position: relative; /* Ensure proper stacking context */
+  z-index: 1; /* Set base z-index */
 }
 
 .message {
@@ -520,6 +524,7 @@ button:hover {
   padding: 10px;
   border-top: 1px solid var(--vscode-panel-border);
   background-color: var(--vscode-editor-background);
+  z-index: 10; /* Ensure this is above messages but doesn't interfere with other UI elements */
 }
 
 #message-input {
@@ -632,15 +637,21 @@ button:hover {
   width: 100%;
   max-width: 100%;
   border-radius: 8px;
-  overflow: hidden;
+  overflow: visible;
+  display: block;
+  position: relative;
+  z-index: 5; /* Ensure it's higher than regular messages but lower than input */
+  height: auto;
 }
 
 .plan-container {
   background-color: var(--vscode-inputValidation-infoBackground, #063b49);
   border: 1px solid var(--vscode-inputValidation-infoBorder, #007acc);
   border-radius: 6px;
-  overflow: hidden;
+  overflow: visible;
   font-size: 13px;
+  width: 100%;
+  margin-bottom: 15px;
 }
 
 .plan-header {

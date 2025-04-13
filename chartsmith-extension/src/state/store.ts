@@ -54,6 +54,11 @@ export const actions = {
     console.log('========= UPDATE MESSAGE ACTION CALLED ==========');
     console.log('Message to update:', message);
     
+    // Check for responsePlanId in the message for debugging
+    if (message.responsePlanId) {
+      console.log(`Message ${message.id} has responsePlanId: ${message.responsePlanId}`);
+    }
+    
     const currentMessages = store.get(messagesAtom);
     console.log('Current messages:', currentMessages);
     
@@ -67,12 +72,19 @@ export const actions = {
       const oldMessage = updatedMessages[existingMessageIndex];
       console.log('Old message:', oldMessage);
       
-      updatedMessages[existingMessageIndex] = {
+      // Preserve responsePlanId when present
+      const updatedMessage = {
         ...oldMessage,
         ...message
       };
       
+      updatedMessages[existingMessageIndex] = updatedMessage;
+      
       console.log('Updated message:', updatedMessages[existingMessageIndex]);
+      if (updatedMessage.responsePlanId) {
+        console.log(`Updated message has responsePlanId: ${updatedMessage.responsePlanId}`);
+      }
+      
       console.log('Setting new messages array');
       store.set(messagesAtom, updatedMessages);
     } else {
