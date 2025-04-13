@@ -11,6 +11,7 @@ interface Window {
   vscodeWebviewContext: any;
   acquireVsCodeApi(): any;
   jotaiStore: any;
+  pushTokenFetched?: boolean;
 }
 
 // When running in a webview inside VS Code
@@ -64,6 +65,15 @@ function initUI() {
       case 'newMessage':
         actions.addMessage(message.message);
         renderAllMessages(); // Re-render from store
+        break;
+      case 'messageUpdated':
+        console.log('========= MESSAGE UPDATED EVENT ==========');
+        console.log('Received updated message from extension:', message.message);
+        console.log('Current messages before update:', store.get(messagesAtom));
+        actions.updateMessage(message.message);
+        console.log('Messages after update:', store.get(messagesAtom));
+        renderAllMessages(); // Re-render from store
+        console.log('Re-render triggered');
         break;
       case 'messages':
         console.log('Received messages from extension:', message.messages);
@@ -314,6 +324,7 @@ function addMessage(message: any) {
 
 function renderAllMessages() {
   const messages = store.get(messagesAtom);
+  console.log('========= RENDER ALL MESSAGES ==========');
   console.log('Rendering messages from store:', messages);
   
   // Debug: Check renders state
@@ -321,7 +332,12 @@ function renderAllMessages() {
   console.log('Current renders in store:', renders);
   
   const messagesContainer = document.getElementById('messages-container');
-  if (!messagesContainer) return;
+  if (!messagesContainer) {
+    console.error('Messages container not found in DOM, cannot render!');
+    return;
+  }
+  
+  console.log('Messages container found, proceeding with render');
   
   // Clear the container first
   messagesContainer.innerHTML = '';

@@ -47,6 +47,15 @@ export async function activate(extensionContext: vscode.ExtensionContext): Promi
     console.log('Auth data loaded successfully');
   }
 
+  // Load active workspace ID to ensure state is consistent
+  try {
+    const workspace = await import('../workspace');
+    const activeWorkspaceId = await workspace.getActiveWorkspaceId();
+    console.log(`Active workspace ID at startup: ${activeWorkspaceId}`);
+  } catch (error) {
+    console.error('Error loading active workspace ID:', error);
+  }
+
   // Register commands and views
   registerCommands(context);
   registerViews(context);

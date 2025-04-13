@@ -2,6 +2,8 @@ import { Centrifuge } from 'centrifuge';
 import WebSocket = require('ws');
 import { GlobalState, ConnectionStatus } from '../../types';
 import * as vscode from 'vscode';
+import { store, actions } from '../../state/store';
+import { workspaceIdAtom } from '../../state/atoms';
 
 let globalState: GlobalState;
 let onMessageCallback: ((message: any) => void) | null = null;
@@ -20,10 +22,99 @@ export function setOnMessageCallback(callback: (message: any) => void): void {
   onMessageCallback = callback;
 }
 
+/**
+ * Process WebSocket messages based on event type
+ * @param data The message payload from Centrifugo
+ * @returns true if the message was handled, false if it was ignored
+ */
+function handleWebSocketMessage(data: any): boolean {
+  outputChannel.appendLine('========= PROCESSING WEBSOCKET MESSAGE ==========');
+  outputChannel.appendLine(`Message data: ${JSON.stringify(data, null, 2)}`);
+  
+  // Skip if no eventType
+  if (!data || !data.eventType) {
+    outputChannel.appendLine('Received message with no eventType, ignoring');
+    return false;
+  }
+  
+  // Get the current workspace ID
+  const currentWorkspaceId = store.get(workspaceIdAtom);
+  outputChannel.appendLine(`Current workspace ID: ${currentWorkspaceId}`);
+  outputChannel.appendLine(`Message workspace ID: ${data.workspaceId}`);
+  
+  // Skip if message workspaceId doesn't match current workspace
+  if (data.workspaceId !== currentWorkspaceId) {
+    outputChannel.appendLine(`Message workspaceId ${data.workspaceId} doesn't match current workspace ${currentWorkspaceId}, ignoring`);
+    return false;
+  }
+  
+  // Handle different event types
+  switch (data.eventType) {
+    case 'chatmessage-updated':
+      handleChatMessageUpdated(data);
+      return true;
+      
+    default:
+      outputChannel.appendLine(`Unknown event type: ${data.eventType}`);
+      return false;
+  }
+}
+
+/**
+ * Handle a chatmessage-updated event
+ * @param data The message payload
+ */
+function handleChatMessageUpdated(data: any): void {
+  outputChannel.appendLine('========= PROCESSING CHAT MESSAGE UPDATE ==========');
+  
+  if (!data.chatMessage) {
+    outputChannel.appendLine('ERROR: chatmessage-updated event missing chatMessage object');
+    return;
+  }
+  
+  const message = data.chatMessage;
+  outputChannel.appendLine(`Processing chatmessage-updated for message ID: ${message.id}`);
+  outputChannel.appendLine(`Message details: ${JSON.stringify(message, null, 2)}`);
+  
+  // Check if the message has the expected structure
+  if (!message.id) {
+    outputChannel.appendLine('ERROR: Message is missing ID field');
+    return;
+  }
+  
+  // Update the message in the store
+  actions.updateMessage(message);
+  
+  // Force re-render by notifying webview
+  if (globalState.webviewGlobal) {
+    globalState.webviewGlobal.postMessage({
+      command: 'messageUpdated',
+      message: message
+    });
+  }
+}
+
 export async function connectWithCentrifugoJwt(): Promise<void> {
   if (!globalState.centrifugoJwt || !globalState.authData?.pushEndpoint) {
     console.log('Cannot connect to Centrifugo: Missing JWT or endpoint');
     return;
+  }
+  
+  // Check current workspace ID
+  const currentWorkspaceId = store.get(workspaceIdAtom);
+  outputChannel.appendLine(`Current workspace ID when connecting: ${currentWorkspaceId}`);
+  
+  if (!currentWorkspaceId) {
+    outputChannel.appendLine('WARNING: No workspace ID set in store when connecting to WebSocket');
+    
+    // Try to fetch it from workspace module
+    try {
+      const workspace = await import('../workspace');
+      const activeWorkspaceId = await workspace.getActiveWorkspaceId();
+      outputChannel.appendLine(`Retrieved workspace ID from storage: ${activeWorkspaceId}`);
+    } catch (error) {
+      outputChannel.appendLine(`Error fetching workspace ID: ${error}`);
+    }
   }
   
   // Check if we're already connected 
@@ -123,8 +214,15 @@ export async function connectToCentrifugo(endpoint: string, token: string): Prom
         outputChannel.appendLine('==========================================');
         outputChannel.appendLine(JSON.stringify(ctx.data, null, 2));
         outputChannel.appendLine('==========================================');
+        
+        // Process the message
+        const handled = handleWebSocketMessage(ctx.data);
+        outputChannel.appendLine(`Message handled: ${handled}`);
+        
+        // Show output window for debugging
         outputChannel.show();
         
+        // Also call the legacy callback if it exists
         if (onMessageCallback) {
           onMessageCallback(ctx.data);
         }

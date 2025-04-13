@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { WorkspaceMapping } from '../../types';
 import { WORKSPACE_MAPPINGS_KEY } from '../../constants';
+import { store, actions } from '../../state/store';
 
 let globalStorage: vscode.Memento;
 
@@ -45,13 +46,24 @@ export async function getAllWorkspaceMappings(): Promise<WorkspaceMapping[]> {
 export async function getActiveWorkspaceId(): Promise<string | null> {
   // Get the active workspace ID from global storage
   const activeWorkspaceId = globalStorage.get<string>('chartsmith.activeWorkspaceId');
+  
+  // Also make sure the store is in sync
+  if (activeWorkspaceId) {
+    actions.setWorkspaceId(activeWorkspaceId);
+  }
+  
   return activeWorkspaceId || null;
 }
 
 export async function setActiveWorkspaceId(workspaceId: string | null): Promise<void> {
+  console.log(`Setting active workspace ID to: ${workspaceId}`);
+  
   if (workspaceId === null) {
     // Clear the active workspace ID
     await globalStorage.update('chartsmith.activeWorkspaceId', undefined);
+    
+    // Also clear the store
+    actions.setWorkspaceId(null);
     
     // Disconnect from WebSocket
     const globalState = (global as any).chartsmithGlobalState;
@@ -73,6 +85,10 @@ export async function setActiveWorkspaceId(workspaceId: string | null): Promise<
   
   // Store the active workspace ID
   await globalStorage.update('chartsmith.activeWorkspaceId', workspaceId);
+  
+  // Also update the store
+  actions.setWorkspaceId(workspaceId);
+  console.log(`Updated store with workspace ID: ${workspaceId}`);
   
   // If we have a webview, notify it of the workspace change
   const globalState = (global as any).chartsmithGlobalState;
