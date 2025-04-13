@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { GlobalState, ConnectionStatus } from '../../types';
+import { Plan } from '../../state/atoms';
 import { initAuth, loadAuthData } from '../auth';
 import { initWebSocket, connectToCentrifugo } from '../webSocket';
 import { initWorkspace } from '../workspace';
@@ -38,6 +39,13 @@ export async function activate(extensionContext: vscode.ExtensionContext): Promi
   initWorkspace(context);
   initChat(globalState);
   initRenders(globalState);
+  
+  // Initialize plans module
+  const initPlansModule = async () => {
+    const plans = await import('../plans');
+    plans.initPlans(globalState);
+  };
+  initPlansModule();
 
   // Try to load auth data
   const authData = await loadAuthData();
@@ -206,6 +214,14 @@ function registerCommands(context: vscode.ExtensionContext): void {
             console.error('Error executing fetchRenders command:', error);
           }
           
+          // Also fetch plans for this workspace
+          try {
+            // Use the command to ensure consistent handling
+            vscode.commands.executeCommand('chartsmith.fetchPlans', uploadResponse.workspaceId);
+          } catch (error) {
+            console.error('Error executing fetchPlans command:', error);
+          }
+          
           // Get the chart path for this workspace
           let chartPath = '';
           try {
@@ -322,12 +338,20 @@ function registerCommands(context: vscode.ExtensionContext): void {
           outputChannel.show();
         }
         
-        // Also fetch renders for this workspace
+        // Also fetch renders and plans for this workspace
         try {
           // We'll fetch renders automatically when fetching messages to ensure both are loaded
           vscode.commands.executeCommand('chartsmith.fetchRenders', workspaceId);
         } catch (error) {
           console.error('Error executing fetchRenders command:', error);
+        }
+        
+        // Fetch plans for this workspace
+        try {
+          // We'll fetch plans automatically when fetching messages to ensure everything is loaded
+          vscode.commands.executeCommand('chartsmith.fetchPlans', workspaceId);
+        } catch (error) {
+          console.error('Error executing fetchPlans command:', error);
         }
       } catch (error) {
         vscode.window.showErrorMessage(`Failed to fetch messages: ${error}`);
@@ -405,6 +429,45 @@ function registerCommands(context: vscode.ExtensionContext): void {
         }
       } catch (error) {
         vscode.window.showErrorMessage(`Failed to fetch renders: ${error}`);
+      }
+    })
+  );
+  
+  // Register fetch plans command
+  context.subscriptions.push(
+    vscode.commands.registerCommand('chartsmith.fetchPlans', async (workspaceId: string) => {
+      if (!globalState.authData) {
+        vscode.window.showErrorMessage('Please log in to ChartSmith first.');
+        return;
+      }
+
+      try {
+        // Import plans module dynamically
+        const plans = await import('../plans');
+        console.log(`Fetching plans for workspace: ${workspaceId}`);
+        const workspacePlans: Plan[] = await plans.fetchWorkspacePlans(
+          globalState.authData,
+          workspaceId
+        );
+
+        console.log(`Got ${workspacePlans ? workspacePlans.length : 0} plans from fetchWorkspacePlans`);
+        console.log('Plans from API:', workspacePlans);
+
+        if (globalState.webviewGlobal) {
+          console.log('Sending plans to webview');
+          // Send API response to webview console for debugging
+          globalState.webviewGlobal.postMessage({
+            command: 'debug',
+            message: `API Plans Response: ${JSON.stringify(workspacePlans)}`
+          });
+          globalState.webviewGlobal.postMessage({
+            command: 'plans',
+            plans: workspacePlans,
+            workspaceId: workspaceId
+          });
+        }
+      } catch (error) {
+        vscode.window.showErrorMessage(`Failed to fetch plans: ${error}`);
       }
     })
   );
@@ -571,6 +634,11 @@ async function handleWebviewMessage(message: any) {
     case 'fetchMessages':
       if (message.workspaceId) {
         vscode.commands.executeCommand('chartsmith.fetchMessages', message.workspaceId);
+      }
+      break;
+    case 'fetchPlans':
+      if (message.workspaceId) {
+        vscode.commands.executeCommand('chartsmith.fetchPlans', message.workspaceId);
       }
       break;
     case 'sendMessage':

@@ -623,3 +623,142 @@ button:hover {
   font-size: 16px;
   margin-right: 6px;
 }
+
+/* Plan message styles */
+.plan-message {
+  align-self: stretch;
+  padding: 0;
+  margin: 15px 0;
+  width: 100%;
+  max-width: 100%;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.plan-container {
+  background-color: var(--vscode-inputValidation-infoBackground, #063b49);
+  border: 1px solid var(--vscode-inputValidation-infoBorder, #007acc);
+  border-radius: 6px;
+  overflow: hidden;
+  font-size: 13px;
+}
+
+.plan-header {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  background-color: var(--vscode-inputValidation-infoBackground, #063b49);
+  border-bottom: 1px solid var(--vscode-inputValidation-infoBorder, #007acc);
+}
+
+.plan-icon {
+  margin-right: 8px;
+  color: var(--vscode-inputValidation-infoBorder, #007acc);
+}
+
+.plan-title {
+  font-weight: bold;
+  color: var(--vscode-inputValidation-infoForeground, #cccccc);
+  margin-right: auto;
+}
+
+.plan-status {
+  font-size: 11px;
+  text-transform: uppercase;
+  padding: 3px 6px;
+  border-radius: 3px;
+  font-weight: bold;
+}
+
+.plan-status.pending {
+  background-color: rgba(255, 165, 0, 0.2);
+  color: #ffA500;
+}
+
+.plan-status.approved {
+  background-color: rgba(0, 153, 0, 0.2);
+  color: #00aa00;
+}
+
+.plan-status.rejected {
+  background-color: rgba(153, 0, 0, 0.2);
+  color: #aa0000;
+}
+
+.plan-status.completed {
+  background-color: rgba(120, 120, 120, 0.2);
+  color: #aaaaaa;
+}
+
+.plan-content {
+  padding: 12px;
+  background-color: var(--vscode-editor-background);
+  color: var(--vscode-editor-foreground);
+}
+
+.plan-actions {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--vscode-panel-border);
+}
+
+.plan-actions-header {
+  font-weight: bold;
+  margin-bottom: 5px;
+}
+
+.plan-action-files {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.plan-action-file {
+  display: flex;
+  align-items: center;
+  padding: 4px 8px;
+  margin: 4px 0;
+  border-radius: 3px;
+  background-color: var(--vscode-editor-inactiveSelectionBackground);
+  gap: 8px;
+}
+
+.plan-action-type {
+  font-weight: bold;
+  background-color: var(--vscode-editor-inactiveSelectionBackground);
+  padding: 2px 5px;
+  border-radius: 3px;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.plan-action-path {
+  flex-grow: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+  font-size: 12px;
+}
+
+.plan-action-status {
+  font-size: 11px;
+  padding: 2px 5px;
+  border-radius: 3px;
+  text-transform: uppercase;
+}
+
+.plan-action-file.pending .plan-action-status {
+  background-color: rgba(255, 165, 0, 0.2);
+  color: #ffA500;
+}
+
+.plan-action-file.completed .plan-action-status {
+  background-color: rgba(0, 153, 0, 0.2);
+  color: #00aa00;
+}
+
+.plan-action-file.error .plan-action-status {
+  background-color: rgba(153, 0, 0, 0.2);
+  color: #aa0000;
+}

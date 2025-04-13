@@ -3,7 +3,7 @@ import WebSocket = require('ws');
 import { GlobalState, ConnectionStatus } from '../../types';
 import * as vscode from 'vscode';
 import { store, actions } from '../../state/store';
-import { workspaceIdAtom } from '../../state/atoms';
+import { workspaceIdAtom, Plan } from '../../state/atoms';
 
 let globalState: GlobalState;
 let onMessageCallback: ((message: any) => void) | null = null;
@@ -54,6 +54,11 @@ function handleWebSocketMessage(data: any): boolean {
       handleChatMessageUpdated(data);
       return true;
       
+    case 'plan-created':
+    case 'plan-updated':
+      handlePlanEvent(data);
+      return true;
+      
     default:
       outputChannel.appendLine(`Unknown event type: ${data.eventType}`);
       return false;
@@ -91,6 +96,64 @@ function handleChatMessageUpdated(data: any): void {
       command: 'messageUpdated',
       message: message
     });
+  }
+}
+
+/**
+ * Handle a plan event (created or updated)
+ * @param data The message payload
+ */
+function handlePlanEvent(data: { eventType: string, workspaceId: string, plan: Plan }): void {
+  outputChannel.appendLine('========= PROCESSING PLAN EVENT ==========');
+  
+  if (!data.plan) {
+    outputChannel.appendLine('ERROR: plan event missing plan object');
+    return;
+  }
+  
+  const plan = data.plan;
+  outputChannel.appendLine(`Processing plan event for plan ID: ${plan.id}`);
+  outputChannel.appendLine(`Plan details: ${JSON.stringify(plan, null, 2)}`);
+  
+  // Check if the plan has the expected structure
+  if (!plan.id) {
+    outputChannel.appendLine('ERROR: Plan is missing ID field');
+    return;
+  }
+  
+  // Use a simpler approach that doesn't rely on dynamic imports for the atoms
+  try {
+    // Import plans module and use the action functions instead of direct store manipulation
+    import('../plans').then(plansModule => {
+      // Handle the plan message via the plans module
+      plansModule.handlePlanMessage({
+        type: 'plan',
+        ...plan,
+        workspaceId: data.workspaceId // Ensure workspaceId is from the outer data object
+      });
+    }).catch(error => {
+      outputChannel.appendLine(`Error importing plans module: ${error}`);
+    });
+    
+    // Force re-render by notifying webview
+    if (globalState.webviewGlobal) {
+      // First send the updated plan
+      globalState.webviewGlobal.postMessage({
+        command: 'newPlan',
+        plan: plan
+      });
+      
+      // Wait a short time to ensure plan is processed, then trigger message re-render
+      setTimeout(() => {
+        if (globalState.webviewGlobal) {
+          globalState.webviewGlobal.postMessage({
+            command: 'renderMessages'
+          });
+        }
+      }, 100);
+    }
+  } catch (error) {
+    outputChannel.appendLine(`Error processing plan: ${error}`);
   }
 }
 

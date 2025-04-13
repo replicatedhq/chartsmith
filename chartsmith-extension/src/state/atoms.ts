@@ -8,6 +8,7 @@ export interface ChatMessage {
   createdAt: string;
   isComplete?: boolean;
   responseRenderId?: string;
+  responsePlanId?: string;
 }
 
 // Define render type
@@ -39,6 +40,24 @@ export interface RenderedFile {
   renderedContent: string;
 }
 
+// Define plan types
+export interface Plan {
+  id: string;
+  description: string;
+  status: string;
+  workspaceId: string;
+  chatMessageIds: string[];
+  createdAt: Date;
+  proceedAt?: Date;
+  actionFiles: ActionFile[];
+}
+
+export interface ActionFile {
+  action: string;
+  path: string;
+  status: string;
+}
+
 
 // Create an atom to store the current workspace ID
 export const workspaceIdAtom = atom<string | null>(null);
@@ -48,6 +67,9 @@ export const messagesAtom = atom<ChatMessage[]>([]);
 
 // Create an atom to store the renders for the current workspace
 export const rendersAtom = atom<Render[]>([]);
+
+// Create an atom to store the plans for the current workspace
+export const plansAtom = atom<Plan[]>([]);
 
 // Create an atom to track connection status
 export const connectionStatusAtom = atom<string>('disconnected');

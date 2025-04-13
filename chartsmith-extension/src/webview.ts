@@ -3,7 +3,7 @@
 
 // Import state management
 import { store, actions } from './state/store';
-import { messagesAtom, workspaceIdAtom, connectionStatusAtom, rendersAtom } from './state/atoms';
+import { messagesAtom, workspaceIdAtom, connectionStatusAtom, rendersAtom, plansAtom } from './state/atoms';
 import { marked } from 'marked';
 
 // Define global interfaces
@@ -106,6 +106,18 @@ function initUI() {
         // Force re-render of messages to update render displays
         renderAllMessages();
         break;
+      case 'plans':
+        console.log('Received plans from extension:', message.plans);
+        actions.setPlans(message.plans || []);
+        break;
+      case 'newPlan':
+        console.log('Received new plan from extension:', message.plan);
+        actions.addPlan(message.plan);
+        break;
+      case 'renderMessages':
+        console.log('Re-rendering all messages to update plans');
+        renderAllMessages();
+        break;
       case 'workspaceChanged':
         // Update the context and fetch messages for the new workspace
         console.log(`Workspace changed event received - new ID: ${message.workspaceId}`);
@@ -134,9 +146,15 @@ function initUI() {
           workspaceId: message.workspaceId
         });
         
-        // Also fetch renders for the workspace
+        // Also fetch renders and plans for the workspace
         vscode.postMessage({
           command: 'fetchRenders',
+          workspaceId: message.workspaceId
+        });
+        
+        // Fetch plans
+        vscode.postMessage({
+          command: 'fetchPlans',
           workspaceId: message.workspaceId
         });
         break;
@@ -229,9 +247,17 @@ function renderLoggedInView(container: HTMLElement) {
     // Initialize button state
     sendMessageBtn.disabled = true;
     
-    // Add keyboard shortcut (Ctrl/Cmd + Enter to send)
+    // Add keyboard shortcut (Enter to send, Shift+Enter for new line)
     messageInput.addEventListener('keydown', (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      // Send message with Enter (unless Shift is pressed for new line)
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        if (messageInput.value.trim()) {
+          sendMessage();
+        }
+      }
+      // Keep the Ctrl/Cmd + Enter shortcut as well
+      else if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
         if (messageInput.value.trim()) {
           sendMessage();
@@ -347,9 +373,15 @@ function renderLoggedInView(container: HTMLElement) {
       workspaceId: workspaceId
     });
     
-    // Also fetch renders
+    // Also fetch renders and plans
     vscode.postMessage({
       command: 'fetchRenders',
+      workspaceId: workspaceId
+    });
+    
+    // Fetch plans
+    vscode.postMessage({
+      command: 'fetchPlans',
       workspaceId: workspaceId
     });
   } else {
@@ -479,6 +511,82 @@ function renderAllMessages() {
       }
       
       messagesContainer.appendChild(agentMessageEl);
+      
+      // If there's a responsePlanId, show the plan
+      if (message.responsePlanId) {
+        // Find the matching plan in the store
+        const plans = store.get(plansAtom);
+        console.log(`Looking for plan ID ${message.responsePlanId} among ${plans.length} plans`);
+        let matchingPlan = plans.find(plan => plan.id === message.responsePlanId);
+        
+        // If plan not found, try to fetch it
+        if (!matchingPlan && context.workspaceId) {
+          console.log(`Plan not found, fetching plans for workspace ${context.workspaceId}`);
+          vscode.postMessage({
+            command: 'fetchPlans',
+            workspaceId: context.workspaceId
+          });
+        }
+        
+        if (matchingPlan) {
+          console.log(`Found matching plan: ${matchingPlan.id}`);
+          
+          // Create plan container element
+          const planEl = document.createElement('div');
+          planEl.className = 'message plan-message';
+          
+          // Build plan HTML with a distinctive style different from regular messages
+          let planHTML = `
+            <div class="plan-container">
+              <div class="plan-header">
+                <div class="plan-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"></polyline>
+                    <path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path>
+                  </svg>
+                </div>
+                <div class="plan-title">ChartSmith Plan</div>
+                <div class="plan-status ${matchingPlan.status.toLowerCase()}">${matchingPlan.status}</div>
+              </div>
+              <div class="plan-content markdown-content">
+          `;
+          
+          // Render plan description as Markdown
+          try {
+            // Use the same marked configuration we have for regular messages
+            planHTML += marked.parse(matchingPlan.description);
+          } catch (error) {
+            console.error('Error parsing plan markdown:', error);
+            planHTML += escapeHtml(matchingPlan.description);
+          }
+          
+          // Add action files if any
+          if (matchingPlan.actionFiles && matchingPlan.actionFiles.length > 0) {
+            planHTML += `<div class="plan-actions">
+              <div class="plan-actions-header">Files to change:</div>
+              <ul class="plan-action-files">`;
+              
+            matchingPlan.actionFiles.forEach(file => {
+              planHTML += `<li class="plan-action-file ${file.status.toLowerCase()}">
+                <span class="plan-action-type">${file.action}</span>
+                <span class="plan-action-path">${file.path}</span>
+                <span class="plan-action-status">${file.status}</span>
+              </li>`;
+            });
+            
+            planHTML += `</ul></div>`;
+          }
+          
+          // Close the plan HTML
+          planHTML += `
+              </div>
+            </div>
+          `;
+          
+          planEl.innerHTML = planHTML;
+          messagesContainer.appendChild(planEl);
+        }
+      }
       
       // If there's a responseRenderId, check if we should show a terminal-like RENDER indicator
       if (message.responseRenderId) {

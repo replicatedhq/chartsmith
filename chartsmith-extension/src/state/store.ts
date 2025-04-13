@@ -1,5 +1,5 @@
 import { createStore } from 'jotai';
-import { messagesAtom, workspaceIdAtom, connectionStatusAtom, rendersAtom } from './atoms';
+import { messagesAtom, workspaceIdAtom, connectionStatusAtom, rendersAtom, plansAtom, Plan } from './atoms';
 
 // Create a store that will persist data
 export const store = createStore();
@@ -14,9 +14,15 @@ store.sub(messagesAtom, () => {
   console.log('Messages atom changed:', store.get(messagesAtom));
 });
 
+// Track plans changes
+store.sub(plansAtom, () => {
+  console.log('Plans atom changed:', store.get(plansAtom));
+});
+
 // Initialize the store with default values
 store.set(messagesAtom, []);
 store.set(rendersAtom, []);
+store.set(plansAtom, []);
 store.set(workspaceIdAtom, null);
 store.set(connectionStatusAtom, 'disconnected');
 
@@ -25,9 +31,10 @@ export const actions = {
   setWorkspaceId: (id: string | null) => {
     store.set(workspaceIdAtom, id);
     if (id === null) {
-      // Clear messages and renders when workspace is cleared
+      // Clear messages, renders, and plans when workspace is cleared
       store.set(messagesAtom, []);
       store.set(rendersAtom, []);
+      store.set(plansAtom, []);
     }
   },
   
@@ -91,6 +98,30 @@ export const actions = {
     }
   },
   
+  setPlans: (plans: Plan[]) => {
+    store.set(plansAtom, plans);
+  },
+  
+  addPlan: (plan: Plan) => {
+    const currentPlans = store.get(plansAtom);
+    const existingPlanIndex = currentPlans.findIndex(p => p.id === plan.id);
+    
+    if (existingPlanIndex !== -1) {
+      // If plan exists, update it
+      console.log(`Updating existing plan in store: ${plan.id}`);
+      const updatedPlans = [...currentPlans];
+      updatedPlans[existingPlanIndex] = {
+        ...updatedPlans[existingPlanIndex],
+        ...plan
+      };
+      store.set(plansAtom, updatedPlans);
+    } else {
+      // If plan doesn't exist, add it
+      console.log(`Adding new plan to store: ${plan.id}`);
+      store.set(plansAtom, [...currentPlans, plan]);
+    }
+  },
+  
   setConnectionStatus: (status: string) => {
     store.set(connectionStatusAtom, status);
   }
@@ -106,6 +137,8 @@ if (typeof window !== 'undefined') {
           return store.get(messagesAtom);
         case 'renders':
           return store.get(rendersAtom);
+        case 'plans':
+          return store.get(plansAtom);
         case 'workspaceId':
           return store.get(workspaceIdAtom);
         case 'connectionStatus':
@@ -133,6 +166,12 @@ if (typeof window !== 'undefined') {
           break;
         case 'addRender':
           actions.addRender(payload);
+          break;
+        case 'setPlans':
+          actions.setPlans(payload);
+          break;
+        case 'addPlan':
+          actions.addPlan(payload);
           break;
         case 'setConnectionStatus':
           actions.setConnectionStatus(payload);
