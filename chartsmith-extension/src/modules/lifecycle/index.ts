@@ -260,6 +260,16 @@ function registerCommands(context: vscode.ExtensionContext): void {
           if (pushResponse && pushResponse.pushToken) {
             globalState.centrifugoJwt = pushResponse.pushToken;
             outputChannel.appendLine('Stored Centrifugo JWT: ' + globalState.centrifugoJwt);
+            
+            // Try to connect to Centrifugo with the JWT
+            try {
+              const webSocket = await import('../webSocket');
+              outputChannel.appendLine('Attempting to connect to Centrifugo with JWT');
+              await webSocket.connectWithCentrifugoJwt();
+              outputChannel.appendLine('Connection attempt completed');
+            } catch (error) {
+              outputChannel.appendLine('Error connecting to Centrifugo: ' + error);
+            }
           } else {
             outputChannel.appendLine('No push token found in response');
           }
@@ -332,6 +342,16 @@ function registerCommands(context: vscode.ExtensionContext): void {
           if (pushResponse && pushResponse.pushToken) {
             globalState.centrifugoJwt = pushResponse.pushToken;
             outputChannel.appendLine('Stored Centrifugo JWT: ' + globalState.centrifugoJwt);
+            
+            // Try to connect to Centrifugo with the JWT
+            try {
+              const webSocket = await import('../webSocket');
+              outputChannel.appendLine('Attempting to connect to Centrifugo with JWT');
+              await webSocket.connectWithCentrifugoJwt();
+              outputChannel.appendLine('Connection attempt completed');
+            } catch (error) {
+              outputChannel.appendLine('Error connecting to Centrifugo: ' + error);
+            }
           } else {
             outputChannel.appendLine('No push token found in response');
           }
