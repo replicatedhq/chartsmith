@@ -541,22 +541,15 @@ function renderAllMessages() {
       console.log(`Looking for plan ID ${planId} among ${plans.length} plans`);
 
       // Create the container elements directly - avoid innerHTML for better TypeScript support
+      // Create a div that looks like an agent message
       const planEl = document.createElement('div');
-      planEl.className = 'message plan-message';
-      planEl.style.cssText = 'position: relative; z-index: 1; margin: 10px 0 20px 0; display: block; width: 100%;';
+      planEl.className = 'message agent-message plan-message';
+      planEl.style.cssText = 'position: relative; z-index: 1; margin: 10px 0; display: block; align-self: flex-start; background-color: var(--vscode-editor-inactiveSelectionBackground); border-bottom-left-radius: 4px; max-width: 90%;';
 
+      // Create content container - no special header needed
       const planContainer = document.createElement('div');
-      planContainer.style.cssText = 'background-color: #1b3b52; border: 1px solid #2d95e3; border-radius: 8px; margin: 0;';
+      planContainer.style.cssText = 'border-radius: 12px; margin: 0;';
       planEl.appendChild(planContainer);
-
-      const planHeader = document.createElement('div');
-      planHeader.style.cssText = 'background-color: #1b3b52; padding: 10px; display: flex; align-items: center;';
-      planContainer.appendChild(planHeader);
-
-      const planTitle = document.createElement('div');
-      planTitle.style.cssText = 'font-weight: bold; color: white;';
-      planTitle.textContent = `ChartSmith Plan (ID: ${planId})`;
-      planHeader.appendChild(planTitle);
 
       // Try to find matching plan
       const matchingPlan = plans.find(plan => plan.id === planId);
@@ -565,7 +558,8 @@ function renderAllMessages() {
       if (matchingPlan) {
         console.log('Found matching plan:', matchingPlan);
         const planContentDiv = document.createElement('div');
-        planContentDiv.style.cssText = 'padding: 10px; background-color: var(--vscode-editor-background); color: var(--vscode-editor-foreground); position: relative; min-height: 50px;';
+        planContentDiv.className = 'message-content markdown-content';
+        planContentDiv.style.cssText = 'position: relative; min-height: 50px;';
 
         // Add the plan description
         try {
@@ -585,12 +579,41 @@ function renderAllMessages() {
 
         // Append the content div to the plan container
         planContainer.appendChild(planContentDiv);
+        
+        // Check if plan status is "review" and add a Proceed button
+        if (matchingPlan.status && matchingPlan.status.toLowerCase() === 'review') {
+          // Create a button container div
+          const buttonContainer = document.createElement('div');
+          buttonContainer.style.cssText = 'margin-top: 15px; padding-top: 10px; border-top: 1px solid var(--vscode-panel-border); text-align: right;';
+          
+          // Create the Proceed button
+          const proceedButton = document.createElement('button');
+          proceedButton.textContent = 'Proceed';
+          proceedButton.className = 'plan-proceed-button';
+          proceedButton.style.cssText = `
+            background-color: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+            border: none;
+            padding: 6px 12px;
+            border-radius: 2px;
+            cursor: pointer;
+            font-size: 13px;
+          `;
+          
+          // Append button to container and container to plan
+          buttonContainer.appendChild(proceedButton);
+          planContentDiv.appendChild(buttonContainer);
+          
+          // Log that we added a proceed button
+          console.log('Added Proceed button to plan with review status');
+        }
       } else {
         console.log('No matching plan found for ID:', planId);
         
         // Create a content div for the "not found" message
         const notFoundDiv = document.createElement('div');
-        notFoundDiv.style.cssText = 'padding: 10px; background-color: var(--vscode-editor-background); color: var(--vscode-editor-foreground); position: relative; min-height: 50px;';
+        notFoundDiv.className = 'message-content';
+        notFoundDiv.style.cssText = 'position: relative; min-height: 30px;';
         notFoundDiv.textContent = `Plan data not loaded yet. Plan ID: ${planId}`;
         planContainer.appendChild(notFoundDiv);
         

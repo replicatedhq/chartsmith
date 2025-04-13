@@ -631,86 +631,53 @@ button:hover {
 
 /* Plan message styles */
 .plan-message {
-  align-self: stretch;
-  padding: 0;
-  margin: 15px 0;
-  width: 100%;
-  max-width: 100%;
-  border-radius: 8px;
+  /* Make it look like an agent message but keep its special classes for future differentiation */
+  align-self: flex-start;
+  padding: 12px;
+  margin: 10px 0;
+  border-radius: 12px;
+  max-width: 90%;
   overflow: visible;
   display: block;
   position: relative;
   z-index: 5; /* Ensure it's higher than regular messages but lower than input */
   height: auto;
+  border-bottom-left-radius: 4px;
+  background-color: var(--vscode-editor-inactiveSelectionBackground);
+  color: var(--vscode-foreground);
 }
 
 .plan-container {
-  background-color: var(--vscode-inputValidation-infoBackground, #063b49);
-  border: 1px solid var(--vscode-inputValidation-infoBorder, #007acc);
-  border-radius: 6px;
+  /* Make it look just like a regular message container */
   overflow: visible;
   font-size: 13px;
   width: 100%;
-  margin-bottom: 15px;
 }
 
-.plan-header {
-  display: flex;
-  align-items: center;
-  padding: 8px 12px;
-  background-color: var(--vscode-inputValidation-infoBackground, #063b49);
-  border-bottom: 1px solid var(--vscode-inputValidation-infoBorder, #007acc);
+/* Remove plan-header as we're not using it anymore */
+
+/* Minimal plan-specific styling for the proceed button */
+.plan-proceed-button {
+  background-color: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  border: none;
+  padding: 6px 12px;
+  border-radius: 2px;
+  cursor: pointer;
+  font-size: 13px;
+  margin-top: 5px;
 }
 
-.plan-icon {
-  margin-right: 8px;
-  color: var(--vscode-inputValidation-infoBorder, #007acc);
+.plan-proceed-button:hover {
+  background-color: var(--vscode-button-hoverBackground);
 }
 
-.plan-title {
-  font-weight: bold;
-  color: var(--vscode-inputValidation-infoForeground, #cccccc);
-  margin-right: auto;
-}
-
-.plan-status {
-  font-size: 11px;
-  text-transform: uppercase;
-  padding: 3px 6px;
-  border-radius: 3px;
-  font-weight: bold;
-}
-
-.plan-status.pending {
-  background-color: rgba(255, 165, 0, 0.2);
-  color: #ffA500;
-}
-
-.plan-status.approved {
-  background-color: rgba(0, 153, 0, 0.2);
-  color: #00aa00;
-}
-
-.plan-status.rejected {
-  background-color: rgba(153, 0, 0, 0.2);
-  color: #aa0000;
-}
-
-.plan-status.completed {
-  background-color: rgba(120, 120, 120, 0.2);
-  color: #aaaaaa;
-}
-
-.plan-content {
-  padding: 12px;
-  background-color: var(--vscode-editor-background);
-  color: var(--vscode-editor-foreground);
-}
-
+/* Container for actions section */
 .plan-actions {
   margin-top: 10px;
   padding-top: 10px;
   border-top: 1px solid var(--vscode-panel-border);
+  text-align: right;
 }
 
 .plan-actions-header {
