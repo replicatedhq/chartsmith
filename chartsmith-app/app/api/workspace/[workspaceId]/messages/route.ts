@@ -3,7 +3,6 @@ import { listMessagesForWorkspace } from "@/lib/workspace/chat";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(req: NextRequest) {
-  console.log("GET /api/workspace/[workspaceId]/messages");
   try {
     // if there's an auth header, use that to find the user
     const authHeader = req.headers.get('authorization');
@@ -26,6 +25,7 @@ export async function GET(req: NextRequest) {
     }
 
     const messages = await listMessagesForWorkspace(workspaceId);
+
     return NextResponse.json(messages);
 
   } catch (err) {

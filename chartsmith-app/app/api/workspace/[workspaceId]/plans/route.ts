@@ -1,9 +1,8 @@
 import { userIdFromExtensionToken } from "@/lib/auth/extension-token";
-import { createChatMessage, CreateChatMessageParams } from "@/lib/workspace/workspace";
+import { listPlans } from "@/lib/workspace/workspace";
 import { NextRequest, NextResponse } from "next/server";
 
-
-export async function POST(req: NextRequest) {
+export async function GET(req: NextRequest) {
   try {
     // if there's an auth header, use that to find the user
     const authHeader = req.headers.get('authorization');
@@ -25,19 +24,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Workspace ID is required' }, { status: 400 });
     }
 
-    const body = await req.json();
-    const { prompt } = body;
-
-    const createChatMessageParams: CreateChatMessageParams = {
-      prompt,
-    };
-
-    const chatMessage = await createChatMessage(userId, workspaceId, createChatMessageParams);
-
-    return NextResponse.json(chatMessage);
-
-  } catch (error) {
-    console.error(error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    const plans = await listPlans(workspaceId);
+    return NextResponse.json(plans);
+  } catch (err) {
+    console.error(err);
+    return NextResponse.json({ error: 'Failed to get plans' }, { status: 500 });
   }
 }

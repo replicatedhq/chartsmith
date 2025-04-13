@@ -1,0 +1,754 @@
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  margin: 0;
+  padding: 0;
+  color: var(--vscode-foreground);
+  background-color: var(--vscode-editor-background);
+}
+
+.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+}
+
+.spinner {
+  border: 4px solid rgba(0, 0, 0, 0.1);
+  border-left-color: var(--vscode-button-background);
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  animation: spin 1s linear infinite;
+  margin-bottom: 10px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.chartsmith-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;  /* Prevent scrolling at container level */
+  position: relative; /* Create proper stacking context */
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.chart-path {
+  padding: 5px 10px;
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+  border-bottom: 1px solid var(--vscode-panel-border);
+  background-color: var(--vscode-editor-inactiveSelectionBackground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+#chart-path {
+  font-weight: bold;
+  margin-right: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chart-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  flex-shrink: 0;
+}
+
+#open-in-chartsmith {
+  color: var(--vscode-textLink-foreground);
+  padding: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#disconnect-btn {
+  color: var(--vscode-errorForeground);
+  padding: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--vscode-foreground);
+}
+
+.icon-button:hover {
+  background-color: var(--vscode-list-hoverBackground);
+  border-radius: 4px;
+}
+
+.connection-status {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  text-transform: capitalize;
+  margin-left: 5px;
+}
+
+.connection-status.connected {
+  background-color: rgba(0, 153, 0, 0.1);
+  color: #0a0;
+}
+
+.connection-status.connecting,
+.connection-status.reconnecting {
+  background-color: rgba(255, 165, 0, 0.1);
+  color: #fa0;
+}
+
+.connection-status.disconnected {
+  background-color: rgba(153, 0, 0, 0.1);
+  color: #a00;
+}
+
+.content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden; /* Let child elements handle overflow */
+  position: relative; /* Create a stacking context */
+}
+
+.full-width {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.footer {
+  padding: 10px;
+  border-top: 1px solid var(--vscode-panel-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.footer-left {
+  display: flex;
+  align-items: center;
+}
+
+.footer-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#disconnect-btn {
+  background-color: var(--vscode-errorForeground);
+  color: white;
+  font-size: 12px;
+}
+
+.confirmation-dialog {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.confirmation-content {
+  background-color: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 6px;
+  padding: 20px;
+  width: 80%;
+  max-width: 400px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.confirmation-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+#confirm-disconnect {
+  background-color: var(--vscode-errorForeground);
+  color: white;
+}
+
+#cancel-disconnect {
+  background-color: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+}
+
+.login-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  padding: 0 20px;
+  text-align: center;
+}
+
+button {
+  background-color: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  border: none;
+  padding: 6px 12px;
+  border-radius: 2px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+button:hover {
+  background-color: var(--vscode-button-hoverBackground);
+}
+
+#workspaces-list {
+  margin-bottom: 20px;
+}
+
+.workspace-item {
+  padding: 10px;
+  margin-bottom: 5px;
+  background-color: var(--vscode-list-hoverBackground);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.workspace-item:hover {
+  background-color: var(--vscode-list-activeSelectionBackground);
+  color: var(--vscode-list-activeSelectionForeground);
+}
+
+#messages-container {
+  flex: 1; /* Take up all available space */
+  height: 100%;
+  overflow-y: auto;
+  margin-bottom: 0; /* Remove margin to maximize space */
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  position: relative; /* Ensure proper stacking context */
+  z-index: 1; /* Set base z-index */
+}
+
+.message {
+  padding: 12px;
+  margin-bottom: 10px;
+  border-radius: 12px;
+  max-width: 80%;
+  word-break: break-word;
+}
+
+.user-message {
+  align-self: flex-end;
+  background-color: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  border-bottom-right-radius: 4px;
+}
+
+.agent-message {
+  align-self: flex-start;
+  background-color: var(--vscode-editor-inactiveSelectionBackground);
+  color: var(--vscode-foreground);
+  border-bottom-left-radius: 4px;
+  max-width: 90%; /* Increase width for markdown content */
+  width: auto;    /* Allow width to adjust based on content */
+}
+
+.render-indicator {
+  align-self: stretch;
+  padding: 0;
+  width: 100%;
+  margin-top: 12px;
+  margin-bottom: 12px;
+  border-radius: 8px;
+  overflow: visible;
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+  box-sizing: border-box;
+  position: relative;
+  z-index: 5;
+  display: block;
+  min-height: 100px;
+}
+
+.terminal-window {
+  width: 100%;
+  background-color: var(--vscode-terminal-background, #1e1e1e);
+  color: var(--vscode-terminal-foreground, #cccccc);
+  border-radius: 8px;
+  overflow: visible;
+  position: relative;
+  z-index: 1;
+  min-height: 50px;
+  display: block;
+}
+
+.terminal-header {
+  background-color: rgba(50, 50, 50, 0.9);
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.2);
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.terminal-buttons {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 8px;
+}
+
+.terminal-button {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.terminal-button.close {
+  background-color: #ff5f56;
+  border: 1px solid #e0443e;
+}
+
+.terminal-button.minimize {
+  background-color: #ffbd2e;
+  border: 1px solid #dea123;
+}
+
+.terminal-button.maximize {
+  background-color: #27c93f;
+  border: 1px solid #1aab29;
+}
+
+.terminal-title {
+  font-size: 12px;
+  font-weight: 500;
+  flex-grow: 1;
+  text-align: center;
+  margin-right: 65px;
+  color: #ddd;
+}
+
+.terminal-content {
+  padding: 6px 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre;
+  display: block;
+  min-height: 30px;
+  position: relative;
+  z-index: 2;
+  background-color: var(--vscode-terminal-background, #1e1e1e);
+}
+
+.terminal-prompt {
+  color: var(--vscode-terminalCommandDecoration-successBackground, #0e7046);
+  font-weight: bold;
+}
+
+.terminal-command {
+  color: var(--vscode-terminal-foreground, #cccccc);
+  margin-left: 4px;
+}
+
+.terminal-stdout {
+  color: var(--vscode-terminal-foreground, #cccccc);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.terminal-stderr {
+  color: var(--vscode-errorForeground, #f44747);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.terminal-cursor {
+  display: inline-block;
+  width: 6px;
+  height: 13px;
+  background-color: var(--vscode-terminal-foreground, #cccccc);
+  margin-left: 1px;
+  animation: blink 1s step-end infinite;
+  vertical-align: middle;
+}
+
+@keyframes blink {
+  from, to { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.message-content {
+  word-break: break-word;
+}
+
+/* Markdown styling for agent messages */
+.markdown-content {
+  line-height: 1.5;
+}
+
+.markdown-content p {
+  margin: 0.5em 0;
+}
+
+.markdown-content p:first-child {
+  margin-top: 0;
+}
+
+.markdown-content p:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-content pre {
+  background-color: var(--vscode-editor-inactiveSelectionBackground);
+  padding: 0.5em;
+  border-radius: 4px;
+  overflow-x: auto;
+  margin: 0.5em 0;
+}
+
+.markdown-content code {
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+  font-size: 0.9em;
+  background-color: var(--vscode-editor-inactiveSelectionBackground);
+  padding: 0.2em 0.4em;
+  border-radius: 3px;
+}
+
+.markdown-content pre code {
+  background-color: transparent;
+  padding: 0;
+  border-radius: 0;
+}
+
+.markdown-content ul, .markdown-content ol {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+
+.markdown-content blockquote {
+  margin: 0.5em 0;
+  padding-left: 1em;
+  border-left: 3px solid var(--vscode-editor-lineHighlightBorder);
+  color: var(--vscode-descriptionForeground);
+}
+
+.markdown-content a {
+  color: var(--vscode-textLink-foreground);
+  text-decoration: none;
+}
+
+.markdown-content a:hover {
+  text-decoration: underline;
+}
+
+.markdown-content img {
+  max-width: 100%;
+  border-radius: 4px;
+}
+
+.markdown-content h1, .markdown-content h2, .markdown-content h3, 
+.markdown-content h4, .markdown-content h5, .markdown-content h6 {
+  margin: 0.8em 0 0.4em;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.markdown-content h1 {
+  font-size: 1.5em;
+}
+
+.markdown-content h2 {
+  font-size: 1.3em;
+}
+
+.markdown-content h3 {
+  font-size: 1.1em;
+}
+
+.markdown-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.5em 0;
+}
+
+.markdown-content th, .markdown-content td {
+  border: 1px solid var(--vscode-panel-border);
+  padding: 0.4em 0.6em;
+  text-align: left;
+}
+
+.markdown-content th {
+  background-color: var(--vscode-editor-inactiveSelectionBackground);
+  font-weight: 600;
+}
+
+#renders-container {
+  /* No margin needed as the messages will be displayed inside the #messages-container */
+}
+
+.no-workspace {
+  padding: 20px;
+  text-align: center;
+  color: var(--vscode-descriptionForeground);
+  font-style: italic;
+}
+
+/* Message input styles */
+.message-input-container {
+  position: relative;
+  padding: 10px;
+  border-top: 1px solid var(--vscode-panel-border);
+  background-color: var(--vscode-editor-background);
+  z-index: 10; /* Ensure this is above messages but doesn't interfere with other UI elements */
+}
+
+#message-input {
+  width: 100%;
+  padding: 10px;
+  padding-right: 40px; /* Make room for the send button */
+  background-color: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  border-radius: 4px;
+  resize: none;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  box-sizing: border-box;
+}
+
+#message-input:focus {
+  outline: none;
+  border-color: var(--vscode-focusBorder);
+}
+
+#send-message-btn {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  background: none;
+  border: none;
+  color: var(--vscode-button-background);
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+#send-message-btn:hover {
+  opacity: 1;
+}
+
+#send-message-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.loading-icon {
+  animation: rotate 2s linear infinite;
+}
+
+@keyframes rotate {
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.action-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 20px;
+  margin-bottom: 20px;
+}
+
+.action-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: bold;
+  border-radius: 6px;
+  text-align: center;
+  cursor: pointer;
+  width: 100%;
+  max-width: 300px;
+  margin: 10px auto;
+  border: 2px solid var(--vscode-button-background);
+  position: relative;
+  overflow: hidden;
+  background-color: transparent;
+  color: var(--vscode-foreground);
+}
+
+.action-button::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: var(--vscode-button-background);
+  opacity: 0;
+  transition: opacity 0.2s;
+  z-index: -1;
+}
+
+.action-button:hover::after {
+  opacity: 0.1;
+}
+
+.button-icon {
+  font-size: 16px;
+  margin-right: 6px;
+}
+
+/* Plan message styles */
+.plan-message {
+  /* Make it look like an agent message but keep its special classes for future differentiation */
+  align-self: flex-start;
+  padding: 12px;
+  margin: 10px 0;
+  border-radius: 12px;
+  max-width: 90%;
+  overflow: visible;
+  display: block;
+  position: relative;
+  z-index: 5; /* Ensure it's higher than regular messages but lower than input */
+  height: auto;
+  border-bottom-left-radius: 4px;
+  background-color: var(--vscode-editor-inactiveSelectionBackground);
+  color: var(--vscode-foreground);
+}
+
+.plan-container {
+  /* Make it look just like a regular message container */
+  overflow: visible;
+  font-size: 13px;
+  width: 100%;
+}
+
+/* Remove plan-header as we're not using it anymore */
+
+/* Minimal plan-specific styling for the proceed button */
+.plan-proceed-button {
+  background-color: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  border: none;
+  padding: 6px 12px;
+  border-radius: 2px;
+  cursor: pointer;
+  font-size: 13px;
+  margin-top: 5px;
+}
+
+.plan-proceed-button:hover {
+  background-color: var(--vscode-button-hoverBackground);
+}
+
+/* Container for actions section */
+.plan-actions {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--vscode-panel-border);
+  text-align: right;
+}
+
+.plan-actions-header {
+  font-weight: bold;
+  margin-bottom: 5px;
+}
+
+.plan-action-files {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.plan-action-file {
+  display: flex;
+  align-items: center;
+  padding: 4px 8px;
+  margin: 4px 0;
+  border-radius: 3px;
+  background-color: var(--vscode-editor-inactiveSelectionBackground);
+  gap: 8px;
+}
+
+.plan-action-type {
+  font-weight: bold;
+  background-color: var(--vscode-editor-inactiveSelectionBackground);
+  padding: 2px 5px;
+  border-radius: 3px;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.plan-action-path {
+  flex-grow: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+  font-size: 12px;
+}
+
+.plan-action-status {
+  font-size: 11px;
+  padding: 2px 5px;
+  border-radius: 3px;
+  text-transform: uppercase;
+}
+
+.plan-action-file.pending .plan-action-status {
+  background-color: rgba(255, 165, 0, 0.2);
+  color: #ffA500;
+}
+
+.plan-action-file.completed .plan-action-status {
+  background-color: rgba(0, 153, 0, 0.2);
+  color: #00aa00;
+}
+
+.plan-action-file.error .plan-action-status {
+  background-color: rgba(153, 0, 0, 0.2);
+  color: #aa0000;
+}

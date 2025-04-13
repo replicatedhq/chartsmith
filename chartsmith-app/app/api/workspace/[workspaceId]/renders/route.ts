@@ -4,7 +4,6 @@ import { NextRequest, NextResponse } from "next/server";
 
 
 export async function GET(req: NextRequest) {
-  console.log("GET /api/workspace/[workspaceId]/renders");
   try {
     // if there's an auth header, use that to find the user
     const authHeader = req.headers.get('authorization');
