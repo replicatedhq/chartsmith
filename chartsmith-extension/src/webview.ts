@@ -127,6 +127,13 @@ function renderLoggedInView(container: HTMLElement) {
       ${context.workspaceId ? `
       <div class="chart-path">
         Current chart: <span id="chart-path">${context.chartPath || 'Unknown'}</span>
+        <button id="open-in-chartsmith" class="icon-button" title="Open in ChartSmith.ai">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+            <polyline points="15 3 21 3 21 9"></polyline>
+            <line x1="10" y1="14" x2="21" y2="3"></line>
+          </svg>
+        </button>
       </div>
       ` : ''}
       <div class="content">
@@ -142,6 +149,7 @@ function renderLoggedInView(container: HTMLElement) {
           ` : ''}
         </div>
         <div class="footer-right">
+          ${context.workspaceId ? `<button id="disconnect-btn">Disconnect</button>` : ''}
           <button id="logout-btn">Logout</button>
         </div>
       </div>
@@ -150,6 +158,58 @@ function renderLoggedInView(container: HTMLElement) {
 
   document.getElementById('logout-btn')?.addEventListener('click', () => {
     vscode.postMessage({ command: 'logout' });
+  });
+  
+  // Add handler for "Open in ChartSmith" button
+  document.getElementById('open-in-chartsmith')?.addEventListener('click', () => {
+    if (context.workspaceId && context.wwwEndpoint) {
+      const url = `${context.wwwEndpoint}/workspace/${context.workspaceId}`;
+      vscode.postMessage({ 
+        command: 'openExternal', 
+        url 
+      });
+    }
+  });
+  
+  // Add disconnect button event listener
+  document.getElementById('disconnect-btn')?.addEventListener('click', () => {
+    // Show confirmation dialog
+    const confirmationContainer = document.createElement('div');
+    confirmationContainer.className = 'confirmation-dialog';
+    confirmationContainer.innerHTML = `
+      <div class="confirmation-content">
+        <p>Are you sure you want to disconnect from the current workspace?</p>
+        <div class="confirmation-buttons">
+          <button id="confirm-disconnect">Disconnect</button>
+          <button id="cancel-disconnect">Cancel</button>
+        </div>
+      </div>
+    `;
+    
+    // Add to DOM
+    document.body.appendChild(confirmationContainer);
+    
+    // Add event listeners for confirmation buttons
+    document.getElementById('confirm-disconnect')?.addEventListener('click', () => {
+      // Remove the confirmation dialog
+      confirmationContainer.remove();
+      
+      // Send disconnect command
+      vscode.postMessage({ command: 'goHome' });
+      
+      // Clear workspace ID in context
+      context.workspaceId = '';
+      context.chartPath = '';
+      actions.setWorkspaceId(null);
+      
+      // Re-render the view
+      renderLoggedInView(container);
+    });
+    
+    document.getElementById('cancel-disconnect')?.addEventListener('click', () => {
+      // Just remove the confirmation dialog
+      confirmationContainer.remove();
+    });
   });
   
   // Initialize Jotai store from context

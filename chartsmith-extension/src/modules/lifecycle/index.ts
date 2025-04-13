@@ -132,6 +132,19 @@ function registerCommands(context: vscode.ExtensionContext): void {
         
         if (uploadResponse.workspaceId) {
           console.log(`Workspace ID: ${uploadResponse.workspaceId}`);
+          
+          // Store the workspace mapping with the chart path
+          try {
+            const workspace = await import('../workspace');
+            await workspace.saveWorkspaceMapping({
+              workspaceId: uploadResponse.workspaceId,
+              localPath: chartDir,
+              lastUpdated: new Date().toISOString()
+            });
+            console.log(`Saved workspace mapping: ${uploadResponse.workspaceId} -> ${chartDir}`);
+          } catch (error) {
+            console.error('Error saving workspace mapping:', error);
+          }
         }
         
         // After uploading, connect to WebSocket and show messages if we have a workspace ID
@@ -156,7 +169,27 @@ function registerCommands(context: vscode.ExtensionContext): void {
             const workspace = await import('../workspace');
             const mapping = await workspace.getWorkspaceMapping(uploadResponse.workspaceId);
             if (mapping) {
-              chartPath = mapping.localPath;
+              // Get the current VS Code workspace folders
+              const workspaceFolders = vscode.workspace.workspaceFolders;
+              
+              if (workspaceFolders && workspaceFolders.length > 0) {
+                const workspaceRoot = workspaceFolders[0].uri.fsPath;
+                
+                // Make path relative to workspace if possible
+                if (mapping.localPath.startsWith(workspaceRoot)) {
+                  chartPath = mapping.localPath.substring(workspaceRoot.length);
+                  // Ensure path starts with /
+                  if (!chartPath.startsWith('/')) {
+                    chartPath = '/' + chartPath;
+                  }
+                } else {
+                  // Fall back to absolute path if not in workspace
+                  chartPath = mapping.localPath;
+                }
+              } else {
+                // No workspace folder, use absolute path
+                chartPath = mapping.localPath;
+              }
             }
           } catch (error) {
             console.error('Error getting workspace mapping:', error);
@@ -346,7 +379,27 @@ class SidebarProvider implements vscode.WebviewViewProvider {
     if (activeWorkspaceId) {
       const mapping = await workspaceModule.getWorkspaceMapping(activeWorkspaceId);
       if (mapping) {
-        chartPath = mapping.localPath;
+        // Get the current VS Code workspace folders
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        
+        if (workspaceFolders && workspaceFolders.length > 0) {
+          const workspaceRoot = workspaceFolders[0].uri.fsPath;
+          
+          // Make path relative to workspace if possible
+          if (mapping.localPath.startsWith(workspaceRoot)) {
+            chartPath = mapping.localPath.substring(workspaceRoot.length);
+            // Ensure path starts with /
+            if (!chartPath.startsWith('/')) {
+              chartPath = '/' + chartPath;
+            }
+          } else {
+            // Fall back to absolute path if not in workspace
+            chartPath = mapping.localPath;
+          }
+        } else {
+          // No workspace folder, use absolute path
+          chartPath = mapping.localPath;
+        }
       }
     }
 
@@ -394,6 +447,12 @@ async function handleWebviewMessage(message: any) {
       // Clear the active workspace and disconnect from WebSocket
       const workspace = await import('../workspace');
       await workspace.setActiveWorkspaceId(null);
+      break;
+    case 'openExternal':
+      // Open URL in external browser
+      if (message.url) {
+        vscode.env.openExternal(vscode.Uri.parse(message.url));
+      }
       break;
     case 'fetchMessages':
       if (message.workspaceId) {
