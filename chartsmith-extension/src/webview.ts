@@ -83,7 +83,24 @@ function initUI() {
         // Update the context and fetch messages for the new workspace
         console.log(`Workspace changed event received - new ID: ${message.workspaceId}`);
         context.workspaceId = message.workspaceId;
+        context.chartPath = message.chartPath || '';
         actions.setWorkspaceId(message.workspaceId);
+        
+        // Update the chart path if present
+        if (message.chartPath) {
+          console.log(`Chart path: ${message.chartPath}`);
+          const chartPathEl = document.getElementById('chart-path');
+          if (chartPathEl) {
+            chartPathEl.textContent = message.chartPath;
+          }
+        }
+        
+        // Re-render the view with updated context
+        const app = document.getElementById('app');
+        if (app) {
+          renderLoggedInView(app);
+        }
+        
         console.log(`Fetching messages for changed workspace ID: ${message.workspaceId}`);
         vscode.postMessage({ 
           command: 'fetchMessages',
@@ -106,20 +123,27 @@ function renderLoggedInView(container: HTMLElement) {
     <div class="chartsmith-container">
       <div class="header">
         <h2>ChartSmith</h2>
-        <div class="header-actions">
+      </div>
+      ${context.workspaceId ? `
+      <div class="chart-path">
+        Current chart: <span id="chart-path">${context.chartPath || 'Unknown'}</span>
+      </div>
+      ` : ''}
+      <div class="content">
+        <div id="messages-container" class="full-width"></div>
+        <div id="renders-container"></div>
+      </div>
+      <div class="footer">
+        <div class="footer-left">
           ${context.workspaceId ? `
             <div class="connection-status ${context.connectionStatus}">
               ${context.connectionStatus}
             </div>
           ` : ''}
         </div>
-      </div>
-      <div class="content">
-        <div id="messages-container"></div>
-        <div id="renders-container"></div>
-      </div>
-      <div class="footer">
-        <button id="logout-btn">Logout</button>
+        <div class="footer-right">
+          <button id="logout-btn">Logout</button>
+        </div>
       </div>
     </div>
   `;
@@ -252,13 +276,57 @@ function renderAllMessages() {
       `;
       messagesContainer.appendChild(agentMessageEl);
       
-      // If there's a responseRenderId, show a RENDER indicator
+      // If there's a responseRenderId, show a terminal-like RENDER indicator
       if (message.responseRenderId) {
+        // Find the matching render in the rendersAtom
+        const renders = store.get(rendersAtom);
+        const matchingRender = renders.find(render => render.id === message.responseRenderId);
+        
+        // Create terminal container element
         const renderIndicatorEl = document.createElement('div');
         renderIndicatorEl.className = 'message render-indicator';
-        renderIndicatorEl.innerHTML = `
-          <div class="message-content">RENDER</div>
+        
+        // Start building terminal HTML
+        let terminalHTML = `
+          <div class="terminal-window">
+            <div class="terminal-header">
+              <div class="terminal-buttons">
+                <span class="terminal-button close"></span>
+                <span class="terminal-button minimize"></span>
+                <span class="terminal-button maximize"></span>
+              </div>
+              <span class="terminal-title">Render Output</span>
+            </div>
+            <div class="terminal-content">`;
+        
+        // Check if the render has charts
+        if (matchingRender && matchingRender.charts && matchingRender.charts.length > 0) {
+          // Iterate through each chart
+          matchingRender.charts.forEach((chart, index) => {
+            // Add a blank line between commands if not the first one
+            if (index > 0) {
+              terminalHTML += `\n`;
+            }
+            
+            // Add the command line for this chart
+            const depUpdateCommand = chart.depUpdateCommand || '';
+            terminalHTML += `<span class="terminal-prompt">$</span>${depUpdateCommand ? ` <span class="terminal-command">${depUpdateCommand}</span>` : ''}`;
+          });
+          
+          // Add cursor at the end of the last command
+          terminalHTML += `<span class="terminal-cursor"></span>`;
+        } else {
+          // No charts found, just show a prompt
+          terminalHTML += `<span class="terminal-prompt">$</span><span class="terminal-cursor"></span>`;
+        }
+        
+        // Close the terminal HTML
+        terminalHTML += `
+            </div>
+          </div>
         `;
+        
+        renderIndicatorEl.innerHTML = terminalHTML;
         messagesContainer.appendChild(renderIndicatorEl);
       }
     }

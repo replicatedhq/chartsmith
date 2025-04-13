@@ -12,7 +12,8 @@ export function getHtmlForWebview(
     userId?: string,
     token?: string,
     connectionStatus: ConnectionStatus,
-    workspaceId?: string
+    workspaceId?: string,
+    chartPath?: string
   }
 ): string {
   // Get the local path to main script
@@ -35,7 +36,8 @@ export function getHtmlForWebview(
     userId: context.userId || '',
     token: context.token || '',
     connectionStatus: context.connectionStatus,
-    workspaceId: context.workspaceId || ''
+    workspaceId: context.workspaceId || '',
+    chartPath: context.chartPath || ''
   });
 
   return `<!DOCTYPE html>

@@ -13,9 +13,31 @@ export interface ChatMessage {
 // Define render type
 export interface Render {
   id: string;
-  // Add any other properties that might be in the renders
-  [key: string]: any;
+  charts: RenderedChart[];
 }
+
+export interface RenderedChart {
+  id: string;
+  chartId: string;
+  chartName: string;
+  isSuccess: boolean;
+  depUpdateCommand?: string;
+  depUpdateStdout?: string;
+  depUpdateStderr?: string;
+  helmTemplateCommand?: string;
+  helmTemplateStdout?: string;
+  helmTemplateStderr?: string;
+  createdAt: Date;
+  completedAt?: Date;
+  renderedFiles: RenderedFile[];
+}
+
+export interface RenderedFile {
+  id: string;
+  filePath: string;
+  renderedContent: string;
+}
+
 
 // Create an atom to store the current workspace ID
 export const workspaceIdAtom = atom<string | null>(null);

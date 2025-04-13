@@ -150,11 +150,24 @@ function registerCommands(context: vscode.ExtensionContext): void {
             console.error('Error executing fetchRenders command:', error);
           }
           
+          // Get the chart path for this workspace
+          let chartPath = '';
+          try {
+            const workspace = await import('../workspace');
+            const mapping = await workspace.getWorkspaceMapping(uploadResponse.workspaceId);
+            if (mapping) {
+              chartPath = mapping.localPath;
+            }
+          } catch (error) {
+            console.error('Error getting workspace mapping:', error);
+          }
+          
           // Notify the webview of the workspace change
           if (globalState.webviewGlobal) {
             globalState.webviewGlobal.postMessage({
               command: 'workspaceChanged',
-              workspaceId: uploadResponse.workspaceId
+              workspaceId: uploadResponse.workspaceId,
+              chartPath: chartPath
             });
           }
         }
@@ -327,6 +340,15 @@ class SidebarProvider implements vscode.WebviewViewProvider {
     // Get the active workspace ID
     const workspaceModule = await import('../workspace');
     const activeWorkspaceId = await workspaceModule.getActiveWorkspaceId();
+    
+    // Get the workspace mapping to find the chart path
+    let chartPath = '';
+    if (activeWorkspaceId) {
+      const mapping = await workspaceModule.getWorkspaceMapping(activeWorkspaceId);
+      if (mapping) {
+        chartPath = mapping.localPath;
+      }
+    }
 
     webviewView.webview.html = getHtmlForWebview(
       webviewView.webview,
@@ -338,7 +360,8 @@ class SidebarProvider implements vscode.WebviewViewProvider {
         userId: globalState.authData?.userId,
         token: globalState.authData?.token,
         connectionStatus: globalState.connectionStatus,
-        workspaceId: activeWorkspaceId || ''
+        workspaceId: activeWorkspaceId || '',
+        chartPath: chartPath
       }
     );
 
