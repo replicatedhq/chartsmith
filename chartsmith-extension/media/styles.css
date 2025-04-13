@@ -33,6 +33,7 @@ body {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  overflow: hidden;  /* Prevent scrolling at container level */
 }
 
 .header {
@@ -64,11 +65,25 @@ body {
   text-overflow: ellipsis;
 }
 
-#open-in-chartsmith {
+.chart-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
   flex-shrink: 0;
+}
+
+#open-in-chartsmith {
   color: var(--vscode-textLink-foreground);
   padding: 2px;
-  margin-left: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#disconnect-btn {
+  color: var(--vscode-errorForeground);
+  padding: 2px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -121,7 +136,6 @@ body {
   flex-direction: column;
   padding: 10px;
   width: 100%;
-  height: calc(100vh - 120px); /* Account for header, footer, and chart path */
   box-sizing: border-box;
   overflow: hidden; /* Let child elements handle overflow */
 }
@@ -498,6 +512,65 @@ button:hover {
   text-align: center;
   color: var(--vscode-descriptionForeground);
   font-style: italic;
+}
+
+/* Message input styles */
+.message-input-container {
+  position: relative;
+  padding: 10px;
+  border-top: 1px solid var(--vscode-panel-border);
+  background-color: var(--vscode-editor-background);
+}
+
+#message-input {
+  width: 100%;
+  padding: 10px;
+  padding-right: 40px; /* Make room for the send button */
+  background-color: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  border-radius: 4px;
+  resize: none;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  box-sizing: border-box;
+}
+
+#message-input:focus {
+  outline: none;
+  border-color: var(--vscode-focusBorder);
+}
+
+#send-message-btn {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  background: none;
+  border: none;
+  color: var(--vscode-button-background);
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+#send-message-btn:hover {
+  opacity: 1;
+}
+
+#send-message-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.loading-icon {
+  animation: rotate 2s linear infinite;
+}
+
+@keyframes rotate {
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 .action-buttons {

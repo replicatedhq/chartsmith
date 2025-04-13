@@ -62,6 +62,39 @@ export async function activate(extensionContext: vscode.ExtensionContext): Promi
 }
 
 
+/**
+ * Sends a message to the API for the given workspace
+ */
+async function sendMessageToApi(workspaceId: string, messageText: string): Promise<void> {
+  if (!globalState.authData) {
+    vscode.window.showErrorMessage('Please log in to ChartSmith first.');
+    return;
+  }
+  
+  outputChannel.appendLine(`Sending message to workspace ${workspaceId}: ${messageText}`);
+  
+  try {
+    // Import API module
+    const api = await import('../api');
+    
+    // Make the POST request to the message endpoint
+    const response = await api.fetchApi(
+      globalState.authData,
+      `/workspace/${workspaceId}/message`,
+      'POST',
+      { prompt: messageText }
+    );
+    
+    outputChannel.appendLine(`Message sent successfully. Response: ${JSON.stringify(response, null, 2)}`);
+    
+    // Fetch updated messages after sending
+    vscode.commands.executeCommand('chartsmith.fetchMessages', workspaceId);
+  } catch (error) {
+    outputChannel.appendLine(`Error sending message: ${error}`);
+    vscode.window.showErrorMessage(`Failed to send message: ${error}`);
+  }
+}
+
 export function deactivate(): void {
   // Cleanup on extension deactivation
   if (globalState.centrifuge) {
@@ -538,6 +571,11 @@ async function handleWebviewMessage(message: any) {
     case 'fetchMessages':
       if (message.workspaceId) {
         vscode.commands.executeCommand('chartsmith.fetchMessages', message.workspaceId);
+      }
+      break;
+    case 'sendMessage':
+      if (message.workspaceId && message.message) {
+        sendMessageToApi(message.workspaceId, message.message);
       }
       break;
     // Add more message handlers as needed

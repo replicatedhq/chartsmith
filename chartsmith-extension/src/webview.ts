@@ -74,6 +74,18 @@ function initUI() {
         console.log('Messages after update:', store.get(messagesAtom));
         renderAllMessages(); // Re-render from store
         console.log('Re-render triggered');
+        
+        // If we have a send button and it's showing the loading state, reset it
+        const sendBtn = document.getElementById('send-message-btn') as HTMLButtonElement;
+        if (sendBtn && sendBtn.querySelector('.loading-icon')) {
+          sendBtn.innerHTML = `
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="22" y1="2" x2="11" y2="13"></line>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+            </svg>
+          `;
+          sendBtn.disabled = true;
+        }
         break;
       case 'messages':
         console.log('Received messages from extension:', message.messages);
@@ -142,19 +154,38 @@ function renderLoggedInView(container: HTMLElement) {
       ${context.workspaceId ? `
       <div class="chart-path">
         Current chart: <span id="chart-path">${context.chartPath || 'Unknown'}</span>
-        <button id="open-in-chartsmith" class="icon-button" title="Open in ChartSmith.ai">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-            <polyline points="15 3 21 3 21 9"></polyline>
-            <line x1="10" y1="14" x2="21" y2="3"></line>
-          </svg>
-        </button>
+        <div class="chart-actions">
+          <button id="open-in-chartsmith" class="icon-button" title="Open in ChartSmith.ai">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+              <polyline points="15 3 21 3 21 9"></polyline>
+              <line x1="10" y1="14" x2="21" y2="3"></line>
+            </svg>
+          </button>
+          <button id="disconnect-btn" class="icon-button" title="Disconnect from workspace">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
       </div>
       ` : ''}
       <div class="content">
         <div id="messages-container" class="full-width"></div>
         <div id="renders-container"></div>
       </div>
+      ${context.workspaceId ? `
+      <div class="message-input-container">
+        <textarea id="message-input" placeholder="Ask a question about your chart..." rows="3"></textarea>
+        <button id="send-message-btn" class="icon-button" title="Send message">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13"></line>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+          </svg>
+        </button>
+      </div>
+      ` : ''}
       <div class="footer">
         <div class="footer-left">
           ${context.workspaceId ? `
@@ -164,7 +195,6 @@ function renderLoggedInView(container: HTMLElement) {
           ` : ''}
         </div>
         <div class="footer-right">
-          ${context.workspaceId ? `<button id="disconnect-btn">Disconnect</button>` : ''}
           <button id="logout-btn">Logout</button>
         </div>
       </div>
@@ -185,6 +215,75 @@ function renderLoggedInView(container: HTMLElement) {
       });
     }
   });
+  
+  // Add message input handlers
+  const messageInput = document.getElementById('message-input') as HTMLTextAreaElement;
+  const sendMessageBtn = document.getElementById('send-message-btn') as HTMLButtonElement;
+  
+  if (messageInput && sendMessageBtn) {
+    // Disable send button if input is empty
+    messageInput.addEventListener('input', () => {
+      sendMessageBtn.disabled = !messageInput.value.trim();
+    });
+    
+    // Initialize button state
+    sendMessageBtn.disabled = true;
+    
+    // Add keyboard shortcut (Ctrl/Cmd + Enter to send)
+    messageInput.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        if (messageInput.value.trim()) {
+          sendMessage();
+        }
+      }
+    });
+    
+    // Send button click handler
+    sendMessageBtn.addEventListener('click', () => {
+      if (messageInput.value.trim()) {
+        sendMessage();
+      }
+    });
+  }
+  
+  // Function to send message to API
+  function sendMessage() {
+    if (!context.workspaceId || !messageInput) return;
+    
+    const messageText = messageInput.value.trim();
+    if (!messageText) return;
+    
+    // Get the send button and make sure it's not null
+    const sendBtn = document.getElementById('send-message-btn') as HTMLButtonElement;
+    if (!sendBtn) return;
+    
+    // Show loading state
+    sendBtn.disabled = true;
+    const originalContent = sendBtn.innerHTML;
+    sendBtn.innerHTML = `
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="loading-icon">
+        <circle cx="12" cy="12" r="10"></circle>
+        <polyline points="12 6 12 12 16 14"></polyline>
+      </svg>
+    `;
+    
+    // Send to extension to handle API call
+    vscode.postMessage({
+      command: 'sendMessage',
+      workspaceId: context.workspaceId,
+      message: messageText
+    });
+    
+    // Clear input
+    messageInput.value = '';
+    
+    // Reset button after delay (will be properly updated when message is confirmed)
+    setTimeout(() => {
+      sendBtn.innerHTML = originalContent;
+      sendBtn.disabled = true;
+    }, 1000);
+  }
   
   // Add disconnect button event listener
   document.getElementById('disconnect-btn')?.addEventListener('click', () => {
