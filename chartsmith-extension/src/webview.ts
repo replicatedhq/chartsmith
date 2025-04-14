@@ -592,6 +592,74 @@ function renderAllMessages() {
 
         // Append the content div to the plan container
         planContainer.appendChild(planContentDiv);
+        
+        // Add action files list if present
+        if (matchingPlan.actionFiles && matchingPlan.actionFiles.length > 0) {
+          console.log('Plan has action files:', matchingPlan.actionFiles);
+          
+          // Create action files container
+          const actionFilesContainer = document.createElement('div');
+          actionFilesContainer.style.cssText = 'margin-top: 15px; padding-top: 10px; border-top: 1px solid var(--vscode-panel-border); font-family: var(--vscode-editor-font-family); font-size: 12px;';
+          
+          // Create heading
+          const actionFilesHeading = document.createElement('div');
+          actionFilesHeading.textContent = 'Files';
+          actionFilesHeading.style.cssText = 'font-weight: bold; margin-bottom: 5px;';
+          actionFilesContainer.appendChild(actionFilesHeading);
+          
+          // Create file list
+          const fileList = document.createElement('div');
+          fileList.style.cssText = 'display: flex; flex-direction: column; gap: 4px;';
+          
+          // Add each file to the list
+          matchingPlan.actionFiles.forEach(file => {
+            const fileItem = document.createElement('div');
+            fileItem.style.cssText = 'display: flex; align-items: center; font-family: monospace; font-size: 12px;';
+            
+            // Create icon based on action type
+            const fileIcon = document.createElement('span');
+            if (file.action === 'update') {
+              // Edit icon
+              fileIcon.innerHTML = `
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;">
+                  <path d="M20 14.66V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h5.34"></path>
+                  <polygon points="18 2 22 6 12 16 8 16 8 12 18 2"></polygon>
+                </svg>
+              `;
+            } else if (file.action === 'create') {
+              // New file icon
+              fileIcon.innerHTML = `
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                  <line x1="12" y1="18" x2="12" y2="12"></line>
+                  <line x1="9" y1="15" x2="15" y2="15"></line>
+                </svg>
+              `;
+            } else {
+              // Generic file icon for other actions
+              fileIcon.innerHTML = `
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                </svg>
+              `;
+            }
+            
+            fileItem.appendChild(fileIcon);
+            
+            // Add filename text
+            const filePathSpan = document.createElement('span');
+            filePathSpan.textContent = file.path;
+            filePathSpan.style.cssText = 'font-family: monospace; overflow-wrap: break-word; white-space: normal;';
+            fileItem.appendChild(filePathSpan);
+            
+            fileList.appendChild(fileItem);
+          });
+          
+          actionFilesContainer.appendChild(fileList);
+          planContentDiv.appendChild(actionFilesContainer);
+        }
 
         // Check if plan status is "review" and add a Proceed button
         if (matchingPlan.status && matchingPlan.status.toLowerCase() === 'review') {
