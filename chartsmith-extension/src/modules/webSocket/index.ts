@@ -476,128 +476,41 @@ async function handleArtifactUpdated(data: any): Promise<void> {
     const path = require('path');
     const os = require('os');
     
-    // Check if there's pending content that requires showing changes
+    // Check if there's pending content and apply it directly
     if (file.contentPending) {
-      outputChannel.appendLine('File has pending content to show');
+      outputChannel.appendLine('File has pending content, applying directly');
       
       try {
-        // Ensure the file exists or create it
-        if (!fs.existsSync(fileUri.fsPath)) {
-          outputChannel.appendLine(`Target file doesn't exist, creating it: ${fileUri.fsPath}`);
-          await fs.promises.mkdir(path.dirname(fileUri.fsPath), { recursive: true });
-          await fs.promises.writeFile(fileUri.fsPath, '');
-          outputChannel.appendLine(`Created empty target file: ${fileUri.fsPath}`);
-        }
+        // Ensure the directory exists
+        await fs.promises.mkdir(path.dirname(fileUri.fsPath), { recursive: true });
         
-        // Create a custom HTML file with the diff view
-        const tempDir = os.tmpdir();
-        const diffHtmlPath = path.join(tempDir, `diff-${path.basename(filePath)}.html`);
-        
-        // Get the current content
-        let currentContent = '';
-        try {
-          currentContent = await fs.promises.readFile(fileUri.fsPath, 'utf8');
-          outputChannel.appendLine(`Read current file content, length: ${currentContent.length}`);
-        } catch (error) {
-          outputChannel.appendLine(`Error reading current file: ${error}`);
-        }
-        
-        // Create a basic HTML diff view
+        // Get the pending content
         const pendingContent = file.contentPending || '';
         outputChannel.appendLine(`Pending content length: ${pendingContent.length}`);
-        
-        // Dump contents to output to debug
-        outputChannel.appendLine('Current content (first 100 chars): ' + currentContent.substring(0, 100));
         outputChannel.appendLine('Pending content (first 100 chars): ' + pendingContent.substring(0, 100));
         
-        // Create a new untitled file showing both contents
-        const diffDocContent = `
-# Current File: ${path.basename(filePath)}
-
-\`\`\`yaml
-${currentContent}
-\`\`\`
-
-# Pending Changes:
-
-\`\`\`yaml
-${pendingContent}
-\`\`\`
-`;
+        // Write the pending content directly to the file
+        await fs.promises.writeFile(fileUri.fsPath, pendingContent);
+        outputChannel.appendLine(`Successfully wrote pending content to the file: ${fileUri.fsPath}`);
         
-        // Create and show the diff document using the markdown format
-        const diffDocument = await vscode.workspace.openTextDocument({
-          content: diffDocContent,
-          language: 'markdown'
-        });
+        // Open the file in the editor
+        await vscode.window.showTextDocument(fileUri);
+        outputChannel.appendLine('File opened with pending content');
         
-        const diffEditor = await vscode.window.showTextDocument(diffDocument, vscode.ViewColumn.Active);
-        
-        // Show a message to the user
-        vscode.window.showInformationMessage(`Showing changes for ${path.basename(filePath)}`);
-        
-        // Also open the target file in a split view
-        await vscode.window.showTextDocument(fileUri, {
-          viewColumn: vscode.ViewColumn.Beside,
-          preview: false,
-        });
-        
-        // Give the user the option to apply changes with a notification
-        const applyChanges = 'Apply Changes';
-        const keepOriginal = 'Keep Original';
-        
-        vscode.window.showInformationMessage(
-          `Do you want to apply the pending changes to ${path.basename(filePath)}?`,
-          applyChanges,
-          keepOriginal
-        ).then(async selection => {
-          if (selection === applyChanges) {
-            try {
-              // Write the pending content to the actual file
-              await fs.promises.writeFile(fileUri.fsPath, pendingContent);
-              outputChannel.appendLine(`Applied pending changes to the file: ${fileUri.fsPath}`);
-              
-              // Reload the document if it's open
-              const docs = vscode.workspace.textDocuments;
-              for (const doc of docs) {
-                if (doc.uri.fsPath === fileUri.fsPath) {
-                  // This will trigger a reload of the document
-                  await vscode.commands.executeCommand('workbench.action.files.revert', doc.uri);
-                  break;
-                }
-              }
-              
-              vscode.window.showInformationMessage(`Changes applied to ${path.basename(filePath)}`);
-            } catch (error) {
-              outputChannel.appendLine(`Error applying changes: ${error}`);
-              vscode.window.showErrorMessage(`Failed to apply changes: ${error}`);
-            }
-          }
-        });
-        
-        outputChannel.appendLine('Displayed changes successfully');
+        // Show a notification to the user
+        vscode.window.showInformationMessage(`Updated ${path.basename(filePath)} with new content`);
       } catch (error) {
-        outputChannel.appendLine(`Error showing changes: ${error}`);
+        outputChannel.appendLine(`Error applying pending content: ${error}`);
         
-        // Ultimate fallback: just open the file
+        // Try a fallback approach
         try {
-          // Open the file as is
-          await vscode.window.showTextDocument(fileUri);
-          outputChannel.appendLine('Fallback: opened original file');
-          
-          // Show notification about the pending content
-          vscode.window.showWarningMessage(
-            `File ${path.basename(filePath)} has pending changes that couldn't be displayed.`, 
-            'Show Pending Content'
-          ).then(async selection => {
-            if (selection === 'Show Pending Content') {
-              const pendingDoc = await vscode.workspace.openTextDocument({ 
-                content: file.contentPending || '',
-                language: vscode.window.activeTextEditor?.document.languageId
-              });
-              await vscode.window.showTextDocument(pendingDoc, vscode.ViewColumn.Beside);
-            }
-          });
+          // Just open the file if it exists
+          if (fs.existsSync(fileUri.fsPath)) {
+            await vscode.window.showTextDocument(fileUri);
+            outputChannel.appendLine('Fallback: opened existing file');
+          } else {
+            outputChannel.appendLine('File does not exist and failed to create it');
+          }
         } catch (fallbackError) {
           outputChannel.appendLine(`Error in fallback approach: ${fallbackError}`);
         }
