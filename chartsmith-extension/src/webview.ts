@@ -126,6 +126,19 @@ function initUI() {
         console.log('Re-rendering all messages to update plans');
         renderAllMessages();
         break;
+      case 'workspaceUpdated':
+        console.log('Workspace updated:', message.workspace);
+        // You could update workspace data in state here if needed
+        break;
+      case 'planProceedError':
+        console.log('Error proceeding with plan:', message.planId, message.error);
+        // Find the button for this plan and reset its state
+        const proceedButton = document.querySelector(`.plan-proceed-button[data-plan-id="${message.planId}"]`) as HTMLButtonElement;
+        if (proceedButton) {
+          proceedButton.textContent = 'Proceed';
+          proceedButton.disabled = false;
+        }
+        break;
       case 'workspaceChanged':
         // Update the context and fetch messages for the new workspace
         console.log(`Workspace changed event received - new ID: ${message.workspaceId}`);
@@ -590,6 +603,7 @@ function renderAllMessages() {
           const proceedButton = document.createElement('button');
           proceedButton.textContent = 'Proceed';
           proceedButton.className = 'plan-proceed-button';
+          proceedButton.setAttribute('data-plan-id', matchingPlan.id);
           proceedButton.style.cssText = `
             background-color: var(--vscode-button-background);
             color: var(--vscode-button-foreground);
@@ -603,9 +617,25 @@ function renderAllMessages() {
           // Append button to container and container to plan
           buttonContainer.appendChild(proceedButton);
           planContentDiv.appendChild(buttonContainer);
+          
+          // Add click event to the proceed button
+          proceedButton.addEventListener('click', () => {
+            console.log(`Proceed button clicked for plan: ${matchingPlan.id}`);
+            
+            // Show loading state on the button
+            proceedButton.disabled = true;
+            proceedButton.textContent = 'Processing...';
+            
+            // Send message to the extension to handle the API call
+            vscode.postMessage({
+              command: 'proceedWithPlan',
+              planId: matchingPlan.id,
+              workspaceId: context.workspaceId
+            });
+          });
 
           // Log that we added a proceed button
-          console.log('Added Proceed button to plan with review status');
+          console.log('Added Proceed button with click handler for plan with review status');
         }
       } else {
         console.log('No matching plan found for ID:', planId);

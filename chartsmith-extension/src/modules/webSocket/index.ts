@@ -220,7 +220,6 @@ export async function connectToCentrifugo(endpoint: string, token: string): Prom
   centrifuge.on('connected', (ctx) => {
     console.log('Connected to Centrifugo', ctx);
     outputChannel.appendLine('Connected to Centrifugo: ' + JSON.stringify(ctx, null, 2));
-    outputChannel.show();
     updateConnectionStatus(ConnectionStatus.CONNECTED);
     globalState.reconnectAttempt = 0;
     clearReconnectTimer();
@@ -236,7 +235,6 @@ export async function connectToCentrifugo(endpoint: string, token: string): Prom
   centrifuge.on('error', (ctx) => {
     console.error('Centrifugo connection error:', ctx);
     outputChannel.appendLine('Centrifugo connection error: ' + JSON.stringify(ctx, null, 2));
-    outputChannel.show();
   });
 
   // Subscribe to workspace-specific channel
@@ -282,9 +280,6 @@ export async function connectToCentrifugo(endpoint: string, token: string): Prom
         const handled = handleWebSocketMessage(ctx.data);
         outputChannel.appendLine(`Message handled: ${handled}`);
         
-        // Show output window for debugging
-        outputChannel.show();
-        
         // Also call the legacy callback if it exists
         if (onMessageCallback) {
           onMessageCallback(ctx.data);
@@ -294,23 +289,19 @@ export async function connectToCentrifugo(endpoint: string, token: string): Prom
       sub.on('error', (ctx) => {
         console.error('Subscription error:', ctx);
         outputChannel.appendLine(`Subscription error on channel ${channel}: ${JSON.stringify(ctx, null, 2)}`);
-        outputChannel.show();
       });
 
       // Add subscription handler
       sub.on('subscribed', (ctx) => {
         outputChannel.appendLine(`Successfully subscribed to channel: ${channel}`);
         outputChannel.appendLine(`Subscription context: ${JSON.stringify(ctx, null, 2)}`);
-        outputChannel.show();
       });
 
       sub.subscribe();
       
       outputChannel.appendLine(`Subscription request sent for channel: ${channel}`);
-      outputChannel.show();
     }).catch(error => {
       outputChannel.appendLine(`Error subscribing to channel: ${error}`);
-      outputChannel.show();
     });
   }
 

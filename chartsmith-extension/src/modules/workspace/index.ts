@@ -120,3 +120,19 @@ export async function removeWorkspaceMappingByPath(localPath: string): Promise<v
 export function constructChannelName(workspaceId: string, userId: string): string {
   return `${workspaceId}#${userId}`;
 }
+
+/**
+ * Updates workspace data with response from the server
+ * This function is used when proceeding with a plan to update any workspace state
+ */
+export function updateWorkspaceData(workspaceData: any): void {
+  console.log('Updating workspace data:', workspaceData);
+  
+  // For now, just log the data. If we need to store or update any specific
+  // workspace state in the future, we can add it here.
+  
+  // You could store the workspace data in a new atom if needed:
+  // if (workspaceData.id) {
+  //   actions.setWorkspaceData(workspaceData);
+  // }
+}

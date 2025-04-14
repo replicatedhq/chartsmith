@@ -103,6 +103,72 @@ async function sendMessageToApi(workspaceId: string, messageText: string): Promi
   }
 }
 
+/**
+ * Proceeds with a plan by sending a POST request to the revision endpoint
+ */
+async function proceedWithPlan(workspaceId: string, planId: string): Promise<void> {
+  if (!globalState.authData) {
+    vscode.window.showErrorMessage('Please log in to ChartSmith first.');
+    return;
+  }
+  
+  outputChannel.appendLine(`Proceeding with plan ${planId} for workspace ${workspaceId}`);
+  
+  try {
+    // Import API module
+    const api = await import('../api');
+    
+    // Make the POST request to the revision endpoint
+    const response = await api.fetchApi(
+      globalState.authData,
+      `/workspace/${workspaceId}/revision`,
+      'POST',
+      { planId: planId }
+    );
+    
+    outputChannel.appendLine(`Plan proceed request successful. Response: ${JSON.stringify(response, null, 2)}`);
+    
+    // Update the workspace with the response
+    if (response) {
+      // Import workspace module
+      const workspace = await import('../workspace');
+      
+      // Update the workspace state if needed
+      if (workspace.updateWorkspaceData && typeof workspace.updateWorkspaceData === 'function') {
+        workspace.updateWorkspaceData(response);
+        
+        // Notify webview that workspace was updated
+        if (globalState.webviewGlobal) {
+          globalState.webviewGlobal.postMessage({
+            command: 'workspaceUpdated',
+            workspace: response
+          });
+        }
+      }
+      
+      // Refresh messages, renders, and plans to reflect changes
+      vscode.commands.executeCommand('chartsmith.fetchMessages', workspaceId);
+      vscode.commands.executeCommand('chartsmith.fetchRenders', workspaceId);
+      vscode.commands.executeCommand('chartsmith.fetchPlans', workspaceId);
+      
+      // Show success message
+      vscode.window.showInformationMessage('Successfully proceeded with the plan.');
+    }
+  } catch (error) {
+    outputChannel.appendLine(`Error proceeding with plan: ${error}`);
+    vscode.window.showErrorMessage(`Failed to proceed with plan: ${error}`);
+    
+    // Notify webview of error so it can reset button state
+    if (globalState.webviewGlobal) {
+      globalState.webviewGlobal.postMessage({
+        command: 'planProceedError',
+        planId: planId,
+        error: `${error}`
+      });
+    }
+  }
+}
+
 export function deactivate(): void {
   // Cleanup on extension deactivation
   if (globalState.centrifuge) {
@@ -332,10 +398,8 @@ function registerCommands(context: vscode.ExtensionContext): void {
             outputChannel.appendLine('No push token found in response');
           }
           
-          outputChannel.show();
         } catch (error) {
           outputChannel.appendLine('Error fetching push data: ' + error);
-          outputChannel.show();
         }
         
         // Also fetch renders and plans for this workspace
@@ -422,10 +486,8 @@ function registerCommands(context: vscode.ExtensionContext): void {
             outputChannel.appendLine('No push token found in response');
           }
           
-          outputChannel.show();
         } catch (error) {
           outputChannel.appendLine('Error fetching push data: ' + error);
-          outputChannel.show();
         }
       } catch (error) {
         vscode.window.showErrorMessage(`Failed to fetch renders: ${error}`);
@@ -654,6 +716,11 @@ async function handleWebviewMessage(message: any) {
     case 'sendMessage':
       if (message.workspaceId && message.message) {
         sendMessageToApi(message.workspaceId, message.message);
+      }
+      break;
+    case 'proceedWithPlan':
+      if (message.workspaceId && message.planId) {
+        proceedWithPlan(message.workspaceId, message.planId);
       }
       break;
     // Add more message handlers as needed
