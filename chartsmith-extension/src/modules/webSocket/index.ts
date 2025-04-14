@@ -59,6 +59,10 @@ function handleWebSocketMessage(data: any): boolean {
       handlePlanEvent(data);
       return true;
       
+    case 'artifact-updated':
+      handleArtifactUpdated(data);
+      return true;
+      
     default:
       outputChannel.appendLine(`Unknown event type: ${data.eventType}`);
       return false;
@@ -386,5 +390,119 @@ function clearReconnectTimer(): void {
   if (globalState.reconnectTimer) {
     clearTimeout(globalState.reconnectTimer);
     globalState.reconnectTimer = null;
+  }
+}
+
+/**
+ * Handle an artifact-updated event
+ * @param data The message payload containing the file object
+ */
+async function handleArtifactUpdated(data: any): Promise<void> {
+  outputChannel.appendLine('========= PROCESSING ARTIFACT UPDATED EVENT ==========');
+  
+  if (!data.file) {
+    outputChannel.appendLine('ERROR: artifact-updated event missing file object');
+    return;
+  }
+  
+  const file = data.file;
+  outputChannel.appendLine(`Processing artifact-updated for file: ${file.filePath}`);
+  outputChannel.appendLine(`File details: ${JSON.stringify(file, null, 2)}`);
+  
+  // Check if the file has the expected structure
+  if (!file.filePath) {
+    outputChannel.appendLine('ERROR: File is missing filePath field');
+    return;
+  }
+  
+  try {
+    // Get the workspace folder to find the file
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders || workspaceFolders.length === 0) {
+      outputChannel.appendLine('ERROR: No workspace folder open');
+      return;
+    }
+    
+    // Get the current workspace ID
+    const currentWorkspaceId = store.get(workspaceIdAtom);
+    outputChannel.appendLine(`Current workspace ID: ${currentWorkspaceId}`);
+    
+    if (!currentWorkspaceId) {
+      outputChannel.appendLine('ERROR: No active workspace ID found');
+      return;
+    }
+    
+    // Get the chart path from workspace mapping
+    const workspaceModule = await import('../workspace');
+    const mapping = await workspaceModule.getWorkspaceMapping(currentWorkspaceId);
+    
+    if (!mapping || !mapping.localPath) {
+      outputChannel.appendLine('ERROR: Could not find workspace mapping or localPath');
+      return;
+    }
+    
+    outputChannel.appendLine(`Found workspace mapping with localPath: ${mapping.localPath}`);
+    
+    // The localPath is the full path to the chart directory
+    const chartBasePath = mapping.localPath;
+    
+    // Parse filePath to handle potential chart name duplication
+    let filePath = file.filePath;
+    
+    // Remove leading chart name if present to avoid duplication
+    // The pattern is likely "chartname/subpath" where chartname is the last directory in chartBasePath
+    const chartName = chartBasePath.split('/').pop() || '';
+    outputChannel.appendLine(`Chart name from path: ${chartName}`);
+    
+    // If filePath starts with chartName/, remove it
+    if (filePath.startsWith(`${chartName}/`)) {
+      outputChannel.appendLine(`File path starts with chart name, removing prefix: ${chartName}/`);
+      filePath = filePath.substring(chartName.length + 1); // +1 for the slash
+    }
+    
+    // Remove any leading slash if present
+    if (filePath.startsWith('/')) {
+      filePath = filePath.substring(1);
+    }
+    
+    outputChannel.appendLine(`Adjusted file path: ${filePath}`);
+    
+    // Create a URI for the file by combining the chart base path with the relative file path
+    const fileUri = vscode.Uri.file(`${chartBasePath}/${filePath}`);
+    outputChannel.appendLine(`Opening file: ${fileUri.fsPath}`);
+    
+    try {
+      // Try to open the file in the editor
+      await vscode.window.showTextDocument(fileUri);
+      outputChannel.appendLine('File opened successfully');
+    } catch (openError) {
+      outputChannel.appendLine(`Could not open file, attempting to create it: ${openError}`);
+      
+      try {
+        // Get the directory path
+        const dirPath = fileUri.fsPath.substring(0, fileUri.fsPath.lastIndexOf('/'));
+        outputChannel.appendLine(`Ensuring directory exists: ${dirPath}`);
+        
+        // Use the Node fs module to create the directory structure if needed
+        const fs = require('fs');
+        const path = require('path');
+        
+        // Create directory recursively
+        await fs.promises.mkdir(path.dirname(fileUri.fsPath), { recursive: true });
+        
+        // Create an empty file
+        await fs.promises.writeFile(fileUri.fsPath, '');
+        outputChannel.appendLine(`Created empty file: ${fileUri.fsPath}`);
+        
+        // Now open the newly created file
+        await vscode.window.showTextDocument(fileUri);
+        outputChannel.appendLine('Created and opened empty file successfully');
+      } catch (createError) {
+        outputChannel.appendLine(`Failed to create file: ${createError}`);
+        throw createError; // Re-throw to be caught by the outer catch
+      }
+    }
+  } catch (error) {
+    outputChannel.appendLine(`ERROR opening file: ${error}`);
   }
 }
