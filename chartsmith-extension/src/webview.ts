@@ -596,32 +596,59 @@ function renderAllMessages() {
         // Add action files list if present
         if (matchingPlan.actionFiles && matchingPlan.actionFiles.length > 0) {
           console.log('Plan has action files:', matchingPlan.actionFiles);
+          const fileCount = matchingPlan.actionFiles.length;
           
           // Create action files container
           const actionFilesContainer = document.createElement('div');
-          actionFilesContainer.style.cssText = 'margin-top: 15px; padding-top: 10px; border-top: 1px solid var(--vscode-panel-border); font-family: var(--vscode-editor-font-family); font-size: 12px;';
+          actionFilesContainer.style.cssText = 'margin-top: 15px; padding-top: 10px; border-top: 1px solid var(--vscode-panel-border); font-family: var(--vscode-editor-font-family); font-size: 11px;';
+          
+          // Create collapsible header
+          const headerContainer = document.createElement('div');
+          headerContainer.style.cssText = 'display: flex; align-items: center; margin-bottom: 8px; cursor: pointer;';
+          headerContainer.setAttribute('data-collapsed', 'false');
+          
+          // Create toggle icon
+          const toggleIcon = document.createElement('span');
+          toggleIcon.innerHTML = `
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+          `;
+          headerContainer.appendChild(toggleIcon);
           
           // Create heading
           const actionFilesHeading = document.createElement('div');
-          actionFilesHeading.textContent = 'Files';
-          actionFilesHeading.style.cssText = 'font-weight: bold; margin-bottom: 5px;';
-          actionFilesContainer.appendChild(actionFilesHeading);
+          actionFilesHeading.textContent = `${fileCount} ${fileCount === 1 ? 'file' : 'files'}`;
+          actionFilesHeading.style.cssText = 'font-weight: bold;';
+          headerContainer.appendChild(actionFilesHeading);
           
-          // Create file list
+          actionFilesContainer.appendChild(headerContainer);
+          
+          // Create file list with inset style
           const fileList = document.createElement('div');
-          fileList.style.cssText = 'display: flex; flex-direction: column; gap: 4px;';
+          fileList.style.cssText = `
+            display: flex; 
+            flex-direction: column; 
+            gap: 3px;
+            background-color: var(--vscode-editor-inactiveSelectionBackground, rgba(100, 100, 100, 0.1));
+            border: 1px solid var(--vscode-panel-border, rgba(120, 120, 120, 0.2));
+            border-radius: 4px;
+            padding: 6px 8px;
+            margin-top: 4px;
+            font-size: 10px;
+          `;
           
           // Add each file to the list
           matchingPlan.actionFiles.forEach(file => {
             const fileItem = document.createElement('div');
-            fileItem.style.cssText = 'display: flex; align-items: center; font-family: monospace; font-size: 12px;';
+            fileItem.style.cssText = 'display: flex; align-items: center; font-family: monospace; font-size: 10px;';
             
             // Create icon based on action type
             const fileIcon = document.createElement('span');
             if (file.action === 'update') {
               // Edit icon
               fileIcon.innerHTML = `
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; min-width: 12px;">
                   <path d="M20 14.66V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h5.34"></path>
                   <polygon points="18 2 22 6 12 16 8 16 8 12 18 2"></polygon>
                 </svg>
@@ -629,7 +656,7 @@ function renderAllMessages() {
             } else if (file.action === 'create') {
               // New file icon
               fileIcon.innerHTML = `
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; min-width: 12px;">
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                   <polyline points="14 2 14 8 20 8"></polyline>
                   <line x1="12" y1="18" x2="12" y2="12"></line>
@@ -639,7 +666,7 @@ function renderAllMessages() {
             } else {
               // Generic file icon for other actions
               fileIcon.innerHTML = `
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; min-width: 12px;">
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                   <polyline points="14 2 14 8 20 8"></polyline>
                 </svg>
@@ -659,6 +686,32 @@ function renderAllMessages() {
           
           actionFilesContainer.appendChild(fileList);
           planContentDiv.appendChild(actionFilesContainer);
+          
+          // Add click handler for collapse/expand
+          headerContainer.addEventListener('click', () => {
+            const isCollapsed = headerContainer.getAttribute('data-collapsed') === 'true';
+            
+            // Toggle collapse state
+            if (isCollapsed) {
+              // Expand
+              fileList.style.display = 'flex';
+              toggleIcon.innerHTML = `
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              `;
+              headerContainer.setAttribute('data-collapsed', 'false');
+            } else {
+              // Collapse
+              fileList.style.display = 'none';
+              toggleIcon.innerHTML = `
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;">
+                  <polyline points="9 18 15 12 9 6"></polyline>
+                </svg>
+              `;
+              headerContainer.setAttribute('data-collapsed', 'true');
+            }
+          });
         }
 
         // Check if plan status is "review" and add a Proceed button
