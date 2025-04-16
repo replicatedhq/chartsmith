@@ -743,170 +743,47 @@ async function handleWebviewMessage(message: any) {
       break;
     // Add more message handlers as needed
   }
+}
 
 /**
  * Renders a debug diff for testing purposes
- * This adds "MARC WAS HERE" to the deployment.yaml file and shows the diff
  */
 async function renderDebugDiff(workspaceId: string): Promise<void> {
-  outputChannel.appendLine('========= RENDERING DEBUG DIFF ==========');
-  
   try {
-    // Get the workspace folder to find the file
-    const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (!workspaceFolders || workspaceFolders.length === 0) {
-      outputChannel.appendLine('ERROR: No workspace folder open');
-      vscode.window.showErrorMessage('No workspace folder open');
-      return;
-    }
-
     // Get the chart path from workspace mapping
     const workspaceModule = await import('../workspace');
     const mapping = await workspaceModule.getWorkspaceMapping(workspaceId);
 
     if (!mapping || !mapping.localPath) {
-      outputChannel.appendLine('ERROR: Could not find workspace mapping or localPath');
       vscode.window.showErrorMessage('Could not find chart path for workspace');
       return;
     }
-
-    outputChannel.appendLine(`Found workspace mapping with localPath: ${mapping.localPath}`);
 
     // The localPath is the full path to the chart directory
     const chartBasePath = mapping.localPath;
 
     // Path to deployment.yaml
     const targetFilePath = `${chartBasePath}/templates/deployment.yaml`;
-    outputChannel.appendLine(`Target file path: ${targetFilePath}`);
 
-    // File system module for file operations
+    // Import modules
     const fs = require('fs');
     const path = require('path');
+    const renderModule = await import('../render');
 
-    // Check if the target file exists
-    if (!fs.existsSync(targetFilePath)) {
-      outputChannel.appendLine(`File does not exist: ${targetFilePath}`);
-      vscode.window.showErrorMessage(`File not found: ${targetFilePath}`);
-      
-      // Create the directory if it doesn't exist
-      await fs.promises.mkdir(path.dirname(targetFilePath), { recursive: true });
-      
-      // Create an empty file - we'll create a basic deployment template
-      await fs.promises.writeFile(targetFilePath, `apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: example
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: example
-  template:
-    metadata:
-      labels:
-        app: example
-    spec:
-      containers:
-      - name: main
-        image: nginx
-`);
-      outputChannel.appendLine(`Created new file: ${targetFilePath}`);
-    }
+    // Read the file content
+    const currentContent = await fs.promises.readFile(targetFilePath, 'utf8');
 
-    // Get the current content of the file
-    let currentContent = await fs.promises.readFile(targetFilePath, 'utf8');
-    outputChannel.appendLine(`Current file content length: ${currentContent.length}`);
+    // Make a change to the content
+    const modifiedContent = currentContent + "\n# MODIFIED LINE\n";
 
-    // Create modified content with "MARC WAS HERE" added
-    const pendingContent = currentContent + "\n# MARC WAS HERE\n";
-    outputChannel.appendLine(`Pending content length: ${pendingContent.length}`);
-
-    // Create custom URIs for the diff view
-    const fileName = path.basename(targetFilePath);
-    const oldUri = vscode.Uri.parse(`chartsmith-diff:${fileName}`);
-    const newUri = vscode.Uri.parse(`chartsmith-diff:${fileName}-new`);
-    
-    // Import the chartsmith content map from webSocket module
-    const webSocketModule = await import('../webSocket');
-    const { chartsmithContentMap } = webSocketModule;
-
-    // Store content in the map
-    chartsmithContentMap.clear(); // Clear any previous entries
-    chartsmithContentMap.set(oldUri.toString(), currentContent);
-    chartsmithContentMap.set(newUri.toString(), pendingContent);
-
-    // Register the provider
-    const provider = new class implements vscode.TextDocumentContentProvider {
-      provideTextDocumentContent(uri: vscode.Uri): string {
-        return chartsmithContentMap.get(uri.toString()) || '';
-      }
-    };
-
-    // Register the provider
-    const registration = vscode.workspace.registerTextDocumentContentProvider('chartsmith-diff', provider);
-
-    // Pre-load documents to ensure VS Code activates them
-    outputChannel.appendLine(`Pre-loading documents for diff view`);
-    try {
-      await vscode.workspace.openTextDocument(oldUri); // pre-load current content
-      outputChannel.appendLine(`Pre-loaded old document`);
-      await vscode.workspace.openTextDocument(newUri); // pre-load pending content
-      outputChannel.appendLine(`Pre-loaded new document`);
-    } catch (preloadError) {
-      outputChannel.appendLine(`Error pre-loading documents: ${preloadError}`);
-    }
-
-    // Show the diff view
-    outputChannel.appendLine(`Opening diff view for ${fileName}`);
-    outputChannel.appendLine(`Old URI: ${oldUri.toString()}`);
-    outputChannel.appendLine(`New URI: ${newUri.toString()}`);
-
-    await vscode.commands.executeCommand(
-      'vscode.diff',
-      oldUri,
-      newUri,
-      `Debug Diff: ${fileName}`,
-      { preview: false }
+    // Call the showFileDiff function to display the diff
+    await renderModule.showFileDiff(
+      targetFilePath,
+      modifiedContent,
+      `Debug Diff: ${path.basename(targetFilePath)}`
     );
-    await vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup');
 
-    outputChannel.appendLine('Diff view opened successfully');
-
-    // Show notification with options
-    const applyChanges = 'Apply Changes';
-    const discardChanges = 'Keep Original';
-
-    vscode.window.showInformationMessage(
-      `Debug diff for ${fileName}. Apply the changes or keep the original?`,
-      applyChanges,
-      discardChanges
-    ).then(async selection => {
-      if (selection === applyChanges) {
-        // Apply the pending content to the actual file
-        try {
-          await fs.promises.writeFile(targetFilePath, pendingContent);
-          outputChannel.appendLine(`Applied pending content to file: ${targetFilePath}`);
-          vscode.window.showInformationMessage(`Applied changes to ${fileName}`);
-
-          // Close the diff view and open the updated file
-          await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
-          await vscode.window.showTextDocument(vscode.Uri.file(targetFilePath));
-        } catch (error) {
-          outputChannel.appendLine(`Error applying changes: ${error}`);
-          vscode.window.showErrorMessage(`Failed to apply changes: ${error}`);
-        }
-      } else if (selection === discardChanges) {
-        // Just close the diff view
-        await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
-        vscode.window.showInformationMessage(`Kept original content for ${fileName}`);
-      }
-
-      // Dispose the provider registration
-      registration.dispose();
-    });
   } catch (error) {
-    outputChannel.appendLine(`ERROR handling debug diff: ${error}`);
     vscode.window.showErrorMessage(`Error rendering debug diff: ${error}`);
   }
-}
 }

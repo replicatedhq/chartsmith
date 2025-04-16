@@ -34,7 +34,13 @@
           "name": "ChartSmith"
         }
       ]
-    }
+    },
+    "commands": [
+      {
+        "command": "chartsmith.showFileDiff",
+        "title": "ChartSmith: Show File Diff"
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
