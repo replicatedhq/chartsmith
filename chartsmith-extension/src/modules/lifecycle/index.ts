@@ -25,10 +25,23 @@ let globalState: GlobalState = {
 // Make global state accessible to other modules
 (global as any).chartsmithGlobalState = globalState;
 
+const chartsmithContentMap = new Map<string, string>();
+
 export async function activate(extensionContext: vscode.ExtensionContext): Promise<void> {
   console.log('CHARTSMITH EXTENSION ACTIVATING');
-  
+
   context = extensionContext;
+
+  // register the content provider
+  const provider = new class implements vscode.TextDocumentContentProvider {
+    provideTextDocumentContent(uri: vscode.Uri): string {
+      return chartsmithContentMap.get(uri.toString()) || '';
+    }
+  };
+
+  context.subscriptions.push(
+    vscode.workspace.registerTextDocumentContentProvider('chartsmith-diff', provider)
+  );
 
   // Initialize output channel
   outputChannel = vscode.window.createOutputChannel('ChartSmith');
@@ -39,7 +52,7 @@ export async function activate(extensionContext: vscode.ExtensionContext): Promi
   initWorkspace(context);
   initChat(globalState);
   initRenders(globalState);
-  
+
   // Initialize plans module
   const initPlansModule = async () => {
     const plans = await import('../plans');
@@ -78,13 +91,13 @@ async function sendMessageToApi(workspaceId: string, messageText: string): Promi
     vscode.window.showErrorMessage('Please log in to ChartSmith first.');
     return;
   }
-  
+
   outputChannel.appendLine(`Sending message to workspace ${workspaceId}: ${messageText}`);
-  
+
   try {
     // Import API module
     const api = await import('../api');
-    
+
     // Make the POST request to the message endpoint
     const response = await api.fetchApi(
       globalState.authData,
@@ -92,9 +105,9 @@ async function sendMessageToApi(workspaceId: string, messageText: string): Promi
       'POST',
       { prompt: messageText }
     );
-    
+
     outputChannel.appendLine(`Message sent successfully. Response: ${JSON.stringify(response, null, 2)}`);
-    
+
     // Fetch updated messages after sending
     vscode.commands.executeCommand('chartsmith.fetchMessages', workspaceId);
   } catch (error) {
@@ -111,13 +124,13 @@ async function proceedWithPlan(workspaceId: string, planId: string): Promise<voi
     vscode.window.showErrorMessage('Please log in to ChartSmith first.');
     return;
   }
-  
+
   outputChannel.appendLine(`Proceeding with plan ${planId} for workspace ${workspaceId}`);
-  
+
   try {
     // Import API module
     const api = await import('../api');
-    
+
     // Make the POST request to the revision endpoint
     const response = await api.fetchApi(
       globalState.authData,
@@ -125,18 +138,18 @@ async function proceedWithPlan(workspaceId: string, planId: string): Promise<voi
       'POST',
       { planId: planId }
     );
-    
+
     outputChannel.appendLine(`Plan proceed request successful. Response: ${JSON.stringify(response, null, 2)}`);
-    
+
     // Update the workspace with the response
     if (response) {
       // Import workspace module
       const workspace = await import('../workspace');
-      
+
       // Update the workspace state if needed
       if (workspace.updateWorkspaceData && typeof workspace.updateWorkspaceData === 'function') {
         workspace.updateWorkspaceData(response);
-        
+
         // Notify webview that workspace was updated
         if (globalState.webviewGlobal) {
           globalState.webviewGlobal.postMessage({
@@ -145,19 +158,19 @@ async function proceedWithPlan(workspaceId: string, planId: string): Promise<voi
           });
         }
       }
-      
+
       // Refresh messages, renders, and plans to reflect changes
       vscode.commands.executeCommand('chartsmith.fetchMessages', workspaceId);
       vscode.commands.executeCommand('chartsmith.fetchRenders', workspaceId);
       vscode.commands.executeCommand('chartsmith.fetchPlans', workspaceId);
-      
+
       // Show success message
       vscode.window.showInformationMessage('Successfully proceeded with the plan.');
     }
   } catch (error) {
     outputChannel.appendLine(`Error proceeding with plan: ${error}`);
     vscode.window.showErrorMessage(`Failed to proceed with plan: ${error}`);
-    
+
     // Notify webview of error so it can reset button state
     if (globalState.webviewGlobal) {
       globalState.webviewGlobal.postMessage({
@@ -192,68 +205,68 @@ function registerCommands(context: vscode.ExtensionContext): void {
         vscode.window.showErrorMessage('Please log in to ChartSmith first.');
         return;
       }
-      
+
       // Get all folders in the workspace
       const workspaceFolders = vscode.workspace.workspaceFolders;
-      
+
       if (!workspaceFolders || workspaceFolders.length === 0) {
         vscode.window.showErrorMessage('Please open a folder containing Helm charts.');
         return;
       }
-      
+
       try {
         // Import chart module dynamically
         const chartModule = await import('../chart');
-        
+
         // Find Helm chart directories
         const chartDirectories = await chartModule.findHelmChartDirectories(workspaceFolders[0].uri.fsPath);
-        
+
         if (chartDirectories.length === 0) {
           vscode.window.showErrorMessage('No Helm charts found in the workspace. Charts must contain a Chart.yaml file.');
           return;
         }
-        
+
         // Create quick pick items
         const quickPickItems = chartDirectories.map(dir => {
-          const relativePath = dir.startsWith(workspaceFolders[0].uri.fsPath) 
+          const relativePath = dir.startsWith(workspaceFolders[0].uri.fsPath)
             ? dir.replace(workspaceFolders[0].uri.fsPath, workspaceFolders[0].name)
             : dir;
-            
+
           return {
             label: relativePath,
             detail: dir
           };
         });
-        
+
         // Show quick pick to select a chart directory
         const selection = await vscode.window.showQuickPick(quickPickItems, {
           placeHolder: 'Select a Helm chart to upload to ChartSmith',
           ignoreFocusOut: true
         });
-        
+
         if (!selection) {
           return; // User cancelled
         }
-        
+
         const chartDir = selection.detail;
-        
+
         // Create temporary tarball
         const chartTarball = await chartModule.createChartTarball(chartDir);
-        
+
         // Upload the chart - the server will respond with the workspace ID
         const uploadResponse = await chartModule.uploadChartToServer(globalState.authData, chartTarball);
-        
+
         // Show success message
         vscode.window.showInformationMessage('Chart uploaded successfully!');
-        
+
         // Log details if available
         if (uploadResponse.id) {
           console.log(`Chart ID: ${uploadResponse.id}`);
         }
-        
+
         if (uploadResponse.workspaceId) {
           console.log(`Workspace ID: ${uploadResponse.workspaceId}`);
-          
+
           // Store the workspace mapping with the chart path
           try {
             const workspace = await import('../workspace');
@@ -267,11 +280,11 @@ function registerCommands(context: vscode.ExtensionContext): void {
             console.error('Error saving workspace mapping:', error);
           }
         }
-        
+
         // After uploading, fetch renders for this workspace
         if (uploadResponse.workspaceId && globalState.authData) {
           console.log(`Workspace ID: ${uploadResponse.workspaceId}`);
-          
+
           // Directly fetch renders for this workspace
           try {
             // Use the command to ensure consistent handling
@@ -279,7 +292,7 @@ function registerCommands(context: vscode.ExtensionContext): void {
           } catch (error) {
             console.error('Error executing fetchRenders command:', error);
           }
-          
+
           // Also fetch plans for this workspace
           try {
             // Use the command to ensure consistent handling
@@ -287,7 +300,7 @@ function registerCommands(context: vscode.ExtensionContext): void {
           } catch (error) {
             console.error('Error executing fetchPlans command:', error);
           }
-          
+
           // Get the chart path for this workspace
           let chartPath = '';
           try {
@@ -296,10 +309,10 @@ function registerCommands(context: vscode.ExtensionContext): void {
             if (mapping) {
               // Get the current VS Code workspace folders
               const workspaceFolders = vscode.workspace.workspaceFolders;
-              
+
               if (workspaceFolders && workspaceFolders.length > 0) {
                 const workspaceRoot = workspaceFolders[0].uri.fsPath;
-                
+
                 // Make path relative to workspace if possible
                 if (mapping.localPath.startsWith(workspaceRoot)) {
                   chartPath = mapping.localPath.substring(workspaceRoot.length);
@@ -319,7 +332,7 @@ function registerCommands(context: vscode.ExtensionContext): void {
           } catch (error) {
             console.error('Error getting workspace mapping:', error);
           }
-          
+
           // Notify the webview of the workspace change
           if (globalState.webviewGlobal) {
             globalState.webviewGlobal.postMessage({
@@ -334,7 +347,7 @@ function registerCommands(context: vscode.ExtensionContext): void {
       }
     })
   );
-  
+
   // Register fetch messages command
   context.subscriptions.push(
     vscode.commands.registerCommand('chartsmith.fetchMessages', async (workspaceId: string) => {
@@ -368,7 +381,7 @@ function registerCommands(context: vscode.ExtensionContext): void {
             workspaceId: workspaceId
           });
         }
-        
+
         // Call /push API
         try {
           const api = await import('../api');
@@ -379,12 +392,12 @@ function registerCommands(context: vscode.ExtensionContext): void {
             'GET'
           );
           outputChannel.appendLine('Push API Response: ' + JSON.stringify(pushResponse, null, 2));
-          
+
           // Store the push token in memory
           if (pushResponse && pushResponse.pushToken) {
             globalState.centrifugoJwt = pushResponse.pushToken;
             outputChannel.appendLine('Stored Centrifugo JWT: ' + globalState.centrifugoJwt);
-            
+
             // Try to connect to Centrifugo with the JWT
             try {
               const webSocket = await import('../webSocket');
@@ -397,11 +410,11 @@ function registerCommands(context: vscode.ExtensionContext): void {
           } else {
             outputChannel.appendLine('No push token found in response');
           }
-          
+
         } catch (error) {
           outputChannel.appendLine('Error fetching push data: ' + error);
         }
-        
+
         // Also fetch renders and plans for this workspace
         try {
           // We'll fetch renders automatically when fetching messages to ensure both are loaded
@@ -409,7 +422,7 @@ function registerCommands(context: vscode.ExtensionContext): void {
         } catch (error) {
           console.error('Error executing fetchRenders command:', error);
         }
-        
+
         // Fetch plans for this workspace
         try {
           // We'll fetch plans automatically when fetching messages to ensure everything is loaded
@@ -422,7 +435,7 @@ function registerCommands(context: vscode.ExtensionContext): void {
       }
     })
   );
-  
+
   // Register fetch renders command
   context.subscriptions.push(
     vscode.commands.registerCommand('chartsmith.fetchRenders', async (workspaceId: string) => {
@@ -456,7 +469,7 @@ function registerCommands(context: vscode.ExtensionContext): void {
             workspaceId: workspaceId
           });
         }
-        
+
         // Call /push API
         try {
           const api = await import('../api');
@@ -467,12 +480,12 @@ function registerCommands(context: vscode.ExtensionContext): void {
             'GET'
           );
           outputChannel.appendLine('Push API Response: ' + JSON.stringify(pushResponse, null, 2));
-          
+
           // Store the push token in memory
           if (pushResponse && pushResponse.pushToken) {
             globalState.centrifugoJwt = pushResponse.pushToken;
             outputChannel.appendLine('Stored Centrifugo JWT: ' + globalState.centrifugoJwt);
-            
+
             // Try to connect to Centrifugo with the JWT
             try {
               const webSocket = await import('../webSocket');
@@ -485,7 +498,7 @@ function registerCommands(context: vscode.ExtensionContext): void {
           } else {
             outputChannel.appendLine('No push token found in response');
           }
-          
+
         } catch (error) {
           outputChannel.appendLine('Error fetching push data: ' + error);
         }
@@ -494,7 +507,7 @@ function registerCommands(context: vscode.ExtensionContext): void {
       }
     })
   );
-  
+
   // Register fetch plans command
   context.subscriptions.push(
     vscode.commands.registerCommand('chartsmith.fetchPlans', async (workspaceId: string) => {
@@ -527,7 +540,7 @@ function registerCommands(context: vscode.ExtensionContext): void {
             plans: workspacePlans,
             workspaceId: workspaceId
           });
-          
+
           // Force re-render of messages to make sure plans are displayed
           setTimeout(() => {
             if (globalState.webviewGlobal) {
@@ -553,7 +566,7 @@ function registerCommands(context: vscode.ExtensionContext): void {
       try {
         // Import the auth module dynamically to avoid circular dependencies
         const auth = await import('../auth');
-        
+
         // Start the auth server first
         auth.startAuthServer(port).then(token => {
           if (token) {
@@ -561,12 +574,12 @@ function registerCommands(context: vscode.ExtensionContext): void {
             // We don't connect to WebSocket here - only when a workspace is opened
           }
         });
-        
+
         // Open the authentication URL in the browser
         const authUrl = `https://chartsmith.ai/auth/extension?next=http://localhost:${port}`;
         vscode.window.showInformationMessage('Please complete login in the browser window.');
         vscode.env.openExternal(vscode.Uri.parse(authUrl));
-        
+
         // Return early since we're handling everything in the promise
         return;
       } catch (error) {
@@ -584,11 +597,11 @@ function registerCommands(context: vscode.ExtensionContext): void {
         // Clear active workspace ID to disconnect WebSocket
         const workspace = await import('../workspace');
         await workspace.setActiveWorkspaceId(null);
-        
+
         // Clear auth data
         const auth = await import('../auth');
         await auth.clearAuthData();
-        
+
         vscode.window.showInformationMessage('Logged out from ChartSmith.');
       } catch (error) {
         vscode.window.showErrorMessage(`Logout failed: ${error}`);
@@ -622,7 +635,7 @@ class SidebarProvider implements vscode.WebviewViewProvider {
     // Get the active workspace ID
     const workspaceModule = await import('../workspace');
     const activeWorkspaceId = await workspaceModule.getActiveWorkspaceId();
-    
+
     // Get the workspace mapping to find the chart path
     let chartPath = '';
     if (activeWorkspaceId) {
@@ -630,10 +643,10 @@ class SidebarProvider implements vscode.WebviewViewProvider {
       if (mapping) {
         // Get the current VS Code workspace folders
         const workspaceFolders = vscode.workspace.workspaceFolders;
-        
+
         if (workspaceFolders && workspaceFolders.length > 0) {
           const workspaceRoot = workspaceFolders[0].uri.fsPath;
-          
+
           // Make path relative to workspace if possible
           if (mapping.localPath.startsWith(workspaceRoot)) {
             chartPath = mapping.localPath.substring(workspaceRoot.length);
@@ -703,6 +716,11 @@ async function handleWebviewMessage(message: any) {
         vscode.env.openExternal(vscode.Uri.parse(message.url));
       }
       break;
+    case 'renderDebugDiff':
+      if (message.workspaceId) {
+        await renderDebugDiff(message.workspaceId);
+      }
+      break;
     case 'fetchMessages':
       if (message.workspaceId) {
         vscode.commands.executeCommand('chartsmith.fetchMessages', message.workspaceId);
@@ -725,4 +743,170 @@ async function handleWebviewMessage(message: any) {
       break;
     // Add more message handlers as needed
   }
+
+/**
+ * Renders a debug diff for testing purposes
+ * This adds "MARC WAS HERE" to the deployment.yaml file and shows the diff
+ */
+async function renderDebugDiff(workspaceId: string): Promise<void> {
+  outputChannel.appendLine('========= RENDERING DEBUG DIFF ==========');
+  
+  try {
+    // Get the workspace folder to find the file
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders || workspaceFolders.length === 0) {
+      outputChannel.appendLine('ERROR: No workspace folder open');
+      vscode.window.showErrorMessage('No workspace folder open');
+      return;
+    }
+
+    // Get the chart path from workspace mapping
+    const workspaceModule = await import('../workspace');
+    const mapping = await workspaceModule.getWorkspaceMapping(workspaceId);
+
+    if (!mapping || !mapping.localPath) {
+      outputChannel.appendLine('ERROR: Could not find workspace mapping or localPath');
+      vscode.window.showErrorMessage('Could not find chart path for workspace');
+      return;
+    }
+
+    outputChannel.appendLine(`Found workspace mapping with localPath: ${mapping.localPath}`);
+
+    // The localPath is the full path to the chart directory
+    const chartBasePath = mapping.localPath;
+
+    // Path to deployment.yaml
+    const targetFilePath = `${chartBasePath}/templates/deployment.yaml`;
+    outputChannel.appendLine(`Target file path: ${targetFilePath}`);
+
+    // File system module for file operations
+    const fs = require('fs');
+    const path = require('path');
+
+    // Check if the target file exists
+    if (!fs.existsSync(targetFilePath)) {
+      outputChannel.appendLine(`File does not exist: ${targetFilePath}`);
+      vscode.window.showErrorMessage(`File not found: ${targetFilePath}`);
+      
+      // Create the directory if it doesn't exist
+      await fs.promises.mkdir(path.dirname(targetFilePath), { recursive: true });
+      
+      // Create an empty file - we'll create a basic deployment template
+      await fs.promises.writeFile(targetFilePath, `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: example
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: example
+  template:
+    metadata:
+      labels:
+        app: example
+    spec:
+      containers:
+      - name: main
+        image: nginx
+`);
+      outputChannel.appendLine(`Created new file: ${targetFilePath}`);
+    }
+
+    // Get the current content of the file
+    let currentContent = await fs.promises.readFile(targetFilePath, 'utf8');
+    outputChannel.appendLine(`Current file content length: ${currentContent.length}`);
+
+    // Create modified content with "MARC WAS HERE" added
+    const pendingContent = currentContent + "\n# MARC WAS HERE\n";
+    outputChannel.appendLine(`Pending content length: ${pendingContent.length}`);
+
+    // Create custom URIs for the diff view
+    const fileName = path.basename(targetFilePath);
+    const oldUri = vscode.Uri.parse(`chartsmith-diff:${fileName}`);
+    const newUri = vscode.Uri.parse(`chartsmith-diff:${fileName}-new`);
+    
+    // Import the chartsmith content map from webSocket module
+    const webSocketModule = await import('../webSocket');
+    const { chartsmithContentMap } = webSocketModule;
+
+    // Store content in the map
+    chartsmithContentMap.clear(); // Clear any previous entries
+    chartsmithContentMap.set(oldUri.toString(), currentContent);
+    chartsmithContentMap.set(newUri.toString(), pendingContent);
+
+    // Register the provider
+    const provider = new class implements vscode.TextDocumentContentProvider {
+      provideTextDocumentContent(uri: vscode.Uri): string {
+        return chartsmithContentMap.get(uri.toString()) || '';
+      }
+    };
+
+    // Register the provider
+    const registration = vscode.workspace.registerTextDocumentContentProvider('chartsmith-diff', provider);
+
+    // Pre-load documents to ensure VS Code activates them
+    outputChannel.appendLine(`Pre-loading documents for diff view`);
+    try {
+      await vscode.workspace.openTextDocument(oldUri); // pre-load current content
+      outputChannel.appendLine(`Pre-loaded old document`);
+      await vscode.workspace.openTextDocument(newUri); // pre-load pending content
+      outputChannel.appendLine(`Pre-loaded new document`);
+    } catch (preloadError) {
+      outputChannel.appendLine(`Error pre-loading documents: ${preloadError}`);
+    }
+
+    // Show the diff view
+    outputChannel.appendLine(`Opening diff view for ${fileName}`);
+    outputChannel.appendLine(`Old URI: ${oldUri.toString()}`);
+    outputChannel.appendLine(`New URI: ${newUri.toString()}`);
+
+    await vscode.commands.executeCommand(
+      'vscode.diff',
+      oldUri,
+      newUri,
+      `Debug Diff: ${fileName}`,
+      { preview: false }
+    );
+    await vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup');
+
+    outputChannel.appendLine('Diff view opened successfully');
+
+    // Show notification with options
+    const applyChanges = 'Apply Changes';
+    const discardChanges = 'Keep Original';
+
+    vscode.window.showInformationMessage(
+      `Debug diff for ${fileName}. Apply the changes or keep the original?`,
+      applyChanges,
+      discardChanges
+    ).then(async selection => {
+      if (selection === applyChanges) {
+        // Apply the pending content to the actual file
+        try {
+          await fs.promises.writeFile(targetFilePath, pendingContent);
+          outputChannel.appendLine(`Applied pending content to file: ${targetFilePath}`);
+          vscode.window.showInformationMessage(`Applied changes to ${fileName}`);
+
+          // Close the diff view and open the updated file
+          await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+          await vscode.window.showTextDocument(vscode.Uri.file(targetFilePath));
+        } catch (error) {
+          outputChannel.appendLine(`Error applying changes: ${error}`);
+          vscode.window.showErrorMessage(`Failed to apply changes: ${error}`);
+        }
+      } else if (selection === discardChanges) {
+        // Just close the diff view
+        await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+        vscode.window.showInformationMessage(`Kept original content for ${fileName}`);
+      }
+
+      // Dispose the provider registration
+      registration.dispose();
+    });
+  } catch (error) {
+    outputChannel.appendLine(`ERROR handling debug diff: ${error}`);
+    vscode.window.showErrorMessage(`Error rendering debug diff: ${error}`);
+  }
+}
 }

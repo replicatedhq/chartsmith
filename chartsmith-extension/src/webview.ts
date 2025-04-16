@@ -201,6 +201,13 @@ function renderLoggedInView(container: HTMLElement) {
               <line x1="10" y1="14" x2="21" y2="3"></line>
             </svg>
           </button>
+          <button id="render-diff-btn" class="icon-button" title="Debug: Render Diff">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+              <path d="M12 11v8"></path>
+              <path d="M8 15h8"></path>
+            </svg>
+          </button>
           <button id="disconnect-btn" class="icon-button" title="Disconnect from workspace">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -251,6 +258,16 @@ function renderLoggedInView(container: HTMLElement) {
       vscode.postMessage({
         command: 'openExternal',
         url
+      });
+    }
+  });
+  
+  // Add handler for "Render Diff" debug button
+  document.getElementById('render-diff-btn')?.addEventListener('click', () => {
+    if (context.workspaceId) {
+      vscode.postMessage({
+        command: 'renderDebugDiff',
+        workspaceId: context.workspaceId
       });
     }
   });
