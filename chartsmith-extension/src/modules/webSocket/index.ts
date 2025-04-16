@@ -6,8 +6,18 @@ import { store, actions } from '../../state/store';
 import { workspaceIdAtom, Plan } from '../../state/atoms';
 import * as path from 'path';
 
+// Extend global type definition to include our maps
+declare global {
+  var pendingContentMap: Map<string, string> | undefined;
+  var chartsmithContentMap: Map<string, string> | undefined;
+}
+
 // Global content map for chartsmith diff views
-export const chartsmithContentMap = new Map<string, string>();
+// This will be accessible as global.chartsmithContentMap
+if (!global.chartsmithContentMap) {
+  global.chartsmithContentMap = new Map<string, string>();
+}
+export const chartsmithContentMap = global.chartsmithContentMap;
 
 let globalState: GlobalState;
 let onMessageCallback: ((message: any) => void) | null = null;
@@ -440,10 +450,35 @@ async function handleArtifactUpdated(data: any): Promise<void> {
     // Create the full file path by combining the chart base path with the relative file path
     const fullFilePath = `${chartBasePath}/${filePath}`;
 
-    // Check if there's pending content that we should show
+    // Always store the pending content when we get it, regardless of whether we show it
     if (file.content_pending) {
-      outputChannel.appendLine('File has pending content, showing diff view');
+      outputChannel.appendLine('File has pending content, storing it');
 
+      // Store the content in both our global maps for future access
+      // This ensures it's available whenever it's needed later
+      if (!global.pendingContentMap) {
+        global.pendingContentMap = new Map<string, string>();
+      }
+      
+      // Store the content with the full filepath as the key
+      global.pendingContentMap.set(filePath, file.content_pending);
+      
+      // Also store in the traditional chartsmith content map
+      chartsmithContentMap.set(filePath, file.content_pending);
+      
+      outputChannel.appendLine(`Stored pending content in global maps for ${filePath}`);
+      
+      // Log the number of stored file contents for debugging
+      outputChannel.appendLine(`Currently tracking pending content for ${global.pendingContentMap.size} files`);
+      
+      // Store the content in the file object's contentPending property for consistency
+      if (!('contentPending' in file)) {
+        (file as any).contentPending = file.content_pending;
+      }
+      
+      // Show the diff view if there's pending content
+      outputChannel.appendLine('Showing diff view for file with pending content');
+      
       // Import the render module to use the showFileDiff function
       const renderModule = await import('../render');
 

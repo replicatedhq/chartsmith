@@ -56,6 +56,8 @@ export interface ActionFile {
   action: string;
   path: string;
   status: string;
+  contentPending?: string;
+  content_pending?: string;  // API sends content_pending (snake_case)
 }
 
 

@@ -25,6 +25,23 @@ try {
   };
 }
 
+// Create an object to store state in the VS Code webview's state
+const state = {
+  draftMessage: '',
+  workspaceId: ''
+};
+
+// Try to load any saved state
+try {
+  const savedState = vscode.getState();
+  if (savedState) {
+    Object.assign(state, savedState);
+    console.log('Loaded saved state:', state);
+  }
+} catch (e) {
+  console.log('Error loading state:', e);
+}
+
 const context = (window as any).vscodeWebviewContext || {};
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -201,17 +218,11 @@ function renderLoggedInView(container: HTMLElement) {
               <line x1="10" y1="14" x2="21" y2="3"></line>
             </svg>
           </button>
-          <button id="render-diff-btn" class="icon-button" title="Debug: Render Diff">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-              <path d="M12 11v8"></path>
-              <path d="M8 15h8"></path>
-            </svg>
-          </button>
           <button id="disconnect-btn" class="icon-button" title="Disconnect from workspace">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+              <path d="M21 12H8"></path>
+              <path d="m12 8-4 4 4 4"></path>
             </svg>
           </button>
         </div>
@@ -261,55 +272,6 @@ function renderLoggedInView(container: HTMLElement) {
       });
     }
   });
-  
-  // Add handler for "Render Diff" debug button
-  document.getElementById('render-diff-btn')?.addEventListener('click', () => {
-    if (context.workspaceId) {
-      vscode.postMessage({
-        command: 'renderDebugDiff',
-        workspaceId: context.workspaceId
-      });
-    }
-  });
-
-  // Add message input handlers
-  const messageInput = document.getElementById('message-input') as HTMLTextAreaElement;
-  const sendMessageBtn = document.getElementById('send-message-btn') as HTMLButtonElement;
-
-  if (messageInput && sendMessageBtn) {
-    // Disable send button if input is empty
-    messageInput.addEventListener('input', () => {
-      sendMessageBtn.disabled = !messageInput.value.trim();
-    });
-
-    // Initialize button state
-    sendMessageBtn.disabled = true;
-
-    // Add keyboard shortcut (Enter to send, Shift+Enter for new line)
-    messageInput.addEventListener('keydown', (e) => {
-      // Send message with Enter (unless Shift is pressed for new line)
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        if (messageInput.value.trim()) {
-          sendMessage();
-        }
-      }
-      // Keep the Ctrl/Cmd + Enter shortcut as well
-      else if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-        e.preventDefault();
-        if (messageInput.value.trim()) {
-          sendMessage();
-        }
-      }
-    });
-
-    // Send button click handler
-    sendMessageBtn.addEventListener('click', () => {
-      if (messageInput.value.trim()) {
-        sendMessage();
-      }
-    });
-  }
 
   // Function to send message to API
   function sendMessage() {
@@ -339,8 +301,16 @@ function renderLoggedInView(container: HTMLElement) {
       message: messageText
     });
 
-    // Clear input
+    // Clear input and draft
     messageInput.value = '';
+
+    // Clear the saved draft
+    state.draftMessage = '';
+    try {
+      vscode.setState(state);
+    } catch (e) {
+      console.log('Error saving state after clearing draft:', e);
+    }
 
     // Reset button after delay (will be properly updated when message is confirmed)
     setTimeout(() => {
@@ -349,7 +319,7 @@ function renderLoggedInView(container: HTMLElement) {
     }, 1000);
   }
 
-  // Add disconnect button event listener
+  // Add handler for "Disconnect" button
   document.getElementById('disconnect-btn')?.addEventListener('click', () => {
     // Show confirmation dialog
     const confirmationContainer = document.createElement('div');
@@ -389,6 +359,66 @@ function renderLoggedInView(container: HTMLElement) {
       confirmationContainer.remove();
     });
   });
+
+  // Add message input handlers
+  const messageInput = document.getElementById('message-input') as HTMLTextAreaElement;
+  const sendMessageBtn = document.getElementById('send-message-btn') as HTMLButtonElement;
+
+  if (messageInput && sendMessageBtn) {
+    // If we have a saved draft for this workspace, restore it
+    if (state.draftMessage && state.workspaceId === context.workspaceId) {
+      messageInput.value = state.draftMessage;
+      console.log('Restored draft message:', state.draftMessage);
+
+      // Update button state based on the restored input
+      sendMessageBtn.disabled = !messageInput.value.trim();
+    }
+
+    // Save draft whenever input changes
+    messageInput.addEventListener('input', () => {
+      // Update button state
+      sendMessageBtn.disabled = !messageInput.value.trim();
+
+      // Save draft to state
+      state.draftMessage = messageInput.value;
+      state.workspaceId = context.workspaceId;
+
+      // Save state to VS Code's webview state
+      try {
+        vscode.setState(state);
+      } catch (e) {
+        console.log('Error saving state:', e);
+      }
+    });
+
+    // Initialize button state
+    sendMessageBtn.disabled = !messageInput.value.trim();
+
+    // Add keyboard shortcut (Enter to send, Shift+Enter for new line)
+    messageInput.addEventListener('keydown', (e) => {
+      // Send message with Enter (unless Shift is pressed for new line)
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        if (messageInput.value.trim()) {
+          sendMessage();
+        }
+      }
+      // Keep the Ctrl/Cmd + Enter shortcut as well
+      else if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        if (messageInput.value.trim()) {
+          sendMessage();
+        }
+      }
+    });
+
+    // Send button click handler
+    sendMessageBtn.addEventListener('click', () => {
+      if (messageInput.value.trim()) {
+        sendMessage();
+      }
+    });
+  }
 
   // Initialize Jotai store from context
   if (context.workspaceId) {
@@ -609,65 +639,71 @@ function renderAllMessages() {
 
         // Append the content div to the plan container
         planContainer.appendChild(planContentDiv);
-        
+
         // Add action files list if present
         if (matchingPlan.actionFiles && matchingPlan.actionFiles.length > 0) {
           console.log('Plan has action files:', matchingPlan.actionFiles);
-          const fileCount = matchingPlan.actionFiles.length;
-          
+
+          // Filter out pending files - only show updating, creating, updated, created
+          const relevantFiles = matchingPlan.actionFiles.filter(file =>
+            file.status === 'updating' ||
+            file.status === 'creating' ||
+            file.status === 'updated' ||
+            file.status === 'created'
+          );
+
+          if (relevantFiles.length === 0) {
+            console.log('No non-pending files to display');
+            return;
+          }
+
+          const fileCount = relevantFiles.length;
+
           // Create action files container
           const actionFilesContainer = document.createElement('div');
           actionFilesContainer.style.cssText = 'margin-top: 15px; padding-top: 10px; border-top: 1px solid var(--vscode-panel-border); font-family: var(--vscode-editor-font-family); font-size: 11px;';
-          
-          // Create collapsible header
-          const headerContainer = document.createElement('div');
-          headerContainer.style.cssText = 'display: flex; align-items: center; margin-bottom: 8px; cursor: pointer;';
-          headerContainer.setAttribute('data-collapsed', 'false');
-          
-          // Create toggle icon
-          const toggleIcon = document.createElement('span');
-          toggleIcon.innerHTML = `
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;">
-              <polyline points="6 9 12 15 18 9"></polyline>
-            </svg>
-          `;
-          headerContainer.appendChild(toggleIcon);
-          
+
           // Create heading
           const actionFilesHeading = document.createElement('div');
-          actionFilesHeading.textContent = `${fileCount} ${fileCount === 1 ? 'file' : 'files'}`;
-          actionFilesHeading.style.cssText = 'font-weight: bold;';
-          headerContainer.appendChild(actionFilesHeading);
-          
-          actionFilesContainer.appendChild(headerContainer);
-          
-          // Create file list with inset style
+          actionFilesHeading.textContent = `${fileCount} ${fileCount === 1 ? 'file' : 'files'} to apply`;
+          actionFilesHeading.style.cssText = 'font-weight: bold; margin-bottom: 12px;';
+          actionFilesContainer.appendChild(actionFilesHeading);
+
+          // File list container - using grid for better layout
           const fileList = document.createElement('div');
           fileList.style.cssText = `
-            display: flex; 
-            flex-direction: column; 
-            gap: 3px;
-            background-color: var(--vscode-editor-inactiveSelectionBackground, rgba(100, 100, 100, 0.1));
-            border: 1px solid var(--vscode-panel-border, rgba(120, 120, 120, 0.2));
-            border-radius: 4px;
-            padding: 6px 8px;
-            margin-top: 4px;
-            font-size: 10px;
+            display: grid;
+            grid-gap: 10px;
+            width: 100%;
           `;
-          
-          // Add each file to the list
-          matchingPlan.actionFiles.forEach(file => {
-            const fileItem = document.createElement('div');
-            fileItem.style.cssText = 'display: flex; align-items: center; font-family: monospace; font-size: 10px;';
-            
+
+          // Add each file as a separate card/box
+          relevantFiles.forEach(file => {
+            // Create file card
+            const fileCard = document.createElement('div');
+            fileCard.style.cssText = `
+              display: flex;
+              flex-direction: column;
+              background-color: var(--vscode-editor-inactiveSelectionBackground, rgba(100, 100, 100, 0.1));
+              border: 1px solid var(--vscode-panel-border, rgba(120, 120, 120, 0.2));
+              border-radius: 6px;
+              padding: 10px;
+              position: relative;
+            `;
+            fileCard.setAttribute('data-file-path', file.path);
+
+            // Create file header with icon and name
+            const fileHeader = document.createElement('div');
+            fileHeader.style.cssText = 'display: flex; align-items: center; margin-bottom: 8px; font-family: monospace; font-size: 12px;';
+
             // Create icon based on status and action type
             const fileIcon = document.createElement('span');
-            
+
             // First, check the status to determine if we should show a spinner or checkmark
             if (file.status === 'creating' || file.status === 'updating') {
               // Spinner for in-progress status
               fileIcon.innerHTML = `
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; min-width: 12px;" class="spin-animation">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px; min-width: 14px;" class="spin-animation">
                   <circle cx="12" cy="12" r="10"></circle>
                   <path d="M12 6v6l4 2"></path>
                 </svg>
@@ -683,7 +719,7 @@ function renderAllMessages() {
             } else if (file.status === 'created' || file.status === 'updated') {
               // Green checkmark for completed status
               fileIcon.innerHTML = `
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; min-width: 12px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px; min-width: 14px;">
                   <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
                   <polyline points="22 4 12 14.01 9 11.01"></polyline>
                 </svg>
@@ -693,7 +729,7 @@ function renderAllMessages() {
               if (file.action === 'update') {
                 // Edit icon
                 fileIcon.innerHTML = `
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; min-width: 12px;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px; min-width: 14px;">
                     <path d="M20 14.66V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h5.34"></path>
                     <polygon points="18 2 22 6 12 16 8 16 8 12 18 2"></polygon>
                   </svg>
@@ -701,7 +737,7 @@ function renderAllMessages() {
               } else if (file.action === 'create') {
                 // New file icon
                 fileIcon.innerHTML = `
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; min-width: 12px;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px; min-width: 14px;">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                     <polyline points="14 2 14 8 20 8"></polyline>
                     <line x1="12" y1="18" x2="12" y2="12"></line>
@@ -711,53 +747,172 @@ function renderAllMessages() {
               } else {
                 // Generic file icon for other actions
                 fileIcon.innerHTML = `
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; min-width: 12px;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px; min-width: 14px;">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                     <polyline points="14 2 14 8 20 8"></polyline>
                   </svg>
                 `;
               }
             }
-            
-            fileItem.appendChild(fileIcon);
-            
-            // Add filename text
+
+            fileHeader.appendChild(fileIcon);
+
+            // Add file path
             const filePathSpan = document.createElement('span');
             filePathSpan.textContent = file.path;
-            filePathSpan.style.cssText = 'font-family: monospace; overflow-wrap: break-word; white-space: normal;';
-            fileItem.appendChild(filePathSpan);
-            
-            fileList.appendChild(fileItem);
-          });
-          
-          actionFilesContainer.appendChild(fileList);
-          planContentDiv.appendChild(actionFilesContainer);
-          
-          // Add click handler for collapse/expand
-          headerContainer.addEventListener('click', () => {
-            const isCollapsed = headerContainer.getAttribute('data-collapsed') === 'true';
-            
-            // Toggle collapse state
-            if (isCollapsed) {
-              // Expand
-              fileList.style.display = 'flex';
-              toggleIcon.innerHTML = `
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;">
-                  <polyline points="6 9 12 15 18 9"></polyline>
-                </svg>
+            filePathSpan.style.cssText = 'font-family: monospace; font-weight: bold; overflow-wrap: break-word; white-space: normal;';
+            fileHeader.appendChild(filePathSpan);
+
+            // Add status badge if applicable
+            if (file.status) {
+              const statusBadge = document.createElement('span');
+              statusBadge.textContent = file.status;
+              statusBadge.style.cssText = `
+                margin-left: auto;
+                padding: 2px 6px;
+                border-radius: 10px;
+                font-size: 10px;
+                text-transform: capitalize;
+                background-color: var(--vscode-badge-background);
+                color: var(--vscode-badge-foreground);
               `;
-              headerContainer.setAttribute('data-collapsed', 'false');
-            } else {
-              // Collapse
-              fileList.style.display = 'none';
-              toggleIcon.innerHTML = `
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;">
-                  <polyline points="9 18 15 12 9 6"></polyline>
-                </svg>
-              `;
-              headerContainer.setAttribute('data-collapsed', 'true');
+              fileHeader.appendChild(statusBadge);
             }
+
+            fileCard.appendChild(fileHeader);
+
+            // Add file action buttons container
+            const buttonContainer = document.createElement('div');
+            buttonContainer.className = 'file-actions';
+            buttonContainer.style.cssText = 'display: flex; gap: 8px; align-items: center;';
+
+            // Create accept button
+            const acceptBtn = document.createElement('button');
+            acceptBtn.className = 'icon-button accept-btn';
+            acceptBtn.title = 'Accept changes';
+            acceptBtn.innerHTML = `
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--vscode-gitDecoration-addedResourceForeground, #81b88b)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+            `;
+
+            // Create reject button
+            const rejectBtn = document.createElement('button');
+            rejectBtn.className = 'icon-button reject-btn';
+            rejectBtn.title = 'Reject changes';
+            rejectBtn.innerHTML = `
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--vscode-gitDecoration-deletedResourceForeground, #c74e39)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            `;
+
+            // Create view diff button
+            const viewDiffBtn = document.createElement('button');
+            viewDiffBtn.className = 'icon-button view-diff-btn';
+            viewDiffBtn.title = 'View changes';
+            viewDiffBtn.innerHTML = `
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 20h9"></path>
+                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+              </svg>
+            `;
+
+            // Add buttons to container
+            buttonContainer.appendChild(viewDiffBtn);
+            buttonContainer.appendChild(acceptBtn);
+            buttonContainer.appendChild(rejectBtn);
+
+            // Add buttons to header
+            fileHeader.appendChild(buttonContainer);
+
+            // Add click handlers
+            viewDiffBtn.addEventListener('click', () => {
+              // Send message to extension to show diff for this file
+              // Include the pending content in the message
+              // Get pending content from either property name
+              const pendingContent = file.content_pending || file.contentPending || '';
+              console.log('View diff - using pending content for file:', file.path);
+              console.log('View diff - content available:', pendingContent !== '');
+              
+              vscode.postMessage({
+                command: 'viewFileDiff',
+                filePath: file.path,
+                workspaceId: context.workspaceId,
+                pendingContent: pendingContent  // Send the pending content to the backend
+              });
+            });
+
+            acceptBtn.addEventListener('click', () => {
+              // Debug logging to diagnose the issue
+              console.log('Accept button clicked for file:', file.path);
+              console.log('File object:', file);
+              console.log('contentPending exists:', !!file.contentPending);
+              console.log('content_pending exists:', !!file.content_pending);
+              
+              // Get pending content from either property name
+              const pendingContent = file.content_pending || file.contentPending || '';
+              console.log('Using pending content (empty string check):', pendingContent !== '');
+              
+              // Send message to extension to accept changes
+              vscode.postMessage({
+                command: 'acceptFileChanges',
+                filePath: file.path,
+                workspaceId: context.workspaceId,
+                pendingContent: pendingContent  // Send the pending content to the backend
+              });
+
+              // Update UI to show accepted
+              fileCard.style.borderColor = 'var(--vscode-gitDecoration-addedResourceForeground, #81b88b)';
+              acceptBtn.disabled = true;
+              rejectBtn.disabled = true;
+              viewDiffBtn.disabled = true;
+
+              // Change status badge if it exists
+              const statusBadge = fileHeader.querySelector('span:last-child');
+              if (statusBadge && statusBadge !== filePathSpan) {
+                statusBadge.textContent = 'Accepted';
+                (statusBadge as HTMLElement).style.backgroundColor = 'var(--vscode-gitDecoration-addedResourceForeground, #81b88b)';
+              }
+            });
+
+            rejectBtn.addEventListener('click', () => {
+              // Get pending content from either property name
+              const pendingContent = file.content_pending || file.contentPending || '';
+              console.log('Reject changes - using pending content for file:', file.path);
+              console.log('Reject changes - content available:', pendingContent !== '');
+              
+              // Send message to extension to reject changes
+              vscode.postMessage({
+                command: 'rejectFileChanges',
+                filePath: file.path,
+                workspaceId: context.workspaceId,
+                pendingContent: pendingContent  // Send the pending content to the backend
+              });
+
+              // Update UI to show rejected
+              fileCard.style.borderColor = 'var(--vscode-gitDecoration-deletedResourceForeground, #c74e39)';
+              acceptBtn.disabled = true;
+              rejectBtn.disabled = true;
+              viewDiffBtn.disabled = true;
+
+              // Change status badge if it exists
+              const statusBadge = fileHeader.querySelector('span:last-child');
+              if (statusBadge && statusBadge !== filePathSpan) {
+                statusBadge.textContent = 'Rejected';
+                (statusBadge as HTMLElement).style.backgroundColor = 'var(--vscode-gitDecoration-deletedResourceForeground, #c74e39)';
+              }
+            });
+
+            // Add the file card to the file list
+            fileList.appendChild(fileCard);
           });
+
+          // Add the file list to the container
+          actionFilesContainer.appendChild(fileList);
+
+          // Add the container to the plan content
+          planContentDiv.appendChild(actionFilesContainer);
         }
 
         // Check if plan status is "review" and add a Proceed button
@@ -784,15 +939,15 @@ function renderAllMessages() {
           // Append button to container and container to plan
           buttonContainer.appendChild(proceedButton);
           planContentDiv.appendChild(buttonContainer);
-          
+
           // Add click event to the proceed button
           proceedButton.addEventListener('click', () => {
             console.log(`Proceed button clicked for plan: ${matchingPlan.id}`);
-            
+
             // Show loading state on the button
             proceedButton.disabled = true;
             proceedButton.textContent = 'Processing...';
-            
+
             // Send message to the extension to handle the API call
             vscode.postMessage({
               command: 'proceedWithPlan',

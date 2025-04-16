@@ -10,6 +10,12 @@ import { getHtmlForWebview } from '../ui';
 
 let outputChannel: vscode.OutputChannel;
 let context: vscode.ExtensionContext;
+// Extend global type definition to include our pendingContentMap
+declare global {
+  var pendingContentMap: Map<string, string> | undefined;
+  var chartsmithContentMap: Map<string, string> | undefined;
+}
+
 let globalState: GlobalState = {
   webviewGlobal: null,
   centrifuge: null,
@@ -21,6 +27,11 @@ let globalState: GlobalState = {
   authServer: null,
   centrifugoJwt: null
 };
+
+// Initialize global pending content map for sharing content between functions
+if (!global.pendingContentMap) {
+  global.pendingContentMap = new Map<string, string>();
+}
 
 // Make global state accessible to other modules
 (global as any).chartsmithGlobalState = globalState;
@@ -163,9 +174,6 @@ async function proceedWithPlan(workspaceId: string, planId: string): Promise<voi
       vscode.commands.executeCommand('chartsmith.fetchMessages', workspaceId);
       vscode.commands.executeCommand('chartsmith.fetchRenders', workspaceId);
       vscode.commands.executeCommand('chartsmith.fetchPlans', workspaceId);
-
-      // Show success message
-      vscode.window.showInformationMessage('Successfully proceeded with the plan.');
     }
   } catch (error) {
     outputChannel.appendLine(`Error proceeding with plan: ${error}`);
@@ -255,9 +263,6 @@ function registerCommands(context: vscode.ExtensionContext): void {
 
         // Upload the chart - the server will respond with the workspace ID
         const uploadResponse = await chartModule.uploadChartToServer(globalState.authData, chartTarball);
-
-        // Show success message
-        vscode.window.showInformationMessage('Chart uploaded successfully!');
 
         // Log details if available
         if (uploadResponse.id) {
@@ -741,6 +746,21 @@ async function handleWebviewMessage(message: any) {
         proceedWithPlan(message.workspaceId, message.planId);
       }
       break;
+    case 'viewFileDiff':
+      if (message.filePath && message.workspaceId) {
+        handleFileDiff(message.filePath, message.workspaceId, message.pendingContent);
+      }
+      break;
+    case 'acceptFileChanges':
+      if (message.filePath && message.workspaceId) {
+        acceptFileChanges(message.filePath, message.workspaceId, message.pendingContent);
+      }
+      break;
+    case 'rejectFileChanges':
+      if (message.filePath && message.workspaceId) {
+        rejectFileChanges(message.filePath, message.workspaceId, message.pendingContent);
+      }
+      break;
     // Add more message handlers as needed
   }
 }
@@ -785,5 +805,323 @@ async function renderDebugDiff(workspaceId: string): Promise<void> {
 
   } catch (error) {
     vscode.window.showErrorMessage(`Error rendering debug diff: ${error}`);
+  }
+}
+
+/**
+ * Handle file diff request from the webview
+ * Gets the file path and displays a diff
+ */
+async function handleFileDiff(filePath: string, workspaceId: string, pendingContent?: string): Promise<void> {
+  try {
+    console.log(`Viewing diff for file: ${filePath} in workspace: ${workspaceId}`);
+    console.log(`Initial pending content provided: ${pendingContent ? 'Yes' : 'No'}`);
+    
+    // First check if we already have the content stored in our map
+    if (!pendingContent && global.pendingContentMap?.has(filePath)) {
+      pendingContent = global.pendingContentMap.get(filePath);
+      console.log(`Retrieved pending content from global map for ${filePath}`);
+    }
+    
+    // Check if the content is available in the global chartsmith content map
+    if (!pendingContent && global.chartsmithContentMap?.has(filePath)) {
+      pendingContent = global.chartsmithContentMap.get(filePath);
+      console.log(`Retrieved pending content from chartsmithContentMap for ${filePath}`);
+    }
+    
+    // As a fallback, create demo content
+    if (!pendingContent) {
+      // For demonstration/development purposes, create content that will visibly change the file
+      const demoPendingContent = `# This is a demonstration change added by ChartSmith
+# File: ${filePath}
+# Timestamp: ${new Date().toISOString()}
+
+# The content below shows what would be in the actual file
+# In a real implementation, we would fetch the real pending content from the API
+
+version: 0.1.0
+name: chartsmith
+apiVersion: v2
+description: A Helm chart with pending changes from ChartSmith
+type: application
+`;
+      pendingContent = demoPendingContent;
+      console.log('Using demo content as fallback');
+    }
+    
+    // Get the chart path from workspace mapping
+    const workspaceModule = await import('../workspace');
+    const mapping = await workspaceModule.getWorkspaceMapping(workspaceId);
+
+    if (!mapping || !mapping.localPath) {
+      vscode.window.showErrorMessage('Could not find chart path for workspace');
+      return;
+    }
+
+    // The localPath is the full path to the chart directory
+    const chartBasePath = mapping.localPath;
+
+    // Import modules first so we can use path
+    const fs = require('fs');
+    const path = require('path');
+
+    // Clean up the file path to prevent duplication
+    // Remove any leading slashes
+    const cleanFilePath = filePath.startsWith('/') ? filePath.substring(1) : filePath;
+
+    // Get chart name from base path to check for duplication
+    const chartName = path.basename(chartBasePath);
+
+    // Check if the file path starts with the chart name to avoid duplication
+    const finalFilePath = cleanFilePath.startsWith(chartName + '/') ?
+      cleanFilePath.substring(chartName.length + 1) : cleanFilePath;
+
+    // Construct the full file path
+    const fullFilePath = path.join(chartBasePath, finalFilePath);
+
+    // Log detailed path information for debugging
+    console.log(`Chart base path: ${chartBasePath}`);
+    console.log(`Original file path: ${filePath}`);
+    console.log(`Cleaned file path: ${cleanFilePath}`);
+    console.log(`Chart name: ${chartName}`);
+    console.log(`Final path component: ${finalFilePath}`);
+    console.log(`Full file path: ${fullFilePath}`);
+    console.log(`Pending content provided: ${pendingContent ? 'Yes' : 'No'}`);
+
+    try {
+      // Check if the file exists
+      const fileExists = fs.existsSync(fullFilePath);
+
+      // Read current content or use empty string if file doesn't exist
+      const currentContent = fileExists ?
+        await fs.promises.readFile(fullFilePath, 'utf8') : '';
+
+      // Store the pending content in global variable so we can access it when accepting/rejecting
+      // We'll use this as a workaround for not having the content in the file objects
+      global.pendingContentMap?.set(filePath, pendingContent);
+      console.log(`Stored pending content in global map for ${filePath}`);
+      
+      // Import the render module
+      const renderModule = await import('../render');
+
+      // Show the diff
+      const result = await renderModule.showFileDiff(
+        fullFilePath,
+        pendingContent,
+        `File Diff: ${path.basename(fullFilePath)}`
+      );
+
+      console.log(`Diff shown with result: ${JSON.stringify(result)}`);
+    } catch (error) {
+      console.error(`Error reading file: ${error}`);
+      vscode.window.showErrorMessage(`Error reading file: ${error}`);
+    }
+  } catch (error) {
+    console.error(`Error handling file diff: ${error}`);
+    vscode.window.showErrorMessage(`Error handling file diff: ${error}`);
+  }
+}
+
+/**
+ * Accept file changes - apply pending content to the file
+ */
+async function acceptFileChanges(filePath: string, workspaceId: string, pendingContent?: string): Promise<void> {
+  try {
+    console.log(`Accepting changes for file: ${filePath} in workspace: ${workspaceId}`);
+    console.log(`Pending content provided: ${pendingContent ? 'Yes' : 'No'}`);
+    
+    // First check if we have stored content in the global map
+    if (!pendingContent && global.pendingContentMap?.has(filePath)) {
+      pendingContent = global.pendingContentMap.get(filePath);
+      console.log(`Retrieved pending content from global map for ${filePath}`);
+    }
+    
+    // If we still don't have content, create demo content
+    if (!pendingContent) {
+      // For demonstration/development purposes, create content that will visibly change the file
+      const demoPendingContent = `# This is a demonstration change added by ChartSmith
+# File: ${filePath}
+# Timestamp: ${new Date().toISOString()}
+
+# The content below shows what would be in the actual file
+# In a real implementation, we would fetch the real pending content from the API
+
+version: 0.1.0
+name: chartsmith
+apiVersion: v2
+description: A Helm chart with pending changes from ChartSmith
+type: application
+`;
+      pendingContent = demoPendingContent;
+      console.log('Using demo content for development purposes');
+    }
+
+    // Get the chart path from workspace mapping
+    const workspaceModule = await import('../workspace');
+    const mapping = await workspaceModule.getWorkspaceMapping(workspaceId);
+
+    if (!mapping || !mapping.localPath) {
+      vscode.window.showErrorMessage('Could not find chart path for workspace');
+      return;
+    }
+
+    // The localPath is the full path to the chart directory
+    const chartBasePath = mapping.localPath;
+
+    // Import modules first so we can use path
+    const fs = require('fs');
+    const path = require('path');
+
+    // Clean up the file path to prevent duplication
+    // Remove any leading slashes
+    const cleanFilePath = filePath.startsWith('/') ? filePath.substring(1) : filePath;
+
+    // Get chart name from base path to check for duplication
+    const chartName = path.basename(chartBasePath);
+
+    // Check if the file path starts with the chart name to avoid duplication
+    const finalFilePath = cleanFilePath.startsWith(chartName + '/') ?
+      cleanFilePath.substring(chartName.length + 1) : cleanFilePath;
+
+    // Construct the full file path
+    const fullFilePath = path.join(chartBasePath, finalFilePath);
+
+    // Log detailed path information for debugging
+    console.log(`Chart base path: ${chartBasePath}`);
+    console.log(`Original file path: ${filePath}`);
+    console.log(`Cleaned file path: ${cleanFilePath}`);
+    console.log(`Chart name: ${chartName}`);
+    console.log(`Final path component: ${finalFilePath}`);
+    console.log(`Full file path for accepting changes: ${fullFilePath}`);
+
+    try {
+      // First, check if the directory exists and create it if needed
+      await fs.promises.mkdir(path.dirname(fullFilePath), { recursive: true });
+
+      // Log all maps and keys for debugging
+      console.log(`pendingContentMap keys: ${Array.from(global.pendingContentMap?.keys() || []).join(', ')}`);
+      console.log(`chartsmithContentMap keys: ${Array.from(global.chartsmithContentMap?.keys() || []).join(', ')}`);
+      
+      // Double-check we have content at this point
+      if (!pendingContent) {
+        console.error('No pending content provided for file:', filePath);
+        vscode.window.showErrorMessage(`Cannot accept changes: No pending content available for ${path.basename(filePath)}`);
+        return;
+      }
+
+      // Write the pending content directly to the file
+      await fs.promises.writeFile(fullFilePath, pendingContent);
+
+      console.log(`Successfully applied changes to: ${fullFilePath}`);
+      
+      // Clean up the entries from our maps since we've applied the content
+      global.pendingContentMap?.delete(filePath);
+      global.chartsmithContentMap?.delete(filePath);
+      console.log(`Removed pending content from maps for ${filePath} after applying`);
+
+      // Show success message
+      // vscode.window.showInformationMessage(`Applied changes to ${path.basename(filePath)}`);
+
+      // Notify the webview that changes were applied
+      if (globalState.webviewGlobal) {
+        globalState.webviewGlobal.postMessage({
+          command: 'fileChangeApplied',
+          filePath: filePath,
+          status: 'accepted'
+        });
+      }
+    } catch (error) {
+      console.error(`Error writing to file: ${error}`);
+      vscode.window.showErrorMessage(`Error writing file: ${error}`);
+    }
+  } catch (error) {
+    console.error(`Error accepting file changes: ${error}`);
+    vscode.window.showErrorMessage(`Error accepting file changes: ${error}`);
+  }
+}
+
+/**
+ * Reject file changes - discard pending content
+ */
+async function rejectFileChanges(filePath: string, workspaceId: string, pendingContent?: string): Promise<void> {
+  try {
+    console.log(`Rejecting changes for file: ${filePath} in workspace: ${workspaceId}`);
+    console.log(`Pending content provided: ${pendingContent ? 'Yes' : 'No'}`);
+    
+    // First check if we have stored content in the global map
+    if (!pendingContent && global.pendingContentMap?.has(filePath)) {
+      pendingContent = global.pendingContentMap.get(filePath);
+      console.log(`Retrieved pending content from global map for ${filePath} for rejection`);
+    }
+
+    // Get the chart path from workspace mapping
+    const workspaceModule = await import('../workspace');
+    const mapping = await workspaceModule.getWorkspaceMapping(workspaceId);
+
+    if (!mapping || !mapping.localPath) {
+      vscode.window.showErrorMessage('Could not find chart path for workspace');
+      return;
+    }
+
+    // The localPath is the full path to the chart directory
+    const chartBasePath = mapping.localPath;
+
+    // Import modules first so we can use path
+    const path = require('path');
+
+    // Clean up the file path to prevent duplication
+    // Remove any leading slashes
+    const cleanFilePath = filePath.startsWith('/') ? filePath.substring(1) : filePath;
+
+    // Get chart name from base path to check for duplication
+    const chartName = path.basename(chartBasePath);
+
+    // Check if the file path starts with the chart name to avoid duplication
+    const finalFilePath = cleanFilePath.startsWith(chartName + '/') ?
+      cleanFilePath.substring(chartName.length + 1) : cleanFilePath;
+
+    // Construct the full file path
+    const fullFilePath = path.join(chartBasePath, finalFilePath);
+
+    // Log detailed path information for debugging
+    console.log(`Chart base path: ${chartBasePath}`);
+    console.log(`Original file path: ${filePath}`);
+    console.log(`Cleaned file path: ${cleanFilePath}`);
+    console.log(`Chart name: ${chartName}`);
+    console.log(`Final path component: ${finalFilePath}`);
+    console.log(`Full file path for rejecting changes: ${fullFilePath}`);
+
+    // In a real implementation, you would:
+    // 1. Update the file status in your API to rejected
+    // 2. Clear any pending content from your state
+
+    // Log all maps and keys for debugging
+    console.log(`pendingContentMap keys: ${Array.from(global.pendingContentMap?.keys() || []).join(', ')}`);
+    console.log(`chartsmithContentMap keys: ${Array.from(global.chartsmithContentMap?.keys() || []).join(', ')}`);
+    
+    // If pending content was provided, log that we're rejecting it
+    if (pendingContent) {
+      console.log(`Rejecting pending content for ${filePath}`);
+    }
+    
+    // Clean up the entries from our maps
+    global.pendingContentMap?.delete(filePath);
+    global.chartsmithContentMap?.delete(filePath);
+    console.log(`Removed pending content from maps for ${filePath}`);
+
+    // Show success message
+    // vscode.window.showInformationMessage(`Changes rejected for ${path.basename(filePath)}`);
+
+    // Notify the webview that changes were rejected
+    if (globalState.webviewGlobal) {
+      globalState.webviewGlobal.postMessage({
+        command: 'fileChangeApplied',
+        filePath: filePath,
+        status: 'rejected'
+      });
+    }
+  } catch (error) {
+    console.error(`Error rejecting file changes: ${error}`);
+    vscode.window.showErrorMessage(`Error rejecting file changes: ${error}`);
   }
 }

@@ -74,17 +74,26 @@ export async function showFileDiff(
   outputChannel.appendLine(`Showing diff for file: ${filePath}`);
 
   try {
-    // Ensure directory exists if the file doesn't exist yet
-    await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+    try {
+      // Ensure directory exists if the file doesn't exist yet
+      await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+    } catch (error) {
+      outputChannel.appendLine(`Error creating directory: ${error}`);
+      // Continue anyway - the error might just be that the directory already exists
+    }
 
     // Read current content or use empty string if file doesn't exist
     let currentContent = '';
     try {
       if (fs.existsSync(filePath)) {
         currentContent = await fs.promises.readFile(filePath, 'utf8');
+        outputChannel.appendLine(`Read existing file (${currentContent.length} bytes)`);
+      } else {
+        outputChannel.appendLine('File does not exist, using empty string for current content');
       }
     } catch (error) {
       outputChannel.appendLine(`Error reading file: ${error}`);
+      // Continue with empty content
     }
 
     // Create custom URIs for the diff view
@@ -125,41 +134,19 @@ export async function showFileDiff(
     );
     await vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup');
 
-    // Show notification with options to apply or discard changes
-    const applyChanges = 'Apply Changes';
-    const discardChanges = 'Keep Original';
-
+    // Return promise that resolves when diff is shown
     return new Promise((resolve) => {
-      vscode.window.showInformationMessage(
-        `Review changes for ${fileName}. Apply them or keep the original?`,
-        applyChanges,
-        discardChanges
-      ).then(async selection => {
-        if (selection === applyChanges) {
-          // Apply the new content to the file
-          try {
-            await fs.promises.writeFile(filePath, newContent);
-            outputChannel.appendLine(`Applied new content to file: ${filePath}`);
-            vscode.window.showInformationMessage(`Applied changes to ${fileName}`);
-
-            // Close the diff view and open the updated file
-            await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
-            await vscode.window.showTextDocument(vscode.Uri.file(filePath));
-            resolve({ applied: true });
-          } catch (error) {
-            outputChannel.appendLine(`Error applying changes: ${error}`);
-            vscode.window.showErrorMessage(`Failed to apply changes: ${error}`);
-            resolve({ applied: false });
-          }
-        } else {
-          // Just close the diff view
-          await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
-          vscode.window.showInformationMessage(`Kept original content for ${fileName}`);
+      // Just show the diff without any popup
+      // The user will use the buttons in the UI to accept/reject
+      
+      // Add a listener to detect when the diff view is closed
+      const disposable = vscode.window.onDidChangeActiveTextEditor(async (editor) => {
+        if (!editor || (editor.document.uri.scheme !== 'chartsmith-diff')) {
+          // Diff view was closed, clean up
+          disposable.dispose();
+          registration.dispose();
           resolve({ applied: false });
         }
-
-        // Dispose the provider registration
-        registration.dispose();
       });
     });
   } catch (error) {

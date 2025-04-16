@@ -44,6 +44,24 @@ export async function fetchWorkspacePlans(
       console.log('Plan IDs received:');
       plans.forEach(plan => {
         console.log(`- Plan ID: ${plan.id}, Status: ${plan.status}`);
+        
+        // Debug the structure of the actionFiles
+        if (plan.actionFiles && plan.actionFiles.length > 0) {
+          console.log('  Action Files:');
+          plan.actionFiles.forEach(file => {
+            console.log(`  - File: ${file.path}, Action: ${file.action}, Status: ${file.status}`);
+            // Log all keys in the file object to see what's actually there
+            console.log('    All properties:', Object.keys(file));
+            // Check if there's a content_pending property
+            if ('content_pending' in file) {
+              console.log('    Has content_pending property');
+            }
+            // Check for contentPending
+            if ('contentPending' in file) {
+              console.log('    Has contentPending property');
+            }
+          });
+        }
       });
     } else {
       console.log('No plans received from API');
