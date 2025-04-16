@@ -149,6 +149,7 @@ export function CreateChartOptions() {
             </div>
           )}
         </div>
+        {/* Icons under prompt box commented out
         <div className="border-t border-gray-800 p-3 sm:p-4 flex items-center gap-3 sm:gap-4">
           <button
             onClick={() => triggerFileUpload('helm')}
@@ -168,6 +169,7 @@ export function CreateChartOptions() {
             <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
         </div>
+        */}
       </div>
 
       <div className="mt-3 sm:mt-4 flex flex-wrap gap-1.5 sm:gap-2 justify-center">
