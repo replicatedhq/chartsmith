@@ -25,5 +25,5 @@ appVersion: "1.16.0"
 
 dependencies:
 - name: replicated
-  repository: oci://registry.replicated.com/library
-  version: 1.5.0
+  repository: oci://registry.chartsmith.ai/library
+  version: 1.5.1
