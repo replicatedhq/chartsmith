@@ -178,23 +178,40 @@ function initUI() {
           renderLoggedInView(app);
         }
 
-        console.log(`Fetching messages for changed workspace ID: ${message.workspaceId}`);
+        console.log(`Fetching workspace data for changed workspace ID: ${message.workspaceId}`);
+        
+        // IMPORTANT: First fetch workspace data and wait for a brief delay to ensure it completes
+        console.log(`EXPLICITLY FETCHING WORKSPACE DATA FIRST for changed workspace ${message.workspaceId}`);
         vscode.postMessage({
-          command: 'fetchMessages',
+          command: 'fetchWorkspaceData',
           workspaceId: message.workspaceId
         });
+        
+        // Add a small delay before fetching messages to ensure workspace data is fetched first
+        setTimeout(() => {
+          console.log(`Now fetching messages after workspace data for changed workspace ${message.workspaceId}`);
+          // Then fetch fresh messages from the server
+          vscode.postMessage({
+            command: 'fetchMessages',
+            workspaceId: message.workspaceId
+          });
+        }, 500);  // 500ms delay
+        
+        // Add a longer delay for renders and plans to ensure they come after workspace and messages
+        setTimeout(() => {
+          console.log(`Now fetching renders and plans after delay for changed workspace ${message.workspaceId}`);
+          // Also fetch renders and plans
+          vscode.postMessage({
+            command: 'fetchRenders',
+            workspaceId: message.workspaceId
+          });
 
-        // Also fetch renders and plans for the workspace
-        vscode.postMessage({
-          command: 'fetchRenders',
-          workspaceId: message.workspaceId
-        });
-
-        // Fetch plans
-        vscode.postMessage({
-          command: 'fetchPlans',
-          workspaceId: message.workspaceId
-        });
+          // Fetch plans 
+          vscode.postMessage({
+            command: 'fetchPlans',
+            workspaceId: message.workspaceId
+          });
+        }, 1000);  // 1000ms delay
         break;
       // Add more message handlers here
     }
@@ -435,23 +452,38 @@ function renderLoggedInView(container: HTMLElement) {
     // Render any existing messages from the store
     renderAllMessages();
 
-    // Then fetch fresh messages and renders from the server
+    // IMPORTANT: First fetch workspace data and wait for a brief delay to ensure it completes
+    console.log(`EXPLICITLY FETCHING WORKSPACE DATA FIRST for ${workspaceId}`);
     vscode.postMessage({
-      command: 'fetchMessages',
+      command: 'fetchWorkspaceData',
       workspaceId: workspaceId
     });
 
-    // Also fetch renders and plans
-    vscode.postMessage({
-      command: 'fetchRenders',
-      workspaceId: workspaceId
-    });
+    // Add a small delay before fetching messages to ensure workspace data is fetched first
+    setTimeout(() => {
+      console.log(`Now fetching messages after workspace data for ${workspaceId}`);
+      // Then fetch fresh messages from the server
+      vscode.postMessage({
+        command: 'fetchMessages',
+        workspaceId: workspaceId
+      });
+    }, 500);  // 500ms delay
 
-    // Fetch plans
-    vscode.postMessage({
-      command: 'fetchPlans',
-      workspaceId: workspaceId
-    });
+    // Add a longer delay for renders and plans to ensure they come after workspace and messages
+    setTimeout(() => {
+      console.log(`Now fetching renders and plans after delay for ${workspaceId}`);
+      // Also fetch renders and plans
+      vscode.postMessage({
+        command: 'fetchRenders',
+        workspaceId: workspaceId
+      });
+
+      // Fetch plans 
+      vscode.postMessage({
+        command: 'fetchPlans',
+        workspaceId: workspaceId
+      });
+    }, 1000);  // 1000ms delay
   } else {
     // No workspace selected, show the action buttons
     const contentContainer = document.querySelector('.content');

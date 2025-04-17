@@ -85,6 +85,14 @@ replicated:
 		--op-service-account env:OP_SERVICE_ACCOUNT_PRODUCTION \
 		--progress plain
 
+.PHONY: replicated-dev
+replicated-dev:
+	dagger call release-dev-replicated \
+		--version $(version) \
+		--endpoint=https://vendor-api-$(okteto-namespace).okteto.repldev.com \
+		--api-token env:REPLICATED_API_TOKEN \
+		--progress plain
+
 .PHONY: production
 production:
 	dagger call release \

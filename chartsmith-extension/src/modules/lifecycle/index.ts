@@ -362,7 +362,7 @@ function registerCommands(context: vscode.ExtensionContext): void {
       }
 
       try {
-        // Import chat module dynamically
+        // Import chat module dynamically and fetch messages
         const chat = await import('../chat');
         console.log(`Fetching messages for workspace: ${workspaceId}`);
         const messages = await chat.fetchWorkspaceMessages(
@@ -437,6 +437,37 @@ function registerCommands(context: vscode.ExtensionContext): void {
         }
       } catch (error) {
         vscode.window.showErrorMessage(`Failed to fetch messages: ${error}`);
+      }
+    })
+  );
+
+  // Register fetch workspace data command
+  context.subscriptions.push(
+    vscode.commands.registerCommand('chartsmith.fetchWorkspaceData', async (workspaceId: string) => {
+      console.log(`!!! chartsmith.fetchWorkspaceData COMMAND TRIGGERED for ${workspaceId} !!!`);
+      
+      if (!globalState.authData) {
+        vscode.window.showErrorMessage('Please log in to ChartSmith first.');
+        return;
+      }
+
+      try {
+        // Import workspace module
+        const workspace = await import('../workspace');
+        console.log(`Fetching workspace data for: ${workspaceId}`);
+        await workspace.fetchAndStoreWorkspaceData(workspaceId);
+        
+        // Notify the webview that workspace data has been updated
+        if (globalState.webviewGlobal) {
+          globalState.webviewGlobal.postMessage({
+            command: 'workspaceDataFetched',
+            workspaceId: workspaceId
+          });
+        }
+        
+      } catch (error) {
+        console.error(`Error fetching workspace data: ${error}`);
+        vscode.window.showErrorMessage(`Failed to fetch workspace data: ${error}`);
       }
     })
   );
@@ -726,6 +757,13 @@ async function handleWebviewMessage(message: any) {
         await renderDebugDiff(message.workspaceId);
       }
       break;
+    case 'fetchWorkspaceData':
+      console.log(`!!! RECEIVED fetchWorkspaceData MESSAGE from webview for ${message.workspaceId} !!!`);
+      if (message.workspaceId) {
+        console.log(`!!! EXECUTING chartsmith.fetchWorkspaceData COMMAND for ${message.workspaceId} !!!`);
+        vscode.commands.executeCommand('chartsmith.fetchWorkspaceData', message.workspaceId);
+      }
+      break;
     case 'fetchMessages':
       if (message.workspaceId) {
         vscode.commands.executeCommand('chartsmith.fetchMessages', message.workspaceId);
@@ -827,6 +865,24 @@ async function handleFileDiff(filePath: string, workspaceId: string, pendingCont
     if (!pendingContent && global.chartsmithContentMap?.has(filePath)) {
       pendingContent = global.chartsmithContentMap.get(filePath);
       console.log(`Retrieved pending content from chartsmithContentMap for ${filePath}`);
+    }
+    
+    // Try to get it from our workspace KV store
+    if (!pendingContent) {
+      try {
+        const workspace = await import('../workspace');
+        const currentWorkspaceId = await workspace.getActiveWorkspaceId();
+        
+        if (currentWorkspaceId) {
+          const storedContent = workspace.getPendingFileContent(currentWorkspaceId, filePath);
+          if (storedContent) {
+            pendingContent = storedContent;
+            console.log(`Retrieved pending content from workspace KV store for ${filePath}`);
+          }
+        }
+      } catch (error) {
+        console.error(`Error getting content from workspace KV store: ${error}`);
+      }
     }
     
     // As a fallback, create demo content
@@ -934,6 +990,24 @@ async function acceptFileChanges(filePath: string, workspaceId: string, pendingC
     if (!pendingContent && global.pendingContentMap?.has(filePath)) {
       pendingContent = global.pendingContentMap.get(filePath);
       console.log(`Retrieved pending content from global map for ${filePath}`);
+    }
+    
+    // Try to get it from our workspace KV store
+    if (!pendingContent) {
+      try {
+        const workspace = await import('../workspace');
+        const currentWorkspaceId = await workspace.getActiveWorkspaceId();
+        
+        if (currentWorkspaceId) {
+          const storedContent = workspace.getPendingFileContent(currentWorkspaceId, filePath);
+          if (storedContent) {
+            pendingContent = storedContent;
+            console.log(`Retrieved pending content from workspace KV store for ${filePath}`);
+          }
+        }
+      } catch (error) {
+        console.error(`Error getting content from workspace KV store: ${error}`);
+      }
     }
     
     // If we still don't have content, create demo content
@@ -1052,6 +1126,24 @@ async function rejectFileChanges(filePath: string, workspaceId: string, pendingC
     if (!pendingContent && global.pendingContentMap?.has(filePath)) {
       pendingContent = global.pendingContentMap.get(filePath);
       console.log(`Retrieved pending content from global map for ${filePath} for rejection`);
+    }
+    
+    // Try to get it from our workspace KV store
+    if (!pendingContent) {
+      try {
+        const workspace = await import('../workspace');
+        const currentWorkspaceId = await workspace.getActiveWorkspaceId();
+        
+        if (currentWorkspaceId) {
+          const storedContent = workspace.getPendingFileContent(currentWorkspaceId, filePath);
+          if (storedContent) {
+            pendingContent = storedContent;
+            console.log(`Retrieved pending content from workspace KV store for ${filePath} for rejection`);
+          }
+        }
+      } catch (error) {
+        console.error(`Error getting content from workspace KV store: ${error}`);
+      }
     }
 
     // Get the chart path from workspace mapping
