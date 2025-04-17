@@ -2,3 +2,4 @@
 bin
 .aider*
 test-results/
+.envrc

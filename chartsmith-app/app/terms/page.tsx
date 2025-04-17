@@ -4,26 +4,32 @@ import React from "react";
 import Link from "next/link";
 import { Footer } from "@/components/Footer";
 import { HomeNav } from "@/components/HomeNav";
+import { useTheme } from "@/contexts/ThemeContext";
+import { Card } from "@/components/ui/Card";
 
 export default function TermsOfServicePage() {
+  const { theme } = useTheme();
+
   return (
-    <div className="flex min-h-screen flex-col bg-app">
+    <div className="min-h-screen bg-[var(--background)]">
       <HomeNav />
 
-      <main className="flex-grow container mx-auto px-4 py-8 max-w-4xl">
-        <div className="prose dark:prose-invert mx-auto">
-          <div className="flex items-center mb-4">
-            <Link href="/" className="text-primary hover:underline flex items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M9.707 14.707a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 1.414L7.414 9H15a1 1 0 110 2H7.414l2.293 2.293a1 1 0 010 1.414z" clipRule="evenodd" />
-              </svg>
-              Return Home
-            </Link>
-          </div>
-          
-          <h1 className="text-3xl font-bold mb-8">Terms of Service</h1>
-          
-          <p className="text-sm text-gray-500 mb-8">Last Updated: April 1, 2025</p>
+      <main className="max-w-7xl mx-auto py-8 px-4">
+        <div className="flex items-center mb-4">
+          <Link href="/" className="text-primary hover:underline flex items-center">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M9.707 14.707a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 1.414L7.414 9H15a1 1 0 110 2H7.414l2.293 2.293a1 1 0 010 1.414z" clipRule="evenodd" />
+            </svg>
+            Return Home
+          </Link>
+        </div>
+        
+        <h1 className={`text-2xl font-bold mb-8 ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
+          Terms of Service
+        </h1>
+        
+        <Card className="p-6 md:p-8 prose dark:prose-invert max-w-none text-base sm:text-lg prose-li:text-base sm:prose-li:text-lg [&_li]:mb-2">
+          <p className="text-base text-gray-500 mb-8">Last Updated: April 1, 2025</p>
           
           <section className="mb-8">
             <h2 className="text-2xl font-semibold mb-4">1. Agreement to Terms</h2>
@@ -60,9 +66,9 @@ export default function TermsOfServicePage() {
             
             <h3 className="text-xl font-medium mb-3">3.2 Prohibited Activities</h3>
             <p>You agree not to:</p>
-            <ul className="list-disc pl-6 mb-4">
-              <li>Use the Service in any way that violates any applicable law or regulation</li>
-              <li>Use the Service to transmit or upload harmful code or malware</li>
+            <ul className="list-disc pl-6 mb-4 text-lg sm:text-xl">
+              <li className="mb-2">Use the Service in any way that violates any applicable law or regulation</li>
+              <li className="mb-2">Use the Service to transmit or upload harmful code or malware</li>
               <li>Attempt to gain unauthorized access to the Service or related systems</li>
               <li>Interfere with or disrupt the integrity or performance of the Service</li>
               <li>Engage in any activity that could disable, overburden, or impair the Service</li>
@@ -172,7 +178,7 @@ export default function TermsOfServicePage() {
               <a href="mailto:legal@replicated.com" className="text-primary">legal@replicated.com</a>
             </p>
           </section>
-        </div>
+        </Card>
       </main>
 
       <Footer />
