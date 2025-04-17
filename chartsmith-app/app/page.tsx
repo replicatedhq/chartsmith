@@ -20,9 +20,12 @@ export default function HomePage() {
   const { isWaitlisted, isAuthLoading } = useAuth();
   const router = useRouter();
 
-  // Handle waitlist redirect
+  // Handle waitlist redirect - only for initial page load, not for explicit navigation
   useEffect(() => {
-    if (!isAuthLoading && isWaitlisted) {
+    // Check if this was a direct page load rather than navigation from waitlist page
+    const isDirectPageLoad = !document.referrer.includes('/waitlist');
+    
+    if (!isAuthLoading && isWaitlisted && isDirectPageLoad) {
       router.replace('/waitlist');
     }
   }, [isWaitlisted, isAuthLoading, router]);

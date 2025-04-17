@@ -67,13 +67,14 @@ export default function WaitlistPage() {
         </div>
 
         <div className="mt-8">
-          <Button
-            variant="default"
-            onClick={() => router.push("/")}
-            className="bg-primary hover:bg-primary/90 text-white"
-          >
-            Return to Home
-          </Button>
+          <a href="/" className="inline-block">
+            <Button
+              variant="default"
+              className="bg-primary hover:bg-primary/90 text-white"
+            >
+              Return to Home
+            </Button>
+          </a>
         </div>
       </Card>
     </div>
