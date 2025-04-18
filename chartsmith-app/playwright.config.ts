@@ -78,7 +78,7 @@ export default defineConfig({
 
   /* Run your local dev server before starting the tests */
   webServer: {
-    command: 'npm run dev',
+    command: 'PORT=3005 npm run dev',
     url: 'http://localhost:3005',
     reuseExistingServer: !process.env.CI,
   },
