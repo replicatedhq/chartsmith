@@ -1,26 +1,10 @@
 #!/bin/bash
 set -e
 
-echo "Starting services with docker compose..."
+echo "Starting services with docker compose for E2E tests..."
 cd ../hack/chartsmith-dev
 
-if lsof -i:8000 > /dev/null 2>&1; then
-  echo "Port 8000 is already in use. Assuming Centrifugo is already running."
-  
-  if ! docker ps | grep -q chartsmith-dev-postgres; then
-    cp docker-compose.yml docker-compose.yml.bak
-    grep -v "centrifugo" docker-compose.yml.bak > docker-compose.yml.temp
-    mv docker-compose.yml.temp docker-compose.yml
-    
-    docker compose up -d
-    
-    mv docker-compose.yml.bak docker-compose.yml
-  else
-    echo "PostgreSQL is already running. Skipping docker compose."
-  fi
-else
-  docker compose up -d
-fi
+docker compose -f docker-compose.e2e.yml up -d
 
 cd ../../
 
@@ -39,10 +23,10 @@ fi
 
 echo "Running database schema setup..."
 cd chartsmith-app
-export CHARTSMITH_PG_URI="postgres://postgres:password@localhost:5432/chartsmith?sslmode=disable"
-export DB_URI="postgres://postgres:password@localhost:5432/chartsmith?sslmode=disable"
+export CHARTSMITH_PG_URI="postgres://postgres:password@localhost:5433/chartsmith?sslmode=disable"
+export DB_URI="postgres://postgres:password@localhost:5433/chartsmith?sslmode=disable"
 export HMAC_SECRET="test-secret-for-playwright-tests"
-export NEXT_PUBLIC_CENTRIFUGO_ADDRESS="http://localhost:8000"
+export NEXT_PUBLIC_CENTRIFUGO_ADDRESS="http://localhost:8001"
 export CENTRIFUGO_API_KEY="test-api-key"
 export NEXT_PUBLIC_API_ENDPOINT="http://localhost:3005/api"
 export NEXT_PUBLIC_ENABLE_TEST_AUTH="true"
@@ -55,10 +39,10 @@ if [ $? -ne 0 ]; then
 fi
 
 echo "Starting backend worker..."
-export CHARTSMITH_PG_URI="postgres://postgres:password@localhost:5432/chartsmith?sslmode=disable"
-export DB_URI="postgres://postgres:password@localhost:5432/chartsmith?sslmode=disable"
+export CHARTSMITH_PG_URI="postgres://postgres:password@localhost:5433/chartsmith?sslmode=disable"
+export DB_URI="postgres://postgres:password@localhost:5433/chartsmith?sslmode=disable"
 export HMAC_SECRET="test-secret-for-playwright-tests"
-export NEXT_PUBLIC_CENTRIFUGO_ADDRESS="http://localhost:8000"
+export NEXT_PUBLIC_CENTRIFUGO_ADDRESS="http://localhost:8001"
 export CENTRIFUGO_API_KEY="test-api-key"
 export NEXT_PUBLIC_API_ENDPOINT="http://localhost:3005/api"
 export NEXT_PUBLIC_ENABLE_TEST_AUTH="true"
@@ -77,10 +61,10 @@ echo "Starting frontend server..."
 cd chartsmith-app
 export NEXT_PUBLIC_ENABLE_TEST_AUTH=true
 export ENABLE_TEST_AUTH=true
-export CHARTSMITH_PG_URI="postgres://postgres:password@localhost:5432/chartsmith?sslmode=disable"
-export DB_URI="postgres://postgres:password@localhost:5432/chartsmith?sslmode=disable"
+export CHARTSMITH_PG_URI="postgres://postgres:password@localhost:5433/chartsmith?sslmode=disable"
+export DB_URI="postgres://postgres:password@localhost:5433/chartsmith?sslmode=disable"
 export HMAC_SECRET="test-secret-for-playwright-tests"
-export NEXT_PUBLIC_CENTRIFUGO_ADDRESS="http://localhost:8000"
+export NEXT_PUBLIC_CENTRIFUGO_ADDRESS="http://localhost:8001"
 export CENTRIFUGO_API_KEY="test-api-key"
 export NEXT_PUBLIC_API_ENDPOINT="http://localhost:3005/api"
 npm run dev &
