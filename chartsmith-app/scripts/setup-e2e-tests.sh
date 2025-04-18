@@ -26,7 +26,7 @@ export DB_URI="postgres://postgres:password@localhost:5432/chartsmith?sslmode=di
 export HMAC_SECRET="test-secret-for-playwright-tests"
 export NEXT_PUBLIC_CENTRIFUGO_ADDRESS="http://localhost:8000"
 export CENTRIFUGO_API_KEY="test-api-key"
-export NEXT_PUBLIC_API_ENDPOINT="http://localhost:3000/api"
+export NEXT_PUBLIC_API_ENDPOINT="http://localhost:3005/api"
 export NEXT_PUBLIC_ENABLE_TEST_AUTH="true"
 export ENABLE_TEST_AUTH="true"
 cd ..
@@ -42,11 +42,32 @@ export DB_URI="postgres://postgres:password@localhost:5432/chartsmith?sslmode=di
 export HMAC_SECRET="test-secret-for-playwright-tests"
 export NEXT_PUBLIC_CENTRIFUGO_ADDRESS="http://localhost:8000"
 export CENTRIFUGO_API_KEY="test-api-key"
-export NEXT_PUBLIC_API_ENDPOINT="http://localhost:3000/api"
+export NEXT_PUBLIC_API_ENDPOINT="http://localhost:3005/api"
 export NEXT_PUBLIC_ENABLE_TEST_AUTH="true"
 export ENABLE_TEST_AUTH="true"
 make run-worker &
 WORKER_PID=$!
 
+echo "Creating default workspace record..."
+docker exec chartsmith-dev-postgres-1 psql -U postgres -d chartsmith -c "INSERT INTO bootstrap_workspace (id, name, current_revision) VALUES ('default', 'default-workspace', 0) ON CONFLICT (id) DO NOTHING;"
+if [ $? -ne 0 ]; then
+  echo "Failed to create default workspace record"
+  exit 1
+fi
+
+echo "Starting frontend server..."
+cd chartsmith-app
+export NEXT_PUBLIC_ENABLE_TEST_AUTH=true
+export ENABLE_TEST_AUTH=true
+export CHARTSMITH_PG_URI="postgres://postgres:password@localhost:5432/chartsmith?sslmode=disable"
+export DB_URI="postgres://postgres:password@localhost:5432/chartsmith?sslmode=disable"
+export HMAC_SECRET="test-secret-for-playwright-tests"
+export NEXT_PUBLIC_CENTRIFUGO_ADDRESS="http://localhost:8000"
+export CENTRIFUGO_API_KEY="test-api-key"
+export NEXT_PUBLIC_API_ENDPOINT="http://localhost:3005/api"
+npm run dev &
+FRONTEND_PID=$!
+
 echo "Environment ready for E2E tests"
 echo "Worker PID: $WORKER_PID"
+echo "Frontend PID: $FRONTEND_PID"
