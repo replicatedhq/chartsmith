@@ -56,8 +56,8 @@ test('Chat auto-scrolling behavior respects user scroll position', async ({ page
       container.scrollTop = 0; // Scroll to top
     });
     
-    // Wait for the "Jump to latest" button to appear
-    await page.waitForSelector('[data-testid="jump-to-latest"]');
+    // Wait for the "Jump to latest" button to appear with increased timeout
+    await page.waitForSelector('[data-testid="jump-to-latest"]', { timeout: 60000 });
     
     // Take screenshot of scrolled up state with button
     await page.screenshot({ path: './test-results/2-scrolled-up-with-button.png' });

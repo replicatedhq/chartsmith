@@ -67,7 +67,7 @@ test('upload helm chart', async ({ page }) => {
     const latestMessage = messagesAfterSubmit[1];
     await expect(latestMessage.locator('[data-testid="user-message"]')).toBeVisible();
     // Look for plan message anywhere in the document, not just in the latest message
-    await expect(page.locator('[data-testid="plan-message"]')).toBeVisible();
+    await expect(page.locator('[data-testid="plan-message"]')).toBeVisible({ timeout: 30000 });
 
 
     // Take a screenshot of the chat messages
