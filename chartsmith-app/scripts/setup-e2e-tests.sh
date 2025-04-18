@@ -64,6 +64,7 @@ export DB_URI="postgres://postgres:password@localhost:5433/chartsmith?sslmode=di
 export HMAC_SECRET="test-secret-for-playwright-tests"
 export NEXT_PUBLIC_CENTRIFUGO_ADDRESS="http://localhost:8001"
 export CENTRIFUGO_ADDRESS="http://localhost:8001"
+export CENTRIFUGO_URL="http://localhost:8001"
 export CENTRIFUGO_API_KEY="test-api-key"
 export NEXT_PUBLIC_API_ENDPOINT="http://localhost:3005/api"
 export NEXT_PUBLIC_ENABLE_TEST_AUTH="true"
@@ -84,6 +85,7 @@ export DB_URI="postgres://postgres:password@localhost:5433/chartsmith?sslmode=di
 export HMAC_SECRET="test-secret-for-playwright-tests"
 export NEXT_PUBLIC_CENTRIFUGO_ADDRESS="http://localhost:8001"
 export CENTRIFUGO_ADDRESS="http://localhost:8001"
+export CENTRIFUGO_URL="http://localhost:8001"
 export CENTRIFUGO_API_KEY="test-api-key"
 export NEXT_PUBLIC_API_ENDPOINT="http://localhost:3005/api"
 export NEXT_PUBLIC_ENABLE_TEST_AUTH="true"
@@ -126,6 +128,7 @@ export DB_URI="postgres://postgres:password@localhost:5433/chartsmith?sslmode=di
 export HMAC_SECRET="test-secret-for-playwright-tests"
 export NEXT_PUBLIC_CENTRIFUGO_ADDRESS="http://localhost:8001"
 export CENTRIFUGO_ADDRESS="http://localhost:8001"
+export CENTRIFUGO_URL="http://localhost:8001"
 export CENTRIFUGO_API_KEY="test-api-key"
 export NEXT_PUBLIC_API_ENDPOINT="http://localhost:3005/api"
 PORT=3005 npm run dev > frontend.log 2>&1 &
