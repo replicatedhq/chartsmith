@@ -65,9 +65,9 @@ export CENTRIFUGO_API_KEY="test-api-key"
 export NEXT_PUBLIC_API_ENDPOINT="http://localhost:3005/api"
 export NEXT_PUBLIC_ENABLE_TEST_AUTH="true"
 export ENABLE_TEST_AUTH="true"
-export VOYAGE_API_KEY="test-voyage-api-key"
-export ANTHROPIC_API_KEY="test-anthropic-api-key"
-export GROQ_API_KEY="test-groq-api-key"
+export VOYAGE_API_KEY="${VOYAGE_API_KEY:-test-voyage-api-key}"
+export ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-test-anthropic-api-key}"
+export GROQ_API_KEY="${GROQ_API_KEY:-test-groq-api-key}"
 cd ..
 make schema
 if [ $? -ne 0 ]; then
@@ -84,9 +84,9 @@ export CENTRIFUGO_API_KEY="test-api-key"
 export NEXT_PUBLIC_API_ENDPOINT="http://localhost:3005/api"
 export NEXT_PUBLIC_ENABLE_TEST_AUTH="true"
 export ENABLE_TEST_AUTH="true"
-export VOYAGE_API_KEY="test-voyage-api-key"
-export ANTHROPIC_API_KEY="test-anthropic-api-key"
-export GROQ_API_KEY="test-groq-api-key"
+export VOYAGE_API_KEY="${VOYAGE_API_KEY:-test-voyage-api-key}"
+export ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-test-anthropic-api-key}"
+export GROQ_API_KEY="${GROQ_API_KEY:-test-groq-api-key}"
 make run-worker &
 WORKER_PID=$!
 
