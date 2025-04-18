@@ -26,9 +26,10 @@ for i in {1..30}; do
   
   if ! docker ps | grep -q chartsmith-dev-postgres-1; then
     echo "PostgreSQL container is not running. Restarting..."
-    cd ../hack/chartsmith-dev
+    SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+    cd "$SCRIPT_DIR/../../hack/chartsmith-dev"
     docker compose -f docker-compose.e2e.yml up -d postgres
-    cd ../../
+    cd "$SCRIPT_DIR/.."
     sleep 5
   fi
   
