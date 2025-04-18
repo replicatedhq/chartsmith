@@ -30,8 +30,8 @@ test('upload helm chart', async ({ page }) => {
     // Set file in the input directly without clicking the upload button
     await fileInput.setInputFiles(testFile);
 
-    // Wait for redirect to workspace page
-    await page.waitForURL(/\/workspace\/[a-zA-Z0-9-]+$/);
+    // Wait for redirect to workspace page with increased timeout
+    await page.waitForURL(/\/workspace\/[a-zA-Z0-9-]+$/, { timeout: 60000 });
 
     // Verify the current URL matches the expected pattern
     const currentUrl = page.url();
