@@ -8,7 +8,7 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 "$SCRIPT_DIR/cleanup-e2e-tests.sh" || true
 
 echo "Starting services with docker compose for E2E tests..."
-cd "$SCRIPT_DIR/../hack/chartsmith-dev"
+cd "$SCRIPT_DIR/../../hack/chartsmith-dev"
 
 # Start the Docker containers
 docker compose -f docker-compose.e2e.yml down -v || true
