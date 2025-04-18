@@ -86,8 +86,21 @@ export HMAC_SECRET="test-secret-for-playwright-tests"
 export NEXT_PUBLIC_CENTRIFUGO_ADDRESS="http://localhost:8001"
 export CENTRIFUGO_API_KEY="test-api-key"
 export NEXT_PUBLIC_API_ENDPOINT="http://localhost:3005/api"
-PORT=3005 npm run dev &
+PORT=3005 npm run dev > frontend.log 2>&1 &
 FRONTEND_PID=$!
+
+echo "Waiting for frontend server to be ready..."
+timeout=60
+counter=0
+while ! curl -s http://localhost:3005 > /dev/null; do
+  if [ $counter -ge $timeout ]; then
+    echo "Timed out waiting for frontend server to start"
+    exit 1
+  fi
+  echo "Waiting for frontend server to start... ($counter/$timeout)"
+  sleep 1
+  counter=$((counter+1))
+done
 
 echo "Environment ready for E2E tests"
 echo "Worker PID: $WORKER_PID"
