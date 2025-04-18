@@ -1,18 +1,34 @@
 #!/bin/bash
 set -e
 
-echo "Starting PostgreSQL..."
-cd ..
-make run-postgres || true  # Ignore error if container already exists
+echo "Starting services with docker-compose..."
+cd ../hack/chartsmith-dev
+docker-compose up -d
+cd ../../
 
 echo "Waiting for PostgreSQL to be ready..."
-sleep 5
+until docker exec chartsmith-postgres pg_isready -U postgres > /dev/null 2>&1; do
+  echo "Waiting for PostgreSQL to start..."
+  sleep 1
+done
+
+echo "Installing vector extension..."
+docker exec -u postgres chartsmith-postgres psql -d chartsmith -c 'CREATE EXTENSION IF NOT EXISTS vector;'
+if [ $? -ne 0 ]; then
+  echo "Failed to install vector extension"
+  exit 1
+fi
 
 echo "Running database schema setup..."
 cd chartsmith-app
-export CHARTSMITH_PG_URI="postgres://postgres:postgres@localhost:5432/chartsmith?sslmode=disable"
+export CHARTSMITH_PG_URI="postgres://postgres:password@localhost:5432/chartsmith?sslmode=disable"
+export DB_URI="postgres://postgres:password@localhost:5432/chartsmith?sslmode=disable"
 cd ..
-make schema || true  # Ignore error if schema already exists
+make schema
+if [ $? -ne 0 ]; then
+  echo "Failed to apply database schema"
+  exit 1
+fi
 
 echo "Starting backend worker..."
 make run-worker &

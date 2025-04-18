@@ -38,9 +38,10 @@ test('Chat auto-scrolling behavior respects user scroll position', async ({ page
     // Manually scroll up
     await page.evaluate(() => {
       const container = document.querySelector('[data-testid="scroll-container"]');
-      if (container) {
-        container.scrollTop = 0; // Scroll to top
+      if (!container) {
+        throw new Error('Scroll container not found');
       }
+      container.scrollTop = 0; // Scroll to top
     });
     
     // Wait for the "Jump to latest" button to appear
