@@ -27,9 +27,12 @@ export default function TestAuthPage() {
 
   useEffect(() => {
     async function handleTestAuth() {
+      if (Object.keys(publicEnv).length === 0) {
+        return;
+      }
+      
       if (publicEnv.NEXT_PUBLIC_ENABLE_TEST_AUTH !== 'true') {
-        console.log("Test auth is not enabled, pushing to home");
-        router.push('/');
+        router.push('/auth-error?error=test_auth_not_enabled');
         return;
       }
 
@@ -41,16 +44,17 @@ export default function TestAuthPage() {
           document.cookie = `session=${jwt}; expires=${expires.toUTCString()}; path=/; SameSite=Lax`;
           window.location.href = '/';
         } else {
-          router.push('/');
+          console.error("Test auth returned null JWT");
+          router.push('/auth-error?error=test_auth_failed_null_jwt');
         }
       } catch (error) {
         console.error("Test auth failed:", error);
-        router.push('/');
+        router.push(`/auth-error?error=test_auth_exception&message=${encodeURIComponent(error?.toString() || "Unknown error")}`);
       }
     }
 
     handleTestAuth();
-  }, [router]);
+  }, [router, publicEnv]);
 
   return (
     <div className="container mx-auto flex items-center justify-center min-h-screen">
