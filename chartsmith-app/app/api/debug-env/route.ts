@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(req: NextRequest) {
+  return NextResponse.json({ 
+    error: 'Debug environment endpoint is disabled for security reasons',
+    message: 'To re-enable this endpoint for local debugging, uncomment the code below and restart the server',
+    instructions: 'IMPORTANT: Never enable this in production environments'
+  }, { status: 403 });
+
+  /* 
+  
   if (process.env.NODE_ENV === 'production') {
     return NextResponse.json({ error: 'Not available in production' }, { status: 403 });
   }
@@ -13,4 +21,5 @@ export async function GET(req: NextRequest) {
   };
 
   return NextResponse.json(envDebug);
+  */
 }
