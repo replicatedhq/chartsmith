@@ -26,6 +26,9 @@ export DB_URI="postgres://postgres:password@localhost:5432/chartsmith?sslmode=di
 export HMAC_SECRET="test-secret-for-playwright-tests"
 export NEXT_PUBLIC_CENTRIFUGO_ADDRESS="http://localhost:8000"
 export CENTRIFUGO_API_KEY="test-api-key"
+export NEXT_PUBLIC_API_ENDPOINT="http://localhost:3000/api"
+export NEXT_PUBLIC_ENABLE_TEST_AUTH="true"
+export ENABLE_TEST_AUTH="true"
 cd ..
 make schema
 if [ $? -ne 0 ]; then
@@ -39,6 +42,9 @@ export DB_URI="postgres://postgres:password@localhost:5432/chartsmith?sslmode=di
 export HMAC_SECRET="test-secret-for-playwright-tests"
 export NEXT_PUBLIC_CENTRIFUGO_ADDRESS="http://localhost:8000"
 export CENTRIFUGO_API_KEY="test-api-key"
+export NEXT_PUBLIC_API_ENDPOINT="http://localhost:3000/api"
+export NEXT_PUBLIC_ENABLE_TEST_AUTH="true"
+export ENABLE_TEST_AUTH="true"
 make run-worker &
 WORKER_PID=$!
 
