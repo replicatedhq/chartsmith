@@ -4,6 +4,7 @@ set -e
 echo "Starting services with docker compose for E2E tests..."
 cd ../hack/chartsmith-dev
 
+docker compose -f docker-compose.e2e.yml down -v || true
 docker compose -f docker-compose.e2e.yml up -d
 
 cd ../../
@@ -28,6 +29,7 @@ for i in {1..30}; do
     echo "PostgreSQL container is not running. Restarting..."
     SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
     cd "$SCRIPT_DIR/../../hack/chartsmith-dev"
+    docker compose -f docker-compose.e2e.yml down -v || true
     docker compose -f docker-compose.e2e.yml up -d postgres
     cd "$SCRIPT_DIR/.."
     for j in {1..10}; do
