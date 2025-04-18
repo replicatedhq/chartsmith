@@ -1,23 +1,43 @@
+#!/bin/bash
+# This script ensures all E2E test resources are properly cleaned up
 
 echo "Cleaning up E2E test environment..."
 
-pkill -f "PORT=3005 npm run dev" || true
-pkill -f "make run-worker" || true
+# Kill frontend and worker processes
+pkill -f "PORT=3005 npm run dev" 2>/dev/null || true
+pkill -f "make run-worker" 2>/dev/null || true
 
+# Kill any processes using our test ports
 if command -v lsof &> /dev/null; then
-  lsof -ti:3005 | xargs kill -9 2>/dev/null || true
-  lsof -ti:8001 | xargs kill -9 2>/dev/null || true
-  lsof -ti:5433 | xargs kill -9 2>/dev/null || true
+  for port in 3005 8001 5433; do
+    pid=$(lsof -ti:$port 2>/dev/null || echo "")
+    if [ -n "$pid" ]; then
+      echo "Killing process $pid using port $port"
+      kill -9 $pid 2>/dev/null || true
+    fi
+  done
 fi
 
+# Stop and remove docker containers with specific names
 echo "Stopping docker containers..."
-docker stop chartsmith-e2e-postgres chartsmith-e2e-centrifugo 2>/dev/null || true
-docker rm chartsmith-e2e-postgres chartsmith-e2e-centrifugo 2>/dev/null || true
+for container in chartsmith-e2e-postgres chartsmith-e2e-centrifugo; do
+  if docker ps -a | grep -q $container; then
+    echo "Stopping and removing container $container"
+    docker stop $container 2>/dev/null || true
+    docker rm $container 2>/dev/null || true
+  fi
+done
 
+# Also try docker-compose down as a fallback
 echo "Stopping docker-compose services..."
-cd ../hack/chartsmith-dev
-docker compose -f docker-compose.e2e.yml down -v 2>/dev/null || true
+if [ -f "../hack/chartsmith-dev/docker-compose.e2e.yml" ]; then
+  cd ../hack/chartsmith-dev
+  docker compose -f docker-compose.e2e.yml down -v 2>/dev/null || true
+else
+  echo "docker-compose.e2e.yml not found, skipping docker-compose down"
+fi
 
+# Remove the volume explicitly
 docker volume rm chartsmith-e2e-postgres-data 2>/dev/null || true
 
 echo "E2E test environment cleaned up successfully"
