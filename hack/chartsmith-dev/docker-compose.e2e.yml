@@ -21,7 +21,7 @@ services:
   centrifugo:
     image: centrifugo/centrifugo:v5
     ports:
-      - "8001:8000"
+      - "8001:8001"
     command: centrifugo --config /centrifugo/config.json
     volumes:
       - ./centrifugo:/centrifugo
