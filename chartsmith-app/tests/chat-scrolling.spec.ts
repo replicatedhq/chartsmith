@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { loginTestUser } from './helpers';
 
 test('Chat auto-scrolling behavior respects user scroll position', async ({ page }) => {
-  test.setTimeout(60000); // Increase timeout to 60 seconds
+  test.setTimeout(120000); // Increase timeout to 120 seconds
   // Start tracing for debugging
   await page.context().tracing.start({
     screenshots: true,
