@@ -13,10 +13,21 @@ test('Chat auto-scrolling behavior respects user scroll position', async ({ page
     // Login using our shared test auth function
     await loginTestUser(page);
     
-    // Find and click on the first workspace available
-    await page.waitForSelector('[data-testid="workspace-item"]');
-    await page.click('[data-testid="workspace-item"]');
-    await page.waitForSelector('textarea[placeholder="Ask a question or ask for a change..."]');
+    await page.goto('/', {
+      waitUntil: 'networkidle'
+    });
+    
+    const fileInput = page.locator('input[type="file"]');
+    
+    const testFile = '../testdata/charts/empty-chart-0.1.0.tgz';
+    
+    await fileInput.setInputFiles(testFile);
+    
+    // Wait for redirect to workspace page with increased timeout
+    await page.waitForURL(/\/workspace\/[a-zA-Z0-9-]+$/, { timeout: 60000 });
+    
+    // Wait for the chat textarea to appear
+    await page.waitForSelector('textarea[placeholder="Ask a question or ask for a change..."]', { timeout: 30000 });
     
     // Send initial message and verify auto-scroll works
     await page.fill('textarea[placeholder="Ask a question or ask for a change..."]', 'Test message');

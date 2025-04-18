@@ -23,6 +23,9 @@ test('import chart from artifacthub', async ({ page }) => {
 
     // Wait for redirect to workspace page with increased timeout
     await page.waitForURL(/\/workspace\/[a-zA-Z0-9-]+$/, { timeout: 60000 });
+    
+    // Wait for the page to fully load
+    await page.waitForLoadState('networkidle', { timeout: 30000 });
 
     // Verify the current URL matches the expected pattern
     const currentUrl = page.url();
