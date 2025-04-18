@@ -67,7 +67,7 @@ if [ $? -ne 0 ]; then
 fi
 
 echo "Creating a sample workspace for the test user..."
-docker exec chartsmith-dev-postgres-1 psql -U postgres -d chartsmith -c "INSERT INTO workspace (id, name, owner_id, created_at, updated_at) VALUES ('test-workspace-1', 'Test Workspace', 'ZO6igAzj2yzJ', NOW(), NOW()) ON CONFLICT (id) DO NOTHING;"
+docker exec chartsmith-dev-postgres-1 psql -U postgres -d chartsmith -c "INSERT INTO workspace (id, name, created_by_user_id, created_at, last_updated_at, created_type, current_revision_number) VALUES ('test-workspace-1', 'Test Workspace', 'ZO6igAzj2yzJ', NOW(), NOW(), 'MANUAL', 0) ON CONFLICT (id) DO NOTHING;"
 if [ $? -ne 0 ]; then
   echo "Failed to create sample workspace"
   exit 1
