@@ -138,7 +138,7 @@ if [ $? -ne 0 ]; then
 fi
 
 echo "Starting frontend server..."
-cd chartsmith-app
+cd "$SCRIPT_DIR/.."
 PORT=3005 npm run dev > frontend.log 2>&1 &
 FRONTEND_PID=$!
 
