@@ -96,16 +96,20 @@ else
 fi
 
 echo "Running database schema setup..."
+cd "$SCRIPT_DIR/../.."
 make schema
 if [ $? -ne 0 ]; then
   echo "Failed to apply database schema"
   "$SCRIPT_DIR/cleanup-e2e-tests.sh" || true
   exit 1
 fi
+cd "$SCRIPT_DIR/.."
 
 echo "Starting backend worker..."
+cd "$SCRIPT_DIR/../.."
 make run-worker &
 WORKER_PID=$!
+cd "$SCRIPT_DIR/.."
 
 echo "Creating default workspace record..."
 docker exec chartsmith-e2e-postgres psql -U postgres -d chartsmith -c "INSERT INTO bootstrap_workspace (id, name, current_revision) VALUES ('default', 'default-workspace', 0) ON CONFLICT (id) DO NOTHING;"
