@@ -12,7 +12,7 @@
     "lint": "next lint --fix",
     "test": "npm run test:unit && npm run test:e2e",
     "test:e2e": "./scripts/setup-e2e-tests.sh && (npx playwright test || (./scripts/cleanup-e2e-tests.sh && exit 1)) && ./scripts/cleanup-e2e-tests.sh",
-    "test:e2e:headed": "./scripts/setup-e2e-tests.sh && (npx playwright test --headed || (./scripts/cleanup-e2e-tests.sh && exit 1)) && ./scripts/cleanup-e2e-tests.sh",
+    "test:e2e:headed": "./scripts/setup-e2e-tests.sh && (DISPLAY=:0 xvfb-run npx playwright test --headed || (./scripts/cleanup-e2e-tests.sh && exit 1)) && ./scripts/cleanup-e2e-tests.sh",
     "test:e2e:setup": "./scripts/setup-e2e-tests.sh && npx playwright test",
     "test:unit": "jest",
     "test:watch": "jest --watch",
