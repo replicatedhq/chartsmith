@@ -1,14 +1,20 @@
 #!/bin/bash
 set -e
 
-"$(dirname "$0")/cleanup-e2e-tests.sh"
+# Get the absolute path to the script directory
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+
+# Clean up any existing test environment
+"$SCRIPT_DIR/cleanup-e2e-tests.sh" || true
 
 echo "Starting services with docker compose for E2E tests..."
-cd ../hack/chartsmith-dev
+cd "$SCRIPT_DIR/../hack/chartsmith-dev"
 
+# Start the Docker containers
+docker compose -f docker-compose.e2e.yml down -v || true
 docker compose -f docker-compose.e2e.yml up -d
 
-cd ../../
+cd "$SCRIPT_DIR/.."
 
 echo "Waiting for PostgreSQL to be ready..."
 for i in {1..30}; do
@@ -21,7 +27,7 @@ for i in {1..30}; do
   
   if [ $i -eq 30 ]; then
     echo "PostgreSQL failed to start after 30 attempts"
-    "$(dirname "$0")/cleanup-e2e-tests.sh"
+    "$SCRIPT_DIR/cleanup-e2e-tests.sh" || true
     exit 1
   fi
 done
@@ -41,7 +47,7 @@ for i in {1..10}; do
   
   if [ $i -eq 10 ]; then
     echo "Failed to install vector extension after 10 attempts"
-    "$(dirname "$0")/cleanup-e2e-tests.sh"
+    "$SCRIPT_DIR/cleanup-e2e-tests.sh" || true
     exit 1
   fi
 done
@@ -93,7 +99,7 @@ echo "Running database schema setup..."
 make schema
 if [ $? -ne 0 ]; then
   echo "Failed to apply database schema"
-  "$(dirname "$0")/cleanup-e2e-tests.sh"
+  "$SCRIPT_DIR/cleanup-e2e-tests.sh" || true
   exit 1
 fi
 
@@ -105,7 +111,7 @@ echo "Creating default workspace record..."
 docker exec chartsmith-e2e-postgres psql -U postgres -d chartsmith -c "INSERT INTO bootstrap_workspace (id, name, current_revision) VALUES ('default', 'default-workspace', 0) ON CONFLICT (id) DO NOTHING;"
 if [ $? -ne 0 ]; then
   echo "Failed to create default workspace record"
-  "$(dirname "$0")/cleanup-e2e-tests.sh"
+  "$SCRIPT_DIR/cleanup-e2e-tests.sh" || true
   exit 1
 fi
 
@@ -115,7 +121,7 @@ docker exec chartsmith-e2e-postgres psql -U postgres -d chartsmith -c "DELETE FR
 docker exec chartsmith-e2e-postgres psql -U postgres -d chartsmith -c "INSERT INTO chartsmith_user (id, email, name, image_url, created_at, last_login_at, last_active_at, is_admin) VALUES ('ZO6igAzj2yzJ', 'playwright@chartsmith.ai', 'Playwright Test User', 'https://randomuser.me/api/portraits/lego/3.jpg', NOW(), NOW(), NOW(), false) ON CONFLICT (email) DO NOTHING;"
 if [ $? -ne 0 ]; then
   echo "Failed to create test user"
-  "$(dirname "$0")/cleanup-e2e-tests.sh"
+  "$SCRIPT_DIR/cleanup-e2e-tests.sh" || true
   exit 1
 fi
 
@@ -123,7 +129,7 @@ echo "Creating a sample workspace for the test user..."
 docker exec chartsmith-e2e-postgres psql -U postgres -d chartsmith -c "INSERT INTO workspace (id, name, created_by_user_id, created_at, last_updated_at, created_type, current_revision_number) VALUES ('test-workspace-1', 'Test Workspace', 'ZO6igAzj2yzJ', NOW(), NOW(), 'MANUAL', 0) ON CONFLICT (id) DO NOTHING;"
 if [ $? -ne 0 ]; then
   echo "Failed to create sample workspace"
-  "$(dirname "$0")/cleanup-e2e-tests.sh"
+  "$SCRIPT_DIR/cleanup-e2e-tests.sh" || true
   exit 1
 fi
 
@@ -138,7 +144,7 @@ counter=0
 while ! curl -s http://localhost:3005 > /dev/null; do
   if [ $counter -ge $timeout ]; then
     echo "Timed out waiting for frontend server to start"
-    "$(dirname "$0")/cleanup-e2e-tests.sh"
+    "$SCRIPT_DIR/cleanup-e2e-tests.sh" || true
     exit 1
   fi
   echo "Waiting for frontend server to start... ($counter/$timeout)"
