@@ -14,6 +14,9 @@ until docker exec chartsmith-dev-postgres-1 pg_isready -U postgres > /dev/null 2
   sleep 1
 done
 
+echo "Creating chartsmith database if it doesn't exist..."
+docker exec -u postgres chartsmith-dev-postgres-1 psql -c 'CREATE DATABASE chartsmith;'
+
 echo "Installing vector extension..."
 docker exec -u postgres chartsmith-dev-postgres-1 psql -d chartsmith -c 'CREATE EXTENSION IF NOT EXISTS vector;'
 if [ $? -ne 0 ]; then
