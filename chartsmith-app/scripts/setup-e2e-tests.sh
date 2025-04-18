@@ -58,16 +58,16 @@ if ! command -v helm &> /dev/null; then
 fi
 
 echo "Setting up environment variables..."
-export CHARTSMITH_PG_URI="postgres://postgres:password@localhost:5433/chartsmith?sslmode=disable"
-export DB_URI="postgres://postgres:password@localhost:5433/chartsmith?sslmode=disable"
+export CHARTSMITH_PG_URI="postgres://postgres:password@127.0.0.1:5433/chartsmith?sslmode=disable"
+export DB_URI="postgres://postgres:password@127.0.0.1:5433/chartsmith?sslmode=disable"
 export HMAC_SECRET="test-secret-for-playwright-tests"
-export NEXT_PUBLIC_CENTRIFUGO_ADDRESS="http://localhost:8001"
-export CENTRIFUGO_ADDRESS="http://localhost:8001"
-export CENTRIFUGO_URL="http://localhost:8001"
-export CHARTSMITH_CENTRIFUGO_ADDRESS="http://localhost:8001/api"
+export NEXT_PUBLIC_CENTRIFUGO_ADDRESS="http://127.0.0.1:8001"
+export CENTRIFUGO_ADDRESS="http://127.0.0.1:8001"
+export CENTRIFUGO_URL="http://127.0.0.1:8001"
+export CHARTSMITH_CENTRIFUGO_ADDRESS="http://127.0.0.1:8001/api"
 export CENTRIFUGO_API_KEY="api_key"
 export CHARTSMITH_CENTRIFUGO_API_KEY="api_key"
-export NEXT_PUBLIC_API_ENDPOINT="http://localhost:3005/api"
+export NEXT_PUBLIC_API_ENDPOINT="http://127.0.0.1:3005/api"
 export NEXT_PUBLIC_ENABLE_TEST_AUTH="true"
 export ENABLE_TEST_AUTH="true"
 
