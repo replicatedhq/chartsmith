@@ -15,7 +15,7 @@ until docker exec chartsmith-dev-postgres-1 pg_isready -U postgres > /dev/null 2
 done
 
 echo "Creating chartsmith database if it doesn't exist..."
-docker exec -u postgres chartsmith-dev-postgres-1 psql -c 'CREATE DATABASE chartsmith;'
+docker exec -u postgres chartsmith-dev-postgres-1 psql -c 'CREATE DATABASE chartsmith;' || echo "Database already exists, continuing..."
 
 echo "Installing vector extension..."
 for i in {1..30}; do
@@ -41,6 +41,11 @@ for i in {1..30}; do
   fi
 done
 
+if ! command -v helm &> /dev/null; then
+    echo "Installing helm..."
+    curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+fi
+
 echo "Running database schema setup..."
 cd chartsmith-app
 export CHARTSMITH_PG_URI="postgres://postgres:password@localhost:5433/chartsmith?sslmode=disable"
@@ -51,6 +56,9 @@ export CENTRIFUGO_API_KEY="test-api-key"
 export NEXT_PUBLIC_API_ENDPOINT="http://localhost:3005/api"
 export NEXT_PUBLIC_ENABLE_TEST_AUTH="true"
 export ENABLE_TEST_AUTH="true"
+export VOYAGE_API_KEY="test-voyage-api-key"
+export ANTHROPIC_API_KEY="test-anthropic-api-key"
+export GROQ_API_KEY="test-groq-api-key"
 cd ..
 make schema
 if [ $? -ne 0 ]; then
@@ -67,6 +75,9 @@ export CENTRIFUGO_API_KEY="test-api-key"
 export NEXT_PUBLIC_API_ENDPOINT="http://localhost:3005/api"
 export NEXT_PUBLIC_ENABLE_TEST_AUTH="true"
 export ENABLE_TEST_AUTH="true"
+export VOYAGE_API_KEY="test-voyage-api-key"
+export ANTHROPIC_API_KEY="test-anthropic-api-key"
+export GROQ_API_KEY="test-groq-api-key"
 make run-worker &
 WORKER_PID=$!
 
