@@ -8,6 +8,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
       POSTGRES_DB: chartsmith
+      POSTGRES_HOST_AUTH_METHOD: trust
     ports:
       - "127.0.0.1:5433:5432"
     volumes:
@@ -18,9 +19,7 @@ services:
       timeout: 5s
       retries: 5
     restart: "no"
-    # Disable IPv6 binding
-    sysctls:
-      - net.ipv6.conf.all.disable_ipv6=1
+    command: postgres -c 'listen_addresses=*'
 
   centrifugo:
     image: centrifugo/centrifugo:v5
@@ -31,9 +30,6 @@ services:
     volumes:
       - ./centrifugo:/centrifugo
     restart: "no"
-    # Disable IPv6 binding
-    sysctls:
-      - net.ipv6.conf.all.disable_ipv6=1
 
 volumes:
   postgres_e2e_data:
