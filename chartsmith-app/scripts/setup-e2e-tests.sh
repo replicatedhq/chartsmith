@@ -57,10 +57,12 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
-echo "Ensuring test user is not waitlisted..."
-docker exec chartsmith-dev-postgres-1 psql -U postgres -d chartsmith -c "INSERT INTO chartsmith_user (id, email, name, image_url, created_at, last_login_at, last_active_at, is_waitlisted) VALUES ('ZO6igAzj2yzJ', 'playwright@chartsmith.ai', 'Playwright Test User', 'https://randomuser.me/api/portraits/lego/3.jpg', NOW(), NOW(), NOW(), false) ON CONFLICT (email) DO UPDATE SET is_waitlisted = false;"
+echo "Ensuring test user exists and is not in waitlist..."
+docker exec chartsmith-dev-postgres-1 psql -U postgres -d chartsmith -c "DELETE FROM waitlist WHERE email = 'playwright@chartsmith.ai';"
+
+docker exec chartsmith-dev-postgres-1 psql -U postgres -d chartsmith -c "INSERT INTO chartsmith_user (id, email, name, image_url, created_at, last_login_at, last_active_at, is_admin) VALUES ('ZO6igAzj2yzJ', 'playwright@chartsmith.ai', 'Playwright Test User', 'https://randomuser.me/api/portraits/lego/3.jpg', NOW(), NOW(), NOW(), false) ON CONFLICT (email) DO NOTHING;"
 if [ $? -ne 0 ]; then
-  echo "Failed to update test user waitlist status"
+  echo "Failed to create test user"
   exit 1
 fi
 
