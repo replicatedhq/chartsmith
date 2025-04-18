@@ -7,24 +7,17 @@ echo "Cleaning up E2E test environment..."
 pkill -f "PORT=3005 npm run dev" 2>/dev/null || true
 pkill -f "make run-worker" 2>/dev/null || true
 
-# Check for processes using our test ports, but don't kill Docker processes
 if command -v lsof &> /dev/null; then
-  for port in 3005 8001 5433; do
-    pid=$(lsof -ti:$port 2>/dev/null || echo "")
-    if [ -n "$pid" ]; then
-      if ps -p $pid -o comm= | grep -v -E 'docker|containerd' > /dev/null; then
-        echo "Killing non-Docker process $pid using port $port"
-        kill $pid 2>/dev/null || true
-        sleep 1
-        if ps -p $pid > /dev/null && ps -p $pid -o comm= | grep -v -E 'docker|containerd' > /dev/null; then
-          echo "Process still running, using SIGKILL"
-          kill -9 $pid 2>/dev/null || true
-        fi
-      else
-        echo "Skipping Docker-related process $pid using port $port"
-      fi
+  pid=$(lsof -ti:3005 2>/dev/null || echo "")
+  if [ -n "$pid" ]; then
+    echo "Killing frontend process $pid using port 3005"
+    kill $pid 2>/dev/null || true
+    sleep 1
+    if ps -p $pid > /dev/null; then
+      echo "Frontend process still running, using SIGKILL"
+      kill -9 $pid 2>/dev/null || true
     fi
-  done
+  fi
 fi
 
 # Stop and remove docker containers with specific names
