@@ -67,7 +67,7 @@ export HMAC_SECRET="test-secret-for-playwright-tests"
 export NEXT_PUBLIC_CENTRIFUGO_ADDRESS="http://localhost:8001"
 export CENTRIFUGO_API_KEY="test-api-key"
 export NEXT_PUBLIC_API_ENDPOINT="http://localhost:3005/api"
-npm run dev &
+PORT=3005 npm run dev &
 FRONTEND_PID=$!
 
 echo "Environment ready for E2E tests"
