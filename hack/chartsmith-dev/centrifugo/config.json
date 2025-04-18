@@ -2,7 +2,7 @@
   "token_hmac_secret_key": "change.me",
   "admin_password": "password",
   "admin_secret": "secret",
-  "api_key": "test-api-key",
+  "api_key": "api_key",
   "allowed_origins": ["*"],
   "allow_user_limited_channels": true,
   "port": 8001
