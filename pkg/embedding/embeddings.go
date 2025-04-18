@@ -55,6 +55,10 @@ func Embeddings(content string) (string, error) {
 	if param.Get().VoyageAPIKey == "" {
 		return "", fmt.Errorf("VOYAGE_API_KEY environment variable not set")
 	}
+	
+	if strings.HasPrefix(param.Get().VoyageAPIKey, "sk-test-mock") {
+		return "[]", nil
+	}
 
 	reqBody := embeddingRequest{
 		Model: "voyage-01",

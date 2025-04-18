@@ -71,9 +71,32 @@ export CHARTSMITH_CENTRIFUGO_API_KEY="api_key"
 export NEXT_PUBLIC_API_ENDPOINT="http://localhost:3005/api"
 export NEXT_PUBLIC_ENABLE_TEST_AUTH="true"
 export ENABLE_TEST_AUTH="true"
-export VOYAGE_API_KEY="${VOYAGE_API_KEY:-test-voyage-api-key}"
-export ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-test-anthropic-api-key}"
-export GROQ_API_KEY="${GROQ_API_KEY:-test-groq-api-key}"
+if [ -n "$VOYAGE_API_KEY" ]; then
+  export VOYAGE_API_KEY="$VOYAGE_API_KEY"
+  export CHARTSMITH_VOYAGE_API_KEY="$VOYAGE_API_KEY"
+else
+  echo "Warning: Using mock VOYAGE_API_KEY for tests"
+  export VOYAGE_API_KEY="sk-test-mock-key"
+  export CHARTSMITH_VOYAGE_API_KEY="sk-test-mock-key"
+fi
+
+if [ -n "$ANTHROPIC_API_KEY" ]; then
+  export ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"
+  export CHARTSMITH_ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"
+else
+  echo "Warning: Using mock ANTHROPIC_API_KEY for tests"
+  export ANTHROPIC_API_KEY="sk-ant-mock-key"
+  export CHARTSMITH_ANTHROPIC_API_KEY="sk-ant-mock-key"
+fi
+
+if [ -n "$GROQ_API_KEY" ]; then
+  export GROQ_API_KEY="$GROQ_API_KEY"
+  export CHARTSMITH_GROQ_API_KEY="$GROQ_API_KEY"
+else
+  echo "Warning: Using mock GROQ_API_KEY for tests"
+  export GROQ_API_KEY="gsk_mock_key"
+  export CHARTSMITH_GROQ_API_KEY="gsk_mock_key"
+fi
 cd ..
 make schema
 if [ $? -ne 0 ]; then
@@ -94,9 +117,32 @@ export CHARTSMITH_CENTRIFUGO_API_KEY="api_key"
 export NEXT_PUBLIC_API_ENDPOINT="http://localhost:3005/api"
 export NEXT_PUBLIC_ENABLE_TEST_AUTH="true"
 export ENABLE_TEST_AUTH="true"
-export VOYAGE_API_KEY="${VOYAGE_API_KEY:-test-voyage-api-key}"
-export ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-test-anthropic-api-key}"
-export GROQ_API_KEY="${GROQ_API_KEY:-test-groq-api-key}"
+if [ -n "$VOYAGE_API_KEY" ]; then
+  export VOYAGE_API_KEY="$VOYAGE_API_KEY"
+  export CHARTSMITH_VOYAGE_API_KEY="$VOYAGE_API_KEY"
+else
+  echo "Warning: Using mock VOYAGE_API_KEY for tests"
+  export VOYAGE_API_KEY="sk-test-mock-key"
+  export CHARTSMITH_VOYAGE_API_KEY="sk-test-mock-key"
+fi
+
+if [ -n "$ANTHROPIC_API_KEY" ]; then
+  export ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"
+  export CHARTSMITH_ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"
+else
+  echo "Warning: Using mock ANTHROPIC_API_KEY for tests"
+  export ANTHROPIC_API_KEY="sk-ant-mock-key"
+  export CHARTSMITH_ANTHROPIC_API_KEY="sk-ant-mock-key"
+fi
+
+if [ -n "$GROQ_API_KEY" ]; then
+  export GROQ_API_KEY="$GROQ_API_KEY"
+  export CHARTSMITH_GROQ_API_KEY="$GROQ_API_KEY"
+else
+  echo "Warning: Using mock GROQ_API_KEY for tests"
+  export GROQ_API_KEY="gsk_mock_key"
+  export CHARTSMITH_GROQ_API_KEY="gsk_mock_key"
+fi
 make run-worker &
 WORKER_PID=$!
 
