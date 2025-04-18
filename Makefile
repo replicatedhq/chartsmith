@@ -104,3 +104,22 @@ production:
 		--github-token env:GITHUB_TOKEN \
 		--op-service-account env:OP_SERVICE_ACCOUNT_PRODUCTION \
 		--progress plain
+
+.PHONY: devin
+devin:
+	direnv exec ~/repos/chartsmith bash -c '\
+		cd hack/chartsmith-dev && \
+		docker compose down && \
+		docker compose up -d && \
+		echo "Waiting for Postgres..." && \
+		until docker exec chartsmith-dev-postgres-1 pg_isready -U postgres > /dev/null 2>&1; do \
+			sleep 1; \
+		done && \
+		echo "Postgres is ready" && \
+		docker exec -u postgres chartsmith-dev-postgres-1 psql -d chartsmith -c '\''CREATE EXTENSION IF NOT EXISTS vector;'\'' && \
+		cd ../.. && \
+		make schema && \
+		go mod download && \
+		cd chartsmith-app && \
+		npm install \
+	'
