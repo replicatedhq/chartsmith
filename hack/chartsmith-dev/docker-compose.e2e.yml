@@ -10,7 +10,7 @@ services:
       POSTGRES_DB: chartsmith
       POSTGRES_HOST_AUTH_METHOD: trust
     ports:
-      - "127.0.0.1:5433:5432"
+      - "5433:5432"
     volumes:
       - postgres_e2e_data:/var/lib/postgresql/data
     healthcheck:
@@ -18,18 +18,18 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-    restart: "no"
+    restart: "always"
     command: postgres -c 'listen_addresses=*'
 
   centrifugo:
     image: centrifugo/centrifugo:v5
     container_name: chartsmith-e2e-centrifugo
     ports:
-      - "127.0.0.1:8001:8001"
+      - "8001:8001"
     command: centrifugo --config /centrifugo/config.json
     volumes:
       - ./centrifugo:/centrifugo
-    restart: "no"
+    restart: "always"
 
 volumes:
   postgres_e2e_data:
