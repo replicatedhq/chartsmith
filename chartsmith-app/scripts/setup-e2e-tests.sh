@@ -18,11 +18,28 @@ echo "Creating chartsmith database if it doesn't exist..."
 docker exec -u postgres chartsmith-dev-postgres-1 psql -c 'CREATE DATABASE chartsmith;'
 
 echo "Installing vector extension..."
-docker exec -u postgres chartsmith-dev-postgres-1 psql -d chartsmith -c 'CREATE EXTENSION IF NOT EXISTS vector;'
-if [ $? -ne 0 ]; then
-  echo "Failed to install vector extension"
-  exit 1
-fi
+for i in {1..30}; do
+  if docker exec -u postgres chartsmith-dev-postgres-1 psql -d chartsmith -c 'CREATE EXTENSION IF NOT EXISTS vector;'; then
+    echo "Vector extension installed successfully"
+    break
+  fi
+  
+  if ! docker ps | grep -q chartsmith-dev-postgres-1; then
+    echo "PostgreSQL container is not running. Restarting..."
+    cd ../hack/chartsmith-dev
+    docker compose -f docker-compose.e2e.yml up -d postgres
+    cd ../../
+    sleep 5
+  fi
+  
+  echo "Waiting for PostgreSQL to be fully ready... ($i/30)"
+  sleep 2
+  
+  if [ $i -eq 30 ]; then
+    echo "Failed to install vector extension after 30 attempts"
+    exit 1
+  fi
+done
 
 echo "Running database schema setup..."
 cd chartsmith-app
