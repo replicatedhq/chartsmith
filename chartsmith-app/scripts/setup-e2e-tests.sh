@@ -7,13 +7,13 @@ docker compose up -d
 cd ../../
 
 echo "Waiting for PostgreSQL to be ready..."
-until docker exec chartsmith-postgres pg_isready -U postgres > /dev/null 2>&1; do
+until docker exec chartsmith-dev-postgres-1 pg_isready -U postgres > /dev/null 2>&1; do
   echo "Waiting for PostgreSQL to start..."
   sleep 1
 done
 
 echo "Installing vector extension..."
-docker exec -u postgres chartsmith-postgres psql -d chartsmith -c 'CREATE EXTENSION IF NOT EXISTS vector;'
+docker exec -u postgres chartsmith-dev-postgres-1 psql -d chartsmith -c 'CREATE EXTENSION IF NOT EXISTS vector;'
 if [ $? -ne 0 ]; then
   echo "Failed to install vector extension"
   exit 1
