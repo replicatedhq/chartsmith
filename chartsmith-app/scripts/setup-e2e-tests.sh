@@ -1,9 +1,9 @@
 #!/bin/bash
 set -e
 
-echo "Starting services with docker-compose..."
+echo "Starting services with docker compose..."
 cd ../hack/chartsmith-dev
-docker-compose up -d
+docker compose up -d
 cd ../../
 
 echo "Waiting for PostgreSQL to be ready..."
