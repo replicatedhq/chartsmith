@@ -3,12 +3,13 @@ version: '3.8'
 services:
   postgres:
     image: ankane/pgvector:latest
+    container_name: chartsmith-e2e-postgres
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
       POSTGRES_DB: chartsmith
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
     volumes:
       - postgres_e2e_data:/var/lib/postgresql/data
     healthcheck:
@@ -16,15 +17,18 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-    restart: always
+    restart: "no"
 
   centrifugo:
     image: centrifugo/centrifugo:v5
+    container_name: chartsmith-e2e-centrifugo
     ports:
-      - "8001:8001"
+      - "127.0.0.1:8001:8001"
     command: centrifugo --config /centrifugo/config.json
     volumes:
       - ./centrifugo:/centrifugo
+    restart: "no"
 
 volumes:
   postgres_e2e_data:
+    name: chartsmith-e2e-postgres-data

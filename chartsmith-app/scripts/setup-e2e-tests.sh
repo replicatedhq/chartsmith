@@ -1,31 +1,42 @@
 #!/bin/bash
 set -e
 
+"$(dirname "$0")/cleanup-e2e-tests.sh"
+
 echo "Starting services with docker compose for E2E tests..."
 cd ../hack/chartsmith-dev
 
-docker compose -f docker-compose.e2e.yml down -v || true
 docker compose -f docker-compose.e2e.yml up -d
 
 cd ../../
 
 echo "Waiting for PostgreSQL to be ready..."
-until docker exec chartsmith-dev-postgres-1 pg_isready -U postgres > /dev/null 2>&1; do
-  echo "Waiting for PostgreSQL to start..."
+for i in {1..30}; do
+  if docker exec chartsmith-e2e-postgres pg_isready -U postgres > /dev/null 2>&1; then
+    echo "PostgreSQL is ready"
+    break
+  fi
+  echo "Waiting for PostgreSQL to start... ($i/30)"
   sleep 1
+  
+  if [ $i -eq 30 ]; then
+    echo "PostgreSQL failed to start after 30 attempts"
+    "$(dirname "$0")/cleanup-e2e-tests.sh"
+    exit 1
+  fi
 done
 
 echo "Creating chartsmith database if it doesn't exist..."
-docker exec -u postgres chartsmith-dev-postgres-1 psql -c 'CREATE DATABASE chartsmith;' || echo "Database already exists, continuing..."
+docker exec -u postgres chartsmith-e2e-postgres psql -c 'CREATE DATABASE chartsmith;' || echo "Database already exists, continuing..."
 
 echo "Installing vector extension..."
 for i in {1..30}; do
-  if docker exec -u postgres chartsmith-dev-postgres-1 psql -d chartsmith -c 'CREATE EXTENSION IF NOT EXISTS vector;'; then
+  if docker exec -u postgres chartsmith-e2e-postgres psql -d chartsmith -c 'CREATE EXTENSION IF NOT EXISTS vector;'; then
     echo "Vector extension installed successfully"
     break
   fi
   
-  if ! docker ps | grep -q chartsmith-dev-postgres-1; then
+  if ! docker ps | grep -q chartsmith-e2e-postgres; then
     echo "PostgreSQL container is not running. Restarting..."
     SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
     cd "$SCRIPT_DIR/../../hack/chartsmith-dev"
@@ -33,7 +44,7 @@ for i in {1..30}; do
     docker compose -f docker-compose.e2e.yml up -d postgres
     cd "$SCRIPT_DIR/.."
     for j in {1..10}; do
-      if docker ps | grep -q chartsmith-dev-postgres-1; then
+      if docker ps | grep -q chartsmith-e2e-postgres; then
         echo "PostgreSQL container is now running"
         sleep 5
         break
@@ -147,23 +158,25 @@ make run-worker &
 WORKER_PID=$!
 
 echo "Creating default workspace record..."
-docker exec chartsmith-dev-postgres-1 psql -U postgres -d chartsmith -c "INSERT INTO bootstrap_workspace (id, name, current_revision) VALUES ('default', 'default-workspace', 0) ON CONFLICT (id) DO NOTHING;"
+docker exec chartsmith-e2e-postgres psql -U postgres -d chartsmith -c "INSERT INTO bootstrap_workspace (id, name, current_revision) VALUES ('default', 'default-workspace', 0) ON CONFLICT (id) DO NOTHING;"
 if [ $? -ne 0 ]; then
   echo "Failed to create default workspace record"
+  "$(dirname "$0")/cleanup-e2e-tests.sh"
   exit 1
 fi
 
 echo "Ensuring test user exists and is not in waitlist..."
-docker exec chartsmith-dev-postgres-1 psql -U postgres -d chartsmith -c "DELETE FROM waitlist WHERE email = 'playwright@chartsmith.ai';"
+docker exec chartsmith-e2e-postgres psql -U postgres -d chartsmith -c "DELETE FROM waitlist WHERE email = 'playwright@chartsmith.ai';"
 
-docker exec chartsmith-dev-postgres-1 psql -U postgres -d chartsmith -c "INSERT INTO chartsmith_user (id, email, name, image_url, created_at, last_login_at, last_active_at, is_admin) VALUES ('ZO6igAzj2yzJ', 'playwright@chartsmith.ai', 'Playwright Test User', 'https://randomuser.me/api/portraits/lego/3.jpg', NOW(), NOW(), NOW(), false) ON CONFLICT (email) DO NOTHING;"
+docker exec chartsmith-e2e-postgres psql -U postgres -d chartsmith -c "INSERT INTO chartsmith_user (id, email, name, image_url, created_at, last_login_at, last_active_at, is_admin) VALUES ('ZO6igAzj2yzJ', 'playwright@chartsmith.ai', 'Playwright Test User', 'https://randomuser.me/api/portraits/lego/3.jpg', NOW(), NOW(), NOW(), false) ON CONFLICT (email) DO NOTHING;"
 if [ $? -ne 0 ]; then
   echo "Failed to create test user"
+  "$(dirname "$0")/cleanup-e2e-tests.sh"
   exit 1
 fi
 
 echo "Creating a sample workspace for the test user..."
-docker exec chartsmith-dev-postgres-1 psql -U postgres -d chartsmith -c "INSERT INTO workspace (id, name, created_by_user_id, created_at, last_updated_at, created_type, current_revision_number) VALUES ('test-workspace-1', 'Test Workspace', 'ZO6igAzj2yzJ', NOW(), NOW(), 'MANUAL', 0) ON CONFLICT (id) DO NOTHING;"
+docker exec chartsmith-e2e-postgres psql -U postgres -d chartsmith -c "INSERT INTO workspace (id, name, created_by_user_id, created_at, last_updated_at, created_type, current_revision_number) VALUES ('test-workspace-1', 'Test Workspace', 'ZO6igAzj2yzJ', NOW(), NOW(), 'MANUAL', 0) ON CONFLICT (id) DO NOTHING;"
 if [ $? -ne 0 ]; then
   echo "Failed to create sample workspace"
   exit 1
