@@ -3,7 +3,25 @@ set -e
 
 echo "Starting services with docker compose..."
 cd ../hack/chartsmith-dev
-docker compose up -d
+
+if lsof -i:8000 > /dev/null 2>&1; then
+  echo "Port 8000 is already in use. Assuming Centrifugo is already running."
+  
+  if ! docker ps | grep -q chartsmith-dev-postgres; then
+    cp docker-compose.yml docker-compose.yml.bak
+    grep -v "centrifugo" docker-compose.yml.bak > docker-compose.yml.temp
+    mv docker-compose.yml.temp docker-compose.yml
+    
+    docker compose up -d
+    
+    mv docker-compose.yml.bak docker-compose.yml
+  else
+    echo "PostgreSQL is already running. Skipping docker compose."
+  fi
+else
+  docker compose up -d
+fi
+
 cd ../../
 
 echo "Waiting for PostgreSQL to be ready..."
