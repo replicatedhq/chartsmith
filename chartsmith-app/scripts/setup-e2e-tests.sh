@@ -30,35 +30,18 @@ echo "Creating chartsmith database if it doesn't exist..."
 docker exec -u postgres chartsmith-e2e-postgres psql -c 'CREATE DATABASE chartsmith;' || echo "Database already exists, continuing..."
 
 echo "Installing vector extension..."
-for i in {1..30}; do
+for i in {1..10}; do
   if docker exec -u postgres chartsmith-e2e-postgres psql -d chartsmith -c 'CREATE EXTENSION IF NOT EXISTS vector;'; then
     echo "Vector extension installed successfully"
     break
   fi
   
-  if ! docker ps | grep -q chartsmith-e2e-postgres; then
-    echo "PostgreSQL container is not running. Restarting..."
-    SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-    cd "$SCRIPT_DIR/../../hack/chartsmith-dev"
-    docker compose -f docker-compose.e2e.yml down -v || true
-    docker compose -f docker-compose.e2e.yml up -d postgres
-    cd "$SCRIPT_DIR/.."
-    for j in {1..10}; do
-      if docker ps | grep -q chartsmith-e2e-postgres; then
-        echo "PostgreSQL container is now running"
-        sleep 5
-        break
-      fi
-      echo "Waiting for PostgreSQL container to start... ($j/10)"
-      sleep 2
-    done
-  fi
-  
-  echo "Waiting for PostgreSQL to be fully ready... ($i/30)"
+  echo "Waiting for vector extension to be available... ($i/10)"
   sleep 2
   
-  if [ $i -eq 30 ]; then
-    echo "Failed to install vector extension after 30 attempts"
+  if [ $i -eq 10 ]; then
+    echo "Failed to install vector extension after 10 attempts"
+    "$(dirname "$0")/cleanup-e2e-tests.sh"
     exit 1
   fi
 done
@@ -68,8 +51,7 @@ if ! command -v helm &> /dev/null; then
     curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 fi
 
-echo "Running database schema setup..."
-cd chartsmith-app
+echo "Setting up environment variables..."
 export CHARTSMITH_PG_URI="postgres://postgres:password@localhost:5433/chartsmith?sslmode=disable"
 export DB_URI="postgres://postgres:password@localhost:5433/chartsmith?sslmode=disable"
 export HMAC_SECRET="test-secret-for-playwright-tests"
@@ -82,8 +64,8 @@ export CHARTSMITH_CENTRIFUGO_API_KEY="api_key"
 export NEXT_PUBLIC_API_ENDPOINT="http://localhost:3005/api"
 export NEXT_PUBLIC_ENABLE_TEST_AUTH="true"
 export ENABLE_TEST_AUTH="true"
+
 if [ -n "$VOYAGE_API_KEY" ]; then
-  export VOYAGE_API_KEY="$VOYAGE_API_KEY"
   export CHARTSMITH_VOYAGE_API_KEY="$VOYAGE_API_KEY"
 else
   echo "Warning: Using mock VOYAGE_API_KEY for tests"
@@ -92,7 +74,6 @@ else
 fi
 
 if [ -n "$ANTHROPIC_API_KEY" ]; then
-  export ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"
   export CHARTSMITH_ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"
 else
   echo "Warning: Using mock ANTHROPIC_API_KEY for tests"
@@ -101,59 +82,22 @@ else
 fi
 
 if [ -n "$GROQ_API_KEY" ]; then
-  export GROQ_API_KEY="$GROQ_API_KEY"
   export CHARTSMITH_GROQ_API_KEY="$GROQ_API_KEY"
 else
   echo "Warning: Using mock GROQ_API_KEY for tests"
   export GROQ_API_KEY="gsk_mock_key"
   export CHARTSMITH_GROQ_API_KEY="gsk_mock_key"
 fi
-cd ..
+
+echo "Running database schema setup..."
 make schema
 if [ $? -ne 0 ]; then
   echo "Failed to apply database schema"
+  "$(dirname "$0")/cleanup-e2e-tests.sh"
   exit 1
 fi
 
 echo "Starting backend worker..."
-export CHARTSMITH_PG_URI="postgres://postgres:password@localhost:5433/chartsmith?sslmode=disable"
-export DB_URI="postgres://postgres:password@localhost:5433/chartsmith?sslmode=disable"
-export HMAC_SECRET="test-secret-for-playwright-tests"
-export NEXT_PUBLIC_CENTRIFUGO_ADDRESS="http://localhost:8001"
-export CENTRIFUGO_ADDRESS="http://localhost:8001"
-export CENTRIFUGO_URL="http://localhost:8001"
-export CHARTSMITH_CENTRIFUGO_ADDRESS="http://localhost:8001/api"
-export CENTRIFUGO_API_KEY="api_key"
-export CHARTSMITH_CENTRIFUGO_API_KEY="api_key"
-export NEXT_PUBLIC_API_ENDPOINT="http://localhost:3005/api"
-export NEXT_PUBLIC_ENABLE_TEST_AUTH="true"
-export ENABLE_TEST_AUTH="true"
-if [ -n "$VOYAGE_API_KEY" ]; then
-  export VOYAGE_API_KEY="$VOYAGE_API_KEY"
-  export CHARTSMITH_VOYAGE_API_KEY="$VOYAGE_API_KEY"
-else
-  echo "Warning: Using mock VOYAGE_API_KEY for tests"
-  export VOYAGE_API_KEY="sk-test-mock-key"
-  export CHARTSMITH_VOYAGE_API_KEY="sk-test-mock-key"
-fi
-
-if [ -n "$ANTHROPIC_API_KEY" ]; then
-  export ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"
-  export CHARTSMITH_ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"
-else
-  echo "Warning: Using mock ANTHROPIC_API_KEY for tests"
-  export ANTHROPIC_API_KEY="sk-ant-mock-key"
-  export CHARTSMITH_ANTHROPIC_API_KEY="sk-ant-mock-key"
-fi
-
-if [ -n "$GROQ_API_KEY" ]; then
-  export GROQ_API_KEY="$GROQ_API_KEY"
-  export CHARTSMITH_GROQ_API_KEY="$GROQ_API_KEY"
-else
-  echo "Warning: Using mock GROQ_API_KEY for tests"
-  export GROQ_API_KEY="gsk_mock_key"
-  export CHARTSMITH_GROQ_API_KEY="gsk_mock_key"
-fi
 make run-worker &
 WORKER_PID=$!
 
@@ -179,23 +123,12 @@ echo "Creating a sample workspace for the test user..."
 docker exec chartsmith-e2e-postgres psql -U postgres -d chartsmith -c "INSERT INTO workspace (id, name, created_by_user_id, created_at, last_updated_at, created_type, current_revision_number) VALUES ('test-workspace-1', 'Test Workspace', 'ZO6igAzj2yzJ', NOW(), NOW(), 'MANUAL', 0) ON CONFLICT (id) DO NOTHING;"
 if [ $? -ne 0 ]; then
   echo "Failed to create sample workspace"
+  "$(dirname "$0")/cleanup-e2e-tests.sh"
   exit 1
 fi
 
 echo "Starting frontend server..."
 cd chartsmith-app
-export NEXT_PUBLIC_ENABLE_TEST_AUTH=true
-export ENABLE_TEST_AUTH=true
-export CHARTSMITH_PG_URI="postgres://postgres:password@localhost:5433/chartsmith?sslmode=disable"
-export DB_URI="postgres://postgres:password@localhost:5433/chartsmith?sslmode=disable"
-export HMAC_SECRET="test-secret-for-playwright-tests"
-export NEXT_PUBLIC_CENTRIFUGO_ADDRESS="http://localhost:8001"
-export CENTRIFUGO_ADDRESS="http://localhost:8001"
-export CENTRIFUGO_URL="http://localhost:8001"
-export CHARTSMITH_CENTRIFUGO_ADDRESS="http://localhost:8001/api"
-export CENTRIFUGO_API_KEY="api_key"
-export CHARTSMITH_CENTRIFUGO_API_KEY="api_key"
-export NEXT_PUBLIC_API_ENDPOINT="http://localhost:3005/api"
 PORT=3005 npm run dev > frontend.log 2>&1 &
 FRONTEND_PID=$!
 
@@ -205,6 +138,7 @@ counter=0
 while ! curl -s http://localhost:3005 > /dev/null; do
   if [ $counter -ge $timeout ]; then
     echo "Timed out waiting for frontend server to start"
+    "$(dirname "$0")/cleanup-e2e-tests.sh"
     exit 1
   fi
   echo "Waiting for frontend server to start... ($counter/$timeout)"
