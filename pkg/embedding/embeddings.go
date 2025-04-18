@@ -57,7 +57,11 @@ func Embeddings(content string) (string, error) {
 	}
 	
 	if strings.HasPrefix(param.Get().VoyageAPIKey, "sk-test-mock") {
-		return "[]", nil
+		mockValues := make([]string, 1024)
+		for i := 0; i < 1024; i++ {
+			mockValues[i] = "0.0"
+		}
+		return "[" + strings.Join(mockValues, ",") + "]", nil
 	}
 
 	reqBody := embeddingRequest{
