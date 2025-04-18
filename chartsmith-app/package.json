@@ -13,6 +13,7 @@
     "test": "npm run test:unit && npm run test:e2e",
     "test:e2e": "npx playwright test",
     "test:e2e:headed": "npx playwright test --headed",
+    "test:e2e:setup": "./scripts/setup-e2e-tests.sh && npx playwright test",
     "test:unit": "jest",
     "test:watch": "jest --watch",
     "test:parseDiff": "jest parseDiff"

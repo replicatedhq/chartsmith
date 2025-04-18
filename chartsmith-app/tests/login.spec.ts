@@ -1,5 +1,4 @@
 import { test, expect } from '@playwright/test';
-import { loginTestUser } from './helpers';
 
 test('login flow', async ({ page }) => {
   // Start tracing
@@ -9,8 +8,8 @@ test('login flow', async ({ page }) => {
   });
 
   try {
-    // Navigate to login
-    await page.goto('/login?test-auth=true');
+    // Navigate to login with test auth
+    await page.goto('/login-with-test-auth');
     await page.screenshot({ path: './test-results/1-initial-load.png' });
 
     // Wait a bit and capture another screenshot
@@ -20,8 +19,8 @@ test('login flow', async ({ page }) => {
     // Log current URL
     console.log('Current URL:', page.url());
     
-    // Wait for navigation to complete (should redirect to home page)
-    await page.waitForNavigation({ timeout: 10000 });
+    // Wait for URL to change to home page (instead of using deprecated waitForNavigation)
+    await page.waitForURL('/', { timeout: 10000 });
     
     // Log final URL
     console.log('Final URL after login:', page.url());
