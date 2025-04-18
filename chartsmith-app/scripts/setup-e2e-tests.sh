@@ -23,6 +23,9 @@ echo "Running database schema setup..."
 cd chartsmith-app
 export CHARTSMITH_PG_URI="postgres://postgres:password@localhost:5432/chartsmith?sslmode=disable"
 export DB_URI="postgres://postgres:password@localhost:5432/chartsmith?sslmode=disable"
+export HMAC_SECRET="test-secret-for-playwright-tests"
+export NEXT_PUBLIC_CENTRIFUGO_ADDRESS="http://localhost:8000"
+export CENTRIFUGO_API_KEY="test-api-key"
 cd ..
 make schema
 if [ $? -ne 0 ]; then
@@ -31,6 +34,11 @@ if [ $? -ne 0 ]; then
 fi
 
 echo "Starting backend worker..."
+export CHARTSMITH_PG_URI="postgres://postgres:password@localhost:5432/chartsmith?sslmode=disable"
+export DB_URI="postgres://postgres:password@localhost:5432/chartsmith?sslmode=disable"
+export HMAC_SECRET="test-secret-for-playwright-tests"
+export NEXT_PUBLIC_CENTRIFUGO_ADDRESS="http://localhost:8000"
+export CENTRIFUGO_API_KEY="test-api-key"
 make run-worker &
 WORKER_PID=$!
 
