@@ -30,7 +30,15 @@ for i in {1..30}; do
     cd "$SCRIPT_DIR/../../hack/chartsmith-dev"
     docker compose -f docker-compose.e2e.yml up -d postgres
     cd "$SCRIPT_DIR/.."
-    sleep 5
+    for j in {1..10}; do
+      if docker ps | grep -q chartsmith-dev-postgres-1; then
+        echo "PostgreSQL container is now running"
+        sleep 5
+        break
+      fi
+      echo "Waiting for PostgreSQL container to start... ($j/10)"
+      sleep 2
+    done
   fi
   
   echo "Waiting for PostgreSQL to be fully ready... ($i/30)"
