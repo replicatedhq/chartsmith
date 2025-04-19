@@ -145,7 +145,7 @@ FRONTEND_PID=$!
 echo "Waiting for frontend server to be ready..."
 timeout=60
 counter=0
-while ! curl -s http://localhost:3005 > /dev/null; do
+while ! curl -s http://127.0.0.1:3005 > /dev/null; do
   if [ $counter -ge $timeout ]; then
     echo "Timed out waiting for frontend server to start"
     "$SCRIPT_DIR/cleanup-e2e-tests.sh" || true
