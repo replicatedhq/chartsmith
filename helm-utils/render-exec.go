@@ -3,6 +3,7 @@ package helmutils
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -27,7 +28,15 @@ type RenderChannels struct {
 	Done chan error
 }
 
+// RenderChartExec executes helm commands to render a chart with the given files and values
+// For backward compatibility, this function wraps RenderChartExecWithVersion with an empty version
 func RenderChartExec(files []types.File, valuesYAML string, renderChannels RenderChannels) error {
+	return RenderChartExecWithVersion(files, valuesYAML, renderChannels, "")
+}
+
+// RenderChartExecWithVersion executes helm commands with specific version to render a chart
+// with the given files and values
+func RenderChartExecWithVersion(files []types.File, valuesYAML string, renderChannels RenderChannels, helmVersion string) error {
 	start := time.Now()
 	defer func() {
 		fmt.Printf("RenderChartExec completed in %v\n", time.Since(start))
@@ -45,9 +54,17 @@ func RenderChartExec(files []types.File, valuesYAML string, renderChannels Rende
 			}
 		}
 	}()
+
+	// Find the correct helm executable
+	helmCmd, err := findExecutableForHelmVersion(helmVersion)
+	if err != nil {
+		renderChannels.Done <- errors.Wrap(err, "failed to find helm executable")
+		return errors.Wrap(err, "failed to find helm executable")
+	}
+
 	// in order to avoid the special feature of helm where it detects the kubeconfig and uses that
 	// when templating the chart, we put a completely fake kubeconfig in the env for this command
-	_ = `apiVersion: v1
+	fakeKubeconfig := `apiVersion: v1
 kind: Config
 clusters:
 - cluster:
@@ -69,6 +86,7 @@ clusters:
 
 	if !foundChart {
 		renderChannels.DepUpdateStdout <- "ERROR: No Chart.yaml file found in the provided files\n"
+		renderChannels.Done <- errors.New("no Chart.yaml file found")
 		return errors.New("no Chart.yaml file found")
 	}
 
@@ -76,19 +94,29 @@ clusters:
 
 	rootDir, err := os.MkdirTemp("", "chartsmith")
 	if err != nil {
+		renderChannels.Done <- errors.Wrap(err, "failed to create temp dir")
 		return errors.Wrap(err, "failed to create temp dir")
 	}
 	defer os.RemoveAll(rootDir)
+
+	// Create fake kubeconfig file
+	fakeKubeconfigPath := filepath.Join(rootDir, "fake-kubeconfig.yaml")
+	if err := os.WriteFile(fakeKubeconfigPath, []byte(fakeKubeconfig), 0644); err != nil {
+		renderChannels.Done <- errors.Wrap(err, "failed to create fake kubeconfig")
+		return errors.Wrap(err, "failed to create fake kubeconfig")
+	}
 
 	for _, file := range files {
 		fileRenderPath := filepath.Join(rootDir, file.FilePath)
 		err := os.MkdirAll(filepath.Dir(fileRenderPath), 0755)
 		if err != nil {
+			renderChannels.Done <- errors.Wrapf(err, "failed to create dir %q", filepath.Dir(fileRenderPath))
 			return errors.Wrapf(err, "failed to create dir %q", filepath.Dir(fileRenderPath))
 		}
 
 		err = os.WriteFile(fileRenderPath, []byte(file.Content), 0644)
 		if err != nil {
+			renderChannels.Done <- errors.Wrapf(err, "failed to write file %q", fileRenderPath)
 			return errors.Wrapf(err, "failed to write file %q", fileRenderPath)
 		}
 	}
@@ -97,8 +125,9 @@ clusters:
 	workingDir := filepath.Join(rootDir, chartDir)
 
 	// helm dependency update
-	depUpdateCmd := exec.Command("helm", "dependency", "update", ".")
+	depUpdateCmd := exec.Command(helmCmd, "dependency", "update", ".")
 	depUpdateCmd.Dir = workingDir
+	depUpdateCmd.Env = []string{"KUBECONFIG=" + fakeKubeconfigPath}
 
 	depUpdateStdoutReader, depUpdateStdoutWriter := io.Pipe()
 	depUpdateStderrReader, depUpdateStderrWriter := io.Pipe()
@@ -126,18 +155,36 @@ clusters:
 
 	// Start the helm dep update process and wait for it to complete
 	go func() {
+		renderChannels.DepUpdateCmd <- depUpdateCmd.String()
+
 		if err := depUpdateCmd.Start(); err != nil {
 			helmDepUpdateExitCh <- errors.Wrap(err, "helm dependency update failed")
 			return
 		}
 
-		err := depUpdateCmd.Wait()
-		if err != nil {
-			helmDepUpdateExitCh <- errors.Wrap(err, "helm dependency update failed")
-			return
-		}
+		// Create a context with timeout for the command
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
 
-		helmDepUpdateExitCh <- nil
+		// Wait in a goroutine
+		done := make(chan error, 1)
+		go func() {
+			done <- depUpdateCmd.Wait()
+		}()
+
+		// Wait for completion or timeout
+		select {
+		case err := <-done:
+			if err != nil {
+				helmDepUpdateExitCh <- errors.Wrap(err, "helm dependency update failed")
+				return
+			}
+			helmDepUpdateExitCh <- nil
+		case <-ctx.Done():
+			// Attempt to kill the process if it times out
+			depUpdateCmd.Process.Kill()
+			helmDepUpdateExitCh <- errors.New("helm dependency update timed out after 5 minutes")
+		}
 	}()
 
 	// Wait for the process to complete
@@ -148,15 +195,19 @@ clusters:
 	depUpdateStderrWriter.Close()
 
 	if err != nil {
+		renderChannels.Done <- errors.Wrap(err, "failed to update dependencies")
 		return errors.Wrap(err, "failed to update dependencies")
 	}
 
 	// helm template with values
-	templateCmd := exec.Command("helm", "template", ".", "--include-crds", "--values", "/dev/stdin")
+	templateCmd := exec.Command(helmCmd, "template", "chartsmith", ".", "--include-crds", "--values", "/dev/stdin")
+	templateCmd.Env = []string{"KUBECONFIG=" + fakeKubeconfigPath}
+	templateCmd.Dir = workingDir
 
 	if valuesYAML != "" {
 		valuesFile := filepath.Join(workingDir, "values.yaml")
 		if err := os.WriteFile(valuesFile, []byte(valuesYAML), 0644); err != nil {
+			renderChannels.Done <- fmt.Errorf("failed to write values file: %w", err)
 			return fmt.Errorf("failed to write values file: %w", err)
 		}
 		templateCmd.Args = append(templateCmd.Args, "-f", "values.yaml")
@@ -164,21 +215,52 @@ clusters:
 
 	fmt.Printf("Running helm template with args: %v\n", templateCmd.Args)
 
-	// Use CombinedOutput instead of pipes for reliable output capture
-	templateCmd.Env = []string{"KUBECONFIG=/dev/null"}
-	templateCmd.Dir = workingDir
-
+	// Send command to the command channel
 	renderChannels.HelmTemplateCmd <- templateCmd.String()
 
-	// Capture all output at once, which avoids the pipe closure issue
-	output, err := templateCmd.CombinedOutput()
-	if err != nil {
+	// Create a context with timeout for the template command
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	// Create a channel to receive the command result
+	cmdDone := make(chan struct {
+		output []byte
+		err    error
+	}, 1)
+
+	// Run the command with timeout in a goroutine
+	go func() {
+		output, err := templateCmd.CombinedOutput()
+		cmdDone <- struct {
+			output []byte
+			err    error
+		}{output, err}
+	}()
+
+	// Wait for completion or timeout
+	var output []byte
+	var cmdErr error
+
+	select {
+	case result := <-cmdDone:
+		output = result.output
+		cmdErr = result.err
+	case <-ctx.Done():
+		// Attempt to kill the process if it times out
+		templateCmd.Process.Kill()
+		renderChannels.HelmTemplateStderr <- "Helm template command timed out after 5 minutes\n"
+		renderChannels.Done <- errors.New("helm template command timed out after 5 minutes")
+		return errors.New("helm template command timed out after 5 minutes")
+	}
+
+	if cmdErr != nil {
 		// Send the output to stderr channel before returning error
 		errLines := bufio.NewScanner(bufio.NewReader(bytes.NewReader(output)))
 		for errLines.Scan() {
 			renderChannels.HelmTemplateStderr <- errLines.Text() + "\n"
 		}
-		return fmt.Errorf("helm template command failed: %w", err)
+		renderChannels.Done <- fmt.Errorf("helm template command failed: %w", cmdErr)
+		return fmt.Errorf("helm template command failed: %w", cmdErr)
 	}
 
 	bufferLineCount := 500
@@ -199,11 +281,30 @@ clusters:
 	}
 
 	if err := lines.Err(); err != nil {
+		renderChannels.Done <- fmt.Errorf("error reading helm template output: %w", err)
 		return fmt.Errorf("error reading helm template output: %w", err)
 	}
 
 	// always send the last buffer
 	renderChannels.HelmTemplateStdout <- strings.Join(buffer, "\n")
 
+	// Send completion signal through Done channel
+	renderChannels.Done <- nil
+
 	return nil
+}
+
+// findExecutableForHelmVersion returns the path to the helm executable for the specified version
+func findExecutableForHelmVersion(helmVersion string) (string, error) {
+	if helmVersion == "" {
+		return "helm", nil
+	}
+
+	// Check for specific version
+	versionedPath := fmt.Sprintf("/usr/local/bin/helm-%s", helmVersion)
+	if _, err := exec.LookPath(versionedPath); err == nil {
+		return versionedPath, nil
+	}
+
+	return "", fmt.Errorf("unsupported helm version: %s", helmVersion)
 }
