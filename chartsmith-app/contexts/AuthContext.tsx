@@ -74,8 +74,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // If they're waitlisted and not already on the waitlist page, redirect them
         if (waitlisted && typeof window !== 'undefined' && 
             window.location.pathname !== '/waitlist' && 
-            window.location.pathname !== '/login' && 
-            window.location.pathname !== '/login-with-test-auth') {
+            window.location.pathname !== '/login') {
           window.location.href = '/waitlist';
         }
       } else {

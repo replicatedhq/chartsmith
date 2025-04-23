@@ -9,6 +9,7 @@ import {
   USER_ID_KEY, 
   WWW_ENDPOINT_KEY 
 } from '../../constants';
+import { log } from '../logging';
 
 let secretStorage: vscode.SecretStorage;
 let globalState: GlobalState;
@@ -21,6 +22,13 @@ export function initAuth(
   context = extensionContext;
   secretStorage = context.secrets;
   globalState = state;
+  
+  // Initialize configuration defaults
+  import('../config').then(config => {
+    config.initDefaultConfigIfNeeded(secretStorage).catch(error => {
+      console.error('Error initializing configuration defaults:', error);
+    });
+  });
 }
 
 export async function getAuthToken(): Promise<string | undefined> {
@@ -54,13 +62,31 @@ export async function isAuthenticated(): Promise<boolean> {
 }
 
 export async function loadAuthData(): Promise<AuthData | null> {
+  console.log(`[DEBUG][AUTH] Loading authentication data from storage...`);
+  
   const token = await getAuthToken();
   const apiEndpoint = await getApiEndpoint();
   const pushEndpoint = await getPushEndpoint();
   const userId = await getUserId();
   const wwwEndpoint = await getWwwEndpoint();
 
+  // Log what we found for debugging
+  console.log(`[DEBUG][AUTH] Auth data loaded:`, {
+    hasToken: !!token,
+    tokenLength: token ? token.length : 0,
+    hasApiEndpoint: !!apiEndpoint,
+    apiEndpoint: apiEndpoint,
+    hasUserId: !!userId,
+    hasPushEndpoint: !!pushEndpoint,
+    hasWwwEndpoint: !!wwwEndpoint
+  });
+
   if (!token || !apiEndpoint || !userId) {
+    console.log(`[DEBUG][AUTH] Auth data incomplete:`, {
+      tokenMissing: !token,
+      apiEndpointMissing: !apiEndpoint,
+      userIdMissing: !userId
+    });
     return null;
   }
 
@@ -73,6 +99,7 @@ export async function loadAuthData(): Promise<AuthData | null> {
   };
 
   globalState.isLoggedIn = true;
+  console.log(`[DEBUG][AUTH] Auth data loaded successfully, user is logged in`);
   return globalState.authData;
 }
 
@@ -125,19 +152,67 @@ export async function saveAuthData(data: AuthData): Promise<void> {
   };
   
   globalState.isLoggedIn = true;
+  
+  // Refresh the webview after login
+  if (globalState.webviewGlobal) {
+    console.log("[AUTH] Sending auth-changed event to webview after login");
+    globalState.webviewGlobal.postMessage({
+      command: 'authChanged',
+      status: 'loggedIn',
+      authData: {
+        apiEndpoint: globalState.authData.apiEndpoint,
+        pushEndpoint: globalState.authData.pushEndpoint,
+        wwwEndpoint: globalState.authData.wwwEndpoint,
+        userId: globalState.authData.userId,
+        hasToken: !!globalState.authData.token
+      }
+    });
+  } else {
+    console.log("[AUTH] No webview available to notify about login");
+    
+    // Try to reload the Chartsmith webview if it exists
+    try {
+      await vscode.commands.executeCommand('chartsmith.view.focus');
+    } catch (error) {
+      console.log("[AUTH] Error focusing chartsmith view:", error);
+    }
+  }
 }
 
-export function clearAuthData(): Promise<void> {
+export async function clearAuthData(): Promise<void> {
+  // Store a reference to current webview before clearing state
+  const webviewGlobal = globalState.webviewGlobal;
+  
+  // Clear global state
   globalState.authData = null;
   globalState.isLoggedIn = false;
   
-  return Promise.all([
+  // Clear storage
+  await Promise.all([
     secretStorage.delete(AUTH_TOKEN_KEY),
     secretStorage.delete(API_ENDPOINT_KEY),
     secretStorage.delete(PUSH_ENDPOINT_KEY),
     secretStorage.delete(USER_ID_KEY),
     secretStorage.delete(WWW_ENDPOINT_KEY)
-  ]).then(() => {});
+  ]);
+  
+  // Notify webview of logout if available
+  if (webviewGlobal) {
+    console.log("[AUTH] Sending auth-changed event to webview after logout");
+    webviewGlobal.postMessage({
+      command: 'authChanged',
+      status: 'loggedOut'
+    });
+  } else {
+    console.log("[AUTH] No webview available to notify about logout");
+    
+    // Try to reload the Chartsmith webview if it exists
+    try {
+      await vscode.commands.executeCommand('chartsmith.view.focus');
+    } catch (error) {
+      console.log("[AUTH] Error focusing chartsmith view:", error);
+    }
+  }
 }
 
 export function startAuthServer(port: number): Promise<string> {
@@ -223,6 +298,10 @@ export function startAuthServer(port: number): Promise<string> {
               
               await saveAuthData(authData);
               
+              // Verify session immediately after login
+              const sessionValid = await verifySession();
+              console.log(`[DEBUG][AUTH] Session verification after login: ${sessionValid ? 'SUCCESS' : 'FAILED'}`);
+              
               res.writeHead(200);
               res.end(JSON.stringify({ success: true }));
               
@@ -260,6 +339,10 @@ export function startAuthServer(port: number): Promise<string> {
         
         await saveAuthData(authData);
 
+        // Verify session immediately after login
+        const sessionValid = await verifySession();
+        console.log(`[DEBUG][AUTH] Session verification after login: ${sessionValid ? 'SUCCESS' : 'FAILED'}`);
+
         res.writeHead(200, { 'Content-Type': 'text/html' });
         res.end('<html><body><h1>Authentication successful!</h1><p>You can close this window now.</p><script>window.close();</script></body></html>');
         
@@ -294,12 +377,262 @@ export function stopAuthServer(): void {
 
 export function decodeJwt(token: string): any {
   try {
-    const base64Url = token.split('.')[1];
+    // Check if token is valid before attempting to decode
+    if (!token || typeof token !== 'string' || token.trim() === '') {
+      console.log('[DEBUG][AUTH] Invalid token format: token is empty or not a string');
+      return null;
+    }
+
+    // Split by dots and verify we have at least 3 parts (header.payload.signature)
+    const parts = token.split('.');
+    if (parts.length < 2) {
+      console.log('[DEBUG][AUTH] Invalid token format: not enough segments');
+      return null;
+    }
+
+    // Get the base64 payload (second part)
+    const base64Url = parts[1];
+    if (!base64Url) {
+      console.log('[DEBUG][AUTH] Invalid token format: payload is missing');
+      return null;
+    }
+
+    // Replace characters for base64 decoding
     const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    
+    // Decode the base64
     const jsonPayload = Buffer.from(base64, 'base64').toString('utf8');
+    
+    // Parse the JSON
     return JSON.parse(jsonPayload);
   } catch (error) {
-    console.error('Error decoding JWT:', error);
+    console.error('[DEBUG][AUTH] Error decoding JWT:', error);
     return null;
   }
+}
+
+/**
+ * DEBUG: Check token validity and expiration
+ * This function can be called before important operations to verify if the token is valid
+ */
+export async function debugCheckTokenValidity(): Promise<void> {
+  console.log(`[DEBUG][AUTH] Checking token validity`);
+  
+  try {
+    // Get auth data from storage
+    const token = await getAuthToken();
+    const apiEndpoint = await getApiEndpoint();
+    const userId = await getUserId();
+    
+    console.log(`[DEBUG][AUTH] Auth data check:`, {
+      hasToken: !!token,
+      tokenLength: token ? token.length : 0,
+      hasApiEndpoint: !!apiEndpoint,
+      apiEndpoint: apiEndpoint,
+      hasUserId: !!userId,
+      isAuthenticated: !!token && !!apiEndpoint && !!userId
+    });
+    
+    if (!token) {
+      console.log(`[DEBUG][AUTH] No token available - authentication required`);
+      return;
+    }
+    
+    try {
+      // Try to decode JWT to check expiration
+      const decodedToken = decodeJwt(token);
+      
+      if (decodedToken) {
+        console.log(`[DEBUG][AUTH] Token decoded successfully`);
+        
+        // Check expiration if available
+        if (decodedToken.exp) {
+          const expirationDate = new Date(decodedToken.exp * 1000);
+          const now = new Date();
+          const isExpired = expirationDate < now;
+          
+          console.log(`[DEBUG][AUTH] Token expiration:`, {
+            expirationTimestamp: decodedToken.exp,
+            expirationDate: expirationDate.toISOString(),
+            currentDate: now.toISOString(),
+            isExpired: isExpired,
+            timeRemaining: isExpired ? 'EXPIRED' : `${Math.floor((expirationDate.getTime() - now.getTime()) / 1000 / 60)} minutes`
+          });
+        } else {
+          console.log(`[DEBUG][AUTH] Token has no expiration information`);
+        }
+      } else {
+        console.log(`[DEBUG][AUTH] Failed to decode token - may not be a valid JWT format`);
+      }
+    } catch (tokenError) {
+      console.error(`[DEBUG][AUTH] Error processing token:`, tokenError);
+    }
+  } catch (error) {
+    console.error(`[DEBUG][AUTH] Unexpected error checking token:`, error);
+  }
+}
+
+/**
+ * Verify if the current session is valid by making a test request to the API
+ * This helps ensure that we have valid credentials before attempting operations
+ */
+export async function verifySession(): Promise<boolean> {
+  console.log(`[DEBUG][AUTH] Verifying session validity...`);
+  
+  try {
+    // Get auth data from storage
+    const token = await getAuthToken();
+    const apiEndpoint = await getApiEndpoint();
+    const userId = await getUserId();
+    
+    // Basic validation of auth data
+    if (!token || !apiEndpoint || !userId) {
+      console.log(`[DEBUG][AUTH] Session invalid: Missing required auth data`);
+      return false;
+    }
+    
+    // Log auth details for debugging
+    console.log(`[DEBUG][AUTH] Auth data for verification:`, {
+      apiEndpoint,
+      userIdLength: userId.length,
+      tokenPrefix: token.substring(0, Math.min(10, token.length)) + '...',
+      tokenLength: token.length
+    });
+    
+    // Create an AuthData object
+    const authData: AuthData = {
+      token,
+      apiEndpoint,
+      pushEndpoint: await getPushEndpoint() || '',
+      userId,
+      wwwEndpoint: await getWwwEndpoint() || ''
+    };
+    
+    // Make a test request to the API to verify the token is valid
+    try {
+      // Use Node.js http/https module directly
+      const url = new URL(`${apiEndpoint}/auth/status`);
+      const isHttps = url.protocol === 'https:';
+      const requestModule = isHttps ? require('https') : require('http');
+      
+      const response = await new Promise<{statusCode: number, body: string}>((resolve, reject) => {
+        const options = {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        };
+        
+        console.log(`[DEBUG][AUTH] Sending verification request to: ${url.toString()}`);
+        
+        const req = requestModule.request(url, options, (res: any) => {
+          let data = '';
+          
+          console.log(`[DEBUG][AUTH] Verification response status: ${res.statusCode}`);
+          console.log(`[DEBUG][AUTH] Verification response headers:`, res.headers);
+          
+          res.on('data', (chunk: Buffer) => {
+            data += chunk.toString();
+          });
+          
+          res.on('end', () => {
+            resolve({
+              statusCode: res.statusCode,
+              body: data
+            });
+          });
+        });
+        
+        req.on('error', (error: Error) => {
+          console.error(`[DEBUG][AUTH] Verification request error:`, error);
+          reject(error);
+        });
+        
+        req.end();
+      });
+      
+      // Check if the response indicates a valid session
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        console.log(`[DEBUG][AUTH] Session verified successfully`);
+        return true;
+      } else if (response.statusCode === 401 || response.statusCode === 403) {
+        console.log(`[DEBUG][AUTH] Session verification failed: Unauthorized`);
+        return false;
+      } else if (response.statusCode >= 300 && response.statusCode < 400) {
+        console.log(`[DEBUG][AUTH] Session verification failed: Redirected (${response.statusCode})`);
+        return false;
+      } else {
+        console.log(`[DEBUG][AUTH] Session verification failed: Unexpected status code ${response.statusCode}`);
+        console.log(`[DEBUG][AUTH] Response body: ${response.body}`);
+        return false;
+      }
+    } catch (error) {
+      console.error(`[DEBUG][AUTH] Error during session verification:`, error);
+      return false;
+    }
+  } catch (error) {
+    console.error(`[DEBUG][AUTH] Unexpected error verifying session:`, error);
+    return false;
+  }
+}
+
+/**
+ * Attempt to refresh the session by making a request to the auth status endpoint
+ * This can sometimes resolve session issues when the token is still valid but not being accepted
+ */
+export async function refreshSession(): Promise<boolean> {
+  console.log(`[DEBUG][AUTH] Attempting to refresh session...`);
+  
+  try {
+    // Get auth data
+    const authData = await loadAuthData();
+    if (!authData) {
+      console.log(`[DEBUG][AUTH] Cannot refresh session: No auth data available`);
+      return false;
+    }
+    
+    // Try to fetch actual auth data from the server
+    try {
+      // Import API module
+      const api = await import('../api');
+      
+      // Make a request to auth status endpoint
+      console.log(`[DEBUG][AUTH] Making refresh request to auth status endpoint`);
+      const response = await api.fetchApi(
+        authData,
+        '/auth/status',
+        'GET'
+      );
+      
+      console.log(`[DEBUG][AUTH] Refresh response:`, response);
+      
+      // Check if response contains valid user info
+      if (response && response.userId) {
+        console.log(`[DEBUG][AUTH] Session refreshed successfully`);
+        return true;
+      } else {
+        console.log(`[DEBUG][AUTH] Session refresh did not return valid user data`);
+        return false;
+      }
+    } catch (error) {
+      console.error(`[DEBUG][AUTH] Error during session refresh:`, error);
+      return false;
+    }
+  } catch (error) {
+    console.error(`[DEBUG][AUTH] Unexpected error refreshing session:`, error);
+    return false;
+  }
+}
+
+/**
+ * Get the currently stored authentication data
+ * @returns The authentication data or null if not authenticated
+ */
+export function getAuthData(): AuthData | null {
+  const state = (global as any).chartsmithGlobalState;
+  if (!state || !state.authData) {
+    console.log('[getAuthData] No auth data available');
+    return null;
+  }
+  return state.authData;
 }

@@ -2,6 +2,8 @@ import * as vscode from 'vscode';
 import { WorkspaceMapping } from '../../types';
 import { WORKSPACE_MAPPINGS_KEY } from '../../constants';
 import { store, actions } from '../../state/store';
+import * as fileContent from '../fileContent';
+import { getAuthData } from '../auth';
 
 /**
  * Interface for workspace file data returned from the API
@@ -192,9 +194,11 @@ export async function setActiveWorkspaceId(workspaceId: string | null): Promise<
   if (workspaceId === null) {
     // Clear the active workspace ID
     await globalStorage.update('chartsmith.activeWorkspaceId', undefined);
+    console.log('Cleared active workspace ID in global storage');
     
     // Also clear the store
     actions.setWorkspaceId(null);
+    console.log('Cleared workspace ID in store');
     
     // Disconnect from WebSocket
     const globalState = (global as any).chartsmithGlobalState;
@@ -202,6 +206,7 @@ export async function setActiveWorkspaceId(workspaceId: string | null): Promise<
       try {
         const webSocket = await import('../webSocket');
         webSocket.disconnectFromCentrifugo();
+        console.log('Disconnected from WebSocket');
       } catch (error) {
         console.error('Error disconnecting from WebSocket:', error);
       }
@@ -214,8 +219,25 @@ export async function setActiveWorkspaceId(workspaceId: string | null): Promise<
     return;
   }
   
-  // Store the active workspace ID
-  await globalStorage.update('chartsmith.activeWorkspaceId', workspaceId);
+  // Store the active workspace ID with forced persistence
+  try {
+    // First try to clear to ensure no stale state
+    await globalStorage.update('chartsmith.activeWorkspaceId', undefined);
+    // Then set the new value
+    await globalStorage.update('chartsmith.activeWorkspaceId', workspaceId);
+    console.log(`Persisted workspace ID to global storage: ${workspaceId}`);
+    
+    // Verify the value was saved
+    const savedId = globalStorage.get<string>('chartsmith.activeWorkspaceId');
+    if (savedId !== workspaceId) {
+      console.warn(`Storage verification failed! Expected: ${workspaceId}, Got: ${savedId}`);
+      // Try again with a different approach
+      await globalStorage.update('chartsmith.activeWorkspaceId', workspaceId.toString());
+      console.log('Attempted alternative persistence method');
+    }
+  } catch (error) {
+    console.error('Error persisting workspace ID:', error);
+  }
   
   // Also update the store
   actions.setWorkspaceId(workspaceId);
@@ -232,6 +254,9 @@ export async function setActiveWorkspaceId(workspaceId: string | null): Promise<
       command: 'workspaceChanged',
       workspaceId: workspaceId
     });
+    console.log(`Notified webview of workspace change to: ${workspaceId}`);
+  } else {
+    console.log('No webview available to notify of workspace change');
   }
 }
 
@@ -256,27 +281,76 @@ export function constructChannelName(workspaceId: string, userId: string): strin
 }
 
 /**
- * Get the pending content for a file
+ * Get pending content for a file
  * @param workspaceId The workspace ID
  * @param filePath The file path
- * @returns The pending content for the file or null if not found
+ * @returns The pending content or null if not found
  */
-export function getPendingFileContent(workspaceId: string, filePath: string): string | null {
-  // Get the current revision number for this workspace
-  const revisionKey = `workspace:${workspaceId}:currentRevision`;
-  const currentRevision = memoryDb.get(revisionKey);
+export async function getPendingFileContent(workspaceId: string, filePath: string): Promise<string | null> {
+  console.log(`[getPendingFileContent] Getting pending content for ${filePath} in workspace ${workspaceId}`);
   
-  if (!currentRevision) {
-    console.log(`No current revision found for workspace ${workspaceId}`);
-    return null;
+  // First check the memory store
+  const key = `pendingContent:${workspaceId}:${filePath}`;
+  const content = memoryDb.get(key);
+  
+  if (content) {
+    console.log(`[getPendingFileContent] Found content in memory for ${filePath}`);
+    return content;
   }
   
-  // Try to get the file content for the current revision
-  const content = getFileContent(workspaceId, filePath, `${currentRevision}`);
+  // Check the current store.plans for pending content
+  const state = (store as any).getState();
+  const plans = state.plans || [];
   
-  console.log(`Retrieved pending content for ${filePath} (revision ${currentRevision}): ${content ? 'Found' : 'Not found'}`);
+  // Get the active plan id from store
+  const activePlanId = state.activePlan ? state.activePlan.id : null;
   
-  return content;
+  if (activePlanId) {
+    console.log(`[getPendingFileContent] Checking active plan ${activePlanId} for pending content`);
+    
+    // Find file in active plan
+    const activePlan = plans.find((plan: any) => plan.id === activePlanId);
+    
+    if (activePlan && activePlan.files) {
+      const file = activePlan.files.find((f: any) => f.path === filePath);
+      
+      if (file && file.pendingContent) {
+        console.log(`[getPendingFileContent] Found pending content in active plan for ${filePath}`);
+        memoryDb.set(key, file.pendingContent);
+        return file.pendingContent;
+      }
+    }
+  }
+  
+  // If not found in memory, try to get from fileContent module (API or cache)
+  try {
+    console.log(`[getPendingFileContent] Getting content from API for ${filePath}`);
+    const authData = getAuthData();
+    
+    if (!authData) {
+      console.log(`[getPendingFileContent] No auth data available, cannot fetch content`);
+      return null;
+    }
+    
+    // Use the fileContent module to get the content
+    const content = await fileContent.getFileContent(
+      authData,
+      workspaceId,
+      activePlanId || 'latest', // Use active plan or 'latest' as fallback
+      filePath
+    );
+    
+    if (content) {
+      // Store in memory for future use
+      memoryDb.set(key, content);
+      return content;
+    }
+  } catch (error) {
+    console.error(`[getPendingFileContent] Error fetching content: ${error}`);
+  }
+  
+  console.log(`[getPendingFileContent] No pending content found for ${filePath}`);
+  return null;
 }
 
 /**

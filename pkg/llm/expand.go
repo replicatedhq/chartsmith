@@ -34,6 +34,18 @@ Here is the prompt:
 		MaxTokens: anthropic.F(int64(8192)),
 		Messages:  anthropic.F([]anthropic.MessageParam{anthropic.NewUserMessage(anthropic.NewTextBlock(userMessage))}),
 	})
+	if err != nil {
+		return "", fmt.Errorf("failed to call Anthropic API: %w", err)
+	}
+
+	// Check if response or response.Content is nil or empty
+	if resp == nil {
+		return "", fmt.Errorf("received nil response from Anthropic API")
+	}
+
+	if len(resp.Content) == 0 {
+		return "", fmt.Errorf("received empty content from Anthropic API")
+	}
 
 	expandedPrompt := resp.Content[0].Text
 

@@ -1,6 +1,16 @@
 // This file contains the client-side code for the webview
 // It will be bundled into dist/webview.js
 
+// Helper function to escape HTML for security
+function escapeHtml(unsafe: string): string {
+  return unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 // Import state management
 import { store, actions } from './state/store';
 import { messagesAtom, workspaceIdAtom, connectionStatusAtom, rendersAtom, plansAtom } from './state/atoms';
@@ -28,8 +38,12 @@ try {
 // Create an object to store state in the VS Code webview's state
 const state = {
   draftMessage: '',
-  workspaceId: ''
+  workspaceId: '',
+  activateWorkspace: true // Add flag to control workspace activation
 };
+
+// For state persistence
+let persistenceInterval: NodeJS.Timeout | null = null;
 
 // Try to load any saved state
 try {
@@ -46,6 +60,25 @@ const context = (window as any).vscodeWebviewContext || {};
 
 document.addEventListener('DOMContentLoaded', () => {
   initUI();
+  
+  // Set up a heartbeat to regularly save state
+  if (persistenceInterval) {
+    clearInterval(persistenceInterval);
+  }
+  
+  persistenceInterval = setInterval(() => {
+    // Only persist if we have a workspaceId
+    if (context.workspaceId) {
+      state.workspaceId = context.workspaceId;
+      state.activateWorkspace = true;
+      try {
+        vscode.setState(state);
+        console.log(`State persistence heartbeat - saved workspace ID: ${context.workspaceId}`);
+      } catch (e) {
+        console.error('Error in persistence heartbeat:', e);
+      }
+    }
+  }, 5000); // Check every 5 seconds
 });
 
 function initUI() {
@@ -54,6 +87,32 @@ function initUI() {
 
   if (context.token) {
     renderLoggedInView(app);
+    
+    // If we have a saved workspaceId in state but not in context,
+    // and we should activate it (not just after manually disconnecting)
+    if (state.workspaceId && !context.workspaceId && state.activateWorkspace) {
+      console.log(`Restoring previous workspace session: ${state.workspaceId}`);
+      // Restore the previous workspace
+      vscode.postMessage({
+        command: 'fetchWorkspaceData',
+        workspaceId: state.workspaceId
+      });
+      
+      // Set a delay to fetch messages after workspace data is loaded
+      setTimeout(() => {
+        vscode.postMessage({
+          command: 'fetchMessages',
+          workspaceId: state.workspaceId
+        });
+        
+        // Update the context manually
+        context.workspaceId = state.workspaceId;
+        actions.setWorkspaceId(state.workspaceId);
+        
+        // Re-render the view with the restored context
+        renderLoggedInView(app);
+      }, 500);
+    }
   } else {
     renderLoginView(app);
   }
@@ -61,6 +120,16 @@ function initUI() {
   // Initialize the store with context values
   if (context.workspaceId) {
     actions.setWorkspaceId(context.workspaceId);
+    
+    // Save the workspaceId to our persistent state
+    state.workspaceId = context.workspaceId;
+    state.activateWorkspace = true;
+    try {
+      vscode.setState(state);
+      console.log('Saved workspace ID to state:', context.workspaceId);
+    } catch (e) {
+      console.error('Error saving workspace ID to state:', e);
+    }
   }
   if (context.connectionStatus) {
     actions.setConnectionStatus(context.connectionStatus);
@@ -139,6 +208,20 @@ function initUI() {
         // Re-render messages to show plans if there are any with responsePlanId
         renderAllMessages();
         break;
+      case 'updatePlanStatus':
+        console.log(`Received updatePlanStatus message for plan: ${message.planId}, status: ${message.status}`);
+        // Use the updatePlanStatus action to update the plan status
+        actions.updatePlanStatus(message.planId, message.status);
+        
+        // Force re-render of all messages to update UI
+        console.log(`Forcing re-render of all messages to update plan status in UI`);
+        renderAllMessages();
+        break;
+      case 'fileChangesApplied':
+        console.log('File changes applied:', message.filePath, message.workspaceId);
+        // Force re-render messages to update UI
+        renderAllMessages();
+        break;
       case 'renderMessages':
         console.log('Re-rendering all messages to update plans');
         renderAllMessages();
@@ -146,6 +229,102 @@ function initUI() {
       case 'workspaceUpdated':
         console.log('Workspace updated:', message.workspace);
         // You could update workspace data in state here if needed
+        break;
+      case 'refresh':
+        // Handle refresh message when webview becomes visible again
+        console.log('Received refresh message - webview visibility restored');
+        if (state.workspaceId && state.activateWorkspace) {
+          console.log(`Re-initializing workspace on refresh: ${state.workspaceId}`);
+          // Update local context
+          context.workspaceId = state.workspaceId;
+          actions.setWorkspaceId(state.workspaceId);
+          
+          // Reload the webview content
+          const app = document.getElementById('app');
+          if (app) {
+            renderLoggedInView(app);
+          }
+          
+          // Force data refresh
+          vscode.postMessage({
+            command: 'fetchWorkspaceData',
+            workspaceId: state.workspaceId
+          });
+          
+          // Fetch other data with delays
+          setTimeout(() => {
+            vscode.postMessage({
+              command: 'fetchMessages',
+              workspaceId: state.workspaceId
+            });
+            
+            setTimeout(() => {
+              vscode.postMessage({
+                command: 'fetchRenders',
+                workspaceId: state.workspaceId
+              });
+              vscode.postMessage({
+                command: 'fetchPlans',
+                workspaceId: state.workspaceId
+              });
+            }, 500);
+          }, 300);
+        }
+        break;
+      case 'authChanged':
+        // Handle authentication state changes
+        console.log('Auth state changed:', message.status);
+        if (message.status === 'loggedIn') {
+          // Update context with new auth data
+          if (message.authData) {
+            context.token = message.authData.hasToken ? 'token-exists' : undefined;
+            context.apiEndpoint = message.authData.apiEndpoint;
+            context.pushEndpoint = message.authData.pushEndpoint;
+            context.wwwEndpoint = message.authData.wwwEndpoint;
+            context.userId = message.authData.userId;
+          } else {
+            context.token = 'token-exists';
+          }
+          
+          // Re-render the main view
+          const appDiv = document.getElementById('app');
+          if (appDiv) {
+            console.log('Rendering logged-in view after auth change');
+            renderLoggedInView(appDiv);
+          }
+        } else if (message.status === 'loggedOut') {
+          // Clear context data
+          context.token = undefined;
+          context.workspaceId = '';
+          context.apiEndpoint = undefined;
+          context.pushEndpoint = undefined;
+          context.wwwEndpoint = undefined;
+          context.userId = undefined;
+          
+          // Clear state
+          state.workspaceId = '';
+          state.activateWorkspace = false;
+          state.draftMessage = '';
+          
+          try {
+            vscode.setState(state);
+          } catch (e) {
+            console.error('Error saving state after logout:', e);
+          }
+          
+          // Reset store state
+          actions.setWorkspaceId(null);
+          actions.setMessages([]);
+          actions.setRenders([]);
+          actions.setPlans([]);
+          
+          // Re-render login view
+          const appDiv = document.getElementById('app');
+          if (appDiv) {
+            console.log('Rendering login view after auth change');
+            renderLoginView(appDiv);
+          }
+        }
         break;
       case 'planProceedError':
         console.log('Error proceeding with plan:', message.planId, message.error);
@@ -162,6 +341,16 @@ function initUI() {
         context.workspaceId = message.workspaceId;
         context.chartPath = message.chartPath || '';
         actions.setWorkspaceId(message.workspaceId);
+
+        // Save the new workspace ID to our persistent state
+        state.workspaceId = message.workspaceId;
+        state.activateWorkspace = true;
+        try {
+          vscode.setState(state);
+          console.log('Updated workspace ID in state:', message.workspaceId);
+        } catch (e) {
+          console.error('Error saving workspace ID to state:', e);
+        }
 
         // Update the chart path if present
         if (message.chartPath) {
@@ -213,9 +402,42 @@ function initUI() {
           });
         }, 1000);  // 1000ms delay
         break;
+      case 'goHome':
+        // Clear the active workspace and disconnect from WebSocket
+        // Set the activateWorkspace flag to false so we don't
+        // automatically reconnect to this workspace on next load
+        state.activateWorkspace = false;
+        try {
+          vscode.setState(state);
+        } catch (e) {
+          console.log('Error updating state after disconnect:', e);
+        }
+        vscode.postMessage({ command: 'goHome' });
+        break;
       // Add more message handlers here
     }
   });
+
+  // Set up workspace selection
+  const workspaceSelect = document.getElementById('workspace-select');
+  if (workspaceSelect) {
+    workspaceSelect.addEventListener('change', (e) => {
+      const selectedWorkspaceId = (e.target as HTMLSelectElement).value;
+      vscode.postMessage({
+        command: 'setWorkspace',
+        workspaceId: selectedWorkspaceId
+      });
+      
+      // Save workspace ID to state and enable auto-activation
+      state.workspaceId = selectedWorkspaceId;
+      state.activateWorkspace = true;
+      try {
+        vscode.setState(state);
+      } catch (e) {
+        console.log('Error saving workspace selection to state:', e);
+      }
+    });
+  }
 }
 
 function renderLoggedInView(container: HTMLElement) {
@@ -366,6 +588,14 @@ function renderLoggedInView(container: HTMLElement) {
       context.workspaceId = '';
       context.chartPath = '';
       actions.setWorkspaceId(null);
+      
+      // Set flag to prevent auto-reconnecting to this workspace
+      state.activateWorkspace = false;
+      try {
+        vscode.setState(state);
+      } catch (e) {
+        console.log('Error updating state after disconnect:', e);
+      }
 
       // Re-render the view
       renderLoggedInView(container);
@@ -636,7 +866,7 @@ function renderAllMessages() {
       // Create a div that looks like an agent message
       const planEl = document.createElement('div');
       planEl.className = 'message agent-message plan-message';
-      planEl.style.cssText = 'position: relative; z-index: 1; margin: 10px 0; display: block; align-self: flex-start; background-color: var(--vscode-editor-inactiveSelectionBackground); border-bottom-left-radius: 4px; max-width: 90%;';
+      planEl.style.cssText = 'margin: 10px 0; display: block; align-self: flex-start; background-color: var(--vscode-editor-inactiveSelectionBackground); border-bottom-left-radius: 4px; max-width: 90%;';
 
       // Create content container - no special header needed
       const planContainer = document.createElement('div');
@@ -644,19 +874,23 @@ function renderAllMessages() {
       planEl.appendChild(planContainer);
 
       // Try to find matching plan
-      const matchingPlan = plans.find(plan => plan.id === planId);
+      const matchingPlan = plans.find(plan => plan.id === planId) as any;
 
       // Add plan content based on whether we found the plan
       if (matchingPlan) {
         console.log('Found matching plan:', matchingPlan);
+        console.log(`Rendering plan: ${matchingPlan.id}, Status: ${matchingPlan.status}, Approved: ${matchingPlan.approved}, Applied: ${matchingPlan.applied}`);
+        console.log(`FULL PLAN OBJECT DUMP:`, JSON.stringify(matchingPlan, null, 2));
+        
         const planContentDiv = document.createElement('div');
         planContentDiv.className = 'message-content markdown-content';
         planContentDiv.style.cssText = 'position: relative; min-height: 50px;';
 
         // Add the plan description
         try {
-          // Use marked synchronously - handle return type explicitly
+          // Convert markdown to HTML
           const parsedContent = marked.parse(matchingPlan.description || 'No description available');
+          
           // If it's a string (not a Promise), set the innerHTML
           if (typeof parsedContent === 'string') {
             planContentDiv.innerHTML = parsedContent;
@@ -668,471 +902,277 @@ function renderAllMessages() {
           console.error('Error parsing plan markdown:', error);
           planContentDiv.textContent = matchingPlan.description || 'No description available';
         }
-
+        
         // Append the content div to the plan container
         planContainer.appendChild(planContentDiv);
+
+        // Create proceed button - we'll decide later if we add it
+        const proceedButton = document.createElement('button');
+        proceedButton.className = 'plan-proceed-button';
+        proceedButton.textContent = 'Proceed';
+        proceedButton.setAttribute('data-plan-id', matchingPlan.id);
+        proceedButton.style.cssText = `
+          margin-top: 12px;
+          background-color: var(--vscode-button-background);
+          color: var(--vscode-button-foreground);
+          padding: 4px 10px;
+          font-size: 11px;
+          border-radius: 4px;
+          cursor: pointer;
+          border: none;
+          align-self: flex-end;
+          display: block;
+          margin-left: auto;
+        `;
+
+        // First check if we should show the proceed button based on plan status
+        const shouldShowButton = 
+          (!matchingPlan.approved && !matchingPlan.applied) && 
+          (matchingPlan.status !== 'approved' && matchingPlan.status !== 'applied');
+        
+        // Always check if a plan is in review state and needs the button, regardless of action files
+        if (matchingPlan.status === 'review' && shouldShowButton) {
+          console.log(`SHOWING PROCEED BUTTON for plan ${matchingPlan.id} (review status)`);
+          console.log(`Button visibility check passed:
+            - !approved = ${!matchingPlan.approved} (approved=${matchingPlan.approved})
+            - !applied = ${!matchingPlan.applied} (applied=${matchingPlan.applied})
+            - status = ${matchingPlan.status}`);
+          
+          planContainer.appendChild(proceedButton);
+          
+          // Add event listener to the proceed button
+          proceedButton.addEventListener('click', () => {
+            // Disable the button and update text
+            proceedButton.disabled = true;
+            proceedButton.textContent = 'Processing...';
+            
+            // Send message to extension to proceed with plan
+            vscode.postMessage({
+              command: 'proceedWithPlan',
+              planId: matchingPlan.id,
+              workspaceId: store.get(workspaceIdAtom)
+            });
+          });
+        } else if (matchingPlan.status !== 'review') {
+          console.log(`Not showing proceed button for plan ${matchingPlan.id}: status is not 'review' (status=${matchingPlan.status})`);
+        }
 
         // Add action files list if present
         if (matchingPlan.actionFiles && matchingPlan.actionFiles.length > 0) {
           console.log('Plan has action files:', matchingPlan.actionFiles);
 
           // Filter out pending files - only show updating, creating, updated, created
-          const relevantFiles = matchingPlan.actionFiles.filter(file =>
+          const relevantFiles = matchingPlan.actionFiles.filter((file: any) =>
             file.status === 'updating' ||
             file.status === 'creating' ||
             file.status === 'updated' ||
             file.status === 'created'
           );
 
-          if (relevantFiles.length === 0) {
-            console.log('No non-pending files to display');
-            return;
-          }
+          if (relevantFiles.length > 0) {
+            const fileCount = relevantFiles.length;
 
-          const fileCount = relevantFiles.length;
+            // Create action files container
+            const actionFilesContainer = document.createElement('div');
+            actionFilesContainer.style.cssText = 'margin-top: 15px; padding-top: 10px; border-top: 1px solid var(--vscode-panel-border); font-family: var(--vscode-editor-font-family); font-size: 11px;';
 
-          // Create action files container
-          const actionFilesContainer = document.createElement('div');
-          actionFilesContainer.style.cssText = 'margin-top: 15px; padding-top: 10px; border-top: 1px solid var(--vscode-panel-border); font-family: var(--vscode-editor-font-family); font-size: 11px;';
+            // Create heading
+            const actionFilesHeading = document.createElement('div');
+            actionFilesHeading.textContent = `${fileCount} ${fileCount === 1 ? 'file' : 'files'} to apply`;
+            actionFilesHeading.style.cssText = 'font-weight: bold; margin-bottom: 12px;';
+            actionFilesContainer.appendChild(actionFilesHeading);
 
-          // Create heading
-          const actionFilesHeading = document.createElement('div');
-          actionFilesHeading.textContent = `${fileCount} ${fileCount === 1 ? 'file' : 'files'} to apply`;
-          actionFilesHeading.style.cssText = 'font-weight: bold; margin-bottom: 12px;';
-          actionFilesContainer.appendChild(actionFilesHeading);
-
-          // File list container - using grid for better layout
-          const fileList = document.createElement('div');
-          fileList.style.cssText = `
-            display: grid;
-            grid-gap: 10px;
-            width: 100%;
-          `;
-
-          // Add each file as a separate card/box
-          relevantFiles.forEach(file => {
-            // Create file card
-            const fileCard = document.createElement('div');
-            fileCard.style.cssText = `
-              display: flex;
-              flex-direction: column;
-              background-color: var(--vscode-editor-inactiveSelectionBackground, rgba(100, 100, 100, 0.1));
-              border: 1px solid var(--vscode-panel-border, rgba(120, 120, 120, 0.2));
-              border-radius: 6px;
-              padding: 10px;
-              position: relative;
+            // File list container - using grid for better layout
+            const fileList = document.createElement('div');
+            fileList.style.cssText = `
+              display: grid;
+              grid-gap: 10px;
+              width: 100%;
             `;
-            fileCard.setAttribute('data-file-path', file.path);
 
-            // Create file header with icon and name
-            const fileHeader = document.createElement('div');
-            fileHeader.style.cssText = 'display: flex; align-items: center; margin-bottom: 8px; font-family: monospace; font-size: 12px;';
-
-            // Create icon based on status and action type
-            const fileIcon = document.createElement('span');
-
-            // First, check the status to determine if we should show a spinner or checkmark
-            if (file.status === 'creating' || file.status === 'updating') {
-              // Spinner for in-progress status
-              fileIcon.innerHTML = `
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px; min-width: 14px;" class="spin-animation">
-                  <circle cx="12" cy="12" r="10"></circle>
-                  <path d="M12 6v6l4 2"></path>
-                </svg>
-                <style>
-                  .spin-animation {
-                    animation: spin 2s linear infinite;
-                  }
-                  @keyframes spin {
-                    to { transform: rotate(360deg); }
-                  }
-                </style>
+            // Add each file as a separate card/box
+            relevantFiles.forEach((file: any) => {
+              // Create file card
+              const fileCard = document.createElement('div');
+              fileCard.style.cssText = `
+                display: flex;
+                flex-direction: column;
+                background-color: var(--vscode-editor-inactiveSelectionBackground, rgba(100, 100, 100, 0.1));
+                border: 1px solid var(--vscode-panel-border, rgba(120, 120, 120, 0.2));
+                border-radius: 6px;
+                padding: 10px;
+                position: relative;
               `;
-            } else if (file.status === 'created' || file.status === 'updated') {
-              // Green checkmark for completed status
-              fileIcon.innerHTML = `
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px; min-width: 14px;">
-                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-                  <polyline points="22 4 12 14.01 9 11.01"></polyline>
-                </svg>
-              `;
-            } else {
-              // For all other cases, show action-based icons
-              if (file.action === 'update') {
-                // Edit icon
+              fileCard.setAttribute('data-file-path', file.path);
+
+              // Create file header with icon and name
+              const fileHeader = document.createElement('div');
+              fileHeader.style.cssText = 'display: flex; align-items: center; margin-bottom: 8px; font-family: monospace; font-size: 12px;';
+
+              // Create icon based on status and action type
+              const fileIcon = document.createElement('span');
+
+              // First, check the status to determine if we should show a spinner or checkmark
+              if (file.status === 'creating' || file.status === 'updating') {
+                // Spinner for in-progress status
                 fileIcon.innerHTML = `
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px; min-width: 14px;">
-                    <path d="M20 14.66V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h5.34"></path>
-                    <polygon points="18 2 22 6 12 16 8 16 8 12 18 2"></polygon>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px; min-width: 14px;" class="spin-animation">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <path d="M12 6v6l4 2"></path>
                   </svg>
+                  <style>
+                    .spin-animation {
+                      animation: spin 2s linear infinite;
+                    }
+                    @keyframes spin {
+                      to { transform: rotate(360deg); }
+                    }
+                  </style>
                 `;
-              } else if (file.action === 'create') {
-                // New file icon
+              } else if (file.status === 'created' || file.status === 'updated') {
+                // Green checkmark for completed status
                 fileIcon.innerHTML = `
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px; min-width: 14px;">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                    <polyline points="14 2 14 8 20 8"></polyline>
-                    <line x1="12" y1="18" x2="12" y2="12"></line>
-                    <line x1="9" y1="15" x2="15" y2="15"></line>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px; min-width: 14px;">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                    <polyline points="22 4 12 14.01 9 11.01"></polyline>
                   </svg>
                 `;
               } else {
-                // Generic file icon for other actions
-                fileIcon.innerHTML = `
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px; min-width: 14px;">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                    <polyline points="14 2 14 8 20 8"></polyline>
-                  </svg>
-                `;
+                // For all other cases, show action-based icons
+                if (file.action === 'update') {
+                  // Edit icon
+                  fileIcon.innerHTML = `
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px; min-width: 14px;">
+                      <path d="M20 14.66V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h5.34"></path>
+                      <polygon points="18 2 22 6 12 16 8 16 8 12 18 2"></polygon>
+                    </svg>
+                  `;
+                }
+              }
+              
+              fileHeader.appendChild(fileIcon);
+              
+              // File name 
+              const fileName = document.createElement('span');
+              fileName.textContent = file.path || 'Unknown file';
+              fileName.style.cssText = 'font-family: monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';
+              fileHeader.appendChild(fileName);
+              
+              fileCard.appendChild(fileHeader);
+              
+              // Add to file list
+              fileList.appendChild(fileCard);
+            });
+            
+            // Add the file list to the container
+            actionFilesContainer.appendChild(fileList);
+            
+            // Add container to plan
+            planContainer.appendChild(actionFilesContainer);
+          }
+        } else if (!matchingPlan.actionFiles || matchingPlan.actionFiles.length === 0) {
+          console.log(`Plan ${matchingPlan.id} has no action files or empty action files array`);
+          
+          // Check if we should force show the button as a fallback
+          if (shouldShowButton) {
+            // TEMPORARY FIX: Force show the button if the plan has no action files but status seems valid
+            if (matchingPlan.status !== 'approved' && matchingPlan.status !== 'applied' && 
+                matchingPlan.approved !== true && matchingPlan.applied !== true) {
+              console.log(`FORCING PROCEED BUTTON TO SHOW for plan with no action files: ${matchingPlan.id}`);
+              
+              // Only add if we haven't already added the button above
+              if (matchingPlan.status !== 'review') {
+                planContainer.appendChild(proceedButton);
+                
+                // Add event listener to the proceed button
+                proceedButton.addEventListener('click', () => {
+                  // Disable the button and update text
+                  proceedButton.disabled = true;
+                  proceedButton.textContent = 'Processing...';
+                  
+                  // Send message to extension to proceed with plan
+                  vscode.postMessage({
+                    command: 'proceedWithPlan',
+                    planId: matchingPlan.id,
+                    workspaceId: store.get(workspaceIdAtom)
+                  });
+                });
               }
             }
-
-            fileHeader.appendChild(fileIcon);
-
-            // Add file path
-            const filePathSpan = document.createElement('span');
-            filePathSpan.textContent = file.path;
-            filePathSpan.style.cssText = 'font-family: monospace; font-weight: bold; overflow-wrap: break-word; white-space: normal;';
-            fileHeader.appendChild(filePathSpan);
-
-            // Add status badge if applicable
-            if (file.status) {
-              const statusBadge = document.createElement('span');
-              statusBadge.textContent = file.status;
-              statusBadge.style.cssText = `
-                margin-left: auto;
-                padding: 2px 6px;
-                border-radius: 10px;
-                font-size: 10px;
-                text-transform: capitalize;
-                background-color: var(--vscode-badge-background);
-                color: var(--vscode-badge-foreground);
-              `;
-              fileHeader.appendChild(statusBadge);
-            }
-
-            fileCard.appendChild(fileHeader);
-
-            // Add file action buttons container
-            const buttonContainer = document.createElement('div');
-            buttonContainer.className = 'file-actions';
-            buttonContainer.style.cssText = 'display: flex; gap: 8px; align-items: center;';
-
-            // Create accept button
-            const acceptBtn = document.createElement('button');
-            acceptBtn.className = 'icon-button accept-btn';
-            acceptBtn.title = 'Accept changes';
-            acceptBtn.innerHTML = `
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--vscode-gitDecoration-addedResourceForeground, #81b88b)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="20 6 9 17 4 12"></polyline>
-              </svg>
-            `;
-
-            // Create reject button
-            const rejectBtn = document.createElement('button');
-            rejectBtn.className = 'icon-button reject-btn';
-            rejectBtn.title = 'Reject changes';
-            rejectBtn.innerHTML = `
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--vscode-gitDecoration-deletedResourceForeground, #c74e39)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-              </svg>
-            `;
-
-            // Create view diff button
-            const viewDiffBtn = document.createElement('button');
-            viewDiffBtn.className = 'icon-button view-diff-btn';
-            viewDiffBtn.title = 'View changes';
-            viewDiffBtn.innerHTML = `
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 20h9"></path>
-                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
-              </svg>
-            `;
-
-            // Add buttons to container
-            buttonContainer.appendChild(viewDiffBtn);
-            buttonContainer.appendChild(acceptBtn);
-            buttonContainer.appendChild(rejectBtn);
-
-            // Add buttons to header
-            fileHeader.appendChild(buttonContainer);
-
-            // Add click handlers
-            viewDiffBtn.addEventListener('click', () => {
-              // Send message to extension to show diff for this file
-              // Include the pending content in the message
-              // Get pending content from either property name
-              const pendingContent = file.content_pending || file.contentPending || '';
-              console.log('View diff - using pending content for file:', file.path);
-              console.log('View diff - content available:', pendingContent !== '');
-              
-              vscode.postMessage({
-                command: 'viewFileDiff',
-                filePath: file.path,
-                workspaceId: context.workspaceId,
-                pendingContent: pendingContent  // Send the pending content to the backend
-              });
-            });
-
-            acceptBtn.addEventListener('click', () => {
-              // Debug logging to diagnose the issue
-              console.log('Accept button clicked for file:', file.path);
-              console.log('File object:', file);
-              console.log('contentPending exists:', !!file.contentPending);
-              console.log('content_pending exists:', !!file.content_pending);
-              
-              // Get pending content from either property name
-              const pendingContent = file.content_pending || file.contentPending || '';
-              console.log('Using pending content (empty string check):', pendingContent !== '');
-              
-              // Send message to extension to accept changes
-              vscode.postMessage({
-                command: 'acceptFileChanges',
-                filePath: file.path,
-                workspaceId: context.workspaceId,
-                pendingContent: pendingContent  // Send the pending content to the backend
-              });
-
-              // Update UI to show accepted
-              fileCard.style.borderColor = 'var(--vscode-gitDecoration-addedResourceForeground, #81b88b)';
-              acceptBtn.disabled = true;
-              rejectBtn.disabled = true;
-              viewDiffBtn.disabled = true;
-
-              // Change status badge if it exists
-              const statusBadge = fileHeader.querySelector('span:last-child');
-              if (statusBadge && statusBadge !== filePathSpan) {
-                statusBadge.textContent = 'Accepted';
-                (statusBadge as HTMLElement).style.backgroundColor = 'var(--vscode-gitDecoration-addedResourceForeground, #81b88b)';
-              }
-            });
-
-            rejectBtn.addEventListener('click', () => {
-              // Get pending content from either property name
-              const pendingContent = file.content_pending || file.contentPending || '';
-              console.log('Reject changes - using pending content for file:', file.path);
-              console.log('Reject changes - content available:', pendingContent !== '');
-              
-              // Send message to extension to reject changes
-              vscode.postMessage({
-                command: 'rejectFileChanges',
-                filePath: file.path,
-                workspaceId: context.workspaceId,
-                pendingContent: pendingContent  // Send the pending content to the backend
-              });
-
-              // Update UI to show rejected
-              fileCard.style.borderColor = 'var(--vscode-gitDecoration-deletedResourceForeground, #c74e39)';
-              acceptBtn.disabled = true;
-              rejectBtn.disabled = true;
-              viewDiffBtn.disabled = true;
-
-              // Change status badge if it exists
-              const statusBadge = fileHeader.querySelector('span:last-child');
-              if (statusBadge && statusBadge !== filePathSpan) {
-                statusBadge.textContent = 'Rejected';
-                (statusBadge as HTMLElement).style.backgroundColor = 'var(--vscode-gitDecoration-deletedResourceForeground, #c74e39)';
-              }
-            });
-
-            // Add the file card to the file list
-            fileList.appendChild(fileCard);
-          });
-
-          // Add the file list to the container
-          actionFilesContainer.appendChild(fileList);
-
-          // Add the container to the plan content
-          planContentDiv.appendChild(actionFilesContainer);
-        }
-
-        // Check if plan status is "review" and add a Proceed button
-        if (matchingPlan.status && matchingPlan.status.toLowerCase() === 'review') {
-          // Create a button container div
-          const buttonContainer = document.createElement('div');
-          buttonContainer.style.cssText = 'margin-top: 15px; padding-top: 10px; border-top: 1px solid var(--vscode-panel-border); text-align: right;';
-
-          // Create the Proceed button
-          const proceedButton = document.createElement('button');
-          proceedButton.textContent = 'Proceed';
-          proceedButton.className = 'plan-proceed-button';
-          proceedButton.setAttribute('data-plan-id', matchingPlan.id);
-          proceedButton.style.cssText = `
-            background-color: var(--vscode-button-background);
-            color: var(--vscode-button-foreground);
-            border: none;
-            padding: 6px 12px;
-            border-radius: 2px;
-            cursor: pointer;
-            font-size: 13px;
-          `;
-
-          // Append button to container and container to plan
-          buttonContainer.appendChild(proceedButton);
-          planContentDiv.appendChild(buttonContainer);
-
-          // Add click event to the proceed button
-          proceedButton.addEventListener('click', () => {
-            console.log(`Proceed button clicked for plan: ${matchingPlan.id}`);
-
-            // Show loading state on the button
-            proceedButton.disabled = true;
-            proceedButton.textContent = 'Processing...';
-
-            // Send message to the extension to handle the API call
-            vscode.postMessage({
-              command: 'proceedWithPlan',
-              planId: matchingPlan.id,
-              workspaceId: context.workspaceId
-            });
-          });
-
-          // Log that we added a proceed button
-          console.log('Added Proceed button with click handler for plan with review status');
+          }
         }
       } else {
-        console.log('No matching plan found for ID:', planId);
-
-        // Create a content div for the "not found" message
-        const notFoundDiv = document.createElement('div');
-        notFoundDiv.className = 'message-content';
-        notFoundDiv.style.cssText = 'position: relative; min-height: 30px;';
-        notFoundDiv.textContent = `Plan data not loaded yet. Plan ID: ${planId}`;
-        planContainer.appendChild(notFoundDiv);
-
-        // Try to fetch plans if we have a workspace ID
-        if (context.workspaceId) {
-          console.log(`Fetching plans for workspace ${context.workspaceId}`);
-          vscode.postMessage({
-            command: 'fetchPlans',
-            workspaceId: context.workspaceId
-          });
-        }
+        // Plan not found - show a message
+        planContainer.innerHTML = `<div style="padding: 12px;">Plan information not available.</div>`;
       }
-
-      // Append the plan element to the messages container
+      
+      // Add the plan element to the message container
       messagesContainer.appendChild(planEl);
-      console.log(planEl);
-      console.log('Plan element added to DOM');
     }
-
-    // If there's a responseRenderId, check if we should show a terminal-like RENDER indicator
-    if (message.responseRenderId) {
-      // Make sure we have the workspace ID in the store
-      const workspaceId = store.get(workspaceIdAtom);
-      if (!workspaceId && context.workspaceId) {
-        console.log('Setting missing workspaceId in store:', context.workspaceId);
-        actions.setWorkspaceId(context.workspaceId);
-      }
-
-      // Find the matching render in the rendersAtom
-      const renders = store.get(rendersAtom);
-      console.log(`Looking for render ID ${message.responseRenderId} among ${renders.length} renders`);
-      let matchingRender = renders.find(render => render.id === message.responseRenderId);
-
-      // If render not found, try to fetch it
-      if (!matchingRender && context.workspaceId) {
-        console.log(`Render not found, fetching renders for workspace ${context.workspaceId}`);
-        vscode.postMessage({
-          command: 'fetchRenders',
-          workspaceId: context.workspaceId
-        });
-      }
-
-      // Skip auto-rendered items
-      console.log(matchingRender);
-      if (matchingRender && matchingRender.isAutorender === true) {
-        console.log(`Skipping auto-rendered item: ${message.responseRenderId}`);
-        // Don't render this indicator, but continue with the loop
-      } else {
-
-      // Create terminal container element
-      const renderIndicatorEl = document.createElement('div');
-      renderIndicatorEl.className = 'message render-indicator';
-      renderIndicatorEl.style.cssText = 'position: relative; z-index: 5; display: block; width: 100%; min-height: 100px; margin: 15px 0; clear: both;';
-
-      // Start building terminal HTML
-      let terminalHTML = `
-        <div class="terminal-window">
-          <div class="terminal-header">
-            <div class="terminal-buttons">
-              <span class="terminal-button close"></span>
-              <span class="terminal-button minimize"></span>
-              <span class="terminal-button maximize"></span>
-            </div>
-            <span class="terminal-title">Render Output</span>
+    
+    // Check for render data associated with this message
+    if (message.id && renders.length > 0) {
+      // Try to find a matching render - using a more generic match
+      const matchingRender = renders.find((r: any) => r.messageId === message.id) as any;
+      
+      if (matchingRender) {
+        console.log(`Found matching render for message ${message.id}:`, matchingRender);
+        
+        // Create a container for the render info
+        const renderIndicatorEl = document.createElement('div');
+        renderIndicatorEl.className = 'message render-indicator';
+        // Do not set any inline styles that would override the CSS
+        console.log('Render indicator element created:', renderIndicatorEl);
+        
+        // Create terminal window
+        const terminalWindow = document.createElement('div');
+        terminalWindow.className = 'terminal-window';
+        
+        // Create terminal header with buttons and title
+        const terminalHeader = document.createElement('div');
+        terminalHeader.className = 'terminal-header';
+        terminalHeader.innerHTML = `
+          <div class="terminal-buttons">
+            <span class="terminal-button close"></span>
+            <span class="terminal-button minimize"></span>
+            <span class="terminal-button maximize"></span>
           </div>
-          <div class="terminal-content">`;
-
-      // Check if the render has charts
-      console.log(matchingRender);
-      if (matchingRender && matchingRender.charts && matchingRender.charts.length > 0) {
-        // Iterate through each chart
-        matchingRender.charts.forEach((chart, index) => {
-          // Add a blank line between chart sections if not the first one
-          if (index > 0) {
-            terminalHTML += `\n\n`;
-          }
-
-          // Add the command line for this chart
-          const depUpdateCommand = chart.depUpdateCommand || '';
-          const escapedCommand = depUpdateCommand ? escapeHtml(depUpdateCommand) : '';
-          terminalHTML += `<span class="terminal-prompt">$</span>${escapedCommand ? ` <span class="terminal-command">${escapedCommand}</span>` : ''}`;
-
-          // Add stdout if available
-          if (chart.depUpdateStdout) {
-            const escapedStdout = escapeHtml(chart.depUpdateStdout);
-            terminalHTML += `\n<span class="terminal-stdout">${escapedStdout}</span>`;
-          }
-
-          // Add stderr if available
-          if (chart.depUpdateStderr) {
-            const escapedStderr = escapeHtml(chart.depUpdateStderr);
-            terminalHTML += `\n<span class="terminal-stderr">${escapedStderr}</span>`;
-          }
-        });
-
-        // Add cursor at the end
-        terminalHTML += `\n<span class="terminal-prompt">$</span><span class="terminal-cursor"></span>`;
-      } else {
-        // No charts found, just show a prompt
-        terminalHTML += `<span class="terminal-prompt">$</span><span class="terminal-cursor"></span>`;
+          <div class="terminal-title">Terminal Output</div>
+        `;
+        
+        // Create terminal content
+        const terminalContent = document.createElement('div');
+        terminalContent.className = 'terminal-content';
+        
+        // Format terminal content based on render data
+        let terminalOutput = '';
+        
+        // Add command if present
+        if (matchingRender.cmd) {
+          terminalOutput += `<span class="terminal-prompt">$</span><span class="terminal-command">${escapeHtml(matchingRender.cmd)}</span>\n`;
+        }
+        
+        // Add standard output if present
+        if (matchingRender.stdout) {
+          terminalOutput += `<span class="terminal-stdout">${escapeHtml(matchingRender.stdout)}</span>`;
+        }
+        
+        // Add error output if present
+        if (matchingRender.stderr) {
+          terminalOutput += `<span class="terminal-stderr">${escapeHtml(matchingRender.stderr)}</span>`;
+        }
+        
+        terminalContent.innerHTML = terminalOutput;
+        
+        // Assemble terminal elements
+        terminalWindow.appendChild(terminalHeader);
+        terminalWindow.appendChild(terminalContent);
+        renderIndicatorEl.appendChild(terminalWindow);
+        
+        // Add to messages container
+        messagesContainer.appendChild(renderIndicatorEl);
+        console.log('Render indicator element added to DOM');
       }
-
-      // Close the terminal HTML
-      terminalHTML += `
-          </div>
-        </div>
-      `;
-
-      renderIndicatorEl.innerHTML = terminalHTML;
-
-      console.log('Render indicator element created:', renderIndicatorEl);
-      messagesContainer.appendChild(renderIndicatorEl);
-      console.log('Render indicator element added to DOM');
-      } // Close the else block
     }
   });
-
-  // Scroll to the bottom
-  messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
-
-// Keep for backward compatibility, but use store-based rendering
-function displayMessages(messages: any[]) {
-  actions.setMessages(messages);
-  renderAllMessages();
-}
-
-// Helper function to escape HTML content for safety
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
-
-// Add more UI functionality as needed

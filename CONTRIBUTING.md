@@ -82,7 +82,19 @@ NEXT_PUBLIC_API_ENDPOINT=http://localhost:3000/api
    ```
    This deploys the Schemahero migrations to set up the database schema.
 
-6. **Terminal 4: Claude Integration**
+6. **Terminal 4: Bootstrap Chart Data**
+   ```bash
+   make bootstrap
+   ```
+   This is a **critical step** that initializes the chart data in the database. Without this step, the application won't have the necessary template data to function properly.
+
+7. **Terminal 5: Create Admin User (recommended)**
+   ```bash
+   make create-admin
+   ```
+   This creates an admin user for local development. You'll be prompted to enter an email and name (both required). After creating the admin user, you can log in via the test auth URL.
+
+8. **Terminal 5: Claude Integration (optional)**
    ```bash
    # Use Claude for development assistance
    ```
@@ -93,7 +105,6 @@ NEXT_PUBLIC_API_ENDPOINT=http://localhost:3000/api
   ```bash
   make run-worker
   ```
-
 
 ### Troubleshooting
 
@@ -117,6 +128,17 @@ If you encounter any issues:
 - Schemahero is used for database migrations
 - The frontend runs on the default Next.js port
 - The worker runs on a separate process
+
+## VS Code Extension Development
+
+For detailed instructions on developing the VS Code extension, see [chartsmith-extension/DEVELOPMENT.md](chartsmith-extension/DEVELOPMENT.md). 
+
+This guide covers:
+- Building and installing the extension from a VSIX file
+- Configuring endpoints for local development
+- Enabling development mode
+- Debugging with the developer console
+- Testing extension features with built-in commands
 
 ## Release
 

@@ -3,8 +3,8 @@ package helmutils
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/replicatedhq/chartsmith/pkg/workspace/types"
+
+	"github.com/pkg/errors"
 )
 
 type RenderChannels struct {
@@ -45,7 +47,7 @@ func RenderChartExec(files []types.File, valuesYAML string, renderChannels Rende
 	}()
 	// in order to avoid the special feature of helm where it detects the kubeconfig and uses that
 	// when templating the chart, we put a completely fake kubeconfig in the env for this command
-	fakeKubeconfig := `apiVersion: v1
+	_ = `apiVersion: v1
 kind: Config
 clusters:
 - cluster:
@@ -53,143 +55,128 @@ clusters:
   name: default
 `
 
-	// create a temp dir and copy the files into it
-	fmt.Printf("Creating temp directory for chart files\n")
-	tempDir, err := os.MkdirTemp("", "chartsmith")
-	if err != nil {
-		fmt.Printf("ERROR: Failed to create temp dir: %v\n", err)
-		return fmt.Errorf("failed to create temp dir: %w", err)
-	}
-	fmt.Printf("Created temp directory at: %s\n", tempDir)
-	defer os.RemoveAll(tempDir)
-
-	fmt.Printf("Copying %d files to the temp directory\n", len(files))
+	// Print the first Chart.yaml file for debugging
+	foundChart := false
+	var chartDir string
 	for _, file := range files {
-		filePath := filepath.Join(tempDir, file.FilePath)
-		// ensure the directory exists
-		dir := filepath.Dir(filePath)
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			fmt.Printf("ERROR: Failed to create directory %s: %v\n", dir, err)
-			return fmt.Errorf("failed to create directory: %w", err)
-		}
-
-		if err := os.WriteFile(filePath, []byte(file.Content), 0644); err != nil {
-			fmt.Printf("ERROR: Failed to write file %s: %v\n", filePath, err)
-			return fmt.Errorf("failed to write file: %w", err)
+		if strings.HasSuffix(file.FilePath, "Chart.yaml") {
+			foundChart = true
+			renderChannels.DepUpdateStdout <- fmt.Sprintf("Found Chart.yaml at %s\n", file.FilePath)
+			chartDir = filepath.Dir(file.FilePath)
+			break
 		}
 	}
-	fmt.Printf("Successfully copied all files to temp directory\n")
 
-	fmt.Printf("Starting helm dependency update...\n")
-	err = runHelmDepUpdate(tempDir, fakeKubeconfig, renderChannels.DepUpdateCmd, renderChannels.DepUpdateStdout, renderChannels.DepUpdateStderr)
+	if !foundChart {
+		renderChannels.DepUpdateStdout <- "ERROR: No Chart.yaml file found in the provided files\n"
+		return errors.New("no Chart.yaml file found")
+	}
+
+	renderChannels.DepUpdateStdout <- fmt.Sprintf("Using chart directory: %s\n", chartDir)
+
+	rootDir, err := os.MkdirTemp("", "chartsmith")
 	if err != nil {
-		fmt.Printf("ERROR: Helm dependency update failed: %v\n", err)
-		renderChannels.Done <- err
-		return err
+		return errors.Wrap(err, "failed to create temp dir")
 	}
-	fmt.Printf("Helm dependency update completed successfully\n")
+	defer os.RemoveAll(rootDir)
 
-	fmt.Printf("Starting helm template...\n")
-	err = runHelmTemplate(tempDir, valuesYAML, fakeKubeconfig, renderChannels.HelmTemplateCmd, renderChannels.HelmTemplateStdout, renderChannels.HelmTemplateStderr)
-	if err != nil {
-		fmt.Printf("ERROR: Helm template failed: %v\n", err)
-		renderChannels.Done <- err
-		return err
-	}
-	fmt.Printf("Helm template completed successfully\n")
-
-	fmt.Printf("Sending completion signal through Done channel\n")
-	renderChannels.Done <- nil
-	fmt.Printf("Completed rendering chart successfully\n")
-
-	return nil
-}
-
-func findExecutableForHelmVersion(helmVersion string) (string, error) {
-	if helmVersion == "" {
-		return "helm", nil
-	}
-
-	// Check for specific version
-	versionedPath := fmt.Sprintf("/usr/local/bin/helm-%s", helmVersion)
-	if _, err := exec.LookPath(versionedPath); err == nil {
-		return versionedPath, nil
-	}
-
-	return "", fmt.Errorf("unsupported helm version: %s", helmVersion)
-}
-
-func runHelmDepUpdate(dir string, kubeconfig string, cmdCh chan string, stdoutCh chan string, stderrCh chan string) error {
-	fmt.Printf("Running helm dep update in %s\n", dir)
-
-	// Add timeout to avoid hanging commands
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
-
-	depUpdateCmd := exec.CommandContext(ctx, "helm", "dep", "update")
-	depUpdateCmd.Env = []string{"KUBECONFIG=" + kubeconfig}
-	depUpdateCmd.Dir = dir
-
-	cmdCh <- depUpdateCmd.String()
-
-	// Use CombinedOutput instead of pipes for reliable output capture
-	output, err := depUpdateCmd.CombinedOutput()
-	if err != nil {
-		// Send the output to stderr channel before returning error
-		errLines := bufio.NewScanner(bufio.NewReader(bytes.NewReader(output)))
-		for errLines.Scan() {
-			stderrCh <- errLines.Text() + "\n"
+	for _, file := range files {
+		fileRenderPath := filepath.Join(rootDir, file.FilePath)
+		err := os.MkdirAll(filepath.Dir(fileRenderPath), 0755)
+		if err != nil {
+			return errors.Wrapf(err, "failed to create dir %q", filepath.Dir(fileRenderPath))
 		}
-		return fmt.Errorf("helm dep update command failed: %w", err)
+
+		err = os.WriteFile(fileRenderPath, []byte(file.Content), 0644)
+		if err != nil {
+			return errors.Wrapf(err, "failed to write file %q", fileRenderPath)
+		}
 	}
 
-	// Process the captured output line by line
-	lines := bufio.NewScanner(bufio.NewReader(bytes.NewReader(output)))
-	for lines.Scan() {
-		line := lines.Text()
-		// Send to stdout channel
-		stdoutCh <- line + "\n"
+	// Working directory for Helm commands is the directory containing Chart.yaml
+	workingDir := filepath.Join(rootDir, chartDir)
+
+	// helm dependency update
+	depUpdateCmd := exec.Command("helm", "dependency", "update", ".")
+	depUpdateCmd.Dir = workingDir
+
+	depUpdateStdoutReader, depUpdateStdoutWriter := io.Pipe()
+	depUpdateStderrReader, depUpdateStderrWriter := io.Pipe()
+
+	depUpdateCmd.Stdout = depUpdateStdoutWriter
+	depUpdateCmd.Stderr = depUpdateStderrWriter
+
+	helmDepUpdateExitCh := make(chan error, 1)
+
+	// Copy helm dep update stdout to the stdout channel
+	go func() {
+		scanner := bufio.NewScanner(depUpdateStdoutReader)
+		for scanner.Scan() {
+			renderChannels.DepUpdateStdout <- scanner.Text() + "\n"
+		}
+	}()
+
+	// Copy helm dep update stderr to the stdout channel
+	go func() {
+		scanner := bufio.NewScanner(depUpdateStderrReader)
+		for scanner.Scan() {
+			renderChannels.DepUpdateStdout <- scanner.Text() + "\n"
+		}
+	}()
+
+	// Start the helm dep update process and wait for it to complete
+	go func() {
+		if err := depUpdateCmd.Start(); err != nil {
+			helmDepUpdateExitCh <- errors.Wrap(err, "helm dependency update failed")
+			return
+		}
+
+		err := depUpdateCmd.Wait()
+		if err != nil {
+			helmDepUpdateExitCh <- errors.Wrap(err, "helm dependency update failed")
+			return
+		}
+
+		helmDepUpdateExitCh <- nil
+	}()
+
+	// Wait for the process to complete
+	err = <-helmDepUpdateExitCh
+
+	// Close the pipes
+	depUpdateStdoutWriter.Close()
+	depUpdateStderrWriter.Close()
+
+	if err != nil {
+		return errors.Wrap(err, "failed to update dependencies")
 	}
 
-	if err := lines.Err(); err != nil {
-		return fmt.Errorf("error reading helm dep update output: %w", err)
-	}
+	// helm template with values
+	templateCmd := exec.Command("helm", "template", ".", "--include-crds", "--values", "/dev/stdin")
 
-	return nil
-}
-
-func runHelmTemplate(dir string, valuesYAML string, kubeconfig string, cmdCh chan string, stdoutCh chan string, stderrCh chan string) error {
-	fmt.Printf("Running helm template in %s\n", dir)
-
-	// Add timeout to avoid hanging commands
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
-
-	args := []string{"template", "chartsmith", "."}
 	if valuesYAML != "" {
-		valuesFile := filepath.Join(dir, "values.yaml")
+		valuesFile := filepath.Join(workingDir, "values.yaml")
 		if err := os.WriteFile(valuesFile, []byte(valuesYAML), 0644); err != nil {
 			return fmt.Errorf("failed to write values file: %w", err)
 		}
-		args = append(args, "-f", "values.yaml")
+		templateCmd.Args = append(templateCmd.Args, "-f", "values.yaml")
 	}
 
-	fmt.Printf("Running helm template with args: %v\n", args)
+	fmt.Printf("Running helm template with args: %v\n", templateCmd.Args)
 
 	// Use CombinedOutput instead of pipes for reliable output capture
-	cmd := exec.CommandContext(ctx, "helm", args...)
-	cmd.Env = []string{"KUBECONFIG=" + kubeconfig}
-	cmd.Dir = dir
+	templateCmd.Env = []string{"KUBECONFIG=/dev/null"}
+	templateCmd.Dir = workingDir
 
-	cmdCh <- cmd.String()
+	renderChannels.HelmTemplateCmd <- templateCmd.String()
 
 	// Capture all output at once, which avoids the pipe closure issue
-	output, err := cmd.CombinedOutput()
+	output, err := templateCmd.CombinedOutput()
 	if err != nil {
 		// Send the output to stderr channel before returning error
 		errLines := bufio.NewScanner(bufio.NewReader(bytes.NewReader(output)))
 		for errLines.Scan() {
-			stderrCh <- errLines.Text() + "\n"
+			renderChannels.HelmTemplateStderr <- errLines.Text() + "\n"
 		}
 		return fmt.Errorf("helm template command failed: %w", err)
 	}
@@ -197,7 +184,6 @@ func runHelmTemplate(dir string, valuesYAML string, kubeconfig string, cmdCh cha
 	bufferLineCount := 500
 	buffer := make([]string, 0, bufferLineCount)
 	// Process the captured output line by line
-	// let 20 lines pass before sending to the
 	lines := bufio.NewScanner(bufio.NewReader(bytes.NewReader(output)))
 	var linesRead int
 	for lines.Scan() {
@@ -206,7 +192,7 @@ func runHelmTemplate(dir string, valuesYAML string, kubeconfig string, cmdCh cha
 		buffer = append(buffer, line)
 		if linesRead%bufferLineCount == 0 {
 			// Send to stdout channel
-			stdoutCh <- strings.Join(buffer, "\n")
+			renderChannels.HelmTemplateStdout <- strings.Join(buffer, "\n")
 			buffer = buffer[:0]
 			linesRead = 0
 		}
@@ -217,7 +203,7 @@ func runHelmTemplate(dir string, valuesYAML string, kubeconfig string, cmdCh cha
 	}
 
 	// always send the last buffer
-	stdoutCh <- strings.Join(buffer, "\n")
+	renderChannels.HelmTemplateStdout <- strings.Join(buffer, "\n")
 
 	return nil
 }

@@ -49,14 +49,20 @@ export interface Plan {
   chatMessageIds: string[];
   createdAt: Date;
   proceedAt?: Date;
+  approved?: boolean;
+  applied?: boolean;
   actionFiles: ActionFile[];
+  files?: Array<{
+    path: string;
+    pendingContent?: string;
+  }>;
 }
 
 export interface ActionFile {
   action: string;
   path: string;
   status: string;
-  contentPending?: string;
+  pendingContent?: string;
   content_pending?: string;  // API sends content_pending (snake_case)
 }
 
@@ -72,6 +78,9 @@ export const rendersAtom = atom<Render[]>([]);
 
 // Create an atom to store the plans for the current workspace
 export const plansAtom = atom<Plan[]>([]);
+
+// Create an atom to store the active plan
+export const activePlanAtom = atom<Plan | null>(null);
 
 // Create an atom to track connection status
 export const connectionStatusAtom = atom<string>('disconnected');
