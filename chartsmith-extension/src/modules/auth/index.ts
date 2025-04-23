@@ -62,31 +62,13 @@ export async function isAuthenticated(): Promise<boolean> {
 }
 
 export async function loadAuthData(): Promise<AuthData | null> {
-  console.log(`[DEBUG][AUTH] Loading authentication data from storage...`);
-  
   const token = await getAuthToken();
   const apiEndpoint = await getApiEndpoint();
   const pushEndpoint = await getPushEndpoint();
   const userId = await getUserId();
   const wwwEndpoint = await getWwwEndpoint();
 
-  // Log what we found for debugging
-  console.log(`[DEBUG][AUTH] Auth data loaded:`, {
-    hasToken: !!token,
-    tokenLength: token ? token.length : 0,
-    hasApiEndpoint: !!apiEndpoint,
-    apiEndpoint: apiEndpoint,
-    hasUserId: !!userId,
-    hasPushEndpoint: !!pushEndpoint,
-    hasWwwEndpoint: !!wwwEndpoint
-  });
-
   if (!token || !apiEndpoint || !userId) {
-    console.log(`[DEBUG][AUTH] Auth data incomplete:`, {
-      tokenMissing: !token,
-      apiEndpointMissing: !apiEndpoint,
-      userIdMissing: !userId
-    });
     return null;
   }
 
@@ -99,7 +81,6 @@ export async function loadAuthData(): Promise<AuthData | null> {
   };
 
   globalState.isLoggedIn = true;
-  console.log(`[DEBUG][AUTH] Auth data loaded successfully, user is logged in`);
   return globalState.authData;
 }
 
@@ -155,7 +136,6 @@ export async function saveAuthData(data: AuthData): Promise<void> {
   
   // Refresh the webview after login
   if (globalState.webviewGlobal) {
-    console.log("[AUTH] Sending auth-changed event to webview after login");
     globalState.webviewGlobal.postMessage({
       command: 'authChanged',
       status: 'loggedIn',
@@ -168,13 +148,11 @@ export async function saveAuthData(data: AuthData): Promise<void> {
       }
     });
   } else {
-    console.log("[AUTH] No webview available to notify about login");
-    
     // Try to reload the Chartsmith webview if it exists
     try {
       await vscode.commands.executeCommand('chartsmith.view.focus');
     } catch (error) {
-      console.log("[AUTH] Error focusing chartsmith view:", error);
+      console.log("Error focusing chartsmith view:", error);
     }
   }
 }
@@ -198,19 +176,16 @@ export async function clearAuthData(): Promise<void> {
   
   // Notify webview of logout if available
   if (webviewGlobal) {
-    console.log("[AUTH] Sending auth-changed event to webview after logout");
     webviewGlobal.postMessage({
       command: 'authChanged',
       status: 'loggedOut'
     });
   } else {
-    console.log("[AUTH] No webview available to notify about logout");
-    
     // Try to reload the Chartsmith webview if it exists
     try {
       await vscode.commands.executeCommand('chartsmith.view.focus');
     } catch (error) {
-      console.log("[AUTH] Error focusing chartsmith view:", error);
+      console.log("Error focusing chartsmith view:", error);
     }
   }
 }
@@ -235,7 +210,6 @@ export function startAuthServer(port: number): Promise<string> {
       
       // Handle CORS preflight requests
       if (req.method === 'OPTIONS') {
-        console.log('Handling OPTIONS request (CORS preflight)');
         res.writeHead(200);
         res.end();
         return;
@@ -252,7 +226,6 @@ export function startAuthServer(port: number): Promise<string> {
         
         req.on('end', async () => {
           try {
-            console.log(`Received data: ${body}`);
             const parsedData = JSON.parse(body);
             
             // Extract the auth data
@@ -300,7 +273,6 @@ export function startAuthServer(port: number): Promise<string> {
               
               // Verify session immediately after login
               const sessionValid = await verifySession();
-              console.log(`[DEBUG][AUTH] Session verification after login: ${sessionValid ? 'SUCCESS' : 'FAILED'}`);
               
               res.writeHead(200);
               res.end(JSON.stringify({ success: true }));
@@ -341,7 +313,6 @@ export function startAuthServer(port: number): Promise<string> {
 
         // Verify session immediately after login
         const sessionValid = await verifySession();
-        console.log(`[DEBUG][AUTH] Session verification after login: ${sessionValid ? 'SUCCESS' : 'FAILED'}`);
 
         res.writeHead(200, { 'Content-Type': 'text/html' });
         res.end('<html><body><h1>Authentication successful!</h1><p>You can close this window now.</p><script>window.close();</script></body></html>');
@@ -379,21 +350,18 @@ export function decodeJwt(token: string): any {
   try {
     // Check if token is valid before attempting to decode
     if (!token || typeof token !== 'string' || token.trim() === '') {
-      console.log('[DEBUG][AUTH] Invalid token format: token is empty or not a string');
       return null;
     }
 
     // Split by dots and verify we have at least 3 parts (header.payload.signature)
     const parts = token.split('.');
     if (parts.length < 2) {
-      console.log('[DEBUG][AUTH] Invalid token format: not enough segments');
       return null;
     }
 
     // Get the base64 payload (second part)
     const base64Url = parts[1];
     if (!base64Url) {
-      console.log('[DEBUG][AUTH] Invalid token format: payload is missing');
       return null;
     }
 
@@ -406,7 +374,7 @@ export function decodeJwt(token: string): any {
     // Parse the JSON
     return JSON.parse(jsonPayload);
   } catch (error) {
-    console.error('[DEBUG][AUTH] Error decoding JWT:', error);
+    console.error('Error decoding JWT:', error);
     return null;
   }
 }
@@ -416,25 +384,14 @@ export function decodeJwt(token: string): any {
  * This function can be called before important operations to verify if the token is valid
  */
 export async function debugCheckTokenValidity(): Promise<void> {
-  console.log(`[DEBUG][AUTH] Checking token validity`);
-  
   try {
     // Get auth data from storage
     const token = await getAuthToken();
     const apiEndpoint = await getApiEndpoint();
     const userId = await getUserId();
     
-    console.log(`[DEBUG][AUTH] Auth data check:`, {
-      hasToken: !!token,
-      tokenLength: token ? token.length : 0,
-      hasApiEndpoint: !!apiEndpoint,
-      apiEndpoint: apiEndpoint,
-      hasUserId: !!userId,
-      isAuthenticated: !!token && !!apiEndpoint && !!userId
-    });
-    
     if (!token) {
-      console.log(`[DEBUG][AUTH] No token available - authentication required`);
+      console.log('No token available - authentication required');
       return;
     }
     
@@ -442,33 +399,20 @@ export async function debugCheckTokenValidity(): Promise<void> {
       // Try to decode JWT to check expiration
       const decodedToken = decodeJwt(token);
       
-      if (decodedToken) {
-        console.log(`[DEBUG][AUTH] Token decoded successfully`);
+      if (decodedToken && decodedToken.exp) {
+        const expirationDate = new Date(decodedToken.exp * 1000);
+        const now = new Date();
+        const isExpired = expirationDate < now;
         
-        // Check expiration if available
-        if (decodedToken.exp) {
-          const expirationDate = new Date(decodedToken.exp * 1000);
-          const now = new Date();
-          const isExpired = expirationDate < now;
-          
-          console.log(`[DEBUG][AUTH] Token expiration:`, {
-            expirationTimestamp: decodedToken.exp,
-            expirationDate: expirationDate.toISOString(),
-            currentDate: now.toISOString(),
-            isExpired: isExpired,
-            timeRemaining: isExpired ? 'EXPIRED' : `${Math.floor((expirationDate.getTime() - now.getTime()) / 1000 / 60)} minutes`
-          });
-        } else {
-          console.log(`[DEBUG][AUTH] Token has no expiration information`);
+        if (isExpired) {
+          console.log('Token has expired');
         }
-      } else {
-        console.log(`[DEBUG][AUTH] Failed to decode token - may not be a valid JWT format`);
       }
     } catch (tokenError) {
-      console.error(`[DEBUG][AUTH] Error processing token:`, tokenError);
+      console.error('Error processing token:', tokenError);
     }
   } catch (error) {
-    console.error(`[DEBUG][AUTH] Unexpected error checking token:`, error);
+    console.error('Unexpected error checking token:', error);
   }
 }
 
@@ -477,8 +421,6 @@ export async function debugCheckTokenValidity(): Promise<void> {
  * This helps ensure that we have valid credentials before attempting operations
  */
 export async function verifySession(): Promise<boolean> {
-  console.log(`[DEBUG][AUTH] Verifying session validity...`);
-  
   try {
     // Get auth data from storage
     const token = await getAuthToken();
@@ -487,17 +429,8 @@ export async function verifySession(): Promise<boolean> {
     
     // Basic validation of auth data
     if (!token || !apiEndpoint || !userId) {
-      console.log(`[DEBUG][AUTH] Session invalid: Missing required auth data`);
       return false;
     }
-    
-    // Log auth details for debugging
-    console.log(`[DEBUG][AUTH] Auth data for verification:`, {
-      apiEndpoint,
-      userIdLength: userId.length,
-      tokenPrefix: token.substring(0, Math.min(10, token.length)) + '...',
-      tokenLength: token.length
-    });
     
     // Create an AuthData object
     const authData: AuthData = {
@@ -523,13 +456,8 @@ export async function verifySession(): Promise<boolean> {
           }
         };
         
-        console.log(`[DEBUG][AUTH] Sending verification request to: ${url.toString()}`);
-        
         const req = requestModule.request(url, options, (res: any) => {
           let data = '';
-          
-          console.log(`[DEBUG][AUTH] Verification response status: ${res.statusCode}`);
-          console.log(`[DEBUG][AUTH] Verification response headers:`, res.headers);
           
           res.on('data', (chunk: Buffer) => {
             data += chunk.toString();
@@ -544,7 +472,7 @@ export async function verifySession(): Promise<boolean> {
         });
         
         req.on('error', (error: Error) => {
-          console.error(`[DEBUG][AUTH] Verification request error:`, error);
+          console.error('Verification request error:', error);
           reject(error);
         });
         
@@ -553,25 +481,21 @@ export async function verifySession(): Promise<boolean> {
       
       // Check if the response indicates a valid session
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        console.log(`[DEBUG][AUTH] Session verified successfully`);
         return true;
       } else if (response.statusCode === 401 || response.statusCode === 403) {
-        console.log(`[DEBUG][AUTH] Session verification failed: Unauthorized`);
         return false;
       } else if (response.statusCode >= 300 && response.statusCode < 400) {
-        console.log(`[DEBUG][AUTH] Session verification failed: Redirected (${response.statusCode})`);
         return false;
       } else {
-        console.log(`[DEBUG][AUTH] Session verification failed: Unexpected status code ${response.statusCode}`);
-        console.log(`[DEBUG][AUTH] Response body: ${response.body}`);
+        console.log(`Session verification failed with status code ${response.statusCode}`);
         return false;
       }
     } catch (error) {
-      console.error(`[DEBUG][AUTH] Error during session verification:`, error);
+      console.error('Error during session verification:', error);
       return false;
     }
   } catch (error) {
-    console.error(`[DEBUG][AUTH] Unexpected error verifying session:`, error);
+    console.error('Unexpected error verifying session:', error);
     return false;
   }
 }
@@ -581,13 +505,10 @@ export async function verifySession(): Promise<boolean> {
  * This can sometimes resolve session issues when the token is still valid but not being accepted
  */
 export async function refreshSession(): Promise<boolean> {
-  console.log(`[DEBUG][AUTH] Attempting to refresh session...`);
-  
   try {
     // Get auth data
     const authData = await loadAuthData();
     if (!authData) {
-      console.log(`[DEBUG][AUTH] Cannot refresh session: No auth data available`);
       return false;
     }
     
@@ -597,29 +518,24 @@ export async function refreshSession(): Promise<boolean> {
       const api = await import('../api');
       
       // Make a request to auth status endpoint
-      console.log(`[DEBUG][AUTH] Making refresh request to auth status endpoint`);
       const response = await api.fetchApi(
         authData,
         '/auth/status',
         'GET'
       );
       
-      console.log(`[DEBUG][AUTH] Refresh response:`, response);
-      
       // Check if response contains valid user info
       if (response && response.userId) {
-        console.log(`[DEBUG][AUTH] Session refreshed successfully`);
         return true;
       } else {
-        console.log(`[DEBUG][AUTH] Session refresh did not return valid user data`);
         return false;
       }
     } catch (error) {
-      console.error(`[DEBUG][AUTH] Error during session refresh:`, error);
+      console.error('Error during session refresh:', error);
       return false;
     }
   } catch (error) {
-    console.error(`[DEBUG][AUTH] Unexpected error refreshing session:`, error);
+    console.error('Unexpected error refreshing session:', error);
     return false;
   }
 }
@@ -631,7 +547,6 @@ export async function refreshSession(): Promise<boolean> {
 export function getAuthData(): AuthData | null {
   const state = (global as any).chartsmithGlobalState;
   if (!state || !state.authData) {
-    console.log('[getAuthData] No auth data available');
     return null;
   }
   return state.authData;

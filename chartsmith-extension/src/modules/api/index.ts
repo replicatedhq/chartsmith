@@ -33,17 +33,9 @@ export async function fetchApi(
       
       // Construct the API URL
       const url = constructApiUrl(authData.apiEndpoint, endpoint);
-      console.log(`API Request [${endpoint}]: ${method} ${url}`);
-      console.log(`Auth token available for [${endpoint}]:`, !!authData.token);
       
       // Parse the URL to determine whether to use http or https module
       const parsedUrl = new URL(url);
-      console.log(`Parsed URL for [${endpoint}]:`, {
-        protocol: parsedUrl.protocol,
-        hostname: parsedUrl.hostname,
-        pathname: parsedUrl.pathname
-      });
-      
       const isHttps = parsedUrl.protocol === 'https:';
       const isLocalhost = parsedUrl.hostname === 'localhost' || parsedUrl.hostname === '127.0.0.1';
       
@@ -55,7 +47,6 @@ export async function fetchApi(
       
       // Use the appropriate module based on the protocol
       const requestModule = isHttps ? https : http;
-      console.log(`Using ${isHttps ? 'HTTPS' : 'HTTP'} module for [${endpoint}]`);
       
       const options = {
         method,
@@ -66,32 +57,21 @@ export async function fetchApi(
         }
       };
       
-      console.log(`API Request options for [${endpoint}]:`, { 
-        method, 
-        url,
-        headers: Object.keys(options.headers) 
-      });
-      
       // Actually make the request
-      console.log(`Creating request object for [${endpoint}]...`);
       const req = requestModule.request(url, options, (res) => {
         let data = '';
-        console.log(`API Response started with status for [${endpoint}]: ${res.statusCode}`);
         
         res.on('data', (chunk) => {
           data += chunk;
         });
         
         res.on('end', () => {
-          console.log(`API Response completed for [${endpoint}] with status: ${res.statusCode}`);
           if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
             try {
               const parsedData = data ? JSON.parse(data) : {};
-              console.log(`API Response success for [${endpoint}], data received:`, typeof parsedData);
               resolve(parsedData);
             } catch (error) {
               console.error(`Invalid JSON response for [${endpoint}]:`, error);
-              console.error(`Response data for [${endpoint}]:`, data);
               reject(new Error(`Invalid JSON response: ${data}`));
             }
           } else {
@@ -107,13 +87,10 @@ export async function fetchApi(
       });
       
       if (body) {
-        console.log(`Request has body for [${endpoint}]`);
         req.write(typeof body === 'string' ? body : JSON.stringify(body));
       }
       
-      console.log(`Ending request for [${endpoint}]...`);
       req.end();
-      console.log(`Request ended for [${endpoint}]`);
     } catch (error) {
       console.error(`Unexpected error in fetchApi for [${endpoint}]:`, error);
       reject(error);
@@ -130,32 +107,12 @@ export async function uploadFile(
 ): Promise<any> {
   return new Promise((resolve, reject) => {
     try {
-      // Debug log all auth data (except token)
-      console.log(`[DEBUG] Upload file to endpoint: ${endpoint}`);
-      console.log(`[DEBUG] Auth data available:`, {
-        apiEndpoint: authData.apiEndpoint,
-        pushEndpoint: authData.pushEndpoint || '(none)',
-        wwwEndpoint: authData.wwwEndpoint || '(none)',
-        userId: authData.userId,
-        hasToken: !!authData.token,
-        tokenLength: authData.token ? authData.token.length : 0
-      });
-
       const url = constructApiUrl(authData.apiEndpoint, endpoint);
-      console.log(`[DEBUG] Constructed upload URL: ${url}`);
       
       // Parse the URL to determine whether to use http or https module
       const parsedUrl = new URL(url);
       const isHttps = parsedUrl.protocol === 'https:';
       const isLocalhost = parsedUrl.hostname === 'localhost' || parsedUrl.hostname === '127.0.0.1';
-      
-      console.log(`[DEBUG] URL parsing result:`, {
-        protocol: parsedUrl.protocol,
-        hostname: parsedUrl.hostname,
-        port: parsedUrl.port || (isHttps ? '443' : '80'),
-        pathname: parsedUrl.pathname,
-        isLocalhost: isLocalhost
-      });
       
       // Allow HTTP for localhost, require HTTPS for everything else
       if (!isHttps && !isLocalhost) {
@@ -171,34 +128,18 @@ export async function uploadFile(
         'Authorization': `Bearer ${authData.token}`
       };
       
-      console.log(`[DEBUG] Request headers:`, {
-        contentType: headers['Content-Type'],
-        authorizationPresent: !!headers['Authorization'],
-        authorizationPrefix: authData.token ? authData.token.substring(0, 10) + '...' : 'none'
-      });
-      
       const options = {
         method: 'POST',
         headers
       };
-      
-      console.log(`[DEBUG] Creating request with options:`, {
-        method: options.method,
-        url: url,
-        headerKeys: Object.keys(options.headers)
-      });
 
       const req = requestModule.request(url, options, (res) => {
         let data = '';
         
-        console.log(`[DEBUG] Response status code: ${res.statusCode}`);
-        console.log(`[DEBUG] Response headers:`, res.headers);
-        
         // Check for redirects specifically
         if (res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 307 || res.statusCode === 308) {
-          console.log(`[DEBUG] Detected redirect to: ${res.headers.location}`);
           if (res.headers.location?.includes('/login')) {
-            console.log(`[DEBUG] AUTHENTICATION ERROR: Redirected to login page. Token may be invalid or expired.`);
+            console.error(`Authentication error: Redirected to login page. Token may be invalid or expired.`);
           }
         }
         
@@ -207,38 +148,28 @@ export async function uploadFile(
         });
         
         res.on('end', () => {
-          console.log(`[DEBUG] Response data length: ${data.length} bytes`);
-          if (data.length < 1000) {
-            console.log(`[DEBUG] Response data: ${data}`);
-          } else {
-            console.log(`[DEBUG] Response data truncated: ${data.substring(0, 500)}...`);
-          }
-          
           if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
             try {
               const parsedData = data ? JSON.parse(data) : {};
-              console.log(`[DEBUG] Successfully parsed JSON response`);
               resolve(parsedData);
             } catch (error) {
-              console.error(`[DEBUG] Invalid JSON response:`, error);
-              console.error(`[DEBUG] Raw response data:`, data);
+              console.error(`Invalid JSON response:`, error);
               reject(new Error(`Invalid JSON response: ${data}`));
             }
           } else {
-            console.error(`[DEBUG] HTTP error ${res.statusCode}`);
+            console.error(`HTTP error ${res.statusCode}`);
             reject(new Error(`HTTP error ${res.statusCode}: ${data}`));
           }
         });
       });
       
       req.on('error', (error) => {
-        console.error(`[DEBUG] Request error:`, error);
+        console.error(`Request error:`, error);
         reject(error);
       });
       
       // Add form fields
       Object.entries(additionalFields).forEach(([name, value]) => {
-        console.log(`[DEBUG] Adding form field: ${name}`);
         req.write(
           `--${boundary}\r\n` +
           `Content-Disposition: form-data; name="${name}"\r\n` +
@@ -250,7 +181,6 @@ export async function uploadFile(
       // Add file
       const fileStream = fs.createReadStream(filePath);
       const fileName = filePath.split('/').pop() || 'file';
-      console.log(`[DEBUG] Adding file: ${fileName} from ${filePath}`);
       
       req.write(
         `--${boundary}\r\n` +
@@ -260,19 +190,18 @@ export async function uploadFile(
       );
       
       fileStream.on('end', () => {
-        console.log(`[DEBUG] File stream ended, completing request`);
         req.write(`\r\n--${boundary}--\r\n`);
         req.end();
       });
       
       fileStream.on('error', (error) => {
-        console.error(`[DEBUG] File stream error:`, error);
+        console.error(`File stream error:`, error);
         reject(error);
       });
       
       fileStream.pipe(req, { end: false });
     } catch (error) {
-      console.error(`[DEBUG] Unexpected error in uploadFile:`, error);
+      console.error(`Unexpected error in uploadFile:`, error);
       reject(error);
     }
   });
@@ -299,16 +228,11 @@ export async function fetchPendingFileContent(
       return null;
     }
 
-    // Log the request details
-    console.log(`Fetching pending content for file: ${filePath}`);
-    console.log(`Workspace ID: ${workspaceId}, Plan ID: ${planId}`);
-    
     // Encode the file path for URL safety
     const encodedFilePath = encodeURIComponent(filePath);
     
     // Make the API request to get file content
     const endpoint = `/workspace/${workspaceId}/plans/${planId}/file/${encodedFilePath}`;
-    console.log(`API endpoint: ${endpoint}`);
     
     const response = await fetchApi(
       authData,
@@ -318,7 +242,6 @@ export async function fetchPendingFileContent(
     
     // Extract and return the content
     if (response && response.content) {
-      console.log(`Content retrieved successfully for ${filePath}`);
       return response.content;
     }
     

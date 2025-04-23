@@ -675,67 +675,6 @@ function registerCommands(context: vscode.ExtensionContext): void {
       }
     })
   );
-
-  // Register a command to verify session
-  context.subscriptions.push(
-    vscode.commands.registerCommand('chartsmith.verifySession', async () => {
-      try {
-        // Import the auth module and verify session
-        const auth = await import('../auth');
-        let sessionValid = await auth.verifySession();
-        
-        if (sessionValid) {
-          vscode.window.showInformationMessage('Session verified successfully. You are authenticated.');
-        } else {
-          // If verification fails, try to refresh the session
-          vscode.window.showWarningMessage('Session verification failed. Attempting to refresh...');
-          
-          const refreshed = await auth.refreshSession();
-          if (refreshed) {
-            // Verify again after refresh
-            sessionValid = await auth.verifySession();
-            if (sessionValid) {
-              vscode.window.showInformationMessage('Session refreshed and verified successfully.');
-            } else {
-              vscode.window.showErrorMessage('Session still invalid after refresh. Please log out and log in again.');
-            }
-          } else {
-            vscode.window.showErrorMessage('Session refresh failed. Please log out and log in again.');
-          }
-        }
-      } catch (error) {
-        vscode.window.showErrorMessage(`Session verification failed: ${error}`);
-      }
-    })
-  );
-
-  // Register a command to test file writing for development use
-  if (isDevelopmentMode()) {
-    context.subscriptions.push(
-      vscode.commands.registerCommand('chartsmith.testFileWrite', async () => {
-        try {
-          // Get the active workspace ID
-          const workspace = await import('../workspace');
-          const activeWorkspaceId = await workspace.getActiveWorkspaceId();
-          
-          if (!activeWorkspaceId) {
-            vscode.window.showErrorMessage('No active workspace. Please open a chart first.');
-            return;
-          }
-          
-          // Import the fileContent module
-          const fileContent = await import('../fileContent');
-          
-          // Run the test
-          await fileContent.testFileWrite(activeWorkspaceId);
-          
-        } catch (error) {
-          console.error('Error running file write test:', error);
-          vscode.window.showErrorMessage(`File write test failed: ${error}`);
-        }
-      })
-    );
-  }
 }
 
 function registerViews(context: vscode.ExtensionContext): void {

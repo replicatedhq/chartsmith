@@ -31,7 +31,3 @@ npm run package:vsix
 ### Configuration
 
 For information on configuring endpoints during development, see [DEVELOPMENT.md](./DEVELOPMENT.md).
-
-### Authentication
-
-For information on authentication flow and troubleshooting login issues, see [AUTHENTICATION.md](./AUTHENTICATION.md).

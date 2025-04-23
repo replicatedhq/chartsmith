@@ -41,38 +41,6 @@
         "title": "ChartSmith: Show File Diff"
       },
       {
-        "command": "chartsmith.createMockDiffs",
-        "title": "ChartSmith: Create Mock Diffs for Testing"
-      },
-      {
-        "command": "chartsmith.testToken",
-        "title": "ChartSmith: Test Authentication Token"
-      },
-      {
-        "command": "chartsmith.verifySession",
-        "title": "ChartSmith: Verify Authentication Session"
-      },
-      {
-        "command": "chartsmith.resetEndpoints",
-        "title": "Chartsmith: Reset Endpoints to Configuration"
-      },
-      {
-        "command": "chartsmith.testFileWrite",
-        "title": "ChartSmith: Test File Writing"
-      },
-      {
-        "command": "chartsmith.testPathResolution",
-        "title": "ChartSmith: Test Path Resolution"
-      },
-      {
-        "command": "chartsmith.showDiff",
-        "title": "ChartSmith: Show Diff"
-      },
-      {
-        "command": "chartsmith.restoreDiffs",
-        "title": "ChartSmith: Restore Saved Diffs"
-      },
-      {
         "command": "chartsmith.refreshDiffButtons",
         "title": "ChartSmith: Refresh Diff Buttons Visibility",
         "icon": "$(refresh)"
@@ -96,10 +64,6 @@
         "command": "chartsmith.rejectSelectedFile",
         "title": "ChartSmith: Reject Selected File Changes",
         "icon": "$(x)"
-      },
-      {
-        "command": "chartsmith.showPlanDetails",
-        "title": "ChartSmith: Show Plan Details for Debugging"
       }
     ],
     "menus": {
@@ -132,32 +96,7 @@
         "key": "alt+shift+d",
         "when": "editorIsOpen"
       }
-    ],
-    "configuration": {
-      "title": "ChartSmith",
-      "properties": {
-        "chartsmith.apiEndpoint": {
-          "type": "string",
-          "default": "https://chartsmith.ai",
-          "description": "API endpoint for ChartSmith service"
-        },
-        "chartsmith.wwwEndpoint": {
-          "type": "string",
-          "default": "https://chartsmith.ai",
-          "description": "Web endpoint for ChartSmith service"
-        },
-        "chartsmith.pushEndpoint": {
-          "type": "string",
-          "default": "",
-          "description": "Push endpoint for ChartSmith service (optional)"
-        },
-        "chartsmith.developmentMode": {
-          "type": "boolean",
-          "default": false,
-          "description": "Enable development mode with features like demo content generation"
-        }
-      }
-    }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
