@@ -35,6 +35,31 @@
         }
       ]
     },
+    "configuration": {
+      "title": "ChartSmith",
+      "properties": {
+        "chartsmith.developmentMode": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable development mode for additional debugging features"
+        },
+        "chartsmith.apiEndpoint": {
+          "type": "string",
+          "default": "https://chartsmith.ai",
+          "description": "Base URL for API requests (e.g., http://localhost:8000 for local development)"
+        },
+        "chartsmith.wwwEndpoint": {
+          "type": "string",
+          "default": "https://chartsmith.ai",
+          "description": "Base URL for web interface (e.g., http://localhost:3000 for local development)"
+        },
+        "chartsmith.pushEndpoint": {
+          "type": "string",
+          "default": "",
+          "description": "WebSocket endpoint for Centrifugo real-time updates (optional)"
+        }
+      }
+    },
     "commands": [
       {
         "command": "chartsmith.showFileDiff",
@@ -64,6 +89,21 @@
         "command": "chartsmith.rejectSelectedFile",
         "title": "ChartSmith: Reject Selected File Changes",
         "icon": "$(x)"
+      },
+      {
+        "command": "chartsmith.resetEndpoints",
+        "title": "ChartSmith: Reset Endpoints to Configuration",
+        "category": "ChartSmith"
+      },
+      {
+        "command": "chartsmith.verifySession",
+        "title": "ChartSmith: Verify Authentication Session",
+        "category": "ChartSmith"
+      },
+      {
+        "command": "chartsmith.testFileWrite",
+        "title": "ChartSmith: Test File Writing",
+        "category": "ChartSmith"
       }
     ],
     "menus": {
