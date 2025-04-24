@@ -3,7 +3,7 @@ import * as path from 'path';
 import { log } from '../logging';
 import { getAuthData } from '../auth';
 import { AuthData } from '../../types';
-import { API_BASE_URL } from '../../constants';
+import { constructApiUrl } from '../utils';
 import { isDevelopmentMode } from '../config';
 
 // Cache for pending file content
@@ -98,8 +98,13 @@ export async function fetchPendingFileContent(
   try {
     log.info(`[fetchPendingFileContent] Fetching content for ${filePath}`);
     
+    const apiUrl = constructApiUrl(
+      authData.apiEndpoint,
+      `/workspace/${workspaceId}/plan/${planId}/file?path=${encodeURIComponent(filePath)}`
+    );
+    
     const response = await fetch(
-      `${API_BASE_URL}/workspace/${workspaceId}/plan/${planId}/file?path=${encodeURIComponent(filePath)}`,
+      apiUrl,
       {
         method: 'GET',
         headers: {
