@@ -9,9 +9,43 @@ import { Card } from "@/components/ui/Card";
 
 export default function PrivacyPolicyPage() {
   const { theme } = useTheme();
+  
+  // Local styles to override the global .prose li styling
+  const customStyles = `
+    /* Ensure list items match paragraph text size at all breakpoints */
+    .privacy-content .prose li {
+      /* Match exactly the Tailwind text-base class */
+      font-size: 0.875rem !important; /* Start with smaller size for very narrow screens */
+    }
+    
+    /* Match Tailwind's responsive breakpoints */
+    @media (min-width: 375px) {
+      .privacy-content .prose li {
+        font-size: 0.9375rem !important; /* Slightly larger */
+      }
+    }
+    
+    @media (min-width: 640px) {
+      .privacy-content .prose li {
+        font-size: 1rem !important; /* Match text-base at sm breakpoint */
+      }
+    }
+    
+    @media (min-width: 768px) {
+      .privacy-content .prose li {
+        font-size: 1.125rem !important; /* Match text-lg at md breakpoint */
+      }
+    }
+    
+    /* Remove any other font size rules from the list markers */
+    .privacy-content .prose li::marker {
+      font-size: 1em !important;
+    }
+  `;
 
   return (
-    <div className="min-h-screen bg-[var(--background)]">
+    <div className="min-h-screen bg-[var(--background)] privacy-content">
+      <style dangerouslySetInnerHTML={{ __html: customStyles }} />
       <HomeNav />
 
       <main className="max-w-7xl mx-auto py-8 px-4">
@@ -28,7 +62,7 @@ export default function PrivacyPolicyPage() {
           Privacy Policy
         </h1>
         
-        <Card className="p-6 md:p-8 prose dark:prose-invert max-w-none text-base sm:text-lg prose-li:text-base sm:prose-li:text-lg [&_li]:mb-2">
+        <Card className="p-6 md:p-8 prose dark:prose-invert max-w-none text-base sm:text-lg [&_li]:mb-2">
           <p className="text-base text-gray-500 mb-8">Last Updated: April 1, 2025</p>
           
           <section className="mb-8">
