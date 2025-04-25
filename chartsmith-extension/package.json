@@ -46,7 +46,7 @@
         "chartsmith.apiEndpoint": {
           "type": "string",
           "default": "https://chartsmith.ai",
-          "description": "Base URL for API requests (e.g., http://localhost:8000 for local development)"
+          "description": "Base URL for API requests (e.g., http://localhost:3000 for local development)"
         },
         "chartsmith.wwwEndpoint": {
           "type": "string",
