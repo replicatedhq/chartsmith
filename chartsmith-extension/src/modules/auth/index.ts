@@ -6,8 +6,7 @@ import {
   AUTH_TOKEN_KEY, 
   API_ENDPOINT_KEY, 
   PUSH_ENDPOINT_KEY, 
-  USER_ID_KEY, 
-  WWW_ENDPOINT_KEY 
+  USER_ID_KEY 
 } from '../../constants';
 import { log } from '../logging';
 
@@ -51,11 +50,6 @@ export async function getUserId(): Promise<string | undefined> {
   return userId;
 }
 
-export async function getWwwEndpoint(): Promise<string | undefined> {
-  const endpoint = await secretStorage.get(WWW_ENDPOINT_KEY);
-  return endpoint;
-}
-
 export async function isAuthenticated(): Promise<boolean> {
   const token = await getAuthToken();
   return !!token;
@@ -66,7 +60,6 @@ export async function loadAuthData(): Promise<AuthData | null> {
   const apiEndpoint = await getApiEndpoint();
   const pushEndpoint = await getPushEndpoint();
   const userId = await getUserId();
-  const wwwEndpoint = await getWwwEndpoint();
 
   if (!token || !apiEndpoint || !userId) {
     return null;
@@ -77,7 +70,7 @@ export async function loadAuthData(): Promise<AuthData | null> {
     apiEndpoint,
     pushEndpoint: pushEndpoint || '',
     userId,
-    wwwEndpoint: wwwEndpoint || ''
+    wwwEndpoint: apiEndpoint // Use API endpoint for WWW endpoint
   };
 
   globalState.isLoggedIn = true;
@@ -101,15 +94,6 @@ export async function saveAuthData(data: AuthData): Promise<void> {
       : pushEndpoint;
   }
   
-  let wwwEndpoint = data.wwwEndpoint;
-  if (wwwEndpoint) {
-    const isWwwLocalhost = new URL(wwwEndpoint).hostname === 'localhost' || 
-                          new URL(wwwEndpoint).hostname === '127.0.0.1';
-    wwwEndpoint = !isWwwLocalhost && wwwEndpoint.startsWith('http:')
-      ? wwwEndpoint.replace('http:', 'https:')
-      : wwwEndpoint;
-  }
-  
   // Store the sanitized data
   await secretStorage.store(AUTH_TOKEN_KEY, data.token);
   await secretStorage.store(API_ENDPOINT_KEY, apiEndpoint);
@@ -119,17 +103,13 @@ export async function saveAuthData(data: AuthData): Promise<void> {
   }
   
   await secretStorage.store(USER_ID_KEY, data.userId);
-  
-  if (wwwEndpoint) {
-    await secretStorage.store(WWW_ENDPOINT_KEY, wwwEndpoint);
-  }
 
   // Update the global state with sanitized data
   globalState.authData = {
     ...data,
     apiEndpoint,
     pushEndpoint: pushEndpoint || '',
-    wwwEndpoint: wwwEndpoint || ''
+    wwwEndpoint: apiEndpoint // Use API endpoint for WWW endpoint
   };
   
   globalState.isLoggedIn = true;
@@ -142,7 +122,7 @@ export async function saveAuthData(data: AuthData): Promise<void> {
       authData: {
         apiEndpoint: globalState.authData.apiEndpoint,
         pushEndpoint: globalState.authData.pushEndpoint,
-        wwwEndpoint: globalState.authData.wwwEndpoint,
+        wwwEndpoint: globalState.authData.apiEndpoint, // Use API endpoint for WWW endpoint
         userId: globalState.authData.userId,
         hasToken: !!globalState.authData.token
       }
@@ -170,8 +150,7 @@ export async function clearAuthData(): Promise<void> {
     secretStorage.delete(AUTH_TOKEN_KEY),
     secretStorage.delete(API_ENDPOINT_KEY),
     secretStorage.delete(PUSH_ENDPOINT_KEY),
-    secretStorage.delete(USER_ID_KEY),
-    secretStorage.delete(WWW_ENDPOINT_KEY)
+    secretStorage.delete(USER_ID_KEY)
   ]);
   
   // Notify webview of logout if available
