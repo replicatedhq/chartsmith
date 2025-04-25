@@ -96,7 +96,7 @@ export async function uploadChartToServer(
       throw new Error('Authentication required: Please login before uploading a chart');
     }
     
-    // Check token validity before upload (but don't let it block the upload if it fails)
+    // Check token validity before upload
     try {
       const auth = await import('../auth');
       
@@ -111,7 +111,7 @@ export async function uploadChartToServer(
         }
       }
       
-      await auth.debugCheckTokenValidity();
+      // Debug token validation removed - no longer needed
     } catch (tokenError) {
       console.error('Token validation error:', tokenError);
       // Continue with upload attempt despite token validation error

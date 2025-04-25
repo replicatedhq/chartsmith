@@ -380,43 +380,6 @@ export function decodeJwt(token: string): any {
 }
 
 /**
- * DEBUG: Check token validity and expiration
- * This function can be called before important operations to verify if the token is valid
- */
-export async function debugCheckTokenValidity(): Promise<void> {
-  try {
-    // Get auth data from storage
-    const token = await getAuthToken();
-    const apiEndpoint = await getApiEndpoint();
-    const userId = await getUserId();
-    
-    if (!token) {
-      console.log('No token available - authentication required');
-      return;
-    }
-    
-    try {
-      // Try to decode JWT to check expiration
-      const decodedToken = decodeJwt(token);
-      
-      if (decodedToken && decodedToken.exp) {
-        const expirationDate = new Date(decodedToken.exp * 1000);
-        const now = new Date();
-        const isExpired = expirationDate < now;
-        
-        if (isExpired) {
-          console.log('Token has expired');
-        }
-      }
-    } catch (tokenError) {
-      console.error('Error processing token:', tokenError);
-    }
-  } catch (error) {
-    console.error('Unexpected error checking token:', error);
-  }
-}
-
-/**
  * Verify if the current session is valid by making a test request to the API
  * This helps ensure that we have valid credentials before attempting operations
  */

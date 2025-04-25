@@ -8,7 +8,7 @@ import { log } from '../logging';
 
 /**
  * Check if development mode is enabled
- * Development mode enables additional features like demo content generation
+ * Development mode enables additional features for debugging
  */
 export function isDevelopmentMode(): boolean {
   const config = vscode.workspace.getConfiguration('chartsmith');
