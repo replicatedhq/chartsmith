@@ -89,21 +89,6 @@
         "command": "chartsmith.rejectSelectedFile",
         "title": "ChartSmith: Reject Selected File Changes",
         "icon": "$(x)"
-      },
-      {
-        "command": "chartsmith.resetEndpoints",
-        "title": "ChartSmith: Reset Endpoints to Configuration",
-        "category": "ChartSmith"
-      },
-      {
-        "command": "chartsmith.verifySession",
-        "title": "ChartSmith: Verify Authentication Session",
-        "category": "ChartSmith"
-      },
-      {
-        "command": "chartsmith.testFileWrite",
-        "title": "ChartSmith: Test File Writing",
-        "category": "ChartSmith"
       }
     ],
     "menus": {

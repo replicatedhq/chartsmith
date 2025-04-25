@@ -94,17 +94,6 @@ export async function activate(extensionContext: vscode.ExtensionContext): Promi
   // Register commands and views
   registerCommands(context);
   registerViews(context);
-
-  // Register reset endpoints command directly in activate
-  vscode.commands.registerCommand("chartsmith.resetEndpoints", async () => {
-    try {
-      await config.resetEndpointsToConfig(context.secrets);
-      vscode.window.showInformationMessage("Endpoints have been reset to match configuration values");
-    } catch (error) {
-      console.error("[ERROR][LIFECYCLE] Error resetting endpoints:", error);
-      vscode.window.showErrorMessage(`Failed to reset endpoints: ${error}`);
-    }
-  });
 }
 
 /**
