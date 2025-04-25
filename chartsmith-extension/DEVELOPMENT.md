@@ -35,7 +35,7 @@ You can configure the endpoints by adding the following to your VSCode settings 
 
 ```json
 {
-  "chartsmith.apiEndpoint": "http://localhost:8000",
+  "chartsmith.apiEndpoint": "http://localhost:3000",
   "chartsmith.wwwEndpoint": "http://localhost:3000",
   "chartsmith.pushEndpoint": "http://localhost:8000"
 }
