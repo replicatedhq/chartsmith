@@ -9,6 +9,14 @@ It's made for both the developer working on it and for AI models to read and app
 - We have a Postres/pgvector database and Centrifugo for realtime notifications.
 - The intent is to keep this system design and avoid new databases, queues, components. Simplicity matters.
 
+## API Design Principles
+- Prefer consolidated data endpoints over granular ones to minimize API calls and database load
+- Structure API routes using Next.js's file-based routing with resource-oriented paths
+- Implement consistent authentication and error handling patterns across endpoints
+- Return complete data objects rather than fragments to reduce follow-up requests
+- Prioritize server-side data processing over client-side assembly of multiple API calls
+
+
 # Subprojects
 - See chartsmith-app/ARCHITECTURE.md for the architecture principles for the front end.
 
