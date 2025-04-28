@@ -88,11 +88,10 @@ NEXT_PUBLIC_API_ENDPOINT=http://localhost:3000/api
    ```
    This is a **critical step** that initializes the chart data in the database. Without this step, the application won't have the necessary template data to function properly.
 
-7. **Terminal 5: Create Admin User (recommended)**
-   ```bash
-   make create-admin
-   ```
-   This creates an admin user for local development. You'll be prompted to enter an email and name (both required). After creating the admin user, you can log in via the test auth URL.
+7. **Admin Access**
+   
+   The first user to log in will automatically be granted admin privileges and bypass the waitlist.
+   You can log in at: http://localhost:3000/login?test-auth=true
 
 8. **Terminal 5: Claude Integration (optional)**
    ```bash
@@ -114,6 +113,15 @@ If you encounter any issues:
 2. Verify all required secrets are properly configured
 3. Check that Schemahero is installed and accessible in your PATH
 4. Make sure all dependencies are installed (both Go and npm packages)
+5. If you get an error `ERROR: type "vector" does not exist` when running `make schema`, you can manually enable the PGVector extension:
+   ```bash
+   docker exec -it chartsmith-dev-postgres-1 psql -U postgres -d chartsmith -c "CREATE EXTENSION IF NOT EXISTS vector;"
+   ```
+   Or simply run the Make target that handles this:
+   ```bash
+   make pgvector
+   ```
+   After enabling the extension, run `make schema` again (though it now automatically runs the pgvector target as a prerequisite).
 
 ### Development Workflow
 

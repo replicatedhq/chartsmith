@@ -78,8 +78,22 @@ run-postgres:
 	docker exec chartsmith-postgres psql -U postgres -d chartsmith -c "CREATE EXTENSION IF NOT EXISTS vector;"
 	@echo "PostgreSQL with pgvector extension is now running"
 
+.PHONY: pgvector
+pgvector:
+	@echo "Ensuring pgvector extension is enabled..."
+	@PG_CONTAINER=$$(docker ps --format '{{.Names}}' | grep postgres | head -n1); \
+	if [ -z "$$PG_CONTAINER" ]; then \
+		echo "Error: No running Postgres container found"; \
+		echo "Make sure to start the development environment first:"; \
+		echo "  cd hack/chartsmith-dev && docker compose up -d"; \
+		exit 1; \
+	fi; \
+	echo "Using Postgres container: $$PG_CONTAINER"; \
+	docker exec -i $$PG_CONTAINER psql -U postgres -d chartsmith -c "CREATE EXTENSION IF NOT EXISTS vector;"; \
+	echo "PGVector extension enabled"
+
 .PHONY: schema
-schema: 
+schema: pgvector
 	@echo "Running schema commands..."
 	rm -rf ./db/generated-schema
 	mkdir -p ./db/generated-schema/tables
