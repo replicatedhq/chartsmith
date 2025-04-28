@@ -435,33 +435,7 @@ export async function getPendingFileContent(workspaceId: string, filePath: strin
       console.error(`[getPendingFileContent] Error fetching workspace data: ${fetchError}`);
     }
     
-    // FALLBACK: As a last resort, try the individual file endpoint
-    console.log(`[getPendingFileContent] Falling back to individual file endpoint for ${filePath}`);
-    
-    // Get the active plan id from store
-    const state = (store as any).getState();
-    const activePlanId = state.activePlan ? state.activePlan.id : null;
-    
-    if (activePlanId) {
-      try {
-        // Use the fileContent module to get the content
-        const content = await fileContent.getFileContent(
-          authData,
-          workspaceId,
-          activePlanId,
-          filePath
-        );
-        
-        if (content) {
-          // Store in memory for future use
-          console.log(`[getPendingFileContent] Got content from fallback method for ${filePath}`);
-          memoryDb.set(key, content);
-          return content;
-        }
-      } catch (fallbackError) {
-        console.error(`[getPendingFileContent] Error using fallback method: ${fallbackError}`);
-      }
-    }
+    // No need to try fallback method anymore
   } catch (error) {
     console.error(`[getPendingFileContent] Error fetching content: ${error}`);
   }

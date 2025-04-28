@@ -228,93 +228,44 @@ export async function fetchPendingFileContent(
       return null;
     }
 
-    // Encode the file path for URL safety
-    const encodedFilePath = encodeURIComponent(filePath);
+    // Make the API request to get workspace data
+    const endpoint = `/workspace/${workspaceId}`;
     
-    // Make the API request to get file content
-    const endpoint = `/workspace/${workspaceId}/plans/${planId}/file/${encodedFilePath}`;
-    
-    const response = await fetchApi(
+    const workspace = await fetchApi(
       authData,
       endpoint,
       'GET'
     );
     
-    // Extract and return the content
-    if (response && response.content) {
-      return response.content;
+    if (!workspace) {
+      console.error('Failed to fetch workspace data');
+      return null;
+    }
+
+    // Check if the file exists in workspace charts
+    if (workspace.charts && workspace.charts.length > 0) {
+      for (const chart of workspace.charts) {
+        const file = chart.files.find((f: { filePath: string; contentPending: string | null }) => f.filePath === filePath);
+        if (file && file.contentPending !== null) {
+          return file.contentPending;
+        }
+      }
     }
     
-    console.error('File content response did not contain expected data:', response);
+    // Check if the file exists in loose files
+    if (workspace.files && workspace.files.length > 0) {
+      const file = workspace.files.find((f: { filePath: string; contentPending: string | null }) => f.filePath === filePath);
+      if (file && file.contentPending !== null) {
+        return file.contentPending;
+      }
+    }
+    
+    console.log(`No pending content found for ${filePath} in workspace`);
     return null;
   } catch (error) {
-    console.error(`Error fetching file content for ${filePath}:`, error);
+    console.error(`Error fetching workspace data for file ${filePath}:`, error);
     return null;
   }
 }
 
-/**
- * Fetches the pending content for a file with a progress indicator
- * 
- * @param authData Authentication data
- * @param workspaceId The workspace ID
- * @param planId The plan ID
- * @param filePath The file path
- * @returns The pending content for the file or null if not found/cancelled
- */
-export async function fetchPendingFileContentWithProgress(
-  authData: AuthData,
-  workspaceId: string,
-  planId: string,
-  filePath: string
-): Promise<string | null> {
-  return vscode.window.withProgress({
-    location: vscode.ProgressLocation.Notification,
-    title: `Retrieving content for ${path.basename(filePath)}`,
-    cancellable: true
-  }, async (progress, token) => {
-    progress.report({ increment: 0, message: 'Connecting to ChartSmith API...' });
-    
-    // Set up cancellation
-    let cancelled = false;
-    token.onCancellationRequested(() => {
-      cancelled = true;
-      console.log('Content retrieval was cancelled by user');
-    });
-    
-    try {
-      progress.report({ increment: 30, message: 'Fetching file content...' });
-      
-      if (cancelled) {
-        return null;
-      }
-      
-      const content = await fetchPendingFileContent(authData, workspaceId, planId, filePath);
-      
-      if (cancelled) {
-        return null;
-      }
-      
-      progress.report({ increment: 70, message: 'Content retrieved' });
-      return content;
-    } catch (error: any) {
-      console.error(`Error fetching content with progress: ${error}`);
-      
-      // Create error message
-      let message = `Could not retrieve content for ${filePath}`;
-      
-      if (error?.message?.includes('401')) {
-        message += ': Authentication failed. Please log in again.';
-      } else if (error?.message?.includes('404')) {
-        message += ': File not found in the plan.';
-      } else if (error?.code === 'ECONNREFUSED' || error?.code === 'ENOTFOUND') {
-        message += ': Cannot connect to ChartSmith API. Please check your network connection.';
-      } else {
-        message += `: ${error?.message || 'Unknown error'}`;
-      }
-      
-      vscode.window.showErrorMessage(message);
-      return null;
-    }
-  });
-}
+// Export any other functions that might be needed (not currently shown in this section)

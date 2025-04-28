@@ -98,11 +98,13 @@ export async function fetchPendingFileContent(
   try {
     log.info(`[fetchPendingFileContent] Fetching content for ${filePath}`);
     
+    // Construct the workspace API endpoint
     const apiUrl = constructApiUrl(
       authData.apiEndpoint,
-      `/workspace/${workspaceId}/plan/${planId}/file?path=${encodeURIComponent(filePath)}`
+      `/workspace/${workspaceId}`
     );
     
+    // Fetch the entire workspace data
     const response = await fetch(
       apiUrl,
       {
@@ -115,27 +117,38 @@ export async function fetchPendingFileContent(
     );
 
     if (!response.ok) {
-      if (response.status === 404) {
-        log.warn(`[fetchPendingFileContent] File not found: ${filePath}`);
-        return null;
+      log.error(`[fetchPendingFileContent] Error fetching workspace data: ${response.status} ${response.statusText}`);
+      return null;
+    }
+
+    const workspace = await response.json();
+    
+    // Look for the file in the workspace charts
+    if (workspace.charts && Array.isArray(workspace.charts)) {
+      for (const chart of workspace.charts) {
+        if (chart.files && Array.isArray(chart.files)) {
+          const file = chart.files.find((f: any) => f.filePath === filePath);
+          if (file && file.contentPending) {
+            log.info(`[fetchPendingFileContent] Found content in workspace charts for ${filePath}`);
+            storeContentInCache(planId, filePath, file.contentPending);
+            return file.contentPending;
+          }
+        }
       }
-      
-      log.error(`[fetchPendingFileContent] Error fetching content: ${response.status} ${response.statusText}`);
-      return null;
+    }
+    
+    // Look for the file in loose files
+    if (workspace.files && Array.isArray(workspace.files)) {
+      const file = workspace.files.find((f: any) => f.filePath === filePath);
+      if (file && file.contentPending) {
+        log.info(`[fetchPendingFileContent] Found content in workspace loose files for ${filePath}`);
+        storeContentInCache(planId, filePath, file.contentPending);
+        return file.contentPending;
+      }
     }
 
-    const data = await response.json();
-    if (!data.content) {
-      log.warn(`[fetchPendingFileContent] No content returned for ${filePath}`);
-      return null;
-    }
-
-    log.info(`[fetchPendingFileContent] Successfully fetched content for ${filePath}`);
-    
-    // Store in cache for future use
-    storeContentInCache(planId, filePath, data.content);
-    
-    return data.content;
+    log.warn(`[fetchPendingFileContent] No pending content found for ${filePath} in workspace`);
+    return null;
   } catch (error) {
     log.error(`[fetchPendingFileContent] Failed to fetch content for ${filePath}: ${error}`);
     return null;
