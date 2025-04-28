@@ -65,19 +65,6 @@ check-env:
 # DATABASE COMMANDS
 # =============================================================================
 
-.PHONY: run-postgres
-run-postgres:
-	docker rm -f chartsmith-postgres || true
-	docker run -d --name chartsmith-postgres \
-		-e POSTGRES_PASSWORD=postgres \
-		-e POSTGRES_DB=chartsmith \
-		-p 5432:5432 \
-		ankane/pgvector:latest
-	@echo "Waiting for PostgreSQL to start..."
-	@sleep 5
-	docker exec chartsmith-postgres psql -U postgres -d chartsmith -c "CREATE EXTENSION IF NOT EXISTS vector;"
-	@echo "PostgreSQL with pgvector extension is now running"
-
 .PHONY: pgvector
 pgvector:
 	@echo "Ensuring pgvector extension is enabled..."
