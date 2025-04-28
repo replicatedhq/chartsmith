@@ -5,21 +5,6 @@ GOOS?=$(shell go env GOOS)
 GOARCH?=$(shell go env GOARCH)
 
 # =============================================================================
-# DEFAULT ENVIRONMENT VARIABLES (can be overridden by exporting in your shell)
-# =============================================================================
-
-# Database and service connections - these have sensible defaults for local development
-CHARTSMITH_PG_URI?=postgresql://postgres:password@localhost:5432/chartsmith?sslmode=disable
-CHARTSMITH_CENTRIFUGO_ADDRESS?=http://localhost:8000/api
-CHARTSMITH_CENTRIFUGO_API_KEY?=api_key
-DB_URI?=$(CHARTSMITH_PG_URI)
-
-# Google OAuth settings - default values for local development
-# For production use, override these through environment variables
-NEXT_PUBLIC_GOOGLE_CLIENT_ID=730758876435-8v7frmnqtt7k7v65edpc6u3hso9olqbe.apps.googleusercontent.com
-NEXT_PUBLIC_GOOGLE_REDIRECT_URI=http://localhost:3000/auth/google
-
-# =============================================================================
 # REQUIRED ENVIRONMENT VARIABLES (must be exported by the user)
 # =============================================================================
 # The following variables MUST be exported before running commands like:
@@ -27,12 +12,25 @@ NEXT_PUBLIC_GOOGLE_REDIRECT_URI=http://localhost:3000/auth/google
 # - make bootstrap
 # - make run-debug-console
 #
+# Required variables:
+#   - ANTHROPIC_API_KEY - API key for Anthropic services
+#   - GROQ_API_KEY - API key for Groq services
+#   - VOYAGE_API_KEY - API key for Voyage services
+#   - CHARTSMITH_PG_URI - PostgreSQL connection string
+#   - CHARTSMITH_CENTRIFUGO_ADDRESS - Centrifugo service address
+#   - CHARTSMITH_CENTRIFUGO_API_KEY - API key for Centrifugo
+#   - GOOGLE_CLIENT_ID - Google OAuth client ID
+#   - GOOGLE_CLIENT_SECRET - Google OAuth client secret
+#
 # Example:
 #   export ANTHROPIC_API_KEY=your-key
 #   export GROQ_API_KEY=your-key
 #   export VOYAGE_API_KEY=your-key
-#   export GOOGLE_CLIENT_ID=your-id (optional for some commands)
-#   export GOOGLE_CLIENT_SECRET=your-secret (optional for some commands)
+#   export CHARTSMITH_PG_URI=postgresql://postgres:password@localhost:5432/chartsmith?sslmode=disable
+#   export CHARTSMITH_CENTRIFUGO_ADDRESS=http://localhost:8000/api
+#   export CHARTSMITH_CENTRIFUGO_API_KEY=api_key
+#   export GOOGLE_CLIENT_ID=your-id
+#   export GOOGLE_CLIENT_SECRET=your-secret
 #   make run-worker
 # =============================================================================
 
@@ -48,17 +46,17 @@ define check_env_var
 	fi
 endef
 
-# Check only essential environment variables that can't have defaults
+# Check required environment variables
 .PHONY: check-env
 check-env:
 	$(call check_env_var,ANTHROPIC_API_KEY)
 	$(call check_env_var,GROQ_API_KEY)
 	$(call check_env_var,VOYAGE_API_KEY)
-	@if [ -z "$(GOOGLE_CLIENT_ID)" ] || [ -z "$(GOOGLE_CLIENT_SECRET)" ]; then \
-		echo "Warning: Google OAuth credentials (GOOGLE_CLIENT_ID and/or GOOGLE_CLIENT_SECRET) are not set."; \
-		echo "These are required for authentication. See CONTRIBUTING.md for details."; \
-		exit 1; \
-	fi
+	$(call check_env_var,CHARTSMITH_PG_URI)
+	$(call check_env_var,CHARTSMITH_CENTRIFUGO_ADDRESS)
+	$(call check_env_var,CHARTSMITH_CENTRIFUGO_API_KEY)
+	$(call check_env_var,GOOGLE_CLIENT_ID)
+	$(call check_env_var,GOOGLE_CLIENT_SECRET)
 	@echo "All required environment variables are set"
 
 # =============================================================================
@@ -100,48 +98,14 @@ build:
 # Requires: ANTHROPIC_API_KEY, GROQ_API_KEY, VOYAGE_API_KEY
 .PHONY: run-worker
 run-worker: build check-env
-	@echo "Running $(WORKER_BINARY_NAME) with environment variables from shell and Makefile..."
-	CHARTSMITH_PG_URI="$(CHARTSMITH_PG_URI)" \
-	CHARTSMITH_CENTRIFUGO_ADDRESS="$(CHARTSMITH_CENTRIFUGO_ADDRESS)" \
-	CHARTSMITH_CENTRIFUGO_API_KEY="$(CHARTSMITH_CENTRIFUGO_API_KEY)" \
-	DB_URI="$(DB_URI)" \
+	@echo "Running $(WORKER_BINARY_NAME) with environment variables from shell..."
 	./$(WORKER_BUILD_DIR)/$(WORKER_BINARY_NAME) run --
 
 .PHONY: bootstrap
 bootstrap: build check-env
 	@echo "Bootstrapping chart..."
-	CHARTSMITH_PG_URI="$(CHARTSMITH_PG_URI)" \
-	CHARTSMITH_CENTRIFUGO_ADDRESS="$(CHARTSMITH_CENTRIFUGO_ADDRESS)" \
-	CHARTSMITH_CENTRIFUGO_API_KEY="$(CHARTSMITH_CENTRIFUGO_API_KEY)" \
-	DB_URI="$(DB_URI)" \
 	./$(WORKER_BUILD_DIR)/$(WORKER_BINARY_NAME) bootstrap \
 		--force
-
-# Creates an admin user for local development
-.PHONY: create-admin
-create-admin:
-	@read -p "Enter email: " email; \
-	read -p "Enter name: " name; \
-	if [ -z "$$email" ] || [ -z "$$name" ]; then \
-		echo "Error: Email and name are required"; \
-		exit 1; \
-	fi; \
-	image="https://randomuser.me/api/portraits/lego/3.jpg"; \
-	echo "Creating admin user for local development..."; \
-	PG_CONTAINER=$$(docker ps --format '{{.Names}}' | grep postgres | head -n1); \
-	if [ -z "$$PG_CONTAINER" ]; then \
-		echo "Error: No running Postgres container found"; \
-		echo "Make sure to start the development environment first:"; \
-		echo "  cd hack/chartsmith-dev && docker compose up -d"; \
-		exit 1; \
-	fi; \
-	echo "Using Postgres container: $$PG_CONTAINER"; \
-	docker exec -i $$PG_CONTAINER psql -U postgres -d chartsmith -c "INSERT INTO chartsmith_user (id, email, name, image_url, created_at, last_login_at, last_active_at, is_admin) \
-		VALUES (md5(random()::text), '$$email', '$$name', '$$image', now(), now(), now(), false) \
-		ON CONFLICT (email) DO NOTHING;"; \
-	docker exec -i $$PG_CONTAINER psql -U postgres -d chartsmith -c "UPDATE chartsmith_user SET is_admin = true WHERE email = '$$email';"; \
-	echo "Admin user created: $$email"; \
-	echo "Log in at: http://localhost:3000/login?test-auth=true"
 
 .PHONY: test-data
 test-data: build
@@ -178,12 +142,9 @@ okteto-dev:
 # Requires: ANTHROPIC_API_KEY, GROQ_API_KEY, VOYAGE_API_KEY
 .PHONY: run-debug-console
 run-debug-console: check-env
-	@echo "Running debug console with environment variables from shell and Makefile..."
-	CHARTSMITH_PG_URI="$(CHARTSMITH_PG_URI)" \
-	CHARTSMITH_CENTRIFUGO_ADDRESS="$(CHARTSMITH_CENTRIFUGO_ADDRESS)" \
-	CHARTSMITH_CENTRIFUGO_API_KEY="$(CHARTSMITH_CENTRIFUGO_API_KEY)" \
-	DB_URI="$(DB_URI)" \
-	go run main.go debug-console
+	@echo "Running debug console with environment variables from shell..."
+	@# We set DB_URI to maintain compatibility with existing code
+	export DB_URI=$(CHARTSMITH_PG_URI) && go run main.go debug-console
 
 # Requires: GITHUB_TOKEN, OP_SERVICE_ACCOUNT_PRODUCTION
 .PHONY: release
