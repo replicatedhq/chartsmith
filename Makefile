@@ -84,8 +84,8 @@ schema: pgvector
 	@echo "Running schema commands..."
 	rm -rf ./db/generated-schema
 	mkdir -p ./db/generated-schema/tables
-	schemahero plan --driver postgres --uri "postgresql://postgres:password@localhost:5432/chartsmith?sslmode=disable" --spec-file ./db/schema/tables --spec-type table --out ./db/generated-schema/tables
-	schemahero apply --driver postgres --uri "postgresql://postgres:password@localhost:5432/chartsmith?sslmode=disable" --ddl ./db/generated-schema/tables
+	schemahero plan --driver postgres --uri "$(CHARTSMITH_PG_URI)" --spec-file ./db/schema/tables --spec-type table --out ./db/generated-schema/tables
+	schemahero apply --driver postgres --uri "$(CHARTSMITH_PG_URI)" --ddl ./db/generated-schema/tables
 
 # =============================================================================
 # DEVELOPMENT COMMANDS
