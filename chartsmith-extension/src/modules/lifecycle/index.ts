@@ -1050,7 +1050,9 @@ export async function renderDebugDiff(filePath: string, workspaceId: string): Pr
         if (relevantPlan?.id) {
           console.log(`Found active plan with ID: ${relevantPlan.id}`);
           
-          const fetchedContent = await api.fetchPendingFileContentWithProgress(
+          // Use fileContent module instead of api module for fetching content
+          const fileContent = await import('../fileContent');
+          const fetchedContent = await fileContent.fetchPendingFileContentWithProgress(
             globalState.authData,
             workspaceId,
             relevantPlan.id,
@@ -1169,8 +1171,9 @@ export async function acceptFileChanges(filePath: string, workspaceId: string, p
         if (relevantPlan?.id) {
           console.log(`Found active plan with ID: ${relevantPlan.id}`);
           
-          // Use the progress indicator version for better UX
-          const fetchedContent = await api.fetchPendingFileContentWithProgress(
+          // Use fileContent module instead of api module for fetching content
+          const fileContent = await import('../fileContent');
+          const fetchedContent = await fileContent.fetchPendingFileContentWithProgress(
             globalState.authData,
             workspaceId,
             relevantPlan.id,
