@@ -488,7 +488,7 @@ export async function refreshSession(): Promise<boolean> {
       );
       
       // Check if response contains valid user info
-      if (response && response.userId) {
+      if (response && response.user && response.user.id) {
         return true;
       } else {
         return false;
