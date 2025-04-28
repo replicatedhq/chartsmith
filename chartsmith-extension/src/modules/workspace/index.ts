@@ -39,23 +39,24 @@ export function debugShowAllKeys(): void {
 }
 
 /**
- * Store workspace data in memory
- * @param workspaceId The workspace ID
- * @param data The workspace data to store
- */
-export function setWorkspaceData(workspaceId: string, data: any): void {
-  const key = `workspace:${workspaceId}`;
-  memoryDb.set(key, data);
-}
-
-/**
- * Get workspace data from memory
+ * Get workspace data from memory cache
  * @param workspaceId The workspace ID
  * @returns The workspace data or null if not found
  */
 export function getWorkspaceData(workspaceId: string): any {
   const key = `workspace:${workspaceId}`;
   return memoryDb.get(key) || null;
+}
+
+/**
+ * Store workspace data in memory cache
+ * @param workspaceId The workspace ID
+ * @param data The workspace data to store
+ */
+export function setWorkspaceData(workspaceId: string, data: any): void {
+  const key = `workspace:${workspaceId}`;
+  memoryDb.set(key, data);
+  console.log(`[setWorkspaceData] Stored workspace data for ${workspaceId}`);
 }
 
 /**
@@ -281,6 +282,55 @@ export function constructChannelName(workspaceId: string, userId: string): strin
 }
 
 /**
+ * Initialize workspace data by loading it from the API if not already in memory
+ * @param workspaceId The workspace ID
+ * @returns A promise that resolves when initialization is complete
+ */
+export async function initializeWorkspace(workspaceId: string): Promise<boolean> {
+  console.log(`[initializeWorkspace] Initializing workspace ${workspaceId}`);
+  
+  // Check if we already have the workspace data
+  const existingData = getWorkspaceData(workspaceId);
+  if (existingData) {
+    console.log(`[initializeWorkspace] Workspace ${workspaceId} already loaded`);
+    return true;
+  }
+  
+  // Get auth data for API requests
+  const authData = getAuthData();
+  if (!authData) {
+    console.log(`[initializeWorkspace] No auth data available, cannot load workspace`);
+    return false;
+  }
+  
+  try {
+    // Import API module
+    const api = await import('../api');
+    
+    // Fetch the workspace data
+    console.log(`[initializeWorkspace] Fetching workspace data for ${workspaceId}`);
+    const workspace = await api.fetchApi(
+      authData,
+      `/workspace/${workspaceId}`,
+      'GET'
+    );
+    
+    if (workspace) {
+      // Store the workspace data
+      setWorkspaceData(workspaceId, workspace);
+      console.log(`[initializeWorkspace] Successfully loaded workspace ${workspaceId}`);
+      return true;
+    } else {
+      console.error(`[initializeWorkspace] Failed to load workspace ${workspaceId} - empty response`);
+      return false;
+    }
+  } catch (error) {
+    console.error(`[initializeWorkspace] Error loading workspace ${workspaceId}:`, error);
+    return false;
+  }
+}
+
+/**
  * Get pending content for a file
  * @param workspaceId The workspace ID
  * @param filePath The file path
@@ -289,7 +339,7 @@ export function constructChannelName(workspaceId: string, userId: string): strin
 export async function getPendingFileContent(workspaceId: string, filePath: string): Promise<string | null> {
   console.log(`[getPendingFileContent] Getting pending content for ${filePath} in workspace ${workspaceId}`);
   
-  // First check the memory store
+  // First check the memory store for direct file content
   const key = `pendingContent:${workspaceId}:${filePath}`;
   const content = memoryDb.get(key);
   
@@ -298,33 +348,37 @@ export async function getPendingFileContent(workspaceId: string, filePath: strin
     return content;
   }
   
-  // Check the current store.plans for pending content
-  const state = (store as any).getState();
-  const plans = state.plans || [];
-  
-  // Get the active plan id from store
-  const activePlanId = state.activePlan ? state.activePlan.id : null;
-  
-  if (activePlanId) {
-    console.log(`[getPendingFileContent] Checking active plan ${activePlanId} for pending content`);
+  // Check if we have the workspace data cached
+  const workspaceData = getWorkspaceData(workspaceId);
+  if (workspaceData) {
+    // Look for the file in workspace charts
+    if (workspaceData.charts && Array.isArray(workspaceData.charts)) {
+      for (const chart of workspaceData.charts) {
+        if (chart.files && Array.isArray(chart.files)) {
+          const file = chart.files.find((f: { filePath: string }) => f.filePath === filePath);
+          if (file && file.contentPending) {
+            console.log(`[getPendingFileContent] Found content in workspace charts for ${filePath}`);
+            memoryDb.set(key, file.contentPending);
+            return file.contentPending;
+          }
+        }
+      }
+    }
     
-    // Find file in active plan
-    const activePlan = plans.find((plan: any) => plan.id === activePlanId);
-    
-    if (activePlan && activePlan.files) {
-      const file = activePlan.files.find((f: any) => f.path === filePath);
-      
-      if (file && file.pendingContent) {
-        console.log(`[getPendingFileContent] Found pending content in active plan for ${filePath}`);
-        memoryDb.set(key, file.pendingContent);
-        return file.pendingContent;
+    // Look for the file in loose files
+    if (workspaceData.files && Array.isArray(workspaceData.files)) {
+      const file = workspaceData.files.find((f: { filePath: string }) => f.filePath === filePath);
+      if (file && file.contentPending) {
+        console.log(`[getPendingFileContent] Found content in workspace loose files for ${filePath}`);
+        memoryDb.set(key, file.contentPending);
+        return file.contentPending;
       }
     }
   }
   
-  // If not found in memory, try to get from fileContent module (API or cache)
+  // If not found in memory or workspace data, try to get workspace data from API
   try {
-    console.log(`[getPendingFileContent] Getting content from API for ${filePath}`);
+    console.log(`[getPendingFileContent] Getting workspace data from API for ${filePath}`);
     const authData = getAuthData();
     
     if (!authData) {
@@ -332,18 +386,81 @@ export async function getPendingFileContent(workspaceId: string, filePath: strin
       return null;
     }
     
-    // Use the fileContent module to get the content
-    const content = await fileContent.getFileContent(
-      authData,
-      workspaceId,
-      activePlanId || 'latest', // Use active plan or 'latest' as fallback
-      filePath
-    );
+    // Fetch the entire workspace - this is more efficient than fetching just one file
+    try {
+      // Import API module
+      const api = await import('../api');
+      
+      const workspace = await api.fetchApi(
+        authData,
+        `/workspace/${workspaceId}`,
+        'GET'
+      );
+      
+      if (workspace) {
+        // Store the workspace data for future use
+        setWorkspaceData(workspaceId, workspace);
+        
+        // Look for the file in the fetched workspace
+        let pendingContent = null;
+        
+        // Check charts first
+        if (workspace.charts && Array.isArray(workspace.charts)) {
+          for (const chart of workspace.charts) {
+            if (chart.files && Array.isArray(chart.files)) {
+              const file = chart.files.find((f: { filePath: string }) => f.filePath === filePath);
+              if (file && file.contentPending) {
+                pendingContent = file.contentPending;
+                break;
+              }
+            }
+          }
+        }
+        
+        // Then check loose files
+        if (!pendingContent && workspace.files && Array.isArray(workspace.files)) {
+          const file = workspace.files.find((f: { filePath: string }) => f.filePath === filePath);
+          if (file && file.contentPending) {
+            pendingContent = file.contentPending;
+          }
+        }
+        
+        if (pendingContent) {
+          console.log(`[getPendingFileContent] Found content in fetched workspace for ${filePath}`);
+          memoryDb.set(key, pendingContent);
+          return pendingContent;
+        }
+      }
+    } catch (fetchError) {
+      console.error(`[getPendingFileContent] Error fetching workspace data: ${fetchError}`);
+    }
     
-    if (content) {
-      // Store in memory for future use
-      memoryDb.set(key, content);
-      return content;
+    // FALLBACK: As a last resort, try the individual file endpoint
+    console.log(`[getPendingFileContent] Falling back to individual file endpoint for ${filePath}`);
+    
+    // Get the active plan id from store
+    const state = (store as any).getState();
+    const activePlanId = state.activePlan ? state.activePlan.id : null;
+    
+    if (activePlanId) {
+      try {
+        // Use the fileContent module to get the content
+        const content = await fileContent.getFileContent(
+          authData,
+          workspaceId,
+          activePlanId,
+          filePath
+        );
+        
+        if (content) {
+          // Store in memory for future use
+          console.log(`[getPendingFileContent] Got content from fallback method for ${filePath}`);
+          memoryDb.set(key, content);
+          return content;
+        }
+      } catch (fallbackError) {
+        console.error(`[getPendingFileContent] Error using fallback method: ${fallbackError}`);
+      }
     }
   } catch (error) {
     console.error(`[getPendingFileContent] Error fetching content: ${error}`);

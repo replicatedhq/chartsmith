@@ -19,7 +19,15 @@ jest.mock('../modules/api', () => {
 // Import the mocked fetchApi for our assertions
 import { fetchApi } from '../modules/api';
 
-describe('fetchPendingFileContent', () => {
+describe('fetchPendingFileContent (deprecated - fallback method)', () => {
+  // Add deprecation notice to test suite
+  beforeAll(() => {
+    console.warn(
+      'WARNING: Tests for fetchPendingFileContent cover a deprecated API endpoint. ' +
+      'This endpoint will be removed soon in favor of using the workspace endpoint.'
+    );
+  });
+  
   // Mock auth data for testing
   const mockAuthData: AuthData = {
     token: 'test-token',
