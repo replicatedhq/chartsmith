@@ -5,6 +5,8 @@ import * as vscode from 'vscode';
 import { store, actions } from '../../state/store';
 import { workspaceIdAtom, Plan } from '../../state/atoms';
 import * as path from 'path';
+import { derivePushEndpoint } from '../endpoints';
+import { AuthData } from '../../types';
 
 // Extend global type definition to include our maps
 declare global {
@@ -29,6 +31,28 @@ export function initWebSocket(state: GlobalState): void {
   // Initialize the output channel if it doesn't exist
   if (!outputChannel) {
     outputChannel = vscode.window.createOutputChannel('ChartSmith WebSocket');
+  }
+  
+  console.log('WebSocket module initialized');
+  outputChannel.appendLine('WebSocket module initialized');
+  
+  // Log initial state
+  if (globalState.authData) {
+    outputChannel.appendLine(`Initial auth data available - API endpoint: ${globalState.authData.apiEndpoint}`);
+    
+    if (globalState.authData.pushEndpoint) {
+      outputChannel.appendLine(`Push endpoint from authData: ${globalState.authData.pushEndpoint}`);
+    } else {
+      outputChannel.appendLine('No push endpoint in authData, will be derived from API endpoint when needed');
+    }
+    
+    // Derive and log push endpoint
+    if (globalState.authData.apiEndpoint) {
+      const derivedPushEndpoint = derivePushEndpoint(globalState.authData.apiEndpoint);
+      outputChannel.appendLine(`Derived push endpoint: ${derivedPushEndpoint}`);
+    }
+  } else {
+    outputChannel.appendLine('No auth data available yet');
   }
 }
 
@@ -163,10 +187,22 @@ function handlePlanEvent(data: { eventType: string, workspaceId: string, plan: P
 }
 
 export async function connectWithCentrifugoJwt(): Promise<void> {
-  if (!globalState.centrifugoJwt || !globalState.authData?.pushEndpoint) {
-    console.log('Cannot connect to Centrifugo: Missing JWT or endpoint');
+  if (!globalState.centrifugoJwt) {
+    console.log('Cannot connect to Centrifugo: Missing JWT');
     return;
   }
+  
+  // If pushEndpoint is not available, derive it from apiEndpoint
+  const pushEndpoint = globalState.authData?.pushEndpoint || 
+    (globalState.authData?.apiEndpoint ? derivePushEndpoint(globalState.authData.apiEndpoint) : '');
+  
+  if (!pushEndpoint) {
+    console.log('Cannot connect to Centrifugo: Unable to determine push endpoint');
+    return;
+  }
+
+  console.log(`Connecting to Centrifugo WebSocket: ${pushEndpoint}`);
+  outputChannel.appendLine(`Connecting to Centrifugo WebSocket: ${pushEndpoint}`);
 
   // Check current workspace ID
   const currentWorkspaceId = store.get(workspaceIdAtom);
@@ -196,7 +232,7 @@ export async function connectWithCentrifugoJwt(): Promise<void> {
   // We already checked centrifugoJwt is not null above
   if (globalState.centrifugoJwt) {
     await connectToCentrifugo(
-      globalState.authData.pushEndpoint,
+      pushEndpoint,
       globalState.centrifugoJwt
     );
   }
@@ -204,103 +240,117 @@ export async function connectWithCentrifugoJwt(): Promise<void> {
 
 export async function connectToCentrifugo(endpoint: string, token: string): Promise<void> {
   console.log('connectToCentrifugo called with endpoint:', endpoint);
+  outputChannel.appendLine(`Connecting to Centrifugo with endpoint: ${endpoint}`);
+  outputChannel.appendLine(`Using WebSocket URL: ${endpoint} (${endpoint.startsWith('wss:') ? 'secure' : 'standard'} WebSocket connection)`);
+  outputChannel.appendLine(`JWT token length: ${token.length} characters, first 10 chars: ${token.substring(0, 10)}...`);
 
   if (globalState.centrifuge) {
+    outputChannel.appendLine('Disconnecting from existing Centrifugo connection before creating a new one');
     disconnectFromCentrifugo();
   }
 
   updateConnectionStatus(ConnectionStatus.CONNECTING);
 
-  const centrifuge = new Centrifuge(endpoint, {
-    websocket: WebSocket,
-    token: token
-  });
-
-  centrifuge.on('connecting', () => {
-    console.log('Connecting to Centrifugo...');
-    outputChannel.appendLine('Connecting to Centrifugo...');
-    updateConnectionStatus(ConnectionStatus.CONNECTING);
-  });
-
-  centrifuge.on('connected', (ctx) => {
-    console.log('Connected to Centrifugo', ctx);
-    outputChannel.appendLine('Connected to Centrifugo: ' + JSON.stringify(ctx, null, 2));
-    updateConnectionStatus(ConnectionStatus.CONNECTED);
-    globalState.reconnectAttempt = 0;
-    clearReconnectTimer();
-  });
-
-  centrifuge.on('disconnected', () => {
-    console.log('Disconnected from Centrifugo');
-    outputChannel.appendLine('Disconnected from Centrifugo');
-    updateConnectionStatus(ConnectionStatus.DISCONNECTED);
-    scheduleReconnect();
-  });
-
-  centrifuge.on('error', (ctx) => {
-    console.error('Centrifugo connection error:', ctx);
-    outputChannel.appendLine('Centrifugo connection error: ' + JSON.stringify(ctx, null, 2));
-  });
-
-  // Subscribe to workspace-specific channel
-  // We need both userId and workspaceId to construct the channel name
-  if (globalState.authData?.userId) {
-    // Get the active workspace ID from the global state
-    const workspace = async () => {
-      try {
-        const workspaceModule = await import('../workspace');
-        return await workspaceModule.getActiveWorkspaceId();
-      } catch (error) {
-        outputChannel.appendLine(`Error getting active workspace ID: ${error}`);
-        return null;
-      }
-    };
-
-    workspace().then(async (workspaceId) => {
-      if (!workspaceId) {
-        outputChannel.appendLine('No active workspace ID found, cannot subscribe to channel');
-        return;
-      }
-
-      // Import the workspace module to use the helper function
-      const workspaceModule = await import('../workspace');
-
-      // Create the workspace/user specific channel
-      const channel = workspaceModule.constructChannelName(
-        workspaceId,
-        globalState.authData?.userId || ''
-      );
-      const sub = centrifuge.newSubscription(channel);
-
-      sub.on('publication', (ctx) => {
-        // Process the message
-        const handled = handleWebSocketMessage(ctx.data);
-
-        // Also call the legacy callback if it exists
-        if (onMessageCallback) {
-          onMessageCallback(ctx.data);
-        }
-      });
-
-      sub.on('error', (ctx) => {
-        console.error('Subscription error:', ctx);
-        outputChannel.appendLine(`Subscription error on channel ${channel}: ${JSON.stringify(ctx, null, 2)}`);
-      });
-
-      // Add subscription handler
-      sub.on('subscribed', (ctx) => {
-        outputChannel.appendLine(`Successfully subscribed to channel: ${channel}`);
-      });
-
-      sub.subscribe();
-
-    }).catch(error => {
-      outputChannel.appendLine(`Error subscribing to channel: ${error}`);
+  try {
+    outputChannel.appendLine('Creating new Centrifuge instance...');
+    const centrifuge = new Centrifuge(endpoint, {
+      websocket: WebSocket,
+      token: token
     });
-  }
 
-  centrifuge.connect();
-  globalState.centrifuge = centrifuge;
+    centrifuge.on('connecting', () => {
+      console.log('Connecting to Centrifugo...');
+      outputChannel.appendLine('Connecting to Centrifugo...');
+      updateConnectionStatus(ConnectionStatus.CONNECTING);
+    });
+
+    centrifuge.on('connected', (ctx) => {
+      console.log('Connected to Centrifugo', ctx);
+      outputChannel.appendLine('Connected to Centrifugo: ' + JSON.stringify(ctx, null, 2));
+      updateConnectionStatus(ConnectionStatus.CONNECTED);
+      globalState.reconnectAttempt = 0;
+      clearReconnectTimer();
+    });
+
+    centrifuge.on('disconnected', () => {
+      console.log('Disconnected from Centrifugo');
+      outputChannel.appendLine('Disconnected from Centrifugo');
+      updateConnectionStatus(ConnectionStatus.DISCONNECTED);
+      scheduleReconnect();
+    });
+
+    centrifuge.on('error', (ctx) => {
+      console.error('Centrifugo connection error:', ctx);
+      outputChannel.appendLine('Centrifugo connection error: ' + JSON.stringify(ctx, null, 2));
+    });
+
+    // Subscribe to workspace-specific channel
+    // We need both userId and workspaceId to construct the channel name
+    if (globalState.authData?.userId) {
+      // Get the active workspace ID from the global state
+      const workspace = async () => {
+        try {
+          const workspaceModule = await import('../workspace');
+          return await workspaceModule.getActiveWorkspaceId();
+        } catch (error) {
+          outputChannel.appendLine(`Error getting active workspace ID: ${error}`);
+          return null;
+        }
+      };
+
+      workspace().then(async (workspaceId) => {
+        if (!workspaceId) {
+          outputChannel.appendLine('No active workspace ID found, cannot subscribe to channel');
+          return;
+        }
+
+        // Import the workspace module to use the helper function
+        const workspaceModule = await import('../workspace');
+
+        // Create the workspace/user specific channel
+        const channel = workspaceModule.constructChannelName(
+          workspaceId,
+          globalState.authData?.userId || ''
+        );
+        outputChannel.appendLine(`Subscribing to channel: ${channel}`);
+        const sub = centrifuge.newSubscription(channel);
+
+        sub.on('publication', (ctx) => {
+          // Process the message
+          outputChannel.appendLine(`Received publication on channel ${channel}`);
+          const handled = handleWebSocketMessage(ctx.data);
+
+          // Also call the legacy callback if it exists
+          if (onMessageCallback) {
+            onMessageCallback(ctx.data);
+          }
+        });
+
+        sub.on('error', (ctx) => {
+          console.error('Subscription error:', ctx);
+          outputChannel.appendLine(`Subscription error on channel ${channel}: ${JSON.stringify(ctx, null, 2)}`);
+        });
+
+        // Add subscription handler
+        sub.on('subscribed', (ctx) => {
+          outputChannel.appendLine(`Successfully subscribed to channel: ${channel}`);
+        });
+
+        sub.subscribe();
+
+      }).catch(error => {
+        outputChannel.appendLine(`Error subscribing to channel: ${error}`);
+      });
+    }
+
+    outputChannel.appendLine('Calling connect() on Centrifuge instance...');
+    centrifuge.connect();
+    globalState.centrifuge = centrifuge;
+  } catch (error) {
+    outputChannel.appendLine(`Error during Centrifugo connection setup: ${error}`);
+    console.error('Error during Centrifugo connection setup:', error);
+    updateConnectionStatus(ConnectionStatus.DISCONNECTED);
+  }
 }
 
 export function disconnectFromCentrifugo(): void {
@@ -345,8 +395,18 @@ function scheduleReconnect(): void {
     if (globalState.centrifugoJwt && globalState.authData) {
       // Use the JWT that we know is not null
       const jwt = globalState.centrifugoJwt;
+      
+      // If pushEndpoint is not available, derive it from apiEndpoint
+      const pushEndpoint = globalState.authData?.pushEndpoint || 
+        (globalState.authData?.apiEndpoint ? derivePushEndpoint(globalState.authData.apiEndpoint) : '');
+      
+      if (!pushEndpoint) {
+        console.log('Cannot reconnect to Centrifugo: Unable to determine push endpoint');
+        return;
+      }
+      
       await connectToCentrifugo(
-        globalState.authData.pushEndpoint,
+        pushEndpoint,
         jwt
       );
     } else if (globalState.authData) {
@@ -363,9 +423,19 @@ function scheduleReconnect(): void {
         if (pushResponse && pushResponse.pushToken) {
           globalState.centrifugoJwt = pushResponse.pushToken;
           console.log('Got new JWT for reconnect');
+          
+          // If pushEndpoint is not available, derive it from apiEndpoint
+          const pushEndpoint = globalState.authData?.pushEndpoint || 
+            (globalState.authData?.apiEndpoint ? derivePushEndpoint(globalState.authData.apiEndpoint) : '');
+          
+          if (!pushEndpoint) {
+            console.log('Cannot reconnect to Centrifugo: Unable to determine push endpoint');
+            return;
+          }
+          
           // Since we just set it to pushToken which is a string, we can safely assert it's a string
           await connectToCentrifugo(
-            globalState.authData.pushEndpoint,
+            pushEndpoint,
             pushResponse.pushToken // Use the pushToken directly
           );
         }
@@ -388,67 +458,66 @@ function clearReconnectTimer(): void {
  * @param data The message payload containing the file object
  */
 async function handleArtifactUpdated(data: any): Promise<void> {
-  if (!data.file) {
-    outputChannel.appendLine('ERROR: artifact-updated event missing file object');
-    return;
-  }
-
-  const file = data.file;
-
-  // Check if the file has the expected structure
-  if (!file.filePath) {
-    outputChannel.appendLine('ERROR: File is missing filePath field');
-    return;
-  }
-
   try {
-    // Get the workspace folder to find the file
-    const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (!workspaceFolders || workspaceFolders.length === 0) {
-      outputChannel.appendLine('ERROR: No workspace folder open');
+    outputChannel.appendLine('========= HANDLING ARTIFACT UPDATE ==========');
+    outputChannel.appendLine(JSON.stringify(data, null, 2));
+    
+    if (!data.file) {
+      outputChannel.appendLine('No file data in artifact update');
       return;
     }
-
-    // Get the current workspace ID
-    const currentWorkspaceId = store.get(workspaceIdAtom);
-    outputChannel.appendLine(`Current workspace ID: ${currentWorkspaceId}`);
-
-    if (!currentWorkspaceId) {
-      outputChannel.appendLine('ERROR: No active workspace ID found');
+    
+    const file = data.file;
+    
+    // Get the active workspace
+    const workspace = await import('../workspace');
+    const workspaceId = await workspace.getActiveWorkspaceId();
+    
+    if (!workspaceId) {
+      outputChannel.appendLine('No active workspace ID');
       return;
     }
-
-    // Get the chart path from workspace mapping
-    const workspaceModule = await import('../workspace');
-    const mapping = await workspaceModule.getWorkspaceMapping(currentWorkspaceId);
-
+    
+    outputChannel.appendLine(`Active workspace ID: ${workspaceId}`);
+    
+    // Get the mapping for this workspace
+    const mapping = await workspace.getWorkspaceMapping(workspaceId);
+    
     if (!mapping || !mapping.localPath) {
-      outputChannel.appendLine('ERROR: Could not find workspace mapping or localPath');
+      outputChannel.appendLine('No workspace mapping found');
       return;
     }
 
     // The localPath is the full path to the chart directory
     const chartBasePath = mapping.localPath;
 
-    // Parse filePath to handle potential chart name duplication
+    // Create a normalized version of file path
     let filePath = file.filePath;
-
-    // Remove leading chart name if present to avoid duplication
-    // The pattern is likely "chartname/subpath" where chartname is the last directory in chartBasePath
+    const normalizedFilePath = filePath.replace(/^\/+/, ''); // Remove leading slashes
+    
+    // Get the chart name from the last part of chartBasePath
     const chartName = chartBasePath.split('/').pop() || '';
-
-    // If filePath starts with chartName/, remove it
-    if (filePath.startsWith(`${chartName}/`)) {
-      filePath = filePath.substring(chartName.length + 1); // +1 for the slash
+    
+    // Handle potential chart name duplication in a more robust way
+    let processedFilePath = normalizedFilePath;
+    
+    // If filePath starts with chartName/ and chart name isn't empty, remove it to avoid duplication
+    if (chartName && normalizedFilePath.startsWith(`${chartName}/`)) {
+      processedFilePath = normalizedFilePath.substring(chartName.length + 1);
+      outputChannel.appendLine(`Removed chart name prefix: ${chartName}/ from file path`);
     }
-
-    // Remove any leading slash if present
-    if (filePath.startsWith('/')) {
-      filePath = filePath.substring(1);
-    }
-
-    // Create the full file path by combining the chart base path with the relative file path
-    const fullFilePath = `${chartBasePath}/${filePath}`;
+    
+    // Create the full file path by properly joining paths
+    const path = require('path');
+    const fullFilePath = path.join(chartBasePath, processedFilePath);
+    
+    outputChannel.appendLine(`File path analysis:
+      Original: ${file.filePath}
+      Normalized: ${normalizedFilePath}
+      Chart name: ${chartName}
+      Processed: ${processedFilePath}
+      Final path: ${fullFilePath}
+    `);
 
     // Always store the pending content when we get it, regardless of whether we show it
     if (file.content_pending) {
@@ -460,13 +529,13 @@ async function handleArtifactUpdated(data: any): Promise<void> {
         global.pendingContentMap = new Map<string, string>();
       }
       
-      // Store the content with the full filepath as the key
-      global.pendingContentMap.set(filePath, file.content_pending);
+      // Store the content with the file path as the key (use original file path from artifact)
+      global.pendingContentMap.set(file.filePath, file.content_pending);
       
       // Also store in the traditional chartsmith content map
-      chartsmithContentMap.set(filePath, file.content_pending);
+      chartsmithContentMap.set(file.filePath, file.content_pending);
       
-      outputChannel.appendLine(`Stored pending content in global maps for ${filePath}`);
+      outputChannel.appendLine(`Stored pending content in global maps for ${file.filePath}`);
       
       // Log the number of stored file contents for debugging
       outputChannel.appendLine(`Currently tracking pending content for ${global.pendingContentMap.size} files`);
@@ -487,7 +556,7 @@ async function handleArtifactUpdated(data: any): Promise<void> {
         const result = await renderModule.showFileDiff(
           fullFilePath,
           file.content_pending || '',
-          `ChartSmith Update: ${path.basename(filePath)}`
+          `ChartSmith Update: ${path.basename(file.filePath)}`
         );
 
         outputChannel.appendLine(`Diff result - changes applied: ${result.applied}`);
@@ -511,7 +580,7 @@ async function handleArtifactUpdated(data: any): Promise<void> {
           // Open the file
           await vscode.window.showTextDocument(vscode.Uri.file(fullFilePath));
 
-          vscode.window.showInformationMessage(`Updated ${path.basename(filePath)} with new content`);
+          vscode.window.showInformationMessage(`Updated ${path.basename(file.filePath)} with new content`);
         } catch (fallbackError) {
           outputChannel.appendLine(`Error in fallback approach: ${fallbackError}`);
         }
@@ -548,4 +617,79 @@ async function handleArtifactUpdated(data: any): Promise<void> {
   } catch (error) {
     outputChannel.appendLine(`ERROR handling artifact-updated event: ${error}`);
   }
+}
+
+/**
+ * Helper function to diagnose WebSocket connection issues
+ * @returns A detailed object with connection information
+ */
+export function debugConnectionInfo(): any {
+  const info = {
+    connectionStatus: globalState.connectionStatus,
+    hasCentrifuge: !!globalState.centrifuge,
+    hasCentrifugoJwt: !!globalState.centrifugoJwt,
+    reconnectAttempt: globalState.reconnectAttempt,
+    authData: null as any,
+    derivedPushEndpoint: null as string | null
+  };
+  
+  // Include auth data info (without token)
+  if (globalState.authData) {
+    info.authData = {
+      hasApiEndpoint: !!globalState.authData.apiEndpoint,
+      apiEndpoint: globalState.authData.apiEndpoint,
+      hasPushEndpoint: !!globalState.authData.pushEndpoint,
+      pushEndpoint: globalState.authData.pushEndpoint,
+      hasWwwEndpoint: !!globalState.authData.wwwEndpoint,
+      wwwEndpoint: globalState.authData.wwwEndpoint,
+      hasUserId: !!globalState.authData.userId,
+      hasToken: !!globalState.authData.token
+    };
+    
+    // Derive push endpoint to check if it matches the current one
+    if (globalState.authData.apiEndpoint) {
+      info.derivedPushEndpoint = derivePushEndpoint(globalState.authData.apiEndpoint);
+    }
+  }
+  
+  outputChannel.appendLine(`---------- WebSocket Debug Info ----------`);
+  outputChannel.appendLine(JSON.stringify(info, null, 2));
+  outputChannel.appendLine(`----------------------------------------`);
+  
+  return info;
+}
+
+/**
+ * Creates a WebSocket connection using authentication data
+ * @param authData Authentication data containing pushEndpoint and JWT
+ * @returns Promise resolving to a Centrifuge connection
+ */
+export async function createWebsocketConnection(authData: AuthData): Promise<Centrifuge> {
+  const websocketEndpoint = authData.pushEndpoint;
+  const jwt = authData.token;
+  
+  if (!websocketEndpoint) {
+    throw new Error('WebSocket endpoint is not available');
+  }
+  
+  if (!jwt) {
+    throw new Error('JWT is not available');
+  }
+  
+  const url = new URL(websocketEndpoint);
+  const isSecure = url.protocol === 'wss:';
+  
+  console.log(`Connecting to WebSocket at: ${websocketEndpoint}`);
+  console.log(`Connection type: ${isSecure ? 'Secure (WSS)' : 'Standard (WS)'}`);
+  console.log(`JWT token length: ${jwt.length} characters`);
+  outputChannel.appendLine(`Creating WebSocket connection to: ${websocketEndpoint}`);
+  outputChannel.appendLine(`Using ${isSecure ? 'secure' : 'standard'} WebSocket protocol`);
+  outputChannel.appendLine(`Path: ${url.pathname}`);
+  
+  const connection = new Centrifuge(websocketEndpoint, {
+    websocket: WebSocket,
+    token: jwt
+  });
+  
+  return connection;
 }

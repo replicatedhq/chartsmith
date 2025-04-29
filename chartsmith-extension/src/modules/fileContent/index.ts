@@ -96,13 +96,21 @@ export async function fetchPendingFileContent(
   }
 
   try {
-    log.info(`[fetchPendingFileContent] Fetching content for ${filePath}`);
+    log.info(`[fetchPendingFileContent] Fetching content for ${filePath} via workspace endpoint`);
+    
+    // Validate parameters
+    if (!workspaceId || !filePath) {
+      log.error(`[fetchPendingFileContent] Invalid parameters: workspaceId=${workspaceId}, filePath=${filePath}`);
+      return null;
+    }
     
     // Construct the workspace API endpoint
     const apiUrl = constructApiUrl(
       authData.apiEndpoint,
       `/workspace/${workspaceId}`
     );
+    
+    log.debug(`[fetchPendingFileContent] Requesting from: ${apiUrl}`);
     
     // Fetch the entire workspace data
     const response = await fetch(
@@ -118,13 +126,31 @@ export async function fetchPendingFileContent(
 
     if (!response.ok) {
       log.error(`[fetchPendingFileContent] Error fetching workspace data: ${response.status} ${response.statusText}`);
+      if (response.status === 401 || response.status === 403) {
+        log.error(`[fetchPendingFileContent] Authentication error - token may be invalid or expired`);
+      }
       return null;
     }
 
-    const workspace = await response.json();
+    // Parse the response
+    let workspace;
+    try {
+      workspace = await response.json();
+      log.debug(`[fetchPendingFileContent] Workspace data received: ${workspace ? 'yes' : 'no'}`);
+      
+      if (!workspace) {
+        log.error(`[fetchPendingFileContent] Empty workspace data returned`);
+        return null;
+      }
+    } catch (jsonError) {
+      log.error(`[fetchPendingFileContent] Error parsing workspace JSON response: ${jsonError}`);
+      return null;
+    }
     
     // Look for the file in the workspace charts
     if (workspace.charts && Array.isArray(workspace.charts)) {
+      log.debug(`[fetchPendingFileContent] Searching in ${workspace.charts.length} charts`);
+      
       for (const chart of workspace.charts) {
         if (chart.files && Array.isArray(chart.files)) {
           const file = chart.files.find((f: any) => f.filePath === filePath);
@@ -135,16 +161,22 @@ export async function fetchPendingFileContent(
           }
         }
       }
+    } else {
+      log.debug(`[fetchPendingFileContent] No charts found in workspace data`);
     }
     
     // Look for the file in loose files
     if (workspace.files && Array.isArray(workspace.files)) {
+      log.debug(`[fetchPendingFileContent] Searching in ${workspace.files.length} loose files`);
+      
       const file = workspace.files.find((f: any) => f.filePath === filePath);
       if (file && file.contentPending) {
         log.info(`[fetchPendingFileContent] Found content in workspace loose files for ${filePath}`);
         storeContentInCache(planId, filePath, file.contentPending);
         return file.contentPending;
       }
+    } else {
+      log.debug(`[fetchPendingFileContent] No loose files found in workspace data`);
     }
 
     log.warn(`[fetchPendingFileContent] No pending content found for ${filePath} in workspace`);
@@ -157,6 +189,7 @@ export async function fetchPendingFileContent(
 
 /**
  * Fetches pending content with a progress indicator
+ * @deprecated This function will be removed in a future version. Use the workspace module's getPendingFileContent instead.
  * @param authData The auth data
  * @param workspaceId The workspace ID
  * @param planId The plan ID
@@ -199,13 +232,9 @@ export async function fetchPendingFileContentWithProgress(
       
       if (isCancelled) return null;
 
-      if (content) {
-        progress.report({ message: "Content retrieved", increment: 50 });
-        return content;
-      }
+      progress.report({ message: "Processing...", increment: 50 });
       
-      progress.report({ message: "Failed to fetch content", increment: 50 });
-      return null;
+      return content;
     }
   );
 }

@@ -68,15 +68,43 @@ export async function fetchApi(
         res.on('end', () => {
           if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
             try {
-              const parsedData = data ? JSON.parse(data) : {};
+              // Check if there's any data to parse
+              if (!data || data.trim() === '') {
+                resolve({}); // Return empty object for empty responses
+                return;
+              }
+
+              // Try to parse as JSON
+              const parsedData = JSON.parse(data);
               resolve(parsedData);
             } catch (error) {
               console.error(`Invalid JSON response for [${endpoint}]:`, error);
-              reject(new Error(`Invalid JSON response: ${data}`));
+              console.error(`Response text: "${data}"`);
+              
+              // If this is related to authentication, provide more specific error
+              if (endpoint.includes('/auth')) {
+                reject(new Error(`Authentication error: Invalid server response format. Please try again.`));
+              } else {
+                reject(new Error(`Invalid JSON response`));
+              }
             }
           } else {
             console.error(`HTTP error ${res.statusCode} for [${endpoint}]:`, data);
-            reject(new Error(`HTTP error ${res.statusCode}: ${data}`));
+            
+            // Try to parse error data as JSON for better error messages
+            try {
+              if (data && data.trim()) {
+                const errorData = JSON.parse(data);
+                if (errorData.message || errorData.error) {
+                  reject(new Error(`HTTP error ${res.statusCode}: ${errorData.message || errorData.error}`));
+                  return;
+                }
+              }
+            } catch (e) {
+              // Parsing failed, use raw data
+            }
+            
+            reject(new Error(`HTTP error ${res.statusCode}: ${data || 'No response data'}`));
           }
         });
       });
@@ -210,6 +238,7 @@ export async function uploadFile(
 /**
  * Fetches the pending content for a specific file in a plan
  * 
+ * @deprecated This function will be removed in a future version. Use the workspace module's getPendingFileContent instead.
  * @param authData Authentication data
  * @param workspaceId The workspace ID
  * @param planId The plan ID
@@ -224,46 +253,73 @@ export async function fetchPendingFileContent(
 ): Promise<string | null> {
   try {
     if (!authData) {
-      console.error('Cannot fetch file content: No auth data available');
+      console.error('[fetchPendingFileContent] Cannot fetch file content: No auth data available');
       return null;
     }
+    
+    if (!workspaceId || !filePath) {
+      console.error(`[fetchPendingFileContent] Invalid parameters: workspaceId=${workspaceId}, filePath=${filePath}`);
+      return null;
+    }
+
+    console.log(`[fetchPendingFileContent] Fetching content for ${filePath} via workspace endpoint`);
 
     // Make the API request to get workspace data
     const endpoint = `/workspace/${workspaceId}`;
     
-    const workspace = await fetchApi(
-      authData,
-      endpoint,
-      'GET'
-    );
+    let workspace;
+    try {
+      workspace = await fetchApi(
+        authData,
+        endpoint,
+        'GET'
+      );
+      
+      console.log(`[fetchPendingFileContent] Workspace data received: ${workspace ? 'yes' : 'no'}`);
+    } catch (error) {
+      console.error(`[fetchPendingFileContent] Error fetching workspace data: ${error}`);
+      return null;
+    }
     
     if (!workspace) {
-      console.error('Failed to fetch workspace data');
+      console.error('[fetchPendingFileContent] Failed to fetch workspace data');
       return null;
     }
 
     // Check if the file exists in workspace charts
-    if (workspace.charts && workspace.charts.length > 0) {
+    if (workspace.charts && Array.isArray(workspace.charts) && workspace.charts.length > 0) {
+      console.log(`[fetchPendingFileContent] Searching in ${workspace.charts.length} charts`);
+      
       for (const chart of workspace.charts) {
-        const file = chart.files.find((f: { filePath: string; contentPending: string | null }) => f.filePath === filePath);
-        if (file && file.contentPending !== null) {
-          return file.contentPending;
+        if (chart.files && Array.isArray(chart.files)) {
+          const file = chart.files.find((f: { filePath: string; contentPending: string | null }) => f.filePath === filePath);
+          if (file && file.contentPending !== null) {
+            console.log(`[fetchPendingFileContent] Found content in workspace charts for ${filePath}`);
+            return file.contentPending;
+          }
         }
       }
+    } else {
+      console.log('[fetchPendingFileContent] No charts found in workspace data');
     }
     
     // Check if the file exists in loose files
-    if (workspace.files && workspace.files.length > 0) {
+    if (workspace.files && Array.isArray(workspace.files) && workspace.files.length > 0) {
+      console.log(`[fetchPendingFileContent] Searching in ${workspace.files.length} loose files`);
+      
       const file = workspace.files.find((f: { filePath: string; contentPending: string | null }) => f.filePath === filePath);
       if (file && file.contentPending !== null) {
+        console.log(`[fetchPendingFileContent] Found content in workspace loose files for ${filePath}`);
         return file.contentPending;
       }
+    } else {
+      console.log('[fetchPendingFileContent] No loose files found in workspace data');
     }
     
-    console.log(`No pending content found for ${filePath} in workspace`);
+    console.log(`[fetchPendingFileContent] No pending content found for ${filePath} in workspace`);
     return null;
   } catch (error) {
-    console.error(`Error fetching workspace data for file ${filePath}:`, error);
+    console.error(`[fetchPendingFileContent] Error fetching workspace data for file ${filePath}:`, error);
     return null;
   }
 }

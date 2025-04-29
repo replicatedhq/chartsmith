@@ -504,7 +504,9 @@ function renderLoggedInView(container: HTMLElement) {
   // Add handler for "Open in ChartSmith" button
   document.getElementById('open-in-chartsmith')?.addEventListener('click', () => {
     if (context.workspaceId && context.wwwEndpoint) {
+      // Ensure we use the correct path format: /workspace/ not /api/workspace/
       const url = `${context.wwwEndpoint}/workspace/${context.workspaceId}`;
+      console.log(`Opening workspace in browser: ${url}`);
       vscode.postMessage({
         command: 'openExternal',
         url

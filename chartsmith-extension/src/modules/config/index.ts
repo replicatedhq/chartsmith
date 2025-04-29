@@ -1,10 +1,9 @@
 import * as vscode from 'vscode';
 import {
-  API_ENDPOINT_KEY,
-  PUSH_ENDPOINT_KEY,
-  WWW_ENDPOINT_KEY
+  API_ENDPOINT_KEY
 } from '../../constants';
 import { log } from '../logging';
+import { deriveWwwEndpoint, derivePushEndpoint } from '../endpoints';
 
 /**
  * Check if development mode is enabled
@@ -28,23 +27,25 @@ export function getApiEndpointConfig(): string {
 }
 
 /**
- * Get the WWW endpoint from configuration with fallback to default
+ * Get the WWW endpoint derived from the API endpoint
  */
 export function getWwwEndpointConfig(): string {
-  const config = vscode.workspace.getConfiguration('chartsmith');
-  const endpoint = config.get<string>('wwwEndpoint') || 'https://chartsmith.ai';
-  log.debug(`Read wwwEndpoint from settings: ${endpoint}`);
-  return endpoint;
+  // Derive from API endpoint
+  const apiEndpoint = getApiEndpointConfig();
+  const wwwEndpoint = deriveWwwEndpoint(apiEndpoint);
+  log.debug(`Derived wwwEndpoint from apiEndpoint: ${wwwEndpoint}`);
+  return wwwEndpoint;
 }
 
 /**
- * Get the push endpoint from configuration (optional)
+ * Get the push endpoint derived from the API endpoint
  */
 export function getPushEndpointConfig(): string {
-  const config = vscode.workspace.getConfiguration('chartsmith');
-  const endpoint = config.get<string>('pushEndpoint') || '';
-  log.debug(`Read pushEndpoint from settings: ${endpoint || '(not set)'}`);
-  return endpoint;
+  // Derive from API endpoint
+  const apiEndpoint = getApiEndpointConfig();
+  const pushEndpoint = derivePushEndpoint(apiEndpoint);
+  log.debug(`Derived pushEndpoint from apiEndpoint: ${pushEndpoint}`);
+  return pushEndpoint;
 }
 
 /**
@@ -64,30 +65,6 @@ export async function initDefaultConfigIfNeeded(secretStorage: vscode.SecretStor
     log.debug(`Setting default apiEndpoint in storage: ${configEndpoint}`);
     await secretStorage.store(API_ENDPOINT_KEY, configEndpoint);
   }
-
-  // Check if WWW endpoint is already set in secret storage
-  const wwwEndpoint = await secretStorage.get(WWW_ENDPOINT_KEY);
-  log.debug(`Current wwwEndpoint in storage: ${wwwEndpoint || '(not set)'}`);
-  
-  if (!wwwEndpoint) {
-    // Set default from configuration or hardcoded fallback
-    const configEndpoint = getWwwEndpointConfig();
-    log.debug(`Setting default wwwEndpoint in storage: ${configEndpoint}`);
-    await secretStorage.store(WWW_ENDPOINT_KEY, configEndpoint);
-  }
-
-  // Check if push endpoint is already set in secret storage
-  const pushEndpoint = await secretStorage.get(PUSH_ENDPOINT_KEY);
-  log.debug(`Current pushEndpoint in storage: ${pushEndpoint || '(not set)'}`);
-  
-  if (!pushEndpoint) {
-    // Set default from configuration or hardcoded fallback
-    const configValue = getPushEndpointConfig();
-    if (configValue) {
-      log.debug(`Setting default pushEndpoint in storage: ${configValue}`);
-      await secretStorage.store(PUSH_ENDPOINT_KEY, configValue);
-    }
-  }
   
   log.debug(`Configuration initialization complete`);
 }
@@ -101,36 +78,15 @@ export async function resetEndpointsToConfig(secretStorage: vscode.SecretStorage
   
   // Get current configuration values
   const apiEndpointConfig = getApiEndpointConfig();
-  const wwwEndpointConfig = getWwwEndpointConfig();
-  const pushEndpointConfig = getPushEndpointConfig();
   
   // Show current stored values for comparison
   const currentApiEndpoint = await secretStorage.get(API_ENDPOINT_KEY);
-  const currentWwwEndpoint = await secretStorage.get(WWW_ENDPOINT_KEY);
-  const currentPushEndpoint = await secretStorage.get(PUSH_ENDPOINT_KEY);
   
-  log.debug(`Current stored values: ${JSON.stringify({
-    apiEndpoint: currentApiEndpoint || '(not set)',
-    wwwEndpoint: currentWwwEndpoint || '(not set)',
-    pushEndpoint: currentPushEndpoint || '(not set)'
-  })}`);
-  
-  log.debug(`New values from configuration: ${JSON.stringify({
-    apiEndpoint: apiEndpointConfig,
-    wwwEndpoint: wwwEndpointConfig,
-    pushEndpoint: pushEndpointConfig || '(not set)'
-  })}`);
+  log.debug(`Current stored API endpoint: ${currentApiEndpoint || '(not set)'}`);
+  log.debug(`New API endpoint: ${apiEndpointConfig}`);
   
   // Update with new configuration values
   await secretStorage.store(API_ENDPOINT_KEY, apiEndpointConfig);
-  await secretStorage.store(WWW_ENDPOINT_KEY, wwwEndpointConfig);
-  
-  if (pushEndpointConfig) {
-    await secretStorage.store(PUSH_ENDPOINT_KEY, pushEndpointConfig);
-  } else {
-    // If no push endpoint is configured, clear it from storage
-    await secretStorage.delete(PUSH_ENDPOINT_KEY);
-  }
   
   log.debug(`Endpoints have been reset to match configuration`);
 } 

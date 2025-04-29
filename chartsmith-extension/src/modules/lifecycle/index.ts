@@ -10,6 +10,7 @@ import { initRenders } from '../renders';
 import { getHtmlForWebview } from '../ui';
 import * as config from "../config";
 import { isDevelopmentMode } from "../config";
+import { updateWithDerivedEndpoints } from '../endpoints';
 
 let outputChannel: vscode.OutputChannel;
 let context: vscode.ExtensionContext;
@@ -664,6 +665,36 @@ function registerCommands(context: vscode.ExtensionContext): void {
       }
     })
   );
+
+  // Check WebSocket connection status
+  context.subscriptions.push(
+    vscode.commands.registerCommand('chartsmith.checkConnection', async () => {
+      console.log(`Current WebSocket connection status: ${globalState.connectionStatus}`);
+      vscode.window.showInformationMessage(`WebSocket status: ${globalState.connectionStatus}`);
+      
+      // Get debug info
+      const websocket = await import('../webSocket');
+      const debugInfo = websocket.debugConnectionInfo();
+      
+      // Show detailed info in output channel
+      console.log('Debug info:', debugInfo);
+      
+      // If not connected, try to reconnect
+      if (globalState.connectionStatus !== ConnectionStatus.CONNECTED) {
+        console.log('WebSocket not connected, attempting to reconnect...');
+        vscode.window.showInformationMessage('WebSocket not connected, attempting to reconnect...');
+        
+        // Try to reconnect
+        await websocket.connectWithCentrifugoJwt();
+        
+        // Check if that helped
+        setTimeout(() => {
+          const newStatus = globalState.connectionStatus;
+          vscode.window.showInformationMessage(`WebSocket status after reconnect attempt: ${newStatus}`);
+        }, 2000);
+      }
+    })
+  );
 }
 
 function registerViews(context: vscode.ExtensionContext): void {
@@ -796,15 +827,22 @@ class SidebarProvider implements vscode.WebviewViewProvider {
       }
     });
 
+    // Ensure authData has properly derived endpoints before passing to webview
+    let authData = globalState.authData;
+    if (authData) {
+      // Update with derived endpoints
+      authData = updateWithDerivedEndpoints(authData) || authData;
+    }
+
     webviewView.webview.html = getHtmlForWebview(
       webviewView.webview,
       this._extensionUri,
       {
-        apiEndpoint: globalState.authData?.apiEndpoint,
-        pushEndpoint: globalState.authData?.pushEndpoint,
-        wwwEndpoint: globalState.authData?.wwwEndpoint,
-        userId: globalState.authData?.userId,
-        token: globalState.authData?.token,
+        apiEndpoint: authData?.apiEndpoint,
+        pushEndpoint: authData?.pushEndpoint,
+        wwwEndpoint: authData?.wwwEndpoint,
+        userId: authData?.userId,
+        token: authData?.token,
         connectionStatus: globalState.connectionStatus,
         workspaceId: activeWorkspaceId || '',
         chartPath: chartPath

@@ -31,21 +31,17 @@ The ChartSmith extension connects to several backend services. In production, th
 
 ### VSCode Settings
 
-You can configure the endpoints by adding the following to your VSCode settings (`settings.json`):
+You can configure the API endpoint by adding the following to your VSCode settings (`settings.json`):
 
 ```json
 {
-  "chartsmith.apiEndpoint": "http://localhost:3000",
-  "chartsmith.wwwEndpoint": "http://localhost:3000",
-  "chartsmith.pushEndpoint": "http://localhost:8000"
+  "chartsmith.apiEndpoint": "http://localhost:3000"
 }
 ```
 
-The settings are:
-
-- `chartsmith.apiEndpoint`: The base URL for API requests (default: `https://chartsmith.ai`)
-- `chartsmith.wwwEndpoint`: The base URL for web interface (default: `https://chartsmith.ai`)
-- `chartsmith.pushEndpoint`: The WebSocket endpoint for Centrifugo real-time updates (optional)
+The WWW and Push endpoints are automatically derived from the API endpoint:
+- **WWW Endpoint**: Same as the API endpoint but with any `/api` path removed
+- **Push Endpoint**: For WebSockets, converted to `ws://` or `wss://` protocol with appropriate paths for Centrifugo
 
 ### Development Mode
 
@@ -64,9 +60,9 @@ This setting enables:
 
 ### Development Workflow
 
-1. Configure the endpoints in your VSCode settings as needed.
-2. If you're already logged in, you'll need to log out and log in again for the new endpoints to take effect.
-3. The extension will use the configured endpoints for all operations.
+1. Configure the API endpoint in your VSCode settings as needed.
+2. If you're already logged in, you'll need to log out and log in again for the new endpoint to take effect.
+3. The extension will use the configured API endpoint and derive other endpoints from it.
 
 ### Notes on HTTPS
 
@@ -79,11 +75,11 @@ The extension will automatically convert HTTP to HTTPS for non-localhost URLs fo
 
 The endpoints are stored in the extension's secret storage. The configuration works as follows:
 
-1. If no endpoints are stored in secret storage, the extension will use the values from VSCode settings.
-2. When logging in, the extension will use the endpoints from VSCode settings.
-3. After authentication, the endpoints provided by the auth server will be stored and used.
+1. If no endpoint is stored in secret storage, the extension will use the value from VSCode settings.
+2. When logging in, the extension will use the API endpoint from VSCode settings.
+3. After authentication, the API endpoint provided by the auth server will be stored and used.
 
-If you need to reset the stored endpoints, you can log out and log in again.
+If you need to reset the stored endpoints, you can use the command "ChartSmith: Reset Endpoints to Configuration" or log out and log in again.
 
 ## Debugging the Extension
 
