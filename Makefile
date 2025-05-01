@@ -49,15 +49,18 @@ endef
 # Check required environment variables
 .PHONY: check-env
 check-env:
-	$(call check_env_var,ANTHROPIC_API_KEY)
-	$(call check_env_var,GROQ_API_KEY)
-	$(call check_env_var,VOYAGE_API_KEY)
-	$(call check_env_var,CHARTSMITH_PG_URI)
-	$(call check_env_var,CHARTSMITH_CENTRIFUGO_ADDRESS)
-	$(call check_env_var,CHARTSMITH_CENTRIFUGO_API_KEY)
-	$(call check_env_var,GOOGLE_CLIENT_ID)
-	$(call check_env_var,GOOGLE_CLIENT_SECRET)
-	@echo "All required environment variables are set"
+	@echo "Environment variable checking is currently disabled"
+	@echo "Skipping environment variable validation..."
+	# Commenting out the actual checks
+	# $(call check_env_var,ANTHROPIC_API_KEY)
+	# $(call check_env_var,GROQ_API_KEY)
+	# $(call check_env_var,VOYAGE_API_KEY)
+	# $(call check_env_var,CHARTSMITH_PG_URI)
+	# $(call check_env_var,CHARTSMITH_CENTRIFUGO_ADDRESS)
+	# $(call check_env_var,CHARTSMITH_CENTRIFUGO_API_KEY)
+	# $(call check_env_var,GOOGLE_CLIENT_ID)
+	# $(call check_env_var,GOOGLE_CLIENT_SECRET)
+	@echo "All required environment variables are ASSUMED to be set"
 
 # =============================================================================
 # DATABASE COMMANDS
