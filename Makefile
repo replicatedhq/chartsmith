@@ -49,18 +49,15 @@ endef
 # Check required environment variables
 .PHONY: check-env
 check-env:
-	@echo "Environment variable checking is currently disabled"
-	@echo "Skipping environment variable validation..."
-	# Commenting out the actual checks
-	# $(call check_env_var,ANTHROPIC_API_KEY)
-	# $(call check_env_var,GROQ_API_KEY)
-	# $(call check_env_var,VOYAGE_API_KEY)
-	# $(call check_env_var,CHARTSMITH_PG_URI)
-	# $(call check_env_var,CHARTSMITH_CENTRIFUGO_ADDRESS)
-	# $(call check_env_var,CHARTSMITH_CENTRIFUGO_API_KEY)
-	# $(call check_env_var,GOOGLE_CLIENT_ID)
-	# $(call check_env_var,GOOGLE_CLIENT_SECRET)
-	@echo "All required environment variables are ASSUMED to be set"
+	$(call check_env_var,ANTHROPIC_API_KEY)
+	$(call check_env_var,GROQ_API_KEY)
+	$(call check_env_var,VOYAGE_API_KEY)
+	$(call check_env_var,CHARTSMITH_PG_URI)
+	$(call check_env_var,CHARTSMITH_CENTRIFUGO_ADDRESS)
+	$(call check_env_var,CHARTSMITH_CENTRIFUGO_API_KEY)
+	$(call check_env_var,GOOGLE_CLIENT_ID)
+	$(call check_env_var,GOOGLE_CLIENT_SECRET)
+	@echo "All required environment variables are set"
 
 # =============================================================================
 # DATABASE COMMANDS
@@ -100,12 +97,12 @@ build:
 
 # Requires: ANTHROPIC_API_KEY, GROQ_API_KEY, VOYAGE_API_KEY
 .PHONY: run-worker
-run-worker: build check-env
+run-worker: build
 	@echo "Running $(WORKER_BINARY_NAME) with environment variables from shell..."
 	./$(WORKER_BUILD_DIR)/$(WORKER_BINARY_NAME) run --
 
 .PHONY: bootstrap
-bootstrap: build check-env
+bootstrap: build
 	@echo "Bootstrapping chart..."
 	./$(WORKER_BUILD_DIR)/$(WORKER_BINARY_NAME) bootstrap \
 		--force
@@ -144,7 +141,7 @@ okteto-dev:
 
 # Requires: ANTHROPIC_API_KEY, GROQ_API_KEY, VOYAGE_API_KEY
 .PHONY: run-debug-console
-run-debug-console: check-env
+run-debug-console:
 	@echo "Running debug console with environment variables from shell..."
 	@# We set DB_URI to maintain compatibility with existing code
 	export DB_URI=$(CHARTSMITH_PG_URI) && go run main.go debug-console
