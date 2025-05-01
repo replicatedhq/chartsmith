@@ -45,8 +45,8 @@
         },
         "chartsmith.apiEndpoint": {
           "type": "string",
-          "default": "https://chartsmith.ai",
-          "description": "Base URL for API requests (e.g., http://localhost:3000 for local development). The WWW and Push endpoints are automatically derived from this value."
+          "default": "https://chartsmith.ai/api",
+          "description": "Base URL for API requests (e.g., http://localhost:3000/api for local development). Always include the /api suffix."
         }
       }
     },
@@ -72,7 +72,19 @@
         }
       },
       {
-        "command": "chartsmith.refreshDiffButtonsVisibility",
+        "command": "chartsmith.view.focus",
+        "title": "ChartSmith: Open ChartSmith"
+      },
+      {
+        "command": "chartsmith.showFileDiff",
+        "title": "ChartSmith: Show File Diff"
+      },
+      {
+        "command": "chartsmith.showAuthDiagnostics",
+        "title": "ChartSmith: Show Authentication Diagnostics"
+      },
+      {
+        "command": "chartsmith.refreshDiffButtons",
         "title": "ChartSmith: Refresh Diff Buttons Visibility"
       }
     ],

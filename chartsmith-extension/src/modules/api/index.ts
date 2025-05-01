@@ -5,6 +5,7 @@ import { AuthData } from '../../types';
 import { constructApiUrl } from '../utils';
 import * as vscode from 'vscode';
 import * as path from 'path';
+import { log } from '../logging';
 
 export async function fetchApi(
   authData: AuthData,
@@ -17,22 +18,25 @@ export async function fetchApi(
     try {
       // Validate auth data
       if (!authData) {
-        console.error('fetchApi: authData is null or undefined');
+        log.error('fetchApi: authData is null or undefined');
         return reject(new Error('Invalid auth data: authData is null or undefined'));
       }
       
       if (!authData.apiEndpoint) {
-        console.error('fetchApi: authData.apiEndpoint is null or undefined');
+        log.error('fetchApi: authData.apiEndpoint is null or undefined');
         return reject(new Error('Invalid auth data: apiEndpoint is missing'));
       }
       
       if (!authData.token && endpoint !== '/auth/status') {
-        console.error('fetchApi: authData.token is null or undefined for non-auth endpoint');
+        log.error('fetchApi: authData.token is null or undefined for non-auth endpoint');
         return reject(new Error('Invalid auth data: token is missing'));
       }
       
-      // Construct the API URL
+      // Construct the API URL with the endpoint path directly
+      // The API endpoint already includes the /api suffix as per standardization
       const url = constructApiUrl(authData.apiEndpoint, endpoint);
+      
+      log.debug(`Making API request to: ${url}`);
       
       // Parse the URL to determine whether to use http or https module
       const parsedUrl = new URL(url);
@@ -41,7 +45,7 @@ export async function fetchApi(
       
       // Allow HTTP for localhost, require HTTPS for everything else
       if (!isHttps && !isLocalhost) {
-        console.error(`Protocol "${parsedUrl.protocol}" not supported for non-localhost [${endpoint}]`);
+        log.error(`Protocol "${parsedUrl.protocol}" not supported for non-localhost [${endpoint}]`);
         return reject(new Error(`Protocol "${parsedUrl.protocol}" not supported for non-localhost. Expected "https:"`));
       }
       
@@ -68,49 +72,30 @@ export async function fetchApi(
         res.on('end', () => {
           if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
             try {
-              // Check if there's any data to parse
-              if (!data || data.trim() === '') {
-                resolve({}); // Return empty object for empty responses
-                return;
-              }
-
-              // Try to parse as JSON
-              const parsedData = JSON.parse(data);
+              const parsedData = data ? JSON.parse(data) : {};
               resolve(parsedData);
             } catch (error) {
-              console.error(`Invalid JSON response for [${endpoint}]:`, error);
-              console.error(`Response text: "${data}"`);
-              
-              // If this is related to authentication, provide more specific error
-              if (endpoint.includes('/auth')) {
-                reject(new Error(`Authentication error: Invalid server response format. Please try again.`));
-              } else {
-                reject(new Error(`Invalid JSON response`));
-              }
+              log.error(`Invalid JSON response for [${endpoint}]: ${error}`);
+              reject(new Error(`Invalid JSON response: ${data}`));
+            }
+          } else if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400) {
+            // Handle redirects specifically
+            if (res.headers.location?.includes('/login')) {
+              log.error(`Authentication error: Redirected to login page. Token may be invalid or expired.`);
+              reject(new Error(`HTTP error ${res.statusCode}: ${res.headers.location}`));
+            } else {
+              log.error(`Redirect error ${res.statusCode} for [${endpoint}] to ${res.headers.location}`);
+              reject(new Error(`HTTP error ${res.statusCode}: Redirected to ${res.headers.location}`));
             }
           } else {
-            console.error(`HTTP error ${res.statusCode} for [${endpoint}]:`, data);
-            
-            // Try to parse error data as JSON for better error messages
-            try {
-              if (data && data.trim()) {
-                const errorData = JSON.parse(data);
-                if (errorData.message || errorData.error) {
-                  reject(new Error(`HTTP error ${res.statusCode}: ${errorData.message || errorData.error}`));
-                  return;
-                }
-              }
-            } catch (e) {
-              // Parsing failed, use raw data
-            }
-            
-            reject(new Error(`HTTP error ${res.statusCode}: ${data || 'No response data'}`));
+            log.error(`HTTP error ${res.statusCode} for [${endpoint}]: ${data}`);
+            reject(new Error(`HTTP error ${res.statusCode}: ${data}`));
           }
         });
       });
       
       req.on('error', (error) => {
-        console.error(`Request error for [${endpoint}]:`, error);
+        log.error(`Request error for [${endpoint}]: ${error}`);
         reject(error);
       });
       
@@ -120,7 +105,7 @@ export async function fetchApi(
       
       req.end();
     } catch (error) {
-      console.error(`Unexpected error in fetchApi for [${endpoint}]:`, error);
+      log.error(`Unexpected error in fetchApi for [${endpoint}]: ${error}`);
       reject(error);
     }
   });
@@ -167,7 +152,13 @@ export async function uploadFile(
         // Check for redirects specifically
         if (res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 307 || res.statusCode === 308) {
           if (res.headers.location?.includes('/login')) {
-            console.error(`Authentication error: Redirected to login page. Token may be invalid or expired.`);
+            log.error(`Authentication error: Redirected to login page. Token may be invalid or expired.`);
+            reject(new Error(`HTTP error ${res.statusCode}: Redirected to login page. Token may be invalid or expired.`));
+            return;
+          } else {
+            log.error(`Redirect error ${res.statusCode} to ${res.headers.location}`);
+            reject(new Error(`HTTP error ${res.statusCode}: Redirected to ${res.headers.location}`));
+            return;
           }
         }
         

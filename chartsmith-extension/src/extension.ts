@@ -23,6 +23,20 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
   
+  // Make sure we have context variables set for diff buttons
+  vscode.commands.executeCommand('setContext', 'chartsmith.showDiffActions', false);
+  
+  // Register command to show authentication diagnostic information
+  context.subscriptions.push(
+    vscode.commands.registerCommand('chartsmith.showAuthDiagnostics', async () => {
+      console.log('Showing authentication diagnostics');
+      
+      // Dynamically import the auth module to avoid circular dependencies
+      const auth = await import('./modules/auth');
+      auth.showAuthDiagnostics();
+    })
+  );
+  
   // Register the showDiff command
   context.subscriptions.push(
     vscode.commands.registerCommand('chartsmith.showFileDiff', async () => {

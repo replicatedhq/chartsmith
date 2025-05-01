@@ -35,12 +35,14 @@ You can configure the API endpoint by adding the following to your VSCode settin
 
 ```json
 {
-  "chartsmith.apiEndpoint": "http://localhost:3000"
+  "chartsmith.apiEndpoint": "http://localhost:3000/api"
 }
 ```
 
+> **IMPORTANT**: Always include the `/api` suffix in your endpoint. For production use, the default is `https://chartsmith.ai/api`.
+
 The WWW and Push endpoints are automatically derived from the API endpoint:
-- **WWW Endpoint**: Same as the API endpoint but with any `/api` path removed
+- **WWW Endpoint**: Same as the API endpoint but with the `/api` path removed
 - **Push Endpoint**: For WebSockets, converted to `ws://` or `wss://` protocol with appropriate paths for Centrifugo
 
 ### Development Mode
@@ -118,6 +120,7 @@ The extension provides several commands for testing and debugging:
 - `ChartSmith: Test Authentication Token` - Verify the auth token
 - `ChartSmith: Verify Authentication Session` - Check if the session is valid
 - `ChartSmith: Reset Endpoints to Configuration` - Reset to the endpoints in settings
+- `ChartSmith: Show Authentication Diagnostics` - Display detailed authentication information for troubleshooting
 - `ChartSmith: Test File Writing` - Test filesystem access
 - `ChartSmith: Test Path Resolution` - Test path handling
 - `ChartSmith: Refresh Diff Buttons Visibility` - Force refresh of diff buttons

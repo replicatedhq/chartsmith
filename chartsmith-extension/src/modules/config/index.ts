@@ -21,7 +21,7 @@ export function isDevelopmentMode(): boolean {
  */
 export function getApiEndpointConfig(): string {
   const config = vscode.workspace.getConfiguration('chartsmith');
-  const endpoint = config.get<string>('apiEndpoint') || 'https://chartsmith.ai';
+  const endpoint = config.get<string>('apiEndpoint') || 'https://chartsmith.ai/api';
   log.debug(`Read apiEndpoint from settings: ${endpoint}`);
   return endpoint;
 }

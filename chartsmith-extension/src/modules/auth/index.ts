@@ -437,102 +437,58 @@ export async function verifySession(): Promise<boolean> {
     
     // Basic validation of auth data
     if (!token || !apiEndpoint || !userId) {
-      console.log('verifySession: Missing auth data', { 
-        hasToken: !!token, 
-        hasApiEndpoint: !!apiEndpoint, 
-        hasUserId: !!userId 
-      });
+      log.info(`verifySession: Missing auth data - hasToken: ${!!token}, hasApiEndpoint: ${!!apiEndpoint}, hasUserId: ${!!userId}`);
       return false;
     }
     
-    // Create an AuthData object with derived endpoints
-    const authData = createAuthDataWithDerivedEndpoints(
-      token,
-      userId,
-      apiEndpoint
-    );
+    log.info(`verifySession: Using API endpoint: ${apiEndpoint}`);
     
-    // Make a test request to the API to verify the token is valid
     try {
-      // Use Node.js http/https module directly
-      const url = new URL(`${apiEndpoint}/auth/status`);
-      const isHttps = url.protocol === 'https:';
-      const requestModule = isHttps ? require('https') : require('http');
+      // Import the proper utilities
+      const utils = await import('../utils');
+      const api = await import('../api');
       
-      console.log(`Verifying session with request to: ${url.toString()}`);
+      // Use fetchApi instead of manual URL construction to ensure consistency
+      // CRITICAL FIX: Use '/auth/status' instead of '/api/auth/status' to avoid double prefix
+      const statusResponse = await api.fetchApi(
+        {
+          token,
+          userId,
+          apiEndpoint,
+          pushEndpoint: '',
+          wwwEndpoint: ''
+        },
+        '/auth/status', // Changed from '/api/auth/status'
+        'GET'
+      );
       
-      const response = await new Promise<{statusCode: number, body: string}>((resolve, reject) => {
-        const options = {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-            'Authorization': `Bearer ${token}`
-          }
-        };
-        
-        const req = requestModule.request(url, options, (res: any) => {
-          let data = '';
-          
-          res.on('data', (chunk: Buffer) => {
-            data += chunk.toString();
-          });
-          
-          res.on('end', () => {
-            console.log(`Auth status response: status=${res.statusCode}, body length=${data.length}`);
-            resolve({
-              statusCode: res.statusCode,
-              body: data
-            });
-          });
-        });
-        
-        req.on('error', (error: Error) => {
-          console.error('Verification request error:', error);
-          reject(error);
-        });
-        
-        req.end();
-      });
+      log.info(`Session verification successful: ${JSON.stringify(statusResponse)}`);
       
-      // Check if the response indicates a valid session
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        console.log('Session verification successful');
-        
-        // Try to parse the response body to verify user data if available
-        try {
-          if (response.body && response.body.trim()) {
-            const responseData = JSON.parse(response.body);
-            if (responseData.user && responseData.user.id === userId) {
-              console.log('User ID in response matches stored user ID');
-            } else if (responseData.user) {
-              console.log('Warning: User ID in response does not match stored user ID');
-            }
-          }
-        } catch (parseError) {
-          console.warn('Could not parse auth status response as JSON:', parseError);
-          // Non-fatal, just continue
+      // If we got a successful response, check user ID
+      if (statusResponse && statusResponse.user && statusResponse.user.id) {
+        if (statusResponse.user.id === userId) {
+          log.info('User ID in response matches stored user ID');
+        } else {
+          log.warn('Warning: User ID in response does not match stored user ID');
         }
-        
         return true;
-      } else if (response.statusCode === 401 || response.statusCode === 403) {
-        console.log(`Session verification failed: Unauthorized (${response.statusCode})`);
-        return false;
-      } else if (response.statusCode >= 300 && response.statusCode < 400) {
-        console.log(`Session verification failed: Redirect (${response.statusCode})`);
-        return false;
-      } else {
-        console.log(`Session verification failed with status code ${response.statusCode}`);
-        if (response.body) {
-          console.log(`Response body: ${response.body.substring(0, 200)}${response.body.length > 200 ? '...' : ''}`);
-        }
-        return false;
       }
-    } catch (error) {
-      console.error('Error during session verification:', error);
+      
+      // If we got here without returning true, something is wrong with the response
+      log.warn('Response from auth status endpoint did not contain expected user data');
+      return false;
+    } catch (error: any) {
+      log.error(`Error during session verification: ${error}`);
+      
+      // More helpful error info for redirects
+      if (error.message && error.message.includes('307')) {
+        log.error('Session verification failed due to redirect. Token likely expired.');
+      }
+      
       return false;
     }
   } catch (error) {
-    console.error('Unexpected error verifying session:', error);
+    log.error(`Unexpected error verifying session: ${error}`);
     return false;
   }
 }
@@ -546,33 +502,45 @@ export async function refreshSession(): Promise<boolean> {
     // Get auth data
     const authData = await loadAuthData();
     if (!authData) {
+      log.info('refreshSession: No auth data available');
       return false;
     }
+    
+    log.info(`refreshSession: Using API endpoint: ${authData.apiEndpoint}`);
     
     // Try to fetch actual auth data from the server
     try {
       // Import API module
       const api = await import('../api');
       
-      // Make a request to auth status endpoint
+      // Make a request to auth status endpoint with properly formatted path
+      // CRITICAL FIX: Use '/auth/status' instead of '/api/auth/status'
       const response = await api.fetchApi(
         authData,
-        '/auth/status',
+        '/auth/status', // Changed from '/api/auth/status'
         'GET'
       );
       
       // Check if response contains valid user info
       if (response && response.user && response.user.id) {
+        log.info('Session refresh successful');
         return true;
       } else {
+        log.warn('Session refresh failed: Invalid or missing user data in response');
         return false;
       }
-    } catch (error) {
-      console.error('Error during session refresh:', error);
+    } catch (error: any) {
+      log.error(`Error during session refresh: ${error}`);
+      
+      // More helpful error info for redirects
+      if (error.message && error.message.includes('307')) {
+        log.error('Session refresh failed due to redirect. Token likely expired.');
+      }
+      
       return false;
     }
   } catch (error) {
-    console.error('Unexpected error refreshing session:', error);
+    log.error(`Unexpected error refreshing session: ${error}`);
     return false;
   }
 }
@@ -594,4 +562,58 @@ export function getAuthData(): AuthData | null {
   }
   
   return state.authData;
+}
+
+/**
+ * Displays diagnostic information about authentication in a VS Code information message
+ * Helpful for debugging authentication issues
+ */
+export function showAuthDiagnostics(): void {
+  try {
+    log.info('Showing auth diagnostics...');
+    
+    // Get auth data
+    const authData = getAuthData();
+    
+    if (!authData) {
+      vscode.window.showInformationMessage('Not authenticated');
+      log.info('Auth diagnostics: Not authenticated');
+      return;
+    }
+    
+    // Check if token is valid by attempting to decode it
+    const decodedToken = decodeJwt(authData.token);
+    const tokenExpiry = decodedToken?.exp ? new Date(decodedToken.exp * 1000).toISOString() : 'N/A';
+    const tokenIsExpired = decodedToken?.exp ? (decodedToken.exp * 1000 < Date.now()) : 'Unknown';
+    
+    // Build the diagnostic information
+    const diagnosticInfo = [
+      `API Endpoint: ${authData.apiEndpoint}`,
+      `WWW Endpoint: ${authData.wwwEndpoint || 'not set'}`,
+      `Push Endpoint: ${authData.pushEndpoint || 'not set'}`,
+      `User ID: ${authData.userId}`,
+      `Token present: ${!!authData.token}`,
+      `Token expiry: ${tokenExpiry}`,
+      `Token expired: ${tokenIsExpired}`
+    ];
+    
+    // Log the info
+    diagnosticInfo.forEach(info => log.info(`Auth diagnostics: ${info}`));
+    
+    // Show an information message with diagnostic details
+    vscode.window.showInformationMessage('Authentication Diagnostics', ...diagnosticInfo);
+    
+    // Additionally, attempt a session verification to check backend connectivity
+    verifySession().then(isValid => {
+      const verificationResult = isValid ? 'Session is valid' : 'Session verification failed';
+      log.info(`Auth diagnostics verification: ${verificationResult}`);
+      vscode.window.showInformationMessage(`Session verification: ${verificationResult}`);
+    }).catch(error => {
+      log.error(`Auth diagnostics verification error: ${error}`);
+      vscode.window.showErrorMessage(`Session verification error: ${error}`);
+    });
+  } catch (error) {
+    log.error(`Error showing auth diagnostics: ${error}`);
+    vscode.window.showErrorMessage(`Failed to show authentication diagnostics: ${error}`);
+  }
 }
