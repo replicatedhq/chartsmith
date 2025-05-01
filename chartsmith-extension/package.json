@@ -80,10 +80,6 @@
         "title": "ChartSmith: Show File Diff"
       },
       {
-        "command": "chartsmith.showAuthDiagnostics",
-        "title": "ChartSmith: Show Authentication Diagnostics"
-      },
-      {
         "command": "chartsmith.refreshDiffButtons",
         "title": "ChartSmith: Refresh Diff Buttons Visibility"
       }
