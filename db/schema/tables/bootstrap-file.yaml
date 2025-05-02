@@ -1,5 +1,7 @@
 database: chartsmith
 name: bootstrap_file
+requires:
+  - pgvector
 schema:
   postgres:
     primaryKey:

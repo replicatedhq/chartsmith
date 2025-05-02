@@ -9,6 +9,7 @@ import { checkWaitlistStatusAction } from "@/lib/auth/actions/check-waitlist-sta
 import { useAuth } from "@/contexts/AuthContext";
 import { LogOut } from "lucide-react";
 import Image from "next/image";
+import Link from 'next/link';
 
 export default function WaitlistPage() {
   const { session, isLoading } = useSession();
@@ -63,11 +64,11 @@ export default function WaitlistPage() {
         {user && (
           <div className="flex items-center justify-center mb-6 pb-4 border-b border-border">
             <div className="flex items-center gap-3">
-              <Image 
-                src={user.avatar} 
-                alt={user.name} 
-                width={40} 
-                height={40} 
+              <Image
+                src={user.avatar}
+                alt={user.name}
+                width={40}
+                height={40}
                 className="rounded-full"
               />
               <div className="text-left">
@@ -77,7 +78,7 @@ export default function WaitlistPage() {
             </div>
           </div>
         )}
-        
+
         <div className="mb-6">
           <h1 className="text-3xl font-bold mb-4 text-text">You&apos;re on the waitlist!</h1>
           <p className="text-text/80 mb-4">
@@ -89,14 +90,14 @@ export default function WaitlistPage() {
         </div>
 
         <div className="mt-8 flex justify-center gap-4">
-          <a href="/" className="inline-block">
+          <Link href="/" className="inline-block">
             <Button
               variant="default"
               className="bg-primary hover:bg-primary/90 text-white"
             >
               Return to Home
             </Button>
-          </a>
+          </Link>
           <Button
             variant="outline"
             className="border-primary text-primary hover:bg-primary/10 flex items-center gap-2"

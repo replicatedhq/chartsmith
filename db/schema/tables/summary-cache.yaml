@@ -1,5 +1,7 @@
 database: chartsmith
 name: content_cache
+requires:
+  - pgvector
 schema:
   postgres:
     primaryKey:

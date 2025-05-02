@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: migrations-deployment
+  labels:
+    app.kubernetes.io/name: chartsmith
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: chartsmith
+      app.kubernetes.io/component: migrations
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: chartsmith
+        app.kubernetes.io/component: migrations
+    spec:
+      restartPolicy: Always
+      volumes:
+        - name: plan
+          emptyDir: {}
+        - name: extensions
+          emptyDir: {}
+        - name: tables
+          emptyDir: {}
+{{- $extensions := .Files.Glob "db/schema/extensions/*.yaml" }}
+{{- $tables := .Files.Glob "db/schema/tables/*.yaml" }}
+{{- range $path, $file := $extensions }}
+        - name: ext-{{ base $path | replace ".yaml" "" | replace "." "-" }}
+          configMap:
+            name: schema-extension-{{ base $path | replace ".yaml" "" | replace "." "-" }}
+{{- end }}
+{{- range $path, $file := $tables }}
+        - name: tbl-{{ base $path | replace ".yaml" "" | replace "." "-" }}
+          configMap:
+            name: schema-table-{{ base $path | replace ".yaml" "" | replace "." "-" }}
+{{- end }}
+      initContainers:
+        - name: plan
+          image: schemahero/schemahero:0.19.0
+          command: ["sh", "-c"]
+          args:
+            - |
+              mkdir -p /plan/extensions
+              /schemahero plan --driver postgres --uri $CHARTSMITH_PG_URI --spec-file /schema/extensions --spec-type extension --out /plan/extensions;
+              mkdir -p /plan/tables
+              /schemahero plan --driver postgres --uri $CHARTSMITH_PG_URI --spec-file /schema/tables --spec-type table --out /plan/tables;
+          env:
+            - name: CHARTSMITH_PG_URI
+              value: "{{ if .Values.postgresql.enabled }}postgres://{{ .Values.postgresql.credentials.username }}:{{ .Values.postgresql.credentials.password }}@postgresql:5432/{{ .Values.postgresql.credentials.database }}{{ else }}{{ .Values.postgresql.externalUri }}{{ end }}"
+          volumeMounts:
+            - name: plan
+              mountPath: /plan
+            - name: extensions
+              mountPath: /schema/extensions
+            - name: tables
+              mountPath: /schema/tables
+{{- range $path, $file := $extensions }}
+            - name: ext-{{ base $path | replace ".yaml" "" | replace "." "-" }}
+              mountPath: /schema/extensions/{{ base $path }}
+              subPath: {{ base $path }}
+{{- end }}
+{{- range $path, $file := $tables }}
+            - name: tbl-{{ base $path | replace ".yaml" "" | replace "." "-" }}
+              mountPath: /schema/tables/{{ base $path }}
+              subPath: {{ base $path }}
+{{- end }}
+        - name: apply
+          image: schemahero/schemahero:0.19.0
+          command: ["sh", "-c"]
+          args:
+            - |
+              /schemahero apply --driver postgres --uri $CHARTSMITH_PG_URI --ddl /plan/extensions;
+              /schemahero apply --driver postgres --uri $CHARTSMITH_PG_URI --ddl /plan/tables;
+          env:
+            - name: CHARTSMITH_PG_URI
+              value: "{{ if .Values.postgresql.enabled }}postgres://{{ .Values.postgresql.credentials.username }}:{{ .Values.postgresql.credentials.password }}@postgresql:5432/{{ .Values.postgresql.credentials.database }}{{ else }}{{ .Values.postgresql.externalUri }}{{ end }}"
+          volumeMounts:
+            - name: plan
+              mountPath: /plan
+      containers:
+        - name: sleep
+          image: schemahero/schemahero:0.19.0
+          command: ["sh", "-c", "sleep infinity"]
+          volumeMounts:
+            - name: plan
+              mountPath: /plan
+

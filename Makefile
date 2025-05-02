@@ -81,6 +81,11 @@ pgvector:
 schema: pgvector
 	@echo "Running schema commands..."
 	rm -rf ./db/generated-schema
+
+	mkdir -p ./db/generated-schema/extensions
+	schemahero plan --driver postgres --uri $(CHARTSMITH_PG_URI) --spec-file ./db/schema/extensions --spec-type extension --out ./db/generated-schema/extensions
+	schemahero apply --driver postgres --uri $(CHARTSMITH_PG_URI) --ddl ./db/generated-schema/extensions
+
 	mkdir -p ./db/generated-schema/tables
 	schemahero plan --driver postgres --uri "$(CHARTSMITH_PG_URI)" --spec-file ./db/schema/tables --spec-type table --out ./db/generated-schema/tables
 	schemahero apply --driver postgres --uri "$(CHARTSMITH_PG_URI)" --ddl ./db/generated-schema/tables
@@ -158,6 +163,10 @@ release:
 # Requires: GITHUB_TOKEN, OP_SERVICE_ACCOUNT_PRODUCTION
 .PHONY: replicated
 replicated:
+	mkdir -p chart/chartsmith/db/schema/extensions
+	mkdir -p chart/chartsmith/db/schema/tables
+	cp db/schema/extensions/*.yaml chart/chartsmith/db/schema/extensions/
+	cp db/schema/tables/*.yaml chart/chartsmith/db/schema/tables/
 	dagger call release \
 		--version $(version) \
 		--build=false \

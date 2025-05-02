@@ -122,3 +122,17 @@ centrifugo:
     value: "api_key"
     existingSecret: {}
 
+# postgresql configuration:
+#   enabled: Set to false to disable the built-in Postgres deployment and use an external database.
+#   externalUri: If enabled is false, provide a Postgres connection string here (e.g. postgres://user:pass@host:5432/dbname).
+postgresql:
+  enabled: true
+  externalUri: ""
+  credentials:
+    username: "pgvector"
+    password: "supersecretpassword"
+    database: "pgvector"
+  storage:
+    size: "10Gi"
+    className: ""
+

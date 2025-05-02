@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "chartsmith.fullname" . }}-worker
+  labels:
+    {{- include "chartsmith.labels" (dict "Chart" .Chart "Values" (merge .Values (dict "component" "worker")) "Release" .Release "Files" .Files) | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "chartsmith.selectorLabels" (dict "Chart" .Chart "Values" (merge .Values (dict "component" "worker")) "Release" .Release "Files" .Files) | nindent 6 }}
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      labels:
+        {{- include "chartsmith.selectorLabels" (dict "Chart" .Chart "Values" (merge .Values (dict "component" "worker")) "Release" .Release "Files" .Files) | nindent 8 }}
+        {{- include "chartsmith.labels" (dict "Chart" .Chart "Values" (merge .Values (dict "component" "worker")) "Release" .Release "Files" .Files) | nindent 8 }}
+        app.kubernetes.io/component: worker
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- if .Values.global.replicated.dockerconfigjson }}
+      imagePullSecrets:
+        - name: chartsmith-image-pull-secret
+      {{- else if .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml .Values.imagePullSecrets | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "chartsmith.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: worker
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.images.worker.registry }}/{{ .Values.images.worker.repository }}:{{ .Values.images.worker.tag }}"
+          imagePullPolicy: {{ .Values.images.worker.pullPolicy }}
+          args: ["run"]
+          env:
+            - name: CHARTSMITH_PG_URI
+              value: "{{ if .Values.postgresql.enabled }}postgres://{{ .Values.postgresql.credentials.username }}:{{ .Values.postgresql.credentials.password }}@postgresql:5432/{{ .Values.postgresql.credentials.database }}{{ else }}{{ .Values.postgresql.externalUri }}{{ end }}"
+            - name: CHARTSMITH_CENTRIFUGO_ADDRESS
+              value: "http://{{ include "chartsmith.fullname" . }}-centrifugo:8000/api"
+            - name: CHARTSMITH_CENTRIFUGO_API_KEY
+              value: {{ .Values.centrifugo.apiKey.value | quote }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+          livenessProbe:
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          {{- with .Values.volumeMounts }}
+          volumeMounts:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.volumes }}
+      volumes:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
