@@ -35,12 +35,69 @@
         }
       ]
     },
+    "configuration": {
+      "title": "ChartSmith",
+      "properties": {
+        "chartsmith.developmentMode": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable development mode for additional debugging features"
+        },
+        "chartsmith.apiEndpoint": {
+          "type": "string",
+          "default": "https://chartsmith.ai/api",
+          "description": "Base URL for API requests (e.g., http://localhost:3000/api for local development). Always include the /api suffix."
+        }
+      }
+    },
     "commands": [
+      {
+        "command": "chartsmith.resetEndpointsToConfig",
+        "title": "ChartSmith: Reset Endpoints to Configuration"
+      },
+      {
+        "command": "chartsmith.acceptChanges",
+        "title": "Accept Changes",
+        "icon": {
+          "light": "media/check-light.svg",
+          "dark": "media/check-dark.svg"
+        }
+      },
+      {
+        "command": "chartsmith.rejectChanges",
+        "title": "Reject Changes",
+        "icon": {
+          "light": "media/discard-light.svg",
+          "dark": "media/discard-dark.svg"
+        }
+      },
+      {
+        "command": "chartsmith.view.focus",
+        "title": "ChartSmith: Open ChartSmith"
+      },
       {
         "command": "chartsmith.showFileDiff",
         "title": "ChartSmith: Show File Diff"
+      },
+      {
+        "command": "chartsmith.refreshDiffButtons",
+        "title": "ChartSmith: Refresh Diff Buttons Visibility"
       }
-    ]
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "chartsmith.acceptChanges",
+          "group": "navigation",
+          "when": "chartsmith.showDiffActions"
+        },
+        {
+          "command": "chartsmith.rejectChanges",
+          "group": "navigation",
+          "when": "chartsmith.showDiffActions"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
@@ -51,26 +108,29 @@
     "lint": "eslint src --ext ts"
   },
   "devDependencies": {
-    "@types/node": "^16.11.7",
+    "@types/glob": "^8.1.0",
+    "@types/marked": "^5.0.2",
+    "@types/node": "20.2.5",
     "@types/vscode": "^1.80.0",
-    "@types/ws": "^8.18.1",
-    "@typescript-eslint/eslint-plugin": "^5.59.1",
-    "@typescript-eslint/parser": "^5.59.1",
+    "@types/ws": "^8.5.5",
+    "@typescript-eslint/eslint-plugin": "^5.59.8",
+    "@typescript-eslint/parser": "^5.59.8",
+    "@vscode/test-electron": "^2.3.2",
     "@vscode/vsce": "^2.19.0",
-    "eslint": "^8.39.0",
-    "ts-loader": "^9.4.2",
-    "typescript": "^5.0.4",
-    "webpack": "^5.81.0",
-    "webpack-cli": "^5.0.2"
+    "eslint": "^8.41.0",
+    "glob": "^8.1.0",
+    "ts-loader": "^9.4.3",
+    "typescript": "^5.1.3",
+    "webpack": "^5.85.0",
+    "webpack-cli": "^5.1.1"
   },
   "dependencies": {
-    "centrifuge": "^5.3.4",
-    "jotai": "^2.12.2",
-    "marked": "^15.0.8",
+    "centrifuge": "^3.1.0",
+    "jotai": "^2.12.3",
+    "marked": "^15.0.11",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "react-markdown": "^10.1.0",
-    "ws": "^8.18.1"
+    "ws": "^8.13.0"
   },
   "optionalDependencies": {
     "bufferutil": "^4.0.9",

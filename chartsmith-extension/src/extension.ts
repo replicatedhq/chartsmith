@@ -1,8 +1,31 @@
 import * as vscode from 'vscode';
 import { activate as activateLifecycle, deactivate as deactivateLifecycle } from './modules/lifecycle';
-import { showFileDiff } from './modules/render';
+import { showFileDiff, saveDiffState, restoreDiffState, setExtensionContext, updateDiffButtonsVisibility, forceRefreshDiffButtons } from './modules/render';
+import * as path from 'path';
+import * as fs from 'fs';
 
 export function activate(context: vscode.ExtensionContext) {
+  // Set extension context in render module
+  setExtensionContext(context);
+  
+  // Register command to manually refresh diff buttons visibility
+  context.subscriptions.push(
+    vscode.commands.registerCommand('chartsmith.refreshDiffButtons', () => {
+      console.log('Manually refreshing diff buttons visibility');
+      forceRefreshDiffButtons();
+      
+      // Force another refresh after a short delay in case of race conditions
+      setTimeout(() => {
+        forceRefreshDiffButtons();
+      }, 200);
+      
+      vscode.window.showInformationMessage('Diff buttons visibility refreshed');
+    })
+  );
+  
+  // Make sure we have context variables set for diff buttons
+  vscode.commands.executeCommand('setContext', 'chartsmith.showDiffActions', false);
+  
   // Register the showDiff command
   context.subscriptions.push(
     vscode.commands.registerCommand('chartsmith.showFileDiff', async () => {
@@ -45,6 +68,28 @@ export function activate(context: vscode.ExtensionContext) {
       await showFileDiff(filePath, newContent, 'Custom Diff');
     })
   );
+  
+  // Listen for window state changes to save diff state
+  context.subscriptions.push(
+    vscode.window.onDidChangeWindowState((e) => {
+      if (!e.focused) {
+        // Window is losing focus, save current diff state
+        console.log('Window losing focus, saving diff state');
+        saveDiffState(context);
+      }
+    })
+  );
+  
+  // Save diff state when extension is about to be deactivated
+  context.subscriptions.push({
+    dispose: () => {
+      console.log('Extension being deactivated, saving diff state');
+      saveDiffState(context);
+    }
+  });
+  
+  // Try to restore any previously saved diffs
+  restoreDiffState(context);
   
   // Activate the core lifecycle module
   return activateLifecycle(context);

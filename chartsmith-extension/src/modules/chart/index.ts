@@ -91,10 +91,41 @@ export async function uploadChartToServer(
   chartTarball: string
 ): Promise<any> {
   try {
-    // Use the exact URL from the original implementation
-    const uploadUrl = `${authData.apiEndpoint}/upload-chart`;
-    console.log(`Uploading chart to: ${uploadUrl}`);
+    // Check if authentication data is valid before proceeding
+    if (!authData || !authData.token || !authData.apiEndpoint) {
+      throw new Error('Authentication required: Please login before uploading a chart');
+    }
     
+    // Check token validity before upload
+    try {
+      const auth = await import('../auth');
+      
+      // Verify session validity before proceeding
+      let sessionValid = await auth.verifySession();
+      
+      if (!sessionValid) {
+        // Try to refresh the session
+        const refreshed = await auth.refreshSession();
+        if (refreshed) {
+          sessionValid = await auth.verifySession();
+        }
+      }
+      
+      // Debug token validation removed - no longer needed
+    } catch (tokenError) {
+      console.error('Token validation error:', tokenError);
+      // Continue with upload attempt despite token validation error
+    }
+    
+    // Verify chart tarball exists
+    const chartExists = await new Promise(resolve => {
+      fs.access(chartTarball, fs.constants.F_OK, err => resolve(!err));
+    });
+    
+    if (!chartExists) {
+      throw new Error('Chart tarball not found: ' + chartTarball);
+    }
+
     // Upload the chart with the correct field name 'file'
     const result = await uploadFile(
       authData,
@@ -116,6 +147,8 @@ export async function uploadChartToServer(
     
     return result;
   } catch (error) {
+    console.error('Error during chart upload:', error);
+    
     // Clean up even on error
     try {
       await deleteFile(chartTarball);

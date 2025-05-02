@@ -2,6 +2,8 @@ import * as vscode from 'vscode';
 import { WorkspaceMapping } from '../../types';
 import { WORKSPACE_MAPPINGS_KEY } from '../../constants';
 import { store, actions } from '../../state/store';
+import * as fileContent from '../fileContent';
+import { getAuthData } from '../auth';
 
 /**
  * Interface for workspace file data returned from the API
@@ -37,23 +39,24 @@ export function debugShowAllKeys(): void {
 }
 
 /**
- * Store workspace data in memory
- * @param workspaceId The workspace ID
- * @param data The workspace data to store
- */
-export function setWorkspaceData(workspaceId: string, data: any): void {
-  const key = `workspace:${workspaceId}`;
-  memoryDb.set(key, data);
-}
-
-/**
- * Get workspace data from memory
+ * Get workspace data from memory cache
  * @param workspaceId The workspace ID
  * @returns The workspace data or null if not found
  */
 export function getWorkspaceData(workspaceId: string): any {
   const key = `workspace:${workspaceId}`;
   return memoryDb.get(key) || null;
+}
+
+/**
+ * Store workspace data in memory cache
+ * @param workspaceId The workspace ID
+ * @param data The workspace data to store
+ */
+export function setWorkspaceData(workspaceId: string, data: any): void {
+  const key = `workspace:${workspaceId}`;
+  memoryDb.set(key, data);
+  console.log(`[setWorkspaceData] Stored workspace data for ${workspaceId}`);
 }
 
 /**
@@ -192,9 +195,11 @@ export async function setActiveWorkspaceId(workspaceId: string | null): Promise<
   if (workspaceId === null) {
     // Clear the active workspace ID
     await globalStorage.update('chartsmith.activeWorkspaceId', undefined);
+    console.log('Cleared active workspace ID in global storage');
     
     // Also clear the store
     actions.setWorkspaceId(null);
+    console.log('Cleared workspace ID in store');
     
     // Disconnect from WebSocket
     const globalState = (global as any).chartsmithGlobalState;
@@ -202,6 +207,7 @@ export async function setActiveWorkspaceId(workspaceId: string | null): Promise<
       try {
         const webSocket = await import('../webSocket');
         webSocket.disconnectFromCentrifugo();
+        console.log('Disconnected from WebSocket');
       } catch (error) {
         console.error('Error disconnecting from WebSocket:', error);
       }
@@ -214,8 +220,25 @@ export async function setActiveWorkspaceId(workspaceId: string | null): Promise<
     return;
   }
   
-  // Store the active workspace ID
-  await globalStorage.update('chartsmith.activeWorkspaceId', workspaceId);
+  // Store the active workspace ID with forced persistence
+  try {
+    // First try to clear to ensure no stale state
+    await globalStorage.update('chartsmith.activeWorkspaceId', undefined);
+    // Then set the new value
+    await globalStorage.update('chartsmith.activeWorkspaceId', workspaceId);
+    console.log(`Persisted workspace ID to global storage: ${workspaceId}`);
+    
+    // Verify the value was saved
+    const savedId = globalStorage.get<string>('chartsmith.activeWorkspaceId');
+    if (savedId !== workspaceId) {
+      console.warn(`Storage verification failed! Expected: ${workspaceId}, Got: ${savedId}`);
+      // Try again with a different approach
+      await globalStorage.update('chartsmith.activeWorkspaceId', workspaceId.toString());
+      console.log('Attempted alternative persistence method');
+    }
+  } catch (error) {
+    console.error('Error persisting workspace ID:', error);
+  }
   
   // Also update the store
   actions.setWorkspaceId(workspaceId);
@@ -232,6 +255,9 @@ export async function setActiveWorkspaceId(workspaceId: string | null): Promise<
       command: 'workspaceChanged',
       workspaceId: workspaceId
     });
+    console.log(`Notified webview of workspace change to: ${workspaceId}`);
+  } else {
+    console.log('No webview available to notify of workspace change');
   }
 }
 
@@ -256,27 +282,166 @@ export function constructChannelName(workspaceId: string, userId: string): strin
 }
 
 /**
- * Get the pending content for a file
+ * Initialize workspace data by loading it from the API if not already in memory
  * @param workspaceId The workspace ID
- * @param filePath The file path
- * @returns The pending content for the file or null if not found
+ * @returns A promise that resolves when initialization is complete
  */
-export function getPendingFileContent(workspaceId: string, filePath: string): string | null {
-  // Get the current revision number for this workspace
-  const revisionKey = `workspace:${workspaceId}:currentRevision`;
-  const currentRevision = memoryDb.get(revisionKey);
+export async function initializeWorkspace(workspaceId: string): Promise<boolean> {
+  console.log(`[initializeWorkspace] Initializing workspace ${workspaceId}`);
   
-  if (!currentRevision) {
-    console.log(`No current revision found for workspace ${workspaceId}`);
-    return null;
+  // Check if we already have the workspace data
+  const existingData = getWorkspaceData(workspaceId);
+  if (existingData) {
+    console.log(`[initializeWorkspace] Workspace ${workspaceId} already loaded`);
+    return true;
   }
   
-  // Try to get the file content for the current revision
-  const content = getFileContent(workspaceId, filePath, `${currentRevision}`);
+  // Get auth data for API requests
+  const authData = getAuthData();
+  if (!authData) {
+    console.log(`[initializeWorkspace] No auth data available, cannot load workspace`);
+    return false;
+  }
   
-  console.log(`Retrieved pending content for ${filePath} (revision ${currentRevision}): ${content ? 'Found' : 'Not found'}`);
+  try {
+    // Import API module
+    const api = await import('../api');
+    
+    // Fetch the workspace data
+    console.log(`[initializeWorkspace] Fetching workspace data for ${workspaceId}`);
+    const workspace = await api.fetchApi(
+      authData,
+      `/workspace/${workspaceId}`,
+      'GET'
+    );
+    
+    if (workspace) {
+      // Store the workspace data
+      setWorkspaceData(workspaceId, workspace);
+      console.log(`[initializeWorkspace] Successfully loaded workspace ${workspaceId}`);
+      return true;
+    } else {
+      console.error(`[initializeWorkspace] Failed to load workspace ${workspaceId} - empty response`);
+      return false;
+    }
+  } catch (error) {
+    console.error(`[initializeWorkspace] Error loading workspace ${workspaceId}:`, error);
+    return false;
+  }
+}
+
+/**
+ * Get pending content for a file
+ * @param workspaceId The workspace ID
+ * @param filePath The file path
+ * @returns The pending content or null if not found
+ */
+export async function getPendingFileContent(workspaceId: string, filePath: string): Promise<string | null> {
+  console.log(`[getPendingFileContent] Getting pending content for ${filePath} in workspace ${workspaceId}`);
   
-  return content;
+  // First check the memory store for direct file content
+  const key = `pendingContent:${workspaceId}:${filePath}`;
+  const content = memoryDb.get(key);
+  
+  if (content) {
+    console.log(`[getPendingFileContent] Found content in memory for ${filePath}`);
+    return content;
+  }
+  
+  // Check if we have the workspace data cached
+  const workspaceData = getWorkspaceData(workspaceId);
+  if (workspaceData) {
+    // Look for the file in workspace charts
+    if (workspaceData.charts && Array.isArray(workspaceData.charts)) {
+      for (const chart of workspaceData.charts) {
+        if (chart.files && Array.isArray(chart.files)) {
+          const file = chart.files.find((f: { filePath: string }) => f.filePath === filePath);
+          if (file && file.contentPending) {
+            console.log(`[getPendingFileContent] Found content in workspace charts for ${filePath}`);
+            memoryDb.set(key, file.contentPending);
+            return file.contentPending;
+          }
+        }
+      }
+    }
+    
+    // Look for the file in loose files
+    if (workspaceData.files && Array.isArray(workspaceData.files)) {
+      const file = workspaceData.files.find((f: { filePath: string }) => f.filePath === filePath);
+      if (file && file.contentPending) {
+        console.log(`[getPendingFileContent] Found content in workspace loose files for ${filePath}`);
+        memoryDb.set(key, file.contentPending);
+        return file.contentPending;
+      }
+    }
+  }
+  
+  // If not found in memory or workspace data, try to get workspace data from API
+  try {
+    console.log(`[getPendingFileContent] Getting workspace data from API for ${filePath}`);
+    const authData = getAuthData();
+    
+    if (!authData) {
+      console.log(`[getPendingFileContent] No auth data available, cannot fetch content`);
+      return null;
+    }
+    
+    // Fetch the entire workspace - this is more efficient than fetching just one file
+    try {
+      // Import API module
+      const api = await import('../api');
+      
+      const workspace = await api.fetchApi(
+        authData,
+        `/workspace/${workspaceId}`,
+        'GET'
+      );
+      
+      if (workspace) {
+        // Store the workspace data for future use
+        setWorkspaceData(workspaceId, workspace);
+        
+        // Look for the file in the fetched workspace
+        let pendingContent = null;
+        
+        // Check charts first
+        if (workspace.charts && Array.isArray(workspace.charts)) {
+          for (const chart of workspace.charts) {
+            if (chart.files && Array.isArray(chart.files)) {
+              const file = chart.files.find((f: { filePath: string }) => f.filePath === filePath);
+              if (file && file.contentPending) {
+                pendingContent = file.contentPending;
+                break;
+              }
+            }
+          }
+        }
+        
+        // Then check loose files
+        if (!pendingContent && workspace.files && Array.isArray(workspace.files)) {
+          const file = workspace.files.find((f: { filePath: string }) => f.filePath === filePath);
+          if (file && file.contentPending) {
+            pendingContent = file.contentPending;
+          }
+        }
+        
+        if (pendingContent) {
+          console.log(`[getPendingFileContent] Found content in fetched workspace for ${filePath}`);
+          memoryDb.set(key, pendingContent);
+          return pendingContent;
+        }
+      }
+    } catch (fetchError) {
+      console.error(`[getPendingFileContent] Error fetching workspace data: ${fetchError}`);
+    }
+    
+    // No need to try fallback method anymore
+  } catch (error) {
+    console.error(`[getPendingFileContent] Error fetching content: ${error}`);
+  }
+  
+  console.log(`[getPendingFileContent] No pending content found for ${filePath}`);
+  return null;
 }
 
 /**

@@ -82,7 +82,18 @@ NEXT_PUBLIC_API_ENDPOINT=http://localhost:3000/api
    ```
    This deploys the Schemahero migrations to set up the database schema.
 
-6. **Terminal 4: Claude Integration**
+6. **Terminal 4: Bootstrap Chart Data**
+   ```bash
+   make bootstrap
+   ```
+   This is a **critical step** that initializes the chart data in the database. Without this step, the application won't have the necessary template data to function properly.
+
+7. **Admin Access**
+   
+   The first user to log in will automatically be granted admin privileges and bypass the waitlist.
+   You can log in at: http://localhost:3000/login?test-auth=true
+
+8. **Terminal 5: Claude Integration (optional)**
    ```bash
    # Use Claude for development assistance
    ```
@@ -94,7 +105,6 @@ NEXT_PUBLIC_API_ENDPOINT=http://localhost:3000/api
   make run-worker
   ```
 
-
 ### Troubleshooting
 
 If you encounter any issues:
@@ -103,6 +113,15 @@ If you encounter any issues:
 2. Verify all required secrets are properly configured
 3. Check that Schemahero is installed and accessible in your PATH
 4. Make sure all dependencies are installed (both Go and npm packages)
+5. If you get an error `ERROR: type "vector" does not exist` when running `make schema`, you can manually enable the PGVector extension:
+   ```bash
+   docker exec -it chartsmith-dev-postgres-1 psql -U postgres -d chartsmith -c "CREATE EXTENSION IF NOT EXISTS vector;"
+   ```
+   Or simply run the Make target that handles this:
+   ```bash
+   make pgvector
+   ```
+   After enabling the extension, run `make schema` again (though it now automatically runs the pgvector target as a prerequisite).
 
 ### Development Workflow
 
@@ -117,6 +136,17 @@ If you encounter any issues:
 - Schemahero is used for database migrations
 - The frontend runs on the default Next.js port
 - The worker runs on a separate process
+
+## VS Code Extension Development
+
+For detailed instructions on developing the VS Code extension, see [chartsmith-extension/DEVELOPMENT.md](chartsmith-extension/DEVELOPMENT.md). 
+
+This guide covers:
+- Building and installing the extension from a VSIX file
+- Configuring endpoints for local development
+- Enabling development mode
+- Debugging with the developer console
+- Testing extension features with built-in commands
 
 ## Release
 

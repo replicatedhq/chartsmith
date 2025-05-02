@@ -11,10 +11,68 @@ const defaultUserSettings: UserSetting = {
   evalBeforeAccept: false,
 };
 
+/**
+ * Checks if there are any users in the system
+ * @returns true if there are no users, false otherwise
+ */
+async function isFirstUser(): Promise<boolean> {
+  try {
+    const db = getDB(await getParam("DB_URI"));
+    const result = await db.query(
+      `SELECT COUNT(*) FROM chartsmith_user`
+    );
+    return parseInt(result.rows[0].count) === 0;
+  } catch (err) {
+    logger.error("Failed to check if first user", { err });
+    throw err;
+  }
+}
+
+/**
+ * Creates a new admin user that bypasses the waitlist
+ * This is used for the first user in the system
+ */
+async function upsertFirstAdminUser(email: string, name: string, imageUrl: string): Promise<User> {
+  try {
+    const db = getDB(await getParam("DB_URI"));
+    const id = srs.default({ length: 12, alphanumeric: true });
+
+    await db.query(
+      `INSERT INTO chartsmith_user (id, email, name, image_url, created_at, last_login_at, last_active_at, is_admin)
+      VALUES ($1, $2, $3, $4, now(), now(), now(), true) ON CONFLICT (email) DO NOTHING`,
+      [id, email, name, imageUrl],
+    );
+
+    logger.info("Created first admin user", { email });
+
+    return {
+      id,
+      email,
+      name,
+      imageUrl,
+      createdAt: new Date(),
+      lastLoginAt: new Date(),
+      lastActiveAt: new Date(),
+      isWaitlisted: false,
+      settings: await getUserSettings(id),
+      isAdmin: true,
+    };
+  } catch (err) {
+    logger.error("Failed to upsert first admin user", { err });
+    throw err;
+  }
+}
+
 export async function upsertUser(email: string, name: string, imageUrl: string): Promise<User> {
   const user = await findUser(email);
   if (user) {
     return user;
+  }
+
+  // Check if this is the first user
+  const isFirst = await isFirstUser();
+  if (isFirst) {
+    return upsertFirstAdminUser(email, name, imageUrl);
   }
 
   const acceptingNewUsers = false;

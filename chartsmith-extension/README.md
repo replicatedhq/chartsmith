@@ -27,3 +27,7 @@ Create a VSIX file to install in VS Code:
 ```bash
 npm run package:vsix
 ```
+
+### Configuration
+
+For information on configuring endpoints during development, see [DEVELOPMENT.md](./DEVELOPMENT.md).

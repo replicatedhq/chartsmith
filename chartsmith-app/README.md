@@ -34,3 +34,20 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Authentication
+
+### Extension Authentication
+
+The VS Code extension authenticates using a token-based mechanism:
+
+1. When a user clicks "Login" in the extension, it opens a browser window to the authentication page
+2. After successful authentication, the app generates an extension token and sends it to the extension
+3. The extension stores this token and uses it for API requests with a Bearer token header
+4. Token validation happens via the `/api/auth/status` endpoint
+
+To test extension authentication:
+```bash
+# Run the auth status test script
+./test-auth-status.sh <your-token>
+```

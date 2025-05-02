@@ -257,12 +257,16 @@ button:hover {
   flex: 1; /* Take up all available space */
   height: 100%;
   overflow-y: auto;
+  overflow-x: hidden; /* Prevent horizontal scroll */
   margin-bottom: 0; /* Remove margin to maximize space */
   display: flex;
   flex-direction: column;
   width: 100%;
-  position: relative; /* Ensure proper stacking context */
-  z-index: 1; /* Set base z-index */
+  position: relative; /* Create stacking context */
+  z-index: 0; /* Base z-index */
+  isolation: isolate; /* Create a new stacking context */
+  contain: layout; /* Optimize rendering performance */
+  contain: content; /* Contain overflow content */
 }
 
 .message {
@@ -271,6 +275,9 @@ button:hover {
   border-radius: 12px;
   max-width: 80%;
   word-break: break-word;
+  overflow: visible; /* Allow content to be visible */
+  position: relative; /* Create stacking context */
+  z-index: auto; /* Let browser handle stacking */
 }
 
 .user-message {
@@ -300,8 +307,8 @@ button:hover {
   font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
   box-sizing: border-box;
-  position: relative;
-  z-index: 5;
+  position: static; /* Ensures element follows normal document flow */
+  z-index: auto; /* Let the browser determine stacking context */
   display: block;
   min-height: 100px;
 }
@@ -311,9 +318,9 @@ button:hover {
   background-color: var(--vscode-terminal-background, #1e1e1e);
   color: var(--vscode-terminal-foreground, #cccccc);
   border-radius: 8px;
-  overflow: visible;
-  position: relative;
-  z-index: 1;
+  overflow: visible; /* Allow content to overflow */
+  position: static; /* Ensures element follows normal document flow */
+  z-index: auto; /* Let the browser determine stacking context */
   min-height: 50px;
   display: block;
 }
@@ -369,12 +376,16 @@ button:hover {
   padding: 6px 8px;
   font-size: 13px;
   line-height: 1.5;
-  white-space: pre;
+  white-space: pre-wrap;
   display: block;
   min-height: 30px;
-  position: relative;
-  z-index: 2;
+  max-height: 400px; /* Limit height */
+  overflow-y: auto; /* Add scrollbar for overflow */
+  overflow-x: auto; /* Add horizontal scrolling for long lines */
+  position: static; /* Ensures element follows normal document flow */
+  z-index: auto; /* Let the browser determine stacking context */
   background-color: var(--vscode-terminal-background, #1e1e1e);
+  word-break: break-word; /* Added to prevent horizontal overflow */
 }
 
 .terminal-prompt {
@@ -416,6 +427,8 @@ button:hover {
 
 .message-content {
   word-break: break-word;
+  overflow-x: auto; /* Allow horizontal scroll for code blocks */
+  max-width: 100%; /* Ensure content doesn't overflow */
 }
 
 /* Markdown styling for agent messages */
