@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "chartsmith.fullname" . }}-centrifugo
+  labels:
+    {{- include "chartsmith.labels" . | nindent 4 }}
+    app.kubernetes.io/component: centrifugo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "chartsmith.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: centrifugo
+  template:
+    metadata:
+      labels:
+        {{- include "chartsmith.selectorLabels" . | nindent 8 }}
+        {{- include "chartsmith.labels" . | nindent 8 }}
+        app.kubernetes.io/component: centrifugo
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- if .Values.global.replicated.dockerconfigjson }}
+      imagePullSecrets:
+        - name: chartsmith-image-pull-secret
+      {{- else if .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml .Values.imagePullSecrets | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "chartsmith.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: centrifugo
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.images.centrifugo.registry }}/{{ .Values.images.centrifugo.repository }}:{{ .Values.images.centrifugo.tag }}"
+          imagePullPolicy: {{ .Values.images.centrifugo.pullPolicy }}
+          command: ["centrifugo", "--config", "/centrifugo/config.json"]
+          volumeMounts:
+            - name: centrifugo-config
+              mountPath: /centrifugo/config.json
+              subPath: config.json
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: centrifugo-config
+          secret:
+            secretName: chartsmith-centrifugo-config
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
