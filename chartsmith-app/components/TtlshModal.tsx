@@ -57,7 +57,7 @@ export function TtlshModal({ isOpen, onClose }: TtlshModalProps) {
   }, [statusPollingInterval]);
 
   // Check if there's an existing publish for this workspace
-  const checkExistingPublish = async (wsId: string) => {
+  const checkExistingPublish = useCallback(async (wsId: string) => {
     if (!session) return;
 
     try {
@@ -80,7 +80,7 @@ export function TtlshModal({ isOpen, onClose }: TtlshModalProps) {
     } catch (err) {
       console.error("Error checking publish status:", err);
     }
-  };
+  }, [session]);
 
   // Poll for status updates
   const startStatusPolling = (wsId: string) => {

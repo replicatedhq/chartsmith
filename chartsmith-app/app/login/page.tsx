@@ -46,7 +46,7 @@ export default function LoginPage() {
         });
       }
     }
-  }, []);
+  }, [publicEnv.NEXT_PUBLIC_ENABLE_TEST_AUTH]);
 
   return (
     <div className={`min-h-screen ${theme === "dark" ? "bg-dark" : "bg-gray-50"}`}>

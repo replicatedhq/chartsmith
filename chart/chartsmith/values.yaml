@@ -4,6 +4,21 @@ images:
     repository: proxy/chartsmith/chartsmith/chartsmith-app
     tag: "0.0.150"
     pullPolicy: IfNotPresent
+  worker:
+    registry: proxy.replicated.com
+    repository: proxy/chartsmith/chartsmith/chartsmith-worker
+    tag: "0.0.150"
+    pullPolicy: IfNotPresent
+  centrifugo:
+    registry: proxy.replicated.com
+    repository: proxy/chartsmith/index.docker.io/centrifugo/centrifugo
+    tag: "v5"
+    pullPolicy: IfNotPresent
+  pgvector:
+    registry: proxy.replicated.com
+    repository: proxy/chartsmith/index.docker.io/ankane/pgvector
+    tag: "latest"
+    pullPolicy: IfNotPresent
 
 imagePullSecrets: []
 
@@ -92,3 +107,32 @@ nodeSelector: {}
 tolerations: []
 
 affinity: {}
+
+centrifugo:
+  tokenHmacSecretKey:
+    value: "change.me"
+    existingSecret: {}
+  adminPassword:
+    value: "password"
+    existingSecret: {}
+  adminSecret:
+    value: "secret"
+    existingSecret: {}
+  apiKey:
+    value: "api_key"
+    existingSecret: {}
+
+# postgresql configuration:
+#   enabled: Set to false to disable the built-in Postgres deployment and use an external database.
+#   externalUri: If enabled is false, provide a Postgres connection string here (e.g. postgres://user:pass@host:5432/dbname).
+postgresql:
+  enabled: true
+  externalUri: ""
+  credentials:
+    username: "pgvector"
+    password: "supersecretpassword"
+    database: "pgvector"
+  storage:
+    size: "10Gi"
+    className: ""
+

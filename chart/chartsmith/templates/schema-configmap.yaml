@@ -1,0 +1,30 @@
+{{- $extensions := .Files.Glob "db/schema/extensions/*.yaml" }}
+{{- $tables := .Files.Glob "db/schema/tables/*.yaml" }}
+{{- range $path, $val := $extensions }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: schema-extension-{{ base $path | replace ".yaml" "" | replace "." "-" }}
+  labels:
+    app.kubernetes.io/name: chartsmith
+    chartsmith.io/schema: extension
+    chartsmith.io/schema-file: {{ base $path }}
+data:
+  {{ base $path }}: |
+{{ $.Files.Get $path | indent 4 }}
+{{- end }}
+{{- range $path, $val := $tables }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: schema-table-{{ base $path | replace ".yaml" "" | replace "." "-" }}
+  labels:
+    app.kubernetes.io/name: chartsmith
+    chartsmith.io/schema: table
+    chartsmith.io/schema-file: {{ base $path }}
+data:
+  {{ base $path }}: |
+{{ $.Files.Get $path | indent 4 }}
+{{- end }}
