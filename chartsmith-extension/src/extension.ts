@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { activate as activateLifecycle, deactivate as deactivateLifecycle } from './modules/lifecycle';
 import { showFileDiff, saveDiffState, restoreDiffState, setExtensionContext, updateDiffButtonsVisibility, forceRefreshDiffButtons } from './modules/render';
+import customDiffModule from './modules/customDiff';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -68,6 +69,9 @@ export function activate(context: vscode.ExtensionContext) {
       await showFileDiff(filePath, newContent, 'Custom Diff');
     })
   );
+  
+  // Register custom diff commands (Phase 1: Monaco-based webview diff)
+  customDiffModule.registerCustomDiffCommands(context);
   
   // Listen for window state changes to save diff state
   context.subscriptions.push(
