@@ -6,6 +6,7 @@ import { logger } from "../../utils/logger";
 
 export async function updateUserAdminStatusAction(session: Session, userId: string, isAdmin: boolean): Promise<boolean> {
   try {
+    // Only admins can change admin status
     if (!session.user.isAdmin) {
       logger.warn("Non-admin user attempted to update admin status", {
         requestingUserId: session.user.id,
@@ -14,6 +15,7 @@ export async function updateUserAdminStatusAction(session: Session, userId: stri
       return false;
     }
     
+    // Prevent admins from removing their own admin status
     if (session.user.id === userId && !isAdmin) {
       logger.warn("User attempted to remove their own admin status", {
         userId: session.user.id,
