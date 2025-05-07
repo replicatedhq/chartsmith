@@ -13,6 +13,13 @@ export async function updateUserAdminStatusAction(session: Session, userId: stri
       });
       return false;
     }
+    
+    if (session.user.id === userId && !isAdmin) {
+      logger.warn("User attempted to remove their own admin status", {
+        userId: session.user.id,
+      });
+      return false;
+    }
 
     const success = await updateUserAdminStatus(userId, isAdmin);
     return success;
