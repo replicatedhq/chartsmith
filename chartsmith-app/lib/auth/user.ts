@@ -519,3 +519,26 @@ export async function approveWaitlistUser(waitlistId: string): Promise<boolean> 
     return false;
   }
 }
+
+/**
+ * Updates a user's admin status
+ * @param userId The ID of the user to update
+ * @param isAdmin Whether the user should have admin privileges
+ * @returns True if the update was successful, false otherwise
+ */
+export async function updateUserAdminStatus(userId: string, isAdmin: boolean): Promise<boolean> {
+  try {
+    const db = getDB(await getParam("DB_URI"));
+    await db.query(
+      `UPDATE chartsmith_user
+       SET is_admin = $1
+       WHERE id = $2`,
+      [isAdmin, userId]
+    );
+    logger.info("Updated user admin status", { userId, isAdmin });
+    return true;
+  } catch (err) {
+    logger.error("Failed to update user admin status", { err, userId });
+    return false;
+  }
+}
