@@ -15,9 +15,9 @@ export async function updateUserAdminStatusAction(session: Session, userId: stri
       return false;
     }
     
-    // Prevent admins from removing their own admin status
-    if (session.user.id === userId && isAdmin === false) {
-      logger.warn("Admin cannot remove their own admin status", {
+    // Prevent admins from modifying their own admin status
+    if (session.user.id === userId) {
+      logger.warn("Admin cannot modify their own admin status", {
         userId: session.user.id,
       });
       return false;
