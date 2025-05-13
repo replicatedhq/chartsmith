@@ -19,8 +19,8 @@ This doc is a development guide for how engineers at Replicated can contribute t
 Before starting, ensure you have the following secrets configured locally on your mac:
 
 - `ANTHROPIC_API_KEY`: Get your own key (Create a new API key in Anthropic Console)
-- `GROQ_API_KEY`: Get your own key (Get invited to Replicated team. Generate new key)
-- `VOYAGE_API_KEY`: Get your own key (Get invited to Replicated team. Generate new key)
+- `GROQ_API_KEY`: Get your own key (Get a new API key from groq.com)`
+- `VOYAGE_API_KEY`: Get your own key (Generate new key)
 - `CHARTSMITH_PG_URI=postgresql://postgres:password@localhost:5432/chartsmith?sslmode=disable`
 - `CHARTSMITH_CENTRIFUGO_ADDRESS=http://localhost:8000/api`
 - `CHARTSMITH_CENTRIFUGO_API_KEY=api_key` (Already set)
@@ -29,6 +29,10 @@ Before starting, ensure you have the following secrets configured locally on you
 - `CHARTSMITH_SLACK_CHANNEL=` (Can ignore)
 
 You should also create a .env.local file in the `chartsmith-app` directory with some of the same content:
+
+
+####
+The following section is for Replicated developers:
 
 You'll need access to the `Developer Automation` folder in 1password. Update the Google Client Secret, and add your Anthropic API key.
 
