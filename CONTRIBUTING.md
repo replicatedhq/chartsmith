@@ -28,7 +28,7 @@ Before starting, ensure you have the following secrets configured locally on you
 - `CHARTSMITH_SLACK_TOKEN=` (Can ignore)
 - `CHARTSMITH_SLACK_CHANNEL=` (Can ignore)
 
-You should also create a .env.local file in the `chartsmith-app` directory with some of the same content. You will update this with your Anthropic API key, and your Google Client secret information. If you are a Replicated developer, you can leverage the shared Google Client Secret found in 1password in the `Developer Automation` folder.
+You should also create a .env.local file in the `chartsmith-app` directory with some of the same content. You will update this with your Anthropic API key, and your Google Client secret information.
 
 ```
 NEXT_PUBLIC_GOOGLE_CLIENT_ID=730758876435-8v7frmnqtt7k7v65edpc6u3hso9olqbe.apps.googleusercontent.com
