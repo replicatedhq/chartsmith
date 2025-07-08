@@ -1,6 +1,6 @@
 # Contributing
 
-This doc is a development guide for how engineers at Replicated can contribute to this project.
+This doc is a development guide for how engineers can contribute to this project.
 
 ## Development Environment Setup
 
@@ -16,10 +16,10 @@ This doc is a development guide for how engineers at Replicated can contribute t
 
 ### Required Secrets
 
-Before starting, ensure you have the following secrets configured locally on your mac:
+Before starting, ensure you have the following secrets configured locally on your computer:
 
 - `ANTHROPIC_API_KEY`: Get your own key (Create a new API key in Anthropic Console)
-- `GROQ_API_KEY`: Get your own key (Get a new API key from groq.com)`
+- `GROQ_API_KEY`: Get your own key (Get a new API key from groq.com)
 - `VOYAGE_API_KEY`: Get your own key (Generate new key)
 - `CHARTSMITH_PG_URI=postgresql://postgres:password@localhost:5432/chartsmith?sslmode=disable`
 - `CHARTSMITH_CENTRIFUGO_ADDRESS=http://localhost:8000/api`
@@ -28,13 +28,7 @@ Before starting, ensure you have the following secrets configured locally on you
 - `CHARTSMITH_SLACK_TOKEN=` (Can ignore)
 - `CHARTSMITH_SLACK_CHANNEL=` (Can ignore)
 
-You should also create a .env.local file in the `chartsmith-app` directory with some of the same content:
-
-
-####
-The following section is for Replicated developers:
-
-You'll need access to the `Developer Automation` folder in 1password. Update the Google Client Secret, and add your Anthropic API key.
+You should also create a .env.local file in the `chartsmith-app` directory with some of the same content. You will update this with your Anthropic API key, and your Google Client secret information. If you are a Replicated developer, you can leverage the shared Google Client Secret found in 1password in the `Developer Automation` folder.
 
 ```
 NEXT_PUBLIC_GOOGLE_CLIENT_ID=730758876435-8v7frmnqtt7k7v65edpc6u3hso9olqbe.apps.googleusercontent.com
