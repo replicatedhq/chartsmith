@@ -10,6 +10,8 @@ Chartsmith is an AI-powered tool that helps you build better Helm charts.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup instructions.
 
+If you are interested in contributing or being a maintainer on this project, please reach out to us by [opening an issue](https://github.com/replicatedhq/chartsmith/issues/new) in the repo. 
+
 ## Authentication
 
 ### Extension Authentication
