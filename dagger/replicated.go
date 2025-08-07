@@ -4,6 +4,7 @@ import (
 	"context"
 	"dagger/chartsmith/internal/dagger"
 	"fmt"
+	"strings"
 )
 
 func createReplicatedRelease(
@@ -79,6 +80,7 @@ func createReplicatedReleaseDev(
 	source *dagger.Directory,
 	version string,
 	endpoint string,
+	proxyRegistryDomain string,
 	apiToken *dagger.Secret,
 ) (int, error) {
 	fmt.Printf("Releasing %s to Replicated Dev on %s\n", version, endpoint)
@@ -86,6 +88,22 @@ func createReplicatedReleaseDev(
 	source = source.WithNewDirectory("/replicated-release")
 
 	helmChartFilename := fmt.Sprintf("chartsmith-%s.tgz", version)
+
+	// we need to edit the proxy registry domain in the values.yaml to be the local dev endpoint
+	valuesYaml, err := source.File("chart/chartsmith/values.yaml").Contents(ctx)
+	if err != nil {
+		return 0, err
+	}
+	valuesYaml = strings.ReplaceAll(valuesYaml, "proxy.replicated.com", proxyRegistryDomain)
+	source = source.WithNewFile("chart/chartsmith/values.yaml", valuesYaml)
+
+	// replace the version in the helmchart.yaml
+	helmChartYaml, err := source.File("replicated/helmchart.yaml").Contents(ctx)
+	if err != nil {
+		return 0, err
+	}
+	helmChartYaml = strings.ReplaceAll(helmChartYaml, "CHART_VERSION", version)
+	source = source.WithNewFile("replicated/helmchart.yaml", helmChartYaml)
 
 	helmChart := dag.Container().From("alpine/helm:latest").
 		WithMountedDirectory("/source", source).

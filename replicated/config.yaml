@@ -1,0 +1,70 @@
+apiVersion: kots.io/v1beta1
+kind: Config
+metadata:
+  name: chartsmith
+spec:
+  groups:
+    - name: external_database
+      title: External Database Configuration
+      description: To use an external database, enable this and provide the details for your postgres 17 with pgvector extension enabled database.
+      items:
+        - name: external_database
+          title: External Database
+          type: bool
+          default: "0"
+        - name: database_host
+          title: Database Host
+          type: text
+          when: "{{repl ConfigOptionEquals \"external_database\" \"0\" }}"
+        - name: database_port
+          title: Database Port
+          type: text
+          when: "{{repl ConfigOptionEquals \"external_database\" \"0\" }}"
+        - name: database_name
+          title: Database Name
+          type: text
+          when: "{{repl ConfigOptionEquals \"external_database\" \"0\" }}"
+        - name: database_user
+          title: Database User
+          type: text
+          when: "{{repl ConfigOptionEquals \"external_database\" \"0\" }}"
+        - name: database_password
+          title: Database Password
+          type: password
+          when: "{{repl ConfigOptionEquals \"external_database\" \"0\" }}"
+        - name: database_ssl_mode
+          title: Database SSL Mode
+          type: text
+          when: "{{repl ConfigOptionEquals \"external_database\" \"0\" }}"
+    - name: llm_configuration
+      title: LLM Configuration
+      description: "Configure the LLM provider and model to use for the application."
+      items:
+        - name: anthropic_api_key
+          title: Anthropic API Key
+          type: password
+          required: true
+        - name: groq_api_key
+          title: Groq API Key
+          type: password
+          required: true
+        - name: voyage_api_key
+          title: Voyage API Key
+          type: password
+          required: true
+    - name: auth
+      title: Authentication Configuration
+      description: "Configure the authentication provider to use for the application."
+      items:
+        - name: google_client_id
+          title: Google Client ID
+          type: text
+          required: true
+        - name: google_client_secret
+          title: Google Client Secret
+          type: password
+          required: true
+        - name: google_redirect_uri
+          title: Google Redirect URI
+          type: text
+          required: true

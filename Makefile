@@ -183,6 +183,7 @@ replicated-dev:
 	dagger call release-dev-replicated \
 		--version $(version) \
 		--endpoint=https://vendor-api-$(okteto-namespace).okteto.repldev.com \
+		--proxy-registry-domain=proxy-registry-$(okteto-namespace).okteto.repldev.com \
 		--api-token env:REPLICATED_API_TOKEN \
 		--progress plain
 
