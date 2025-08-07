@@ -6,7 +6,7 @@ spec:
   groups:
     - name: external_database
       title: External Database Configuration
-      description: "To use an external database, enable this and provide the details for your postgres 17 with pgvector extension enabled database.
+      description: To use an external database, enable this and provide the details for your postgres 17 with pgvector extension enabled database.
       items:
         - name: external_database
           title: External Database
@@ -15,27 +15,27 @@ spec:
         - name: database_host
           title: Database Host
           type: text
-          when: "{{repl ConfigOption \"external_database\" \"0\" }}"
+          when: "{{repl ConfigOptionEquals \"external_database\" \"0\" }}"
         - name: database_port
           title: Database Port
           type: text
-          when: "{{repl ConfigOption \"external_database\" \"0\" }}"
+          when: "{{repl ConfigOptionEquals \"external_database\" \"0\" }}"
         - name: database_name
           title: Database Name
           type: text
-          when: "{{repl ConfigOption \"external_database\" \"0\" }}"
+          when: "{{repl ConfigOptionEquals \"external_database\" \"0\" }}"
         - name: database_user
           title: Database User
           type: text
-          when: "{{repl ConfigOption \"external_database\" \"0\" }}"
+          when: "{{repl ConfigOptionEquals \"external_database\" \"0\" }}"
         - name: database_password
           title: Database Password
           type: password
-          when: "{{repl ConfigOption \"external_database\" \"0\" }}"
+          when: "{{repl ConfigOptionEquals \"external_database\" \"0\" }}"
         - name: database_ssl_mode
           title: Database SSL Mode
           type: text
-          when: "{{repl ConfigOption \"external_database\" \"0\" }}"
+          when: "{{repl ConfigOptionEquals \"external_database\" \"0\" }}"
     - name: llm_configuration
       title: LLM Configuration
       description: "Configure the LLM provider and model to use for the application."

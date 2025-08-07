@@ -1,0 +1,8 @@
+apiVersion: kots.io/v1beta2
+kind: HelmChart
+metadata:
+  name: chartsmith
+spec:
+  chart:
+    name: chartsmith
+    chartVersion: CHART_VERSION

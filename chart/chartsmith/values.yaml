@@ -1,26 +1,25 @@
 images:
   app:
     registry: proxy.replicated.com
-    repository: proxy/chartsmith/chartsmith/chartsmith-app
+    repository: proxy/chartsmith/dockerhub/chartsmith/chartsmith-app
     tag: "0.0.150"
     pullPolicy: IfNotPresent
   worker:
     registry: proxy.replicated.com
-    repository: proxy/chartsmith/chartsmith/chartsmith-worker
+    repository: proxy/chartsmith/dockerhub/chartsmith/chartsmith-worker
     tag: "0.0.150"
     pullPolicy: IfNotPresent
   centrifugo:
     registry: proxy.replicated.com
-    repository: proxy/chartsmith/index.docker.io/centrifugo/centrifugo
+    repository: proxy/chartsmith/dockerhub/centrifugo/centrifugo
     tag: "v5"
     pullPolicy: IfNotPresent
   pgvector:
     registry: proxy.replicated.com
-    repository: proxy/chartsmith/index.docker.io/ankane/pgvector
+    repository: proxy/chartsmith/dockerhub/ankane/pgvector
     tag: "latest"
     pullPolicy: IfNotPresent
 
-imagePullSecrets: []
 
 nameOverride: ""
 fullnameOverride: ""

@@ -15,10 +15,11 @@ func (m *Chartsmith) ReleaseDevReplicated(
 	version string,
 
 	endpoint string,
+	proxyRegistryDomain string,
 
 	apiToken *dagger.Secret,
 ) error {
-	releaseSequence, err := createReplicatedReleaseDev(ctx, source, version, endpoint, apiToken)
+	releaseSequence, err := createReplicatedReleaseDev(ctx, source, version, endpoint, proxyRegistryDomain, apiToken)
 	if err != nil {
 		return err
 	}
