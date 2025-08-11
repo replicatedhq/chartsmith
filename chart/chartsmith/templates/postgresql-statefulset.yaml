@@ -18,7 +18,7 @@ spec:
         app: chartsmith
         component: postgresql
     spec:
-      {{- if .Values.global.replicated.dockerconfigjson }}
+      {{- if and .Values.global .Values.global.replicated .Values.global.replicated.dockerconfigjson }}
       imagePullSecrets:
         - name: chartsmith-image-pull-secret
       {{- else if .Values.imagePullSecrets }}
