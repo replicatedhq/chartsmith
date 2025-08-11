@@ -17,6 +17,22 @@ func createReplicatedRelease(
 
 	source = source.WithNewDirectory("/replicated-release")
 
+	// replace the version in the helmchart.yaml
+	helmChartYaml, err := source.File("replicated/helmchart.yaml").Contents(ctx)
+	if err != nil {
+		return 0, err
+	}
+	helmChartYaml = strings.ReplaceAll(helmChartYaml, "CHART_VERSION", version)
+	source = source.WithNewFile("replicated/helmchart.yaml", helmChartYaml)
+
+	// replace the version in the values.yaml
+	valuesYaml, err := source.File("chart/chartsmith/values.yaml").Contents(ctx)
+	if err != nil {
+		return 0, err
+	}
+	valuesYaml = strings.ReplaceAll(valuesYaml, "CHARTSMITH_VERSION", version)
+	source = source.WithNewFile("chart/chartsmith/values.yaml", valuesYaml)
+
 	helmChartFilename := fmt.Sprintf("chartsmith-%s.tgz", version)
 
 	helmChart := dag.Container().From("alpine/helm:latest").
@@ -95,6 +111,7 @@ func createReplicatedReleaseDev(
 		return 0, err
 	}
 	valuesYaml = strings.ReplaceAll(valuesYaml, "proxy.replicated.com", proxyRegistryDomain)
+	valuesYaml = strings.ReplaceAll(valuesYaml, "CHARTSMITH_VERSION", version)
 	source = source.WithNewFile("chart/chartsmith/values.yaml", valuesYaml)
 
 	// replace the version in the helmchart.yaml

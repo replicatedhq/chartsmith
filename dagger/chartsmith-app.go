@@ -87,6 +87,7 @@ func buildChartsmithApp(ctx context.Context, source *dagger.Directory, opService
 	}).From("node:18").
 		WithDirectory("/app", standalone).
 		WithWorkdir("/").
+		WithEnvVariable("HOSTNAME", "0.0.0.0").
 		WithEntrypoint([]string{"node"}).
 		WithDefaultArgs([]string{"/app/server.js"})
 

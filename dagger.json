@@ -4,7 +4,7 @@
   "dependencies": [
     {
       "name": "gh",
-      "source": "github.com/luanmtruong/daggerverse/gh@8b0cf4487018dff60c3c380aa1a1b29bbf2ca345"
+      "source": "github.com/sagikazarmark/daggerverse/gh@v0.3.0"
     },
     {
       "name": "kustomize",
