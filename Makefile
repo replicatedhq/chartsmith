@@ -187,6 +187,15 @@ replicated-dev:
 		--api-token env:REPLICATED_API_TOKEN \
 		--progress plain
 
+# Requires: REPLICATED_API_TOKEN
+.PHONY: replicated-prod
+replicated-prod:
+	dagger call release-dev-replicated \
+		--version $(version) \
+		--app-slug $(app-slug) \
+		--api-token env:REPLICATED_API_TOKEN \
+		--progress plain
+
 # Requires: GITHUB_TOKEN, OP_SERVICE_ACCOUNT_PRODUCTION
 .PHONY: production
 production:
