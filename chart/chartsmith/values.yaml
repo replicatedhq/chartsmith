@@ -49,9 +49,10 @@ securityContext: {}
   # runAsUser: 1000
 
 service:
-  type: ClusterIP
+  type: NodePort
   port: 3000
   targetPort: 3000
+  nodePort: 30080
   annotations: {}
   labels: {}
 
