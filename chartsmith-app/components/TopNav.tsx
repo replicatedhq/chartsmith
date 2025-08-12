@@ -4,13 +4,18 @@ import Link from "next/link";
 import { useTheme } from "@/contexts/ThemeContext";
 import { StatusDropdown } from "./StatusDropdown";
 import { TtlshModal } from "./TtlshModal";
+import { ZipDownloadModal } from "./ZipDownloadModal";
 
 // Removed evalItems
 
-const exportItems = [{ label: "Push to ttl.sh" }];
+const exportItems = [
+  { label: "Push to ttl.sh" },
+  { label: "Download as Zip" }
+];
 
 export function TopNav() {
   const [showTtlshModal, setShowTtlshModal] = useState(false);
+  const [showZipModal, setShowZipModal] = useState(false);
   const { resolvedTheme } = useTheme();
 
   return (
@@ -43,6 +48,8 @@ export function TopNav() {
             onItemClick={(item) => {
               if (item.label === "Push to ttl.sh") {
                 setShowTtlshModal(true);
+              } else if (item.label === "Download as Zip") {
+                setShowZipModal(true);
               }
             }} 
           />
@@ -50,6 +57,7 @@ export function TopNav() {
       </nav>
 
       <TtlshModal isOpen={showTtlshModal} onClose={() => setShowTtlshModal(false)} />
+      <ZipDownloadModal isOpen={showZipModal} onClose={() => setShowZipModal(false)} />
     </>
   );
 }
