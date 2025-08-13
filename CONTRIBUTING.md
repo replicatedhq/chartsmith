@@ -34,7 +34,6 @@ You should also create a .env.local file in the `chartsmith-app` directory with 
 NEXT_PUBLIC_GOOGLE_CLIENT_ID=730758876435-8v7frmnqtt7k7v65edpc6u3hso9olqbe.apps.googleusercontent.com
 NEXT_PUBLIC_GOOGLE_REDIRECT_URI=http://localhost:3000/auth/google
 GOOGLE_CLIENT_SECRET=<get from 1password>
-DB_URI=postgresql://postgres:password@localhost:5432/chartsmith?connect_timeout=10&application_name=chartsmith&sslmode=disable
 HMAC_SECRET=not-secure
 CENTRIFUGO_TOKEN_HMAC_SECRET=change.me
 NEXT_PUBLIC_CENTRIFUGO_ADDRESS=ws://localhost:8000/connection/websocket
