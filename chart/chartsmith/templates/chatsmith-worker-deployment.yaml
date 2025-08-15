@@ -39,7 +39,7 @@ spec:
         - name: worker
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
-          image: "{{ .Values.images.worker.registry }}/{{ .Values.images.worker.repository }}:{{ .Values.images.worker.tag }}"
+          image: "{{ .Values.images.worker.registry }}/{{ .Values.images.worker.repository }}:{{ .Values.images.worker.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.images.worker.pullPolicy }}
           args: ["run"]
           env:

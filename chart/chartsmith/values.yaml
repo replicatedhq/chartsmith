@@ -2,12 +2,14 @@ images:
   app:
     registry: proxy.replicated.com
     repository: proxy/chartsmith/dockerhub/chartsmith/chartsmith-app
-    tag: "CHARTSMITH_VERSION"
+    # Default is the chart appVersion.
+    tag: ""
     pullPolicy: IfNotPresent
   worker:
     registry: proxy.replicated.com
     repository: proxy/chartsmith/dockerhub/chartsmith/chartsmith-worker
-    tag: "CHARTSMITH_VERSION"
+    # Default is the chart appVersion.
+    tag: ""
     pullPolicy: IfNotPresent
   centrifugo:
     registry: proxy.replicated.com
