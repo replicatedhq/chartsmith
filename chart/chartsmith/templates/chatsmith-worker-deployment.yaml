@@ -35,6 +35,30 @@ spec:
       serviceAccountName: {{ include "chartsmith.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- if .Values.worker.bootstrap.enabled }}
+      initContainers:
+        - securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          args:
+          - bootstrap
+          - --workspace-dir={{ .Values.worker.bootstrap.workspaceDir | default "/bootstrap/default-workspace" }}
+          command:
+          - /chartsmith-worker
+          env:
+          {{- if .Values.artifacthub.aws.useEC2Parameters }}
+          - name: USE_EC2_PARAMETERS
+            value: "true"
+          - name: AWS_REGION
+            value: {{ .Values.artifacthub.aws.region | default "us-east-1" | quote }}
+          {{- end }}
+          image: "{{ .Values.images.worker.registry }}/{{ .Values.images.worker.repository }}:{{ .Values.images.worker.tag | default .Chart.AppVersion }}"
+          name: bootstrap
+          env:
+            - name: CHARTSMITH_PG_URI
+              value: "{{ if .Values.postgresql.enabled }}postgres://{{ .Values.postgresql.credentials.username }}:{{ .Values.postgresql.credentials.password }}@postgresql:5432/{{ .Values.postgresql.credentials.database }}?sslmode=disable{{ else }}{{ .Values.postgresql.externalUri }}{{ end }}"
+            - name: LOG_LEVEL
+              value: "debug"
+      {{- end }}
       containers:
         - name: worker
           securityContext:
@@ -43,6 +67,12 @@ spec:
           imagePullPolicy: {{ .Values.images.worker.pullPolicy }}
           args: ["run"]
           env:
+            {{- if .Values.artifacthub.aws.useEC2Parameters }}
+            - name: USE_EC2_PARAMETERS
+              value: "true"
+            - name: AWS_REGION
+              value: {{ .Values.artifacthub.aws.region | default "us-east-1" | quote }}
+            {{- end }}
             - name: CHARTSMITH_PG_URI
               value: "{{ if .Values.postgresql.enabled }}postgres://{{ .Values.postgresql.credentials.username }}:{{ .Values.postgresql.credentials.password }}@postgresql:5432/{{ .Values.postgresql.credentials.database }}{{ else }}{{ .Values.postgresql.externalUri }}{{ end }}"
             - name: CHARTSMITH_CENTRIFUGO_ADDRESS

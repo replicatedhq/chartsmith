@@ -22,7 +22,6 @@ images:
     tag: "latest"
     pullPolicy: IfNotPresent
 
-
 nameOverride: ""
 fullnameOverride: ""
 
@@ -71,7 +70,6 @@ readinessProbe:
     port: http
   initialDelaySeconds: 5
   periodSeconds: 5
-
 
 resources:
   limits:
@@ -125,6 +123,17 @@ tolerations: []
 
 affinity: {}
 
+worker:
+  # Bootstrap initial workspace on startup
+  bootstrap:
+    enabled: false
+    # Default: "/bootstrap/default-workspace"
+    workspaceDir: ""
+  aws:
+    useEC2Parameters: false
+    # Default: "us-east-1"
+    region: ""
+
 centrifugo:
   tokenHmacSecretKey:
     value: "change.me"
@@ -152,4 +161,3 @@ postgresql:
   storage:
     size: "10Gi"
     className: ""
-
