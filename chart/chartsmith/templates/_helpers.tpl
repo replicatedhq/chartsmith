@@ -61,3 +61,18 @@ Create the name of the service account to use
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
+
+{{/*
+Define CHARTSMITH_ANTHROPIC_API_KEY
+*/}}
+{{- define "chartsmith.anthropicApiKey" -}}
+{{- if .Values.anthropic.apiKey }}
+name: {{ include "chartsmith.fullname" . }}-secrets
+key: ANTHROPIC_API_KEY
+{{- else if .Values.anthropic.existingSecret }}
+name: {{ .Values.anthropic.existingSecret }}
+key: {{ .Values.anthropic.existingSecretKey | default "api-key" }}
+{{- else }}
+{{- fail "\n\nThis chart requires an ANTHROPIC_API_KEY. See README for instructions." }}
+{{- end }}
+{{- end }}

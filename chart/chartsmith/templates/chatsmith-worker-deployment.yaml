@@ -73,6 +73,10 @@ spec:
             - name: AWS_REGION
               value: {{ .Values.artifacthub.aws.region | default "us-east-1" | quote }}
             {{- end }}
+            - name: CHARTSMITH_ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  {{- include "chartsmith.anthropicApiKey" . | nindent 18 }}
             - name: CHARTSMITH_PG_URI
               value: "{{ if .Values.postgresql.enabled }}postgres://{{ .Values.postgresql.credentials.username }}:{{ .Values.postgresql.credentials.password }}@postgresql:5432/{{ .Values.postgresql.credentials.database }}{{ else }}{{ .Values.postgresql.externalUri }}{{ end }}"
             - name: CHARTSMITH_CENTRIFUGO_ADDRESS

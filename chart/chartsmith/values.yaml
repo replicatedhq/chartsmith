@@ -134,6 +134,13 @@ worker:
     # Default: "us-east-1"
     region: ""
 
+# Anthropic API configuration (REQUIRED)
+# Get your API key from: https://console.anthropic.com/
+anthropic:
+  apiKey: ""
+  # existingSecret: chartsmith-anthropic
+  # existingSecretKey: api-key
+
 centrifugo:
   tokenHmacSecretKey:
     value: "change.me"
