@@ -32,10 +32,10 @@ serviceAccount:
   name: ""
 
 # This is for setting Kubernetes Annotations to a Pod.
-# For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/
+# For more information see: https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/
 podAnnotations: {}
 # This is for setting Kubernetes Labels to a Pod.
-# For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
+# For more information see: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
 podLabels: {}
 
 podSecurityContext: {}
@@ -78,27 +78,40 @@ resources:
   requests:
     cpu: 100m
     memory: 128Mi
-  # We usually recommend not to specify default resources and to leave this as a conscious
-  # choice for the user. This also increases chances charts run on environments with little
-  # resources, such as Minikube. If you do want to specify resources, uncomment the following
-  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-  # limits:
-  #   cpu: 100m
-  #   memory: 128Mi
-  # requests:
-  #   cpu: 100m
-  #   memory: 128Mi
 
+# This is for setting ingress
+# For more information see: https://kubernetes.io/docs/concepts/services-networking/ingress/
 ingress:
   enabled: false
   className: ""
   annotations: {}
-  hosts:
-    - host: chart-example.local
-      paths:
-        - path: /
-          pathType: ImplementationSpecific
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+  hosts: []
+    # - host: chartsmith.localdev.me
+    #   paths:
+    #     - path: /
+    #       pathType: ImplementationSpecific
   tls: []
+    # - secretName: chartsmith-tls
+    #   hosts:
+    #     - chartsmith.localdev.me
+
+# Public endpoint configuration
+# These values should match your ingress host and service port configuration
+# TODO do we want these first three to be configurable?
+# TODO remove example values from here (I think examples are better in comments)
+config:
+  # Public API endpoint URL that the frontend will use
+  apiEndpoint: "http://chartsmith.localdev.me:3000/api"
+  # WebSocket endpoint for real-time updates via Centrifugo
+  centrifugoAddress: "ws://chartsmith.localdev.me:3000/centrifugo/connection"
+  # OAuth redirect URI - must match Google OAuth configuration
+  googleRedirectUri: "http://chartsmith.localdev.me:3000/auth/google"
+  # Replicated OAuth redirect URI (leave empty if not using)
+  replicatedRedirect:
+    enabled: false
+    url: ""
 
 autoscaling:
   enabled: false
@@ -134,37 +147,77 @@ worker:
     # Default: "us-east-1"
     region: ""
 
-# Anthropic API configuration (REQUIRED)
+auth:
+  # CAUTION: Enable test authentication (NEVER USE IN PRODUCTION)
+  enableTestAuth: false
+  google:
+    # OAuth redirect URI - must match Google OAuth configuration below
+    redirectUri: ""
+    # Create OAuth credentials at https://console.cloud.google.com/
+    clientId: ""
+    # Optional: either set as value or in an existing secret
+    clientSecret: ""
+    # If set, key must be GOOGLE_CLIENT_SECRET
+    existingK8sSecret: ""
+
+# HMAC secret for JWT tokens (REQUIRED)
+# 32-byte hex string for signing JWTs
+# Generate with: openssl rand -hex 32
+# REQUIRED: either hmacSecret or existingK8sSecretKey
+hmac:
+  secret: ""
+  # If set, key must be HMAC_SECRET
+  existingK8sSecret: ""
+
+# Anthropic API configuration
 # Get your API key from: https://console.anthropic.com/
+# REQUIRED: either apiKey or existingSecret
 anthropic:
   apiKey: ""
-  # existingSecret: chartsmith-anthropic
-  # existingSecretKey: api-key
+  # If set, key must be ANTHROPIC_API_KEY
+  existingSecret: ""
 
+# More information at: https://console.groq.com/docs/quickstart
+# REQUIRED: either apiKey or existingSecret
+groq:
+  apiKey: ""
+  # If set, key must be GROQ_API_KEY
+  existingSecret: ""
+
+# More information at: https://docs.voyageai.com/docs/faq#how-do-i-get-the-voyage-api-key
+# REQUIRED: either apiKey or existingSecret
+voyage:
+  apiKey: ""
+  # If set, key must be VOYAGE_API_KEY
+  existingSecret: ""
+
+# REQUIRED: these keys either as values or in an existing secret
+# TODO: check if we need to set CHARTSMITH_CENTRIFUGO_API_KEY env var since we mount it in config.json
 centrifugo:
-  tokenHmacSecretKey:
-    value: "change.me"
-    existingSecret: {}
-  adminPassword:
-    value: "password"
-    existingSecret: {}
-  adminSecret:
-    value: "secret"
-    existingSecret: {}
-  apiKey:
-    value: "api_key"
-    existingSecret: {}
+  apiKey: ""
+  tokenHmacSecret: ""
+  adminPassword: ""
+  adminSecret: ""
+  # If set, secret data/stringData must be under a "config.json" key, and follow Centrifugo v5 json config format:
+  # For more information see: https://centrifugal.dev/docs/5/server/configuration
+  existingSecret: ""
 
 # postgresql configuration:
-#   enabled: Set to false to disable the built-in Postgres deployment and use an external database.
-#   externalUri: If enabled is false, provide a Postgres connection string here (e.g. postgres://user:pass@host:5432/dbname).
+# REQUIRED: either externalUri (with enabled=false) or credentials (with enabled=true)
 postgresql:
+  # Enable to create a Postgres instance (true)
   enabled: true
+  # External Postgres connection URI (postgres://[user[:password]@][host][:port][/dbname][?options])
+  # REQUIRED if enabled is "false"
   externalUri: ""
+  # Credentials to create a Postgres instance
+  # REQUIRED if enabled is "true" (must add all credentials, either as values or in an existing secret)
   credentials:
-    username: "pgvector"
-    password: "supersecretpassword"
-    database: "pgvector"
+    username: ""
+    password: ""
+    database: ""
+    # If set, keys must be PG_USERNAME, PG_PASSWORD, and PG_DATABASE
+    existingSecret: ""
   storage:
     size: "10Gi"
     className: ""

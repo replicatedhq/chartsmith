@@ -45,7 +45,7 @@ spec:
           command:
           - /chartsmith-worker
           env:
-          {{- if .Values.artifacthub.aws.useEC2Parameters }}
+          {{- if .Values.worker.aws.useEC2Parameters }}
           - name: USE_EC2_PARAMETERS
             value: "true"
           - name: AWS_REGION
@@ -67,22 +67,35 @@ spec:
           imagePullPolicy: {{ .Values.images.worker.pullPolicy }}
           args: ["run"]
           env:
-            {{- if .Values.artifacthub.aws.useEC2Parameters }}
+            {{- if .Values.worker.aws.useEC2Parameters }}
             - name: USE_EC2_PARAMETERS
               value: "true"
             - name: AWS_REGION
               value: {{ .Values.artifacthub.aws.region | default "us-east-1" | quote }}
             {{- end }}
-            - name: CHARTSMITH_ANTHROPIC_API_KEY
+            - name: ANTHROPIC_API_KEY
               valueFrom:
                 secretKeyRef:
-                  {{- include "chartsmith.anthropicApiKey" . | nindent 18 }}
-            - name: CHARTSMITH_PG_URI
-              value: "{{ if .Values.postgresql.enabled }}postgres://{{ .Values.postgresql.credentials.username }}:{{ .Values.postgresql.credentials.password }}@postgresql:5432/{{ .Values.postgresql.credentials.database }}{{ else }}{{ .Values.postgresql.externalUri }}{{ end }}"
+                  name: {{ include "chartsmith.anthropicApiKey" . }}
+                  key: ANTHROPIC_API_KEY
+            - name: GROQ_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "chartsmith.groqApiKey" . }}
+                  key: GROQ_API_KEY
+            - name: VOYAGE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "chartsmith.voyageApiKey" . }}
+                  key: VOYAGE_API_KEY
+            {{- include "chartsmith.pgUri" . | nindent 12 }}
             - name: CHARTSMITH_CENTRIFUGO_ADDRESS
-              value: "http://{{ include "chartsmith.fullname" . }}-centrifugo:8000/api"
+              value: http://{{ include "chartsmith.fullname" . }}-centrifugo:8000/api
             - name: CHARTSMITH_CENTRIFUGO_API_KEY
-              value: {{ .Values.centrifugo.apiKey.value | quote }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "chartsmith.centrifugoApiKey" . }}
+                  key: CHARTSMITH_CENTRIFUGO_API_KEY
           ports:
             - name: http
               containerPort: {{ .Values.service.port }}

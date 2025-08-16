@@ -41,6 +41,48 @@ spec:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.images.app.registry }}/{{ .Values.images.app.repository }}:{{ .Values.images.app.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.images.app.pullPolicy }}
+          env:
+          - name: CENTRIFUGO_TOKEN_HMAC_SECRET
+            valueFrom:
+              secretKeyRef:
+                key: CENTRIFUGO_TOKEN_HMAC_SECRET
+                name: {{ include "chartsmith.centrifugoTokenHmacSecret" . }}
+          - name: GOOGLE_CLIENT_SECRET
+            valueFrom:
+              secretKeyRef:
+                key: GOOGLE_CLIENT_SECRET
+                name: {{ include "chartsmith.googleClientSecret" . }}
+          - name: HMAC_SECRET
+            valueFrom:
+              secretKeyRef:
+                key: HMAC_SECRET
+                name: {{ include "chartsmith.hmacSecret" . }}
+          {{- include "chartsmith.pgUri" . | nindent 10 }}
+          - name: NEXT_PUBLIC_GOOGLE_CLIENT_ID
+            valueFrom:
+              configMapKeyRef:
+                key: NEXT_PUBLIC_GOOGLE_CLIENT_ID
+                name: chartsmith-configs
+          - name: NEXT_PUBLIC_CENTRIFUGO_ADDRESS
+            valueFrom:
+              configMapKeyRef:
+                key: NEXT_PUBLIC_CENTRIFUGO_ADDRESS
+                name: chartsmith-configs
+          - name: NEXT_PUBLIC_GOOGLE_REDIRECT_URI
+            valueFrom:
+              configMapKeyRef:
+                key: NEXT_PUBLIC_GOOGLE_REDIRECT_URI
+                name: chartsmith-configs
+          - name: ANTHROPIC_API_KEY
+            valueFrom:
+              secretKeyRef:
+                key: ANTHROPIC_API_KEY
+                name: {{ include "chartsmith.anthropicApiKey" . }}
+          - name: NEXT_PUBLIC_API_ENDPOINT
+            valueFrom:
+              configMapKeyRef:
+                key: NEXT_PUBLIC_API_ENDPOINT
+                name: chartsmith-configs
           ports:
             - name: http
               containerPort: {{ .Values.service.targetPort }}
