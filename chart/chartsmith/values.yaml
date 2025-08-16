@@ -106,8 +106,6 @@ config:
   apiEndpoint: "http://chartsmith.localdev.me:3000/api"
   # WebSocket endpoint for real-time updates via Centrifugo
   centrifugoAddress: "ws://chartsmith.localdev.me:3000/centrifugo/connection"
-  # OAuth redirect URI - must match Google OAuth configuration
-  googleRedirectUri: "http://chartsmith.localdev.me:3000/auth/google"
   # Replicated OAuth redirect URI (leave empty if not using)
   replicatedRedirect:
     enabled: false
@@ -151,7 +149,7 @@ auth:
   # CAUTION: Enable test authentication (NEVER USE IN PRODUCTION)
   enableTestAuth: false
   google:
-    # OAuth redirect URI - must match Google OAuth configuration below
+    # OAuth redirect URI - must match Google OAuth configuration below (eg, "http://chartsmith.localdev.me:3000/auth/google")
     redirectUri: ""
     # Create OAuth credentials at https://console.cloud.google.com/
     clientId: ""
