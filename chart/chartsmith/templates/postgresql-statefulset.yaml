@@ -50,7 +50,7 @@ spec:
               name: postgres
           volumeMounts:
             - name: data
-              mountPath: /var/lib/postgresql/data
+              mountPath: /var/lib/postgresql
           readinessProbe:
             exec:
               command:
@@ -67,22 +67,16 @@ spec:
                 - "$(POSTGRES_USER)"
             initialDelaySeconds: 30
             periodSeconds: 10
-      volumes:
-        - name: data
-          persistentVolumeClaim:
-            claimName: postgresql-data
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: postgresql-data
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: {{ .Values.postgresql.storage.size | default "10Gi" }}
-{{- if .Values.postgresql.storage.className }}
-  storageClassName: {{ .Values.postgresql.storage.className | quote }}
-{{- end }}
-{{- end }}
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: {{ .Values.postgresql.storage.size | default "10Gi" }}
+    {{- if .Values.postgresql.storage.className }}
+      storageClassName: {{ .Values.postgresql.storage.className | quote }}
+    {{- end }}
+    {{- end }}
