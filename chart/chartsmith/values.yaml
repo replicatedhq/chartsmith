@@ -106,10 +106,6 @@ config:
   apiEndpoint: "http://chartsmith.localdev.me:3000/api"
   # WebSocket endpoint for real-time updates via Centrifugo
   centrifugoAddress: "ws://chartsmith.localdev.me:3000/centrifugo/connection"
-  # Replicated OAuth redirect URI (leave empty if not using)
-  replicatedRedirect:
-    enabled: false
-    url: ""
 
 autoscaling:
   enabled: false
@@ -157,6 +153,9 @@ auth:
     clientSecret: ""
     # If set, key must be GOOGLE_CLIENT_SECRET
     existingK8sSecret: ""
+  replicated:
+    # Replicated OAuth redirect URI (leave empty if not using)
+    redirectUri: ""
 
 # HMAC secret for JWT tokens (REQUIRED)
 # 32-byte hex string for signing JWTs
