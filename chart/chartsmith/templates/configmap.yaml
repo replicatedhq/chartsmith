@@ -14,6 +14,4 @@ data:
   {{- if .Values.auth.google.clientId }}
   NEXT_PUBLIC_GOOGLE_CLIENT_ID: {{ .Values.auth.google.clientId | quote }}
   {{- end }}
-  {{- if .Values.auth.enableTestAuth }}
-  NEXT_PUBLIC_ENABLE_TEST_AUTH: "true"
-  {{- end }}
+  NEXT_PUBLIC_ENABLE_TEST_AUTH: {{ .Values.auth.enableTestAuth | quote | default "false" }}
