@@ -35,7 +35,7 @@ spec:
             {{- end }}
             backend:
               service:
-                name: {{ include "chartsmith.fullname" $ }}
+                name: {{ include "chartsmith.fullname" $ }}-app
                 port:
                   number: {{ $.Values.service.port }}
           {{- end }}
