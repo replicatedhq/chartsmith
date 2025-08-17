@@ -91,6 +91,8 @@ config:
 
 #### Use External PostgreSQL Database
 
+To disable chart-managed PostgreSQL and use an external database:
+
 ```yaml
 postgresql:
   enabled: false
@@ -166,14 +168,7 @@ kubectl create secret generic chartsmith-secrets \
 By default this chart installs additional, dependent charts:
 
 - PostgreSQL with pgvector extension (can be disabled)
-
-To disable PostgreSQL and use an external database:
-
-```yaml
-postgresql:
-  enabled: false
-  externalUri: "postgres://..."
-```
+- Replicated SDK (can be disabled)
 
 ## Source Code
 

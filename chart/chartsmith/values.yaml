@@ -213,7 +213,7 @@ postgresql:
     username: ""
     password: ""
     database: ""
-    # If set, keys must be PG_USERNAME, PG_PASSWORD, and PG_DATABASE
+    # If set, keys must be username, password, and database
     existingSecret: ""
   storage:
     size: "10Gi"

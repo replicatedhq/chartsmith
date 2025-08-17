@@ -33,17 +33,17 @@ spec:
             - name: POSTGRES_DB
               valueFrom:
                 secretKeyRef:
-                  name: postgresql-secret
+                  name: {{ default "postgresql-secret" .Values.postgresql.credentials.existingSecret }}
                   key: database
             - name: POSTGRES_USER
               valueFrom:
                 secretKeyRef:
-                  name: postgresql-secret
+                  name: {{ default "postgresql-secret" .Values.postgresql.credentials.existingSecret }}
                   key: username
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: postgresql-secret
+                  name: {{ default "postgresql-secret" .Values.postgresql.credentials.existingSecret }}
                   key: password
           ports:
             - containerPort: 5432
