@@ -164,16 +164,15 @@ Define CHARTSMITH_PG_URI
 {{- if not (or $pgUri $pgEnabled) }}
   {{- fail "\n\nThis chart requires either postgresql.externalUri, or postgresql.enabled=true. See README for instructions." }}
 {{- end }}
-- name: CHARTSMITH_PG_URI
 {{- if $pgUri }}
-  value: {{ $pgUri }}
+value: {{ $pgUri }}
 {{- else if $pgEnabled }}
   {{- if not (or $pgCredentialsSet $pgExistingSecret) }}
     {{- fail "\n\nIf postgresql.enabled=true this chart requires postgresql credentials (as values or in an existing secret). See README for instructions." }}
   {{- end }}
-  valueFrom:
-    secretKeyRef:
-      name: {{ if $pgCredentialsSet }}{{ include "chartsmith.fullname" . }}-secrets{{ else }}{{ $pgExistingSecret }}{{ end }}
-      key: CHARTSMITH_PG_URI
+valueFrom:
+  secretKeyRef:
+    name: {{ if $pgCredentialsSet }}{{ include "chartsmith.fullname" . }}-secrets{{ else }}{{ $pgExistingSecret }}{{ end }}
+    key: CHARTSMITH_PG_URI
 {{- end }}
 {{- end}}

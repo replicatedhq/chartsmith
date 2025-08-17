@@ -1,3 +1,4 @@
+{{- $region := .Values.worker.aws.region }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -45,16 +46,16 @@ spec:
           command:
           - /chartsmith-worker
           env:
-          {{- if .Values.worker.aws.useEC2Parameters }}
-          - name: USE_EC2_PARAMETERS
-            value: "true"
-          - name: AWS_REGION
-            value: {{ .Values.artifacthub.aws.region | default "us-east-1" | quote }}
-          {{- end }}
+            - name: USE_EC2_PARAMETERS
+              value: {{ .Values.worker.aws.useEC2Parameters | quote }}
+            {{- if $region }}
+            - name: AWS_REGION
+              value: {{ $region }}
+            {{- end }}
+            - name: CHARTSMITH_PG_URI
+              {{- include "chartsmith.pgUri" . | trim | nindent 14 }}
           image: "{{ .Values.images.worker.registry }}/{{ .Values.images.worker.repository }}:{{ .Values.images.worker.tag | default .Chart.AppVersion }}"
           name: bootstrap
-          env:
-            {{- include "chartsmith.pgUri" . | nindent 12 }}
       {{- end }}
       containers:
         - name: worker
@@ -64,11 +65,11 @@ spec:
           imagePullPolicy: {{ .Values.images.worker.pullPolicy }}
           args: ["run"]
           env:
-            {{- if .Values.worker.aws.useEC2Parameters }}
             - name: USE_EC2_PARAMETERS
-              value: "true"
+              value: {{ .Values.worker.aws.useEC2Parameters | quote }}
+            {{- if $region }}
             - name: AWS_REGION
-              value: {{ .Values.artifacthub.aws.region | default "us-east-1" | quote }}
+              value: {{ $region }}
             {{- end }}
             - name: ANTHROPIC_API_KEY
               valueFrom:
@@ -85,7 +86,8 @@ spec:
                 secretKeyRef:
                   name: {{ include "chartsmith.voyageApiKey" . }}
                   key: VOYAGE_API_KEY
-            {{- include "chartsmith.pgUri" . | nindent 12 }}
+            - name: CHARTSMITH_PG_URI
+              {{- include "chartsmith.pgUri" . | trim | nindent 14 }}
             - name: CHARTSMITH_CENTRIFUGO_ADDRESS
               value: http://{{ include "chartsmith.fullname" . }}-centrifugo:8000/api
             - name: CHARTSMITH_CENTRIFUGO_API_KEY

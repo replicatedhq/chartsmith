@@ -57,7 +57,8 @@ spec:
               secretKeyRef:
                 key: HMAC_SECRET
                 name: {{ include "chartsmith.hmacSecret" . }}
-          {{- include "chartsmith.pgUri" . | nindent 10 }}
+          - name: CHARTSMITH_PG_URI
+            {{- include "chartsmith.pgUri" . | trim | nindent 12 }}
           - name: NEXT_PUBLIC_GOOGLE_CLIENT_ID
             valueFrom:
               configMapKeyRef:

@@ -48,7 +48,7 @@ spec:
               /schemahero plan --driver postgres --uri $CHARTSMITH_PG_URI --spec-file /schema/tables --spec-type table --out /plan/tables;
           env:
             - name: CHARTSMITH_PG_URI
-              value: "{{ if .Values.postgresql.enabled }}postgres://{{ .Values.postgresql.credentials.username }}:{{ .Values.postgresql.credentials.password }}@postgresql:5432/{{ .Values.postgresql.credentials.database }}{{ else }}{{ .Values.postgresql.externalUri }}{{ end }}"
+              {{- include "chartsmith.pgUri" . | trim | nindent 14 }}
           volumeMounts:
             - name: plan
               mountPath: /plan
@@ -75,7 +75,7 @@ spec:
               /schemahero apply --driver postgres --uri $CHARTSMITH_PG_URI --ddl /plan/tables;
           env:
             - name: CHARTSMITH_PG_URI
-              value: "{{ if .Values.postgresql.enabled }}postgres://{{ .Values.postgresql.credentials.username }}:{{ .Values.postgresql.credentials.password }}@postgresql:5432/{{ .Values.postgresql.credentials.database }}{{ else }}{{ .Values.postgresql.externalUri }}{{ end }}"
+              {{- include "chartsmith.pgUri" . | trim | nindent 14 }}
           volumeMounts:
             - name: plan
               mountPath: /plan
