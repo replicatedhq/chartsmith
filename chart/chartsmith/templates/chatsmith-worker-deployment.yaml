@@ -54,10 +54,7 @@ spec:
           image: "{{ .Values.images.worker.registry }}/{{ .Values.images.worker.repository }}:{{ .Values.images.worker.tag | default .Chart.AppVersion }}"
           name: bootstrap
           env:
-            - name: CHARTSMITH_PG_URI
-              value: "{{ if .Values.postgresql.enabled }}postgres://{{ .Values.postgresql.credentials.username }}:{{ .Values.postgresql.credentials.password }}@postgresql:5432/{{ .Values.postgresql.credentials.database }}?sslmode=disable{{ else }}{{ .Values.postgresql.externalUri }}{{ end }}"
-            - name: LOG_LEVEL
-              value: "debug"
+            {{- include "chartsmith.pgUri" . | nindent 12 }}
       {{- end }}
       containers:
         - name: worker
