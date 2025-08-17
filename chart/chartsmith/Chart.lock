@@ -2,5 +2,5 @@ dependencies:
 - name: replicated
   repository: oci://registry.chartsmith.ai/library
   version: 1.5.1
-digest: sha256:01dca11bf74053e092c465c7c5f74fc0fff8af0d090f0b6c11c137961c9c8480
-generated: "2025-08-07T10:36:20.867007-05:00"
+digest: sha256:67dcf31cd328c181f26d2d65fee81b02ae1c807448731a095c6e9249e0bbb5af
+generated: "2025-08-17T13:06:15.083087-04:00"

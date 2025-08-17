@@ -219,3 +219,7 @@ postgresql:
   storage:
     size: "10Gi"
     className: ""
+
+# Optionallly enable the replicated SDK subchart
+replicatedSdk:
+  enabled: false
