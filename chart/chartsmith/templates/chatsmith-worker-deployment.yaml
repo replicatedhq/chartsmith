@@ -46,8 +46,11 @@ spec:
           command:
           - /chartsmith-worker
           env:
+            # TODO remove conditional when this PR is merged https://github.com/replicatedhq/chartsmith/pull/111
+            {{- if .Values.worker.aws.useEC2Parameters }}
             - name: USE_EC2_PARAMETERS
               value: {{ .Values.worker.aws.useEC2Parameters | quote }}
+            {{- end }}
             {{- if $region }}
             - name: AWS_REGION
               value: {{ $region }}
@@ -65,8 +68,10 @@ spec:
           imagePullPolicy: {{ .Values.images.worker.pullPolicy }}
           args: ["run"]
           env:
+            {{- if .Values.worker.aws.useEC2Parameters }}
             - name: USE_EC2_PARAMETERS
               value: {{ .Values.worker.aws.useEC2Parameters | quote }}
+            {{- end }}
             {{- if $region }}
             - name: AWS_REGION
               value: {{ $region }}
