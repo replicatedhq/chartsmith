@@ -84,6 +84,16 @@ spec:
               configMapKeyRef:
                 key: NEXT_PUBLIC_API_ENDPOINT
                 name: chartsmith-configs
+          - name: NEXT_PUBLIC_ENABLE_TEST_AUTH
+            valueFrom:
+              configMapKeyRef:
+                key: NEXT_PUBLIC_ENABLE_TEST_AUTH
+                name: chartsmith-configs
+          - name: NEXT_PUBLIC_REPLICATED_REDIRECT_URI
+            valueFrom:
+              configMapKeyRef:
+                key: NEXT_PUBLIC_REPLICATED_REDIRECT_URI
+                name: chartsmith-configs
           ports:
             - name: http
               containerPort: {{ .Values.service.targetPort }}
