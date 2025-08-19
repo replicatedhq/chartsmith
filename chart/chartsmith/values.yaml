@@ -85,13 +85,17 @@ ingress:
   enabled: false
   className: ""
   annotations: {}
-    # kubernetes.io/ingress.class: nginx
-    # kubernetes.io/tls-acme: "true"
+    # nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    # nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
   hosts: []
     # - host: chartsmith.localdev.me
     #   paths:
+    #     - path: /connection/websocket
+    #       pathType: Prefix
+    #       service: centrifugo
     #     - path: /
-    #       pathType: ImplementationSpecific
+    #       pathType: Prefix
+    #       service: app
   tls: []
     # - secretName: chartsmith-tls
     #   hosts:
@@ -191,6 +195,7 @@ voyage:
 # REQUIRED: these keys either as values or in an existing secret
 # TODO: check if we need to set CHARTSMITH_CENTRIFUGO_API_KEY env var since we mount it in config.json
 centrifugo:
+  enabled: true
   apiKey: ""
   tokenHmacSecret: ""
   adminPassword: ""
