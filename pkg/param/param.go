@@ -48,7 +48,7 @@ func Init(sess *session.Session) error {
 	awsSession = sess
 
 	var paramsMap map[string]string
-	if os.Getenv("USE_EC2_PARAMETERS") != "" {
+	if os.Getenv("USE_EC2_PARAMETERS") == "true" {
 		p, err := GetParamsFromSSM(paramLookup)
 		if err != nil {
 			return fmt.Errorf("get from ssm: %w", err)
