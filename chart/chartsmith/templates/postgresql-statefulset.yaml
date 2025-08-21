@@ -33,24 +33,24 @@ spec:
             - name: POSTGRES_DB
               valueFrom:
                 secretKeyRef:
-                  name: postgresql-secret
+                  name: {{ default "postgresql-secret" .Values.postgresql.credentials.existingSecret }}
                   key: database
             - name: POSTGRES_USER
               valueFrom:
                 secretKeyRef:
-                  name: postgresql-secret
+                  name: {{ default "postgresql-secret" .Values.postgresql.credentials.existingSecret }}
                   key: username
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: postgresql-secret
+                  name: {{ default "postgresql-secret" .Values.postgresql.credentials.existingSecret }}
                   key: password
           ports:
             - containerPort: 5432
               name: postgres
           volumeMounts:
             - name: data
-              mountPath: /var/lib/postgresql/data
+              mountPath: /var/lib/postgresql
           readinessProbe:
             exec:
               command:
@@ -67,22 +67,16 @@ spec:
                 - "$(POSTGRES_USER)"
             initialDelaySeconds: 30
             periodSeconds: 10
-      volumes:
-        - name: data
-          persistentVolumeClaim:
-            claimName: postgresql-data
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: postgresql-data
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: {{ .Values.postgresql.storage.size | default "10Gi" }}
-{{- if .Values.postgresql.storage.className }}
-  storageClassName: {{ .Values.postgresql.storage.className | quote }}
-{{- end }}
-{{- end }}
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: {{ .Values.postgresql.storage.size | default "10Gi" }}
+    {{- if .Values.postgresql.storage.className }}
+      storageClassName: {{ .Values.postgresql.storage.className | quote }}
+    {{- end }}
+    {{- end }}

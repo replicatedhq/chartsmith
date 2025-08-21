@@ -35,9 +35,15 @@ spec:
             {{- end }}
             backend:
               service:
-                name: {{ include "chartsmith.fullname" $ }}
+                {{- if and (eq .service "centrifugo") $.Values.centrifugo.enabled }}
+                name: {{ include "chartsmith.fullname" $ }}-centrifugo
+                port:
+                  number: 8000
+                {{- else }}
+                name: {{ include "chartsmith.fullname" $ }}-app
                 port:
                   number: {{ $.Values.service.port }}
+                {{- end }}
           {{- end }}
     {{- end }}
 {{- end }}

@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "chartsmith.fullname" . }}-configs
+  labels:
+    {{- include "chartsmith.labels" . | nindent 4 }}
+data:
+  NEXT_PUBLIC_API_ENDPOINT: {{ .Values.config.apiEndpoint | quote }}
+  NEXT_PUBLIC_CENTRIFUGO_ADDRESS: {{ .Values.config.centrifugoAddress | quote }}
+  NEXT_PUBLIC_GOOGLE_REDIRECT_URI: {{ .Values.auth.google.redirectUri | quote }}
+  NEXT_PUBLIC_REPLICATED_REDIRECT_URI: {{ .Values.auth.replicated.redirectUri | quote }}
+  NEXT_PUBLIC_GOOGLE_CLIENT_ID: {{ .Values.auth.google.clientId | quote }}
+  NEXT_PUBLIC_ENABLE_TEST_AUTH: {{ .Values.auth.enableTestAuth | quote }}
