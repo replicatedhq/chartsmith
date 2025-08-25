@@ -5,4 +5,4 @@ metadata:
 spec:
   chart:
     name: chartsmith
-    chartVersion: CHART_VERSION
+    chartVersion: 0.2.0
