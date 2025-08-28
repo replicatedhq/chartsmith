@@ -92,7 +92,6 @@ export async function sessionToken(session: Session): Promise<string> {
       name: session.user.name,
       email: session.user.email,
       picture: session.user.imageUrl,
-      userSettings: session.user.settings,
       isWaitlisted: session.user.isWaitlisted,
       isAdmin: session.user.isAdmin || false
     };
@@ -193,6 +192,9 @@ export async function findSession(token: string): Promise<Session | undefined> {
                   settings: {
                     automaticallyAcceptPatches: false,
                     evalBeforeAccept: false,
+                    theme: 'auto',
+                    tabSize: '2 spaces',
+                    showMinimap: false,
                   },
                   isAdmin: false
                 },
@@ -237,6 +239,9 @@ export async function findSession(token: string): Promise<Session | undefined> {
             settings: {
               automaticallyAcceptPatches: false,
               evalBeforeAccept: false,
+              theme: 'auto',
+              tabSize: '2 spaces',
+              showMinimap: false,
             },
             isAdmin: false
           };

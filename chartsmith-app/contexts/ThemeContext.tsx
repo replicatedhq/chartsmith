@@ -14,23 +14,36 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({
   children,
-  defaultTheme = 'dark'
+  defaultTheme = 'auto'
 }: {
   children: React.ReactNode;
   defaultTheme?: Theme;
 }) {
   const [theme, setThemeState] = useState<Theme>(defaultTheme);
+  const [isHydrated, setIsHydrated] = useState(false);
 
-  const [systemTheme, setSystemTheme] = useState<"light" | "dark">(
-    typeof window !== 'undefined'
-      ? window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-      : 'dark'
-  );
+  const [systemTheme, setSystemTheme] = useState<"light" | "dark">('dark');
 
+  // Hydration effect - read theme from cookie only after client hydration
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
+    setIsHydrated(true);
+
+    // Read theme from cookie after hydration to prevent SSR mismatch
+    const cookieValue = document.cookie
+      .split('; ')
+      .find(row => row.startsWith('theme='))
+      ?.split('=')[1];
+
+    if (cookieValue && ['light', 'dark', 'auto'].includes(cookieValue)) {
+      setThemeState(cookieValue as Theme);
+    }
+
+    // Set initial system theme
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    setSystemTheme(mediaQuery.matches ? 'dark' : 'light');
+
     const handleChange = (e: MediaQueryListEvent) => {
       setSystemTheme(e.matches ? 'dark' : 'light');
     };
@@ -41,11 +54,16 @@ export function ThemeProvider({
 
   const setTheme = (newTheme: Theme) => {
     // Set cookie with theme preference
-    document.cookie = `theme=${newTheme}; path=/; SameSite=Lax`;
+    if (typeof window !== 'undefined') {
+      document.cookie = `theme=${newTheme}; path=/; SameSite=Lax`;
+    }
     setThemeState(newTheme);
   };
 
   useEffect(() => {
+    // Only apply theme to DOM after hydration to prevent mismatch
+    if (!isHydrated || typeof window === 'undefined') return;
+
     const activeTheme = theme === 'auto' ? systemTheme : theme;
     document.documentElement.classList.remove('light', 'dark');
     document.documentElement.classList.add(activeTheme);
@@ -62,7 +80,7 @@ export function ThemeProvider({
       document.documentElement.style.setProperty('--border', '#e2e8f0');
       document.documentElement.style.setProperty('--text', '#0f172a');
     }
-  }, [theme, systemTheme]);
+  }, [theme, systemTheme, isHydrated]);
 
   const resolvedTheme = theme === 'auto' ? systemTheme : theme;
 
