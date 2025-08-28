@@ -9,6 +9,9 @@ import { logger } from "../utils/logger";
 const defaultUserSettings: UserSetting = {
   automaticallyAcceptPatches: false,
   evalBeforeAccept: false,
+  theme: 'auto',
+  tabSize: '2 spaces',
+  showMinimap: false,
 };
 
 /**
@@ -205,6 +208,7 @@ export async function findUser(email: string): Promise<User | undefined> {
 
 export async function updateUserSetting(id: string, key: string, value: string): Promise<UserSetting> {
   try {
+    logger.info("Updating user setting in database", { userId: id, key, value });
     const db = getDB(await getParam("DB_URI"));
     await db.query(
       `
@@ -215,14 +219,17 @@ export async function updateUserSetting(id: string, key: string, value: string):
       [id, key, value],
     );
 
-    return await getUserSettings(id);
+    logger.info("Successfully updated user setting, fetching fresh settings");
+    const updatedSettings = await getUserSettings(id);
+    logger.info("Returning updated settings", { updatedSettings });
+    return updatedSettings;
   } catch (err) {
     logger.error("Failed to update user setting", { err });
     throw err;
   }
 }
 
-async function getUserSettings(id: string): Promise<UserSetting> {
+export async function getUserSettings(id: string): Promise<UserSetting> {
   try {
     const db = getDB(await getParam("DB_URI"));
     const result = await db.query(
@@ -239,23 +246,41 @@ async function getUserSettings(id: string): Promise<UserSetting> {
     );
 
     const userSettings: UserSetting = { ...defaultUserSettings };
+    logger.info("Loading user settings from database", {
+      userId: id,
+      rowCount: result.rows.length,
+      defaultSettings: defaultUserSettings
+    });
 
     for (const row of result.rows) {
+      logger.info("Processing setting row", { key: row.key, value: row.value });
       switch (row.key) {
         case "automatically_accept_patches":
           userSettings.automaticallyAcceptPatches = row.value === "true";
           break;
         case "eval_before_accept":
           userSettings.evalBeforeAccept = row.value === "true";
+          break;
+        case "theme":
+          userSettings.theme = row.value;
+          break;
+        case "tab_size":
+          userSettings.tabSize = row.value;
+          break;
+        case "show_minimap":
+          userSettings.showMinimap = row.value === "true";
+          break;
       }
     }
 
+    logger.info("Final user settings loaded", { userId: id, finalSettings: userSettings });
     return userSettings;
   } catch (err) {
     logger.error("Failed to get user settings", { err });
     throw err;
   }
 }
+
 
 export async function getUser(id: string): Promise<User | undefined> {
   try {
@@ -368,6 +393,9 @@ export async function listWaitlistUsers(): Promise<User[]> {
         settings: {
           automaticallyAcceptPatches: false,
           evalBeforeAccept: false,
+          theme: 'auto',
+          tabSize: '2 spaces',
+          showMinimap: false,
         },
         isAdmin: false,
       });
