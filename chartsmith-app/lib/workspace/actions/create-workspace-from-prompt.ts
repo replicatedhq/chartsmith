@@ -11,6 +11,7 @@ export async function createWorkspaceFromPromptAction(session: Session, prompt: 
   const createChartMessageParams: CreateChatMessageParams = {
     prompt: prompt,
     messageFromPersona: ChatMessageFromPersona.AUTO,
+    useSecureBuildImages: session.user.settings.useSecureBuildImages,
   }
   const w = await createWorkspace("prompt", session.user.id, createChartMessageParams);
 

@@ -12,13 +12,15 @@ import (
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 	"github.com/replicatedhq/chartsmith/pkg/realtime"
 	realtimetypes "github.com/replicatedhq/chartsmith/pkg/realtime/types"
+	"github.com/replicatedhq/chartsmith/pkg/backend"
 	"github.com/replicatedhq/chartsmith/pkg/workspace"
 	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 	"go.uber.org/zap"
 )
 
 type applyPlanPayload struct {
-	PlanID string `json:"planId"`
+	PlanID  string       `json:"planId"`
+	Options backend.Options `json:"options,omitempty"`
 }
 
 // applyPlanLockKeyExtractor extracts the workspace ID from the apply plan payload
@@ -128,7 +130,7 @@ func handleApplyPlanNotification(ctx context.Context, payload string) error {
 		}
 
 		// Process the file
-		if err := processActionFile(ctx, w, updatedPlan, actionFile, realtimeRecipient); err != nil {
+		if err := processActionFile(ctx, w, updatedPlan, actionFile, realtimeRecipient, p.Options); err != nil {
 			return fmt.Errorf("failed to process action file: %w", err)
 		}
 	}
@@ -207,7 +209,7 @@ func updateActionFileStatus(ctx context.Context, planID, path, status string) er
 }
 
 // processActionFile processes a single action file for a plan
-func processActionFile(ctx context.Context, w *workspacetypes.Workspace, plan *workspacetypes.Plan, actionFile workspacetypes.ActionFile, realtimeRecipient realtimetypes.Recipient) error {
+func processActionFile(ctx context.Context, w *workspacetypes.Workspace, plan *workspacetypes.Plan, actionFile workspacetypes.ActionFile, realtimeRecipient realtimetypes.Recipient, options backend.Options) error {
 	// Get chart and current content
 	currentContent := ""
 	var chartID string
@@ -242,7 +244,7 @@ func processActionFile(ctx context.Context, w *workspacetypes.Workspace, plan *w
 			Path: actionFile.Path,
 		}
 
-		finalContent, err := llm.ExecuteAction(ctx, apwp, plan, currentContent, interimContentCh)
+		finalContent, err := llm.ExecuteAction(ctx, apwp, plan, currentContent, interimContentCh, options)
 		if err != nil {
 			errCh <- fmt.Errorf("failed to execute action: %w", err)
 			return

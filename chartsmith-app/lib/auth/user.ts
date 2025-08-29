@@ -12,6 +12,7 @@ const defaultUserSettings: UserSetting = {
   theme: 'auto',
   tabSize: '2 spaces',
   showMinimap: false,
+  useSecureBuildImages: false,
 };
 
 /**
@@ -270,6 +271,9 @@ export async function getUserSettings(id: string): Promise<UserSetting> {
         case "show_minimap":
           userSettings.showMinimap = row.value === "true";
           break;
+        case "use_secure_build_images":
+          userSettings.useSecureBuildImages = row.value === "true";
+          break;
       }
     }
 
@@ -396,6 +400,7 @@ export async function listWaitlistUsers(): Promise<User[]> {
           theme: 'auto',
           tabSize: '2 spaces',
           showMinimap: false,
+          useSecureBuildImages: false,
         },
         isAdmin: false,
       });

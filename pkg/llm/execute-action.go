@@ -11,6 +11,7 @@ import (
 	llmtypes "github.com/replicatedhq/chartsmith/pkg/llm/types"
 	"github.com/replicatedhq/chartsmith/pkg/logger"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
+	"github.com/replicatedhq/chartsmith/pkg/backend"
 	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 	"github.com/tuvistavie/securerandom"
 	"go.uber.org/zap"
@@ -434,7 +435,7 @@ func findBestMatchRegion(content, oldStr string, minMatchLen int) (int, int) {
 	return -1, -1
 }
 
-func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWithPath, plan *workspacetypes.Plan, currentContent string, interimContentCh chan string) (string, error) {
+func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWithPath, plan *workspacetypes.Plan, currentContent string, interimContentCh chan string, options backend.Options) (string, error) {
 	updatedContent := currentContent
 	lastActivity := time.Now()
 
@@ -481,7 +482,7 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 	}
 
 	messages := []anthropic.MessageParam{
-		anthropic.NewAssistantMessage(anthropic.NewTextBlock(executePlanSystemPrompt)),
+		anthropic.NewAssistantMessage(anthropic.NewTextBlock(GetExecutePlanSystemPrompt(options))),
 		anthropic.NewUserMessage(anthropic.NewTextBlock(detailedPlanInstructions)),
 	}
 

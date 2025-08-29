@@ -32,4 +32,5 @@ export interface UserSetting {
   theme: string;
   tabSize: string;
   showMinimap: boolean;
+  useSecureBuildImages: boolean;
 }

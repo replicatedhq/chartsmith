@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from 'react';
-import { X, Trash2, Key, Check, Loader2, Lock } from 'lucide-react';
+import { X, Trash2, Key, Check, Loader2, Lock, Shield } from 'lucide-react';
 import { useTheme, Theme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { updateUserSettingAction } from '@/lib/auth/actions/update-user-setting';
@@ -15,7 +15,7 @@ interface SettingsModalProps {
 }
 
 interface SettingsSection {
-  id: 'general' | 'replicated' | 'appearance' | 'editor' | 'changes';
+  id: 'general' | 'replicated' | 'appearance' | 'editor' | 'changes' | 'images';
   label: string;
   icon: React.ReactNode;
   content: React.ReactNode;
@@ -24,7 +24,7 @@ interface SettingsSection {
 export function SettingsModal({ isOpen, onClose, session }: SettingsModalProps) {
   const { refreshSession } = useSession();
   const { theme, setTheme } = useTheme();
-  const [activeSection, setActiveSection] = useState<'general' | 'replicated' | 'appearance' | 'editor' | 'changes'>('general');
+  const [activeSection, setActiveSection] = useState<'general' | 'replicated' | 'appearance' | 'editor' | 'changes' | 'images'>('general');
   const [autoAcceptChanges, setAutoAcceptChanges] = useState(session.user?.settings?.automaticallyAcceptPatches ?? false);
   const [validateBeforeAccept, setValidateBeforeAccept] = useState(session.user?.settings?.evalBeforeAccept ?? false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -38,6 +38,8 @@ export function SettingsModal({ isOpen, onClose, session }: SettingsModalProps) 
   const [savingTabSize, setSavingTabSize] = useState(false);
   const [isChangingTheme, setIsChangingTheme] = useState(false);
   const [publicEnv, setPublicEnv] = useState<Record<string, string>>({});
+  const [useSecureBuildImages, setUseSecureBuildImages] = useState(session.user?.settings?.useSecureBuildImages ?? false);
+  const [savingSecureBuildImages, setSavingSecureBuildImages] = useState(false);
 
   useEffect(() => {
     const fetchConfig = async () => {
@@ -60,6 +62,7 @@ export function SettingsModal({ isOpen, onClose, session }: SettingsModalProps) 
       setValidateBeforeAccept(session.user.settings.evalBeforeAccept ?? false);
       setShowMinimap(session.user.settings.showMinimap ?? false);
       setTabSize(session.user.settings.tabSize ?? '2 spaces');
+      setUseSecureBuildImages(session.user.settings.useSecureBuildImages ?? false);
 
       // Only sync theme from database if there's a significant difference and we're not changing themes
       // Remove automatic sync to prevent hydration conflicts - let user manually change theme
@@ -221,6 +224,23 @@ export function SettingsModal({ isOpen, onClose, session }: SettingsModalProps) 
       console.log('Updated local session state:', session.user.settings.showMinimap);
     } finally {
       setSavingMinimap(false);
+    }
+  };
+
+  const handleSecureBuildImagesChange = async (checked: boolean) => {
+    if (!session.user) return;
+    console.log('handleSecureBuildImagesChange called', { checked, currentValue: session.user.settings.useSecureBuildImages });
+    setSavingSecureBuildImages(true);
+    try {
+      setUseSecureBuildImages(checked);
+      console.log('About to save use_secure_build_images to database');
+      const result = await updateUserSettingAction(session, 'use_secure_build_images', checked.toString());
+      console.log('Database save result:', result);
+      // Update session locally to reflect the change immediately
+      session.user.settings.useSecureBuildImages = checked;
+      console.log('Updated local session state:', session.user.settings.useSecureBuildImages);
+    } finally {
+      setSavingSecureBuildImages(false);
     }
   };
 
@@ -459,6 +479,42 @@ export function SettingsModal({ isOpen, onClose, session }: SettingsModalProps) 
               Run eval/validation before patches are accepted
             </label>
           </div>
+        </div>
+      ),
+    },
+    {
+      id: 'images' as const,
+      label: 'Images',
+      icon: <Shield className="w-4 h-4" />,
+      content: (
+        <div className="space-y-4">
+          <div className="flex items-center space-x-2">
+            {savingSecureBuildImages ? (
+              <Loader2 className="w-4 h-4 animate-spin text-primary" />
+            ) : (
+              <input
+                type="checkbox"
+                id="secure-build-images"
+                checked={useSecureBuildImages}
+                onChange={(e) => handleSecureBuildImagesChange(e.target.checked)}
+                className={`rounded border transition-colors ${
+                  theme === 'dark'
+                    ? 'border-dark-border bg-dark text-primary'
+                    : 'border-gray-300 bg-white text-primary'
+                } focus:ring-primary`}
+              />
+            )}
+            <label htmlFor="secure-build-images" className={`text-sm ${
+              theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+            }`}>
+              Use SecureBuild images (cve0.io)
+            </label>
+          </div>
+          <p className={`text-xs ${
+            theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+          }`}>
+            When enabled, ChartSmith will prefer container images from the SecureBuild cve0.io registry, which provides vulnerability-free container images for enhanced security.
+          </p>
         </div>
       ),
     },

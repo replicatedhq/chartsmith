@@ -195,6 +195,7 @@ export async function findSession(token: string): Promise<Session | undefined> {
                     theme: 'auto',
                     tabSize: '2 spaces',
                     showMinimap: false,
+                    useSecureBuildImages: false,
                   },
                   isAdmin: false
                 },
@@ -242,6 +243,7 @@ export async function findSession(token: string): Promise<Session | undefined> {
               theme: 'auto',
               tabSize: '2 spaces',
               showMinimap: false,
+              useSecureBuildImages: false,
             },
             isAdmin: false
           };

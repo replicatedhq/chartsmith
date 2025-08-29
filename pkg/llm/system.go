@@ -1,5 +1,10 @@
 package llm
 
+import (
+	"github.com/replicatedhq/chartsmith/pkg/backend"
+	"github.com/replicatedhq/chartsmith/pkg/logger"
+)
+
 const endUserSystemPrompt = `You are ChartSmith, an expert AI assistant and a highly skilled senior SRE specializing in using Helm charts to deploy applications to Kubernetes.
  Your primary responsibility is to configure and install and upgrade applications using Helm charts.
 
@@ -138,3 +143,34 @@ const convertFileSystemPrompt = commonSystemPrompt + `
   - When creating new values for the values.yaml, expect that this will be a complex chart and you should not have a very flat values.yaml schema
 </convert_file_instructions>
 `
+
+const secureBuildPromptAddition = `
+<secure_build_instructions>
+  - IMPORTANT: Use SecureBuild images from the cve0.io OCI repository when available.
+  - For all container images, prefer using images from cve0.io when they are available.
+  - When specifying image repositories, use cve0.io as the registry for images when possible.
+  - SecureBuild OCI repository URIs are formatted like cve0.io/postgres:17.6.
+  - This provides enhanced security through vulnerability-free container images.
+  - Make sure to note in the initial plan and chart values creation that SecureBuild (cve0.io) images are being used.
+</secure_build_instructions>
+`
+
+// GetInitialPlanSystemPrompt returns the initial plan system prompt with optional SecureBuild additions
+func GetInitialPlanSystemPrompt(options backend.Options) string {
+	if options.UseSecureBuildImages {
+		logger.Info("Adding SecureBuild instructions to initial plan system prompt")
+		return initialPlanSystemPrompt + secureBuildPromptAddition
+	}
+	logger.Info("Using standard initial plan system prompt (no SecureBuild)")
+	return initialPlanSystemPrompt
+}
+
+// GetExecutePlanSystemPrompt returns the execute plan system prompt with optional SecureBuild additions
+func GetExecutePlanSystemPrompt(options backend.Options) string {
+	if options.UseSecureBuildImages {
+		logger.Info("Adding SecureBuild instructions to execute plan system prompt")
+		return executePlanSystemPrompt + secureBuildPromptAddition
+	}
+	logger.Info("Using standard execute plan system prompt (no SecureBuild)")
+	return executePlanSystemPrompt
+}
