@@ -144,6 +144,30 @@ export const CodeEditor = React.memo(function CodeEditor({
     updateCurrentDiffIndex(allFilesWithContentPending);
   }, [selectedFile, allFilesWithContentPending, updateCurrentDiffIndex]);
 
+  // Auto-accept patches when YOLO mode is enabled
+  useEffect(() => {
+    const shouldAutoAccept = session.user?.settings?.automaticallyAcceptPatches === true;
+    const hasPatches = allFilesWithContentPending.length > 0;
+    const planIsApplied = mostRecentPlan?.status === "applied";
+
+    if (shouldAutoAccept && hasPatches && planIsApplied && workspace) {
+      console.log("YOLO mode enabled: automatically accepting all patches");
+      // Use setTimeout to avoid state update conflicts
+      setTimeout(async () => {
+        try {
+          await acceptAllPatchesAction(session, workspace.id, workspace.currentRevisionNumber);
+          // Reload workspace after auto-accept
+          const freshWorkspace = await getWorkspaceAction(session, workspace.id);
+          if (freshWorkspace) {
+            setWorkspace(freshWorkspace);
+          }
+        } catch (error) {
+          console.error("Auto-accept failed:", error);
+        }
+      }, 100);
+    }
+  }, [allFilesWithContentPending, mostRecentPlan?.status, session.user?.settings?.automaticallyAcceptPatches, session, workspace, setWorkspace]);
+
   // Handle outside clicks for dropdowns
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -626,7 +650,18 @@ export const CodeEditor = React.memo(function CodeEditor({
           <div className="flex items-center gap-2">
             {mostRecentPlan?.status === "applied" && (
               <>
-                <div ref={acceptButtonRef} className="relative">
+                {session.user?.settings?.automaticallyAcceptPatches ? (
+                  <div className={`px-3 py-1 text-xs rounded-md flex items-center gap-1 font-mono ${
+                    theme === "dark"
+                      ? "bg-green-600 text-white"
+                      : "bg-green-600 text-white"
+                  }`}>
+                    <Check className="w-3 h-3" />
+                    Auto-accepting changes...
+                  </div>
+                ) : (
+                  <>
+                    <div ref={acceptButtonRef} className="relative">
                   <div className="flex">
                     <button
                       className={`px-3 py-1 text-xs rounded-l-md flex items-center gap-1 font-mono ${
@@ -737,6 +772,8 @@ export const CodeEditor = React.memo(function CodeEditor({
                     </div>
                   )}
                 </div>
+                  </>
+                )}
               </>
             )}
 

@@ -239,7 +239,10 @@ export async function createChatMessage(userId: string, workspaceId: string, par
         additionalFiles: params.additionalFiles,
       });
     } else if (params.knownIntent === ChatMessageIntent.NON_PLAN) {
-      await client.query(`SELECT pg_notify('new_nonplan_chat_message', $1)`, [chatMessageId]);
+      await enqueueWork("conversational", {
+        chatMessageId,
+        workspaceId,
+      });
     } else if (params.knownIntent === ChatMessageIntent.RENDER) {
       await renderWorkspace(workspaceId, chatMessageId);
     } else if (params.knownIntent === ChatMessageIntent.CONVERT_K8S_TO_HELM) {

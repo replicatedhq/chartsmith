@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from 'react';
-import { X, Trash2, Key, Check, Loader2 } from 'lucide-react';
+import { X, Trash2, Key, Check, Loader2, Lock } from 'lucide-react';
 import { useTheme, Theme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { updateUserSettingAction } from '@/lib/auth/actions/update-user-setting';
@@ -22,14 +22,21 @@ interface SettingsSection {
 }
 
 export function SettingsModal({ isOpen, onClose, session }: SettingsModalProps) {
+  const { refreshSession } = useSession();
   const { theme, setTheme } = useTheme();
   const [activeSection, setActiveSection] = useState<'general' | 'replicated' | 'appearance' | 'editor' | 'changes'>('general');
-  const [autoAcceptChanges, setAutoAcceptChanges] = useState(session.user?.settings?.automaticallyAcceptPatches || false);
-  const [validateBeforeAccept, setValidateBeforeAccept] = useState(session.user?.settings?.evalBeforeAccept || false);
+  const [autoAcceptChanges, setAutoAcceptChanges] = useState(session.user?.settings?.automaticallyAcceptPatches ?? false);
+  const [validateBeforeAccept, setValidateBeforeAccept] = useState(session.user?.settings?.evalBeforeAccept ?? false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [apiToken, setApiToken] = useState('');
   const [savingAutoAccept, setSavingAutoAccept] = useState(false);
   const [savingValidate, setSavingValidate] = useState(false);
+  const [showMinimap, setShowMinimap] = useState(session.user?.settings?.showMinimap ?? false);
+  const [tabSize, setTabSize] = useState(session.user?.settings?.tabSize ?? '2 spaces');
+  const [localTheme, setLocalTheme] = useState(session.user?.settings?.theme ?? 'auto');
+  const [savingMinimap, setSavingMinimap] = useState(false);
+  const [savingTabSize, setSavingTabSize] = useState(false);
+  const [isChangingTheme, setIsChangingTheme] = useState(false);
   const [publicEnv, setPublicEnv] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -49,10 +56,31 @@ export function SettingsModal({ isOpen, onClose, session }: SettingsModalProps) 
 
   useEffect(() => {
     if (session.user?.settings) {
-      setAutoAcceptChanges(session.user.settings.automaticallyAcceptPatches);
-      setValidateBeforeAccept(session.user.settings.evalBeforeAccept);
+      setAutoAcceptChanges(session.user.settings.automaticallyAcceptPatches ?? false);
+      setValidateBeforeAccept(session.user.settings.evalBeforeAccept ?? false);
+      setShowMinimap(session.user.settings.showMinimap ?? false);
+      setTabSize(session.user.settings.tabSize ?? '2 spaces');
+
+      // Only sync theme from database if there's a significant difference and we're not changing themes
+      // Remove automatic sync to prevent hydration conflicts - let user manually change theme
+      const dbTheme = session.user.settings.theme ?? 'auto';
+      setLocalTheme(dbTheme);
     }
   }, [session.user?.settings]);
+
+  // Sync localTheme only when modal opens (isOpen changes from false to true)
+  useEffect(() => {
+    if (isOpen && session.user?.settings) {
+      const dbTheme = session.user.settings.theme ?? 'auto';
+      console.log('Modal opened, syncing localTheme to:', dbTheme);
+      setLocalTheme(dbTheme);
+    }
+  }, [isOpen, session.user?.settings?.theme]);
+
+  // Debug localTheme changes
+  useEffect(() => {
+    console.log('localTheme state changed to:', localTheme);
+  }, [localTheme]);
 
   if (!isOpen) return null;
 
@@ -83,10 +111,16 @@ export function SettingsModal({ isOpen, onClose, session }: SettingsModalProps) 
 
   const handleAutoAcceptChange = async (checked: boolean) => {
     if (!session.user) return;
+    console.log('handleAutoAcceptChange called', { checked, currentValue: session.user.settings.automaticallyAcceptPatches });
     setSavingAutoAccept(true);
     try {
       setAutoAcceptChanges(checked);
-      await updateUserSettingAction(session, 'automatically_accept_patches', checked.toString());
+      console.log('About to save automatically_accept_patches to database');
+      const result = await updateUserSettingAction(session, 'automatically_accept_patches', checked.toString());
+      console.log('Database save result:', result);
+      // Update session locally to reflect the change immediately
+      session.user.settings.automaticallyAcceptPatches = checked;
+      console.log('Updated local session state:', session.user.settings.automaticallyAcceptPatches);
     } finally {
       setSavingAutoAccept(false);
     }
@@ -94,12 +128,99 @@ export function SettingsModal({ isOpen, onClose, session }: SettingsModalProps) 
 
   const handleValidateBeforeAcceptChange = async (checked: boolean) => {
     if (!session.user) return;
+    console.log('handleValidateBeforeAcceptChange called', { checked, currentValue: session.user.settings.evalBeforeAccept });
     setSavingValidate(true);
     try {
       setValidateBeforeAccept(checked);
-      await updateUserSettingAction(session, 'eval_before_accept', checked.toString());
+      console.log('About to save eval_before_accept to database');
+      const result = await updateUserSettingAction(session, 'eval_before_accept', checked.toString());
+      console.log('Database save result:', result);
+      // Update session locally to reflect the change immediately
+      session.user.settings.evalBeforeAccept = checked;
+      console.log('Updated local session state:', session.user.settings.evalBeforeAccept);
     } finally {
       setSavingValidate(false);
+    }
+  };
+
+
+  const handleThemeChange = async (newTheme: string) => {
+    if (!session.user) return;
+    console.log('handleThemeChange called', {
+      newTheme,
+      currentValue: session.user.settings.theme,
+      currentLocalTheme: localTheme,
+      currentContextTheme: theme
+    });
+    try {
+      // Set flag to prevent automatic theme sync from interfering
+      setIsChangingTheme(true);
+
+      // Update local theme state immediately for UI responsiveness
+      console.log('Setting localTheme to:', newTheme);
+      setLocalTheme(newTheme);
+
+      // Update theme context (this will also set the cookie)
+      console.log('Setting theme context to:', newTheme);
+      setTheme(newTheme as Theme);
+
+      console.log('About to save theme to database');
+      const result = await updateUserSettingAction(session, 'theme', newTheme);
+      console.log('Database save result:', result);
+
+      // Update session locally with the result from database
+      if (result.theme) {
+        session.user.settings.theme = result.theme;
+        console.log('Updated local session state:', session.user.settings.theme);
+      }
+
+      console.log('After all updates:', {
+        localTheme,
+        contextTheme: theme,
+        sessionTheme: session.user.settings.theme
+      });
+    } catch (error) {
+      console.error('Failed to save theme:', error);
+      // Revert both local theme and context theme on error
+      setLocalTheme(session.user.settings.theme);
+      setTheme(session.user.settings.theme as Theme);
+    } finally {
+      // Clear the flag after a short delay to allow state updates to settle
+      setTimeout(() => setIsChangingTheme(false), 500);
+    }
+  };
+
+  const handleTabSizeChange = async (newTabSize: string) => {
+    if (!session.user) return;
+    console.log('handleTabSizeChange called', { newTabSize, currentValue: session.user.settings.tabSize });
+    setSavingTabSize(true);
+    try {
+      setTabSize(newTabSize);
+      console.log('About to save tab_size to database');
+      const result = await updateUserSettingAction(session, 'tab_size', newTabSize);
+      console.log('Database save result:', result);
+      // Update session locally to reflect the change immediately
+      session.user.settings.tabSize = newTabSize;
+      console.log('Updated local session state:', session.user.settings.tabSize);
+    } finally {
+      setSavingTabSize(false);
+    }
+  };
+
+  const handleMinimapChange = async (checked: boolean) => {
+    if (!session.user) return;
+    console.log('handleMinimapChange called', { checked, currentValue: session.user.settings.showMinimap });
+    setSavingMinimap(true);
+    try {
+      setShowMinimap(checked);
+      console.log('About to save show_minimap to database');
+      const result = await updateUserSettingAction(session, 'show_minimap', checked.toString());
+      console.log('Database save result:', result);
+      // Update session locally to reflect the change immediately
+      session.user.settings.showMinimap = checked;
+      console.log('Updated local session state:', session.user.settings.showMinimap);
+    } finally {
+      setSavingMinimap(false);
     }
   };
 
@@ -199,9 +320,16 @@ export function SettingsModal({ isOpen, onClose, session }: SettingsModalProps) 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Theme
-            </label>              <select
-                value={theme}
-                onChange={(e) => setTheme(e.target.value as Theme)}
+            </label>
+            <select
+                value={localTheme}
+                onChange={(e) => {
+                  console.log('Select onChange triggered:', {
+                    selectedValue: e.target.value,
+                    currentLocalTheme: localTheme
+                  });
+                  handleThemeChange(e.target.value);
+                }}
                 className={`w-full px-3 py-2 rounded-lg transition-colors ${
                   theme === 'dark'
                     ? 'bg-dark border-dark-border text-gray-300'
@@ -229,26 +357,42 @@ export function SettingsModal({ isOpen, onClose, session }: SettingsModalProps) 
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Tab Size
             </label>
-            <select className={`w-full px-3 py-2 rounded-lg transition-colors ${
-              theme === 'dark'
-                ? 'bg-dark border-dark-border text-gray-300'
-                : 'bg-white border-gray-300 text-gray-900'
-            } border focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent`}>
-              <option>2 spaces</option>
-              <option>4 spaces</option>
-              <option>8 spaces</option>
-            </select>
+            {savingTabSize ? (
+              <div className="flex items-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                <span className="text-sm text-gray-500">Saving...</span>
+              </div>
+            ) : (
+              <select
+                value={tabSize}
+                onChange={(e) => handleTabSizeChange(e.target.value)}
+                className={`w-full px-3 py-2 rounded-lg transition-colors ${
+                  theme === 'dark'
+                    ? 'bg-dark border-dark-border text-gray-300'
+                    : 'bg-white border-gray-300 text-gray-900'
+                } border focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent`}>
+                <option value="2 spaces">2 spaces</option>
+                <option value="4 spaces">4 spaces</option>
+                <option value="8 spaces">8 spaces</option>
+              </select>
+            )}
           </div>
           <div className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              id="minimap"
-              className={`rounded border transition-colors ${
-                theme === 'dark'
-                  ? 'border-dark-border bg-dark text-primary'
-                  : 'border-gray-300 bg-white text-primary'
-              } focus:ring-primary`}
-            />
+            {savingMinimap ? (
+              <Loader2 className="w-4 h-4 animate-spin text-primary" />
+            ) : (
+              <input
+                type="checkbox"
+                id="minimap"
+                checked={showMinimap}
+                onChange={(e) => handleMinimapChange(e.target.checked)}
+                className={`rounded border transition-colors ${
+                  theme === 'dark'
+                    ? 'border-dark-border bg-dark text-primary'
+                    : 'border-gray-300 bg-white text-primary'
+                } focus:ring-primary`}
+              />
+            )}
             <label htmlFor="minimap" className={`text-sm ${
               theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
             }`}>
@@ -317,7 +461,7 @@ export function SettingsModal({ isOpen, onClose, session }: SettingsModalProps) 
           </div>
         </div>
       ),
-    }
+    },
   ];
 
   return (

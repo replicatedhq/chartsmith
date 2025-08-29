@@ -83,8 +83,27 @@ export const useSession = (redirectIfNotLoggedIn: boolean = false) => {
     validate(token);
   }, [router, redirectIfNotLoggedIn]);
 
+  const refreshSession = useCallback(async () => {
+    const token = document.cookie
+      .split("; ")
+      .find((cookie) => cookie.startsWith("session="))
+      ?.split("=")[1];
+
+    if (!token) {
+      return;
+    }
+
+    try {
+      const sess = await validateSession(token);
+      setSession(sess);
+    } catch (error) {
+      logger.error("Session refresh failed:", error);
+    }
+  }, []);
+
   return {
     isLoading,
     session,
+    refreshSession,
   };
 };
