@@ -80,6 +80,10 @@
         "title": "ChartSmith: Show File Diff"
       },
       {
+        "command": "chartsmith.showCustomFileDiff",
+        "title": "ChartSmith: Show Native File Diff (Preview)"
+      },
+      {
         "command": "chartsmith.refreshDiffButtons",
         "title": "ChartSmith: Refresh Diff Buttons Visibility"
       }
