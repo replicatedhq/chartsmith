@@ -7,6 +7,7 @@ import (
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
 	"github.com/replicatedhq/chartsmith/pkg/logger"
+	"github.com/replicatedhq/chartsmith/pkg/backend"
 	"github.com/replicatedhq/chartsmith/pkg/workspace"
 	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 	"go.uber.org/zap"
@@ -16,6 +17,7 @@ type CreateInitialPlanOpts struct {
 	ChatMessages    []workspacetypes.Chat
 	PreviousPlans   []workspacetypes.Plan
 	AdditionalFiles []workspacetypes.File
+	Options         backend.Options
 }
 
 func CreateInitialPlan(ctx context.Context, streamCh chan string, doneCh chan error, opts CreateInitialPlanOpts) error {
@@ -31,7 +33,7 @@ func CreateInitialPlan(ctx context.Context, streamCh chan string, doneCh chan er
 	}
 
 	messages := []anthropic.MessageParam{
-		anthropic.NewAssistantMessage(anthropic.NewTextBlock(initialPlanSystemPrompt)),
+		anthropic.NewAssistantMessage(anthropic.NewTextBlock(GetInitialPlanSystemPrompt(opts.Options))),
 		anthropic.NewAssistantMessage(anthropic.NewTextBlock(initialPlanInstructions)),
 	}
 

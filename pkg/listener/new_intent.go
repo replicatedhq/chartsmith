@@ -11,6 +11,7 @@ import (
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 	"github.com/replicatedhq/chartsmith/pkg/realtime"
 	realtimetypes "github.com/replicatedhq/chartsmith/pkg/realtime/types"
+	"github.com/replicatedhq/chartsmith/pkg/backend"
 	"github.com/replicatedhq/chartsmith/pkg/workspace"
 	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 	"go.uber.org/zap"
@@ -227,7 +228,16 @@ func handleNewIntentNotification(ctx context.Context, payload string) error {
 	// if the intent is proceed, we need to send a message to the planner
 	if intent.IsProceed && plan != nil {
 		// create a revision
-		rev, err := workspace.CreateRevision(ctx, w.ID, &plan.ID, userIDs[0])
+		// Get the user's SecureBuild setting
+		useSecureBuildImages, err := workspace.GetUserSecureBuildSetting(ctx, userIDs[0])
+		if err != nil {
+			return fmt.Errorf("failed to get user SecureBuild setting: %w", err)
+		}
+
+		options := backend.Options{
+			UseSecureBuildImages: useSecureBuildImages,
+		}
+		rev, err := workspace.CreateRevision(ctx, w.ID, &plan.ID, userIDs[0], options)
 		if err != nil {
 			return fmt.Errorf("failed to create revision: %w", err)
 		}
