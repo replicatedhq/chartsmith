@@ -9,17 +9,25 @@
  * 3. Shows "Jump to latest" button when user has scrolled up
  * 4. Re-enables auto-scroll when user clicks button or scrolls to bottom
  * 5. Never fights with user scroll - user intent always takes precedence
+ * 
+ * Performance optimizations:
+ * - Uses requestAnimationFrame for smooth scroll updates
+ * - Debounces rapid scroll events
+ * - Uses passive event listeners where possible
  */
 
-import React, { useRef, useEffect, useState, useLayoutEffect } from "react";
+import React, { useRef, useEffect, useState, useLayoutEffect, useCallback, memo } from "react";
 import { ChevronDown } from "lucide-react";
+
+/** Minimum time between scroll updates (ms) for smooth 60fps */
+const SCROLL_DEBOUNCE_MS = 16;
 
 interface ScrollingContentProps {
   children: React.ReactNode;
   forceScroll?: boolean;
 }
 
-export function ScrollingContent({ children, forceScroll = false }: ScrollingContentProps) {
+function ScrollingContentInner({ children, forceScroll = false }: ScrollingContentProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const [showScrollButton, setShowScrollButton] = useState(false);
@@ -27,6 +35,10 @@ export function ScrollingContent({ children, forceScroll = false }: ScrollingCon
   const hasScrolledUpRef = useRef(false);
   const initialScrollCompleteRef = useRef(false);
   const lastContentRef = useRef("");
+  
+  // Performance optimization refs
+  const rafIdRef = useRef<number | null>(null);
+  const lastScrollTimeRef = useRef<number>(0);
   
   // Update test helpers if in test environment
   useEffect(() => {
@@ -39,12 +51,29 @@ export function ScrollingContent({ children, forceScroll = false }: ScrollingCon
     }
   }, [shouldAutoScroll, showScrollButton]);
   
-  // Simple function to scroll to bottom
-  const scrollToBottom = () => {
+  // Cleanup RAF on unmount
+  useEffect(() => {
+    return () => {
+      if (rafIdRef.current) {
+        cancelAnimationFrame(rafIdRef.current);
+      }
+    };
+  }, []);
+  
+  // Optimized scroll to bottom using requestAnimationFrame
+  const scrollToBottom = useCallback(() => {
     const container = containerRef.current;
     if (!container) return;
     
-    container.scrollTop = container.scrollHeight;
+    // Use RAF for smooth scrolling
+    if (rafIdRef.current) {
+      cancelAnimationFrame(rafIdRef.current);
+    }
+    
+    rafIdRef.current = requestAnimationFrame(() => {
+      container.scrollTop = container.scrollHeight;
+      rafIdRef.current = null;
+    });
     
     // After manually scrolling to bottom, we should re-enable auto-scroll
     if (hasScrolledUpRef.current) {
@@ -52,9 +81,10 @@ export function ScrollingContent({ children, forceScroll = false }: ScrollingCon
       hasScrolledUpRef.current = false;
       setShowScrollButton(false);
     }
-  };
+  }, []);
   
   // Set up scroll detection with stronger user intent detection
+  // Uses passive event listener for better scroll performance
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -62,6 +92,13 @@ export function ScrollingContent({ children, forceScroll = false }: ScrollingCon
     let scrollTimer: NodeJS.Timeout | null = null;
     
     const handleScroll = () => {
+      // Debounce rapid scroll events for performance
+      const now = performance.now();
+      if (now - lastScrollTimeRef.current < SCROLL_DEBOUNCE_MS) {
+        return;
+      }
+      lastScrollTimeRef.current = now;
+      
       // Mark as actively scrolling
       isUserScrollingRef.current = true;
       
@@ -98,7 +135,8 @@ export function ScrollingContent({ children, forceScroll = false }: ScrollingCon
       }, 200);
     };
 
-    container.addEventListener('scroll', handleScroll);
+    // Use passive listener for better scroll performance
+    container.addEventListener('scroll', handleScroll, { passive: true });
     return () => {
       container.removeEventListener('scroll', handleScroll);
       if (scrollTimer) {
@@ -144,7 +182,7 @@ export function ScrollingContent({ children, forceScroll = false }: ScrollingCon
       
       quickScroll();
     }
-  }, [children, shouldAutoScroll, forceScroll]);
+  }, [children, shouldAutoScroll, forceScroll, scrollToBottom]);
 
   // Use a mutation observer to catch DOM changes from streaming updates
   useEffect(() => {
@@ -202,7 +240,7 @@ export function ScrollingContent({ children, forceScroll = false }: ScrollingCon
     return () => {
       observer.disconnect();
     };
-  }, [shouldAutoScroll, forceScroll]);
+  }, [shouldAutoScroll, forceScroll, scrollToBottom]);
 
   return (
     <div className="relative w-full h-full">
@@ -221,18 +259,30 @@ export function ScrollingContent({ children, forceScroll = false }: ScrollingCon
       {showScrollButton && (
         <button 
           onClick={scrollToBottom}
+          aria-label="Scroll to latest message"
           className="absolute bottom-24 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white dark:bg-gray-950 
                      px-3 py-1.5 rounded-full shadow-xl border border-blue-400/40 dark:border-blue-300/30 flex items-center gap-1.5 text-xs font-medium
-                     opacity-100 hover:scale-105 transition-all duration-200 z-30"
+                     hover:scale-105 transition-all duration-200 z-30 scroll-button-bounce"
           data-testid="jump-to-latest"
         >
-          <ChevronDown className="w-3.5 h-3.5" />
+          <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />
           Jump to latest
         </button>
       )}
     </div>
   );
 }
+
+/**
+ * Memoized ScrollingContent component.
+ * Only re-renders when forceScroll prop changes, not on children updates
+ * (children updates are handled by MutationObserver for smooth scrolling).
+ */
+export const ScrollingContent = memo(ScrollingContentInner, (prevProps, nextProps) => {
+  // Only re-render if forceScroll changes
+  // Children changes are handled by MutationObserver
+  return prevProps.forceScroll === nextProps.forceScroll;
+});
 
 // Expose test helpers for integration testing when in test environment
 if (typeof window !== 'undefined' && process.env.NODE_ENV === 'test') {

@@ -5,10 +5,12 @@ import type { NextRequest } from 'next/server';
 const publicPaths = [
   '/login',
   '/login-with-test-auth',
+  '/api/test-auth', // Test auth route handler
   '/auth/google',
   '/api/auth/callback/google',
   '/api/auth/status',
   '/api/config',
+  '/api/chat', // AI chat endpoint
   '/signup',
   '/_next',
   '/favicon.ico',

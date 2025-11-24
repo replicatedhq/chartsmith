@@ -178,3 +178,82 @@ body {
 .tab-inactive {
   @apply text-gray-500 hover:text-gray-300;
 }
+
+/* ============================================================================
+ * Chat Message Animations
+ * ============================================================================ */
+
+/* Message slide-in animation */
+@keyframes message-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Subtle pulse for sending state */
+@keyframes sending-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+/* Streaming cursor blink */
+@keyframes cursor-blink {
+  0%, 50% {
+    opacity: 1;
+  }
+  51%, 100% {
+    opacity: 0;
+  }
+}
+
+/* Apply message animation */
+.message-animate-in {
+  animation: message-in 0.3s ease-out forwards;
+}
+
+/* Sending state animation */
+.message-sending {
+  animation: sending-pulse 1.5s ease-in-out infinite;
+}
+
+/* Streaming cursor */
+.streaming-cursor::after {
+  content: '▋';
+  animation: cursor-blink 1s step-end infinite;
+  margin-left: 2px;
+  color: currentColor;
+  opacity: 0.7;
+}
+
+/* Smooth content transitions */
+.message-content {
+  transition: opacity 0.15s ease-out;
+}
+
+/* Status indicator transitions */
+.status-indicator {
+  transition: all 0.2s ease-out;
+}
+
+/* Scroll button animation */
+@keyframes bounce-subtle {
+  0%, 100% {
+    transform: translateX(-50%) translateY(0);
+  }
+  50% {
+    transform: translateX(-50%) translateY(-3px);
+  }
+}
+
+.scroll-button-bounce {
+  animation: bounce-subtle 2s ease-in-out infinite;
+}

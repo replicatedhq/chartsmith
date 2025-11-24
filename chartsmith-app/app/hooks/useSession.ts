@@ -15,7 +15,9 @@ export const useSession = (redirectIfNotLoggedIn: boolean = false) => {
 
     if (token) {
       try {
-        await extendSessionAction(token);
+        // Decode the URL-encoded token
+        const decodedToken = decodeURIComponent(token);
+        await extendSessionAction(decodedToken);
       } catch (error) {
         logger.error("Failed to extend session:", error);
       }
@@ -61,8 +63,10 @@ export const useSession = (redirectIfNotLoggedIn: boolean = false) => {
       return;
     }
 
-    const validate = async (token: string) => {
+    const validate = async (encodedToken: string) => {
       try {
+        // Decode the URL-encoded token
+        const token = decodeURIComponent(encodedToken);
         const sess = await validateSession(token);
         if (!sess && redirectIfNotLoggedIn) {
           router.replace("/");
