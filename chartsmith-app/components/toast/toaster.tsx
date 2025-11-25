@@ -19,7 +19,7 @@ export function Toaster() {
               <div className="flex gap-2">
                 <button
                   onClick={action.onClick}
-                  className="inline-flex h-8 shrink-0 items-center justify-center rounded-md bg-transparent px-3 text-sm font-medium ring-offset-background transition-colors hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+                  className="inline-flex h-8 shrink-0 items-center justify-center rounded-forge border border-forge-iron bg-forge-iron/50 px-3 text-sm font-medium text-forge-silver transition-all hover:bg-forge-iron hover:text-stone-100 focus:outline-none focus:ring-2 focus:ring-forge-ember/50 disabled:pointer-events-none disabled:opacity-50"
                 >
                   {action.label}
                 </button>

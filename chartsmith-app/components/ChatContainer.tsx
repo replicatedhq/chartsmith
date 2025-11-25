@@ -407,24 +407,26 @@ export function ChatContainer({ session }: ChatContainerProps) {
   }
 
   return (
-    <main 
-      className={`h-[calc(100vh-3.5rem)] border-r flex flex-col min-h-0 overflow-hidden transition-all duration-300 ease-in-out w-full relative ${theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"}`}
+    <main
+      className={`h-[calc(100vh-4rem)] border-r flex flex-col min-h-0 overflow-hidden transition-all duration-300 ease-in-out w-full relative ${theme === "dark" ? "bg-forge-charcoal border-forge-iron" : "bg-stone-50 border-stone-200"}`}
       aria-label="Chat interface"
     >
       {/* Chat header with conversation manager */}
-      <header 
-        className={`flex items-center justify-between px-3 py-2 border-b flex-shrink-0 ${
-          theme === "dark" ? "border-dark-border" : "border-gray-200"
+      <header
+        className={`flex items-center justify-between px-4 py-3 border-b flex-shrink-0 ${
+          theme === "dark" ? "border-forge-iron bg-forge-steel/30" : "border-stone-200 bg-white"
         }`}
       >
-        <div className="flex items-center gap-2">
-          <h1 className={`text-sm font-medium ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
-            Chat
+        <div className="flex items-center gap-3">
+          <div className={`
+            w-2 h-2 rounded-full
+            ${isLoading ? "bg-forge-ember animate-pulse" : "bg-forge-success"}
+          `} />
+          <h1 className={`font-display text-sm font-semibold ${theme === "dark" ? "text-stone-100" : "text-stone-900"}`}>
+            Forge Assistant
           </h1>
           {currentConversationId && (
-            <span className={`text-xs px-1.5 py-0.5 rounded ${
-              theme === "dark" ? "bg-primary/20 text-primary" : "bg-primary/10 text-primary"
-            }`}>
+            <span className="badge-ember">
               Saved
             </span>
           )}
@@ -461,11 +463,22 @@ export function ChatContainer({ session }: ChatContainerProps) {
             aria-relevant="additions"
           >
             {messages.length === 0 && (
-              <div 
-                className={`text-center py-8 text-sm ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}
+              <div
+                className={`flex flex-col items-center justify-center py-16 px-4 ${theme === 'dark' ? 'text-forge-zinc' : 'text-stone-400'}`}
                 role="status"
               >
-                Start a conversation by typing a message below
+                <div className={`
+                  w-16 h-16 rounded-full flex items-center justify-center mb-4
+                  ${theme === 'dark' ? 'bg-forge-iron/50' : 'bg-stone-100'}
+                `}>
+                  <Sparkles className="w-7 h-7 text-forge-ember" />
+                </div>
+                <p className={`font-display font-medium text-sm mb-1 ${theme === 'dark' ? 'text-stone-300' : 'text-stone-600'}`}>
+                  Ready to forge
+                </p>
+                <p className="text-xs text-center max-w-xs">
+                  Ask questions about your Helm chart or request changes
+                </p>
               </div>
             )}
             {messages.map((item, index) => {
@@ -516,11 +529,11 @@ export function ChatContainer({ session }: ChatContainerProps) {
         </ScrollingContent>
       </div>
       {/* Chat input form - complementary region */}
-      <aside 
-        className={`absolute bottom-0 left-0 right-0 ${theme === "dark" ? "bg-dark-surface" : "bg-white"} border-t ${theme === "dark" ? "border-dark-border" : "border-gray-200"}`}
+      <aside
+        className={`absolute bottom-0 left-0 right-0 ${theme === "dark" ? "bg-forge-charcoal" : "bg-white"} border-t ${theme === "dark" ? "border-forge-iron" : "border-stone-200"}`}
         aria-label="Message input"
       >
-        <form onSubmit={handleSubmit} className="p-3 relative" role="form" aria-label="Send a message">
+        <form onSubmit={handleSubmit} className="p-4 relative" role="form" aria-label="Send a message">
           <label htmlFor="chat-input" className="sr-only">
             Type your message
           </label>
@@ -530,22 +543,22 @@ export function ChatContainer({ session }: ChatContainerProps) {
             value={input}
             onChange={handleInputChange}
             onKeyDown={handleTextareaKeyDown}
-            placeholder="Ask a question or ask for a change..."
+            placeholder="Ask a question or request a change..."
             rows={3}
             style={{ height: 'auto', minHeight: '72px', maxHeight: '150px' }}
             aria-describedby="chat-input-hint"
             aria-invalid={false}
-            className={`w-full px-3 py-1.5 pr-24 text-sm rounded-md border resize-none overflow-hidden ${
+            className={`w-full px-4 py-3 pr-24 text-sm rounded-forge border resize-none overflow-hidden font-sans transition-all duration-200 ${
               theme === "dark"
-                ? "bg-dark border-dark-border/60 text-white placeholder-gray-500"
-                : "bg-white border-gray-200 text-gray-900 placeholder-gray-400"
-            } focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50`}
+                ? "bg-forge-steel border-forge-iron text-stone-100 placeholder-forge-zinc"
+                : "bg-white border-stone-200 text-stone-900 placeholder-stone-400"
+            } focus:outline-none focus:ring-2 focus:ring-forge-ember/30 focus:border-forge-ember/50`}
           />
           <div id="chat-input-hint" className="sr-only">
             Press Enter to send, Shift+Enter for new line, Escape to unfocus
           </div>
           
-          <div className="absolute right-4 top-[18px] flex gap-2">
+          <div className="absolute right-5 top-[20px] flex gap-2">
             {/* Role selector button */}
             <div ref={roleMenuRef} className="relative">
               <button
@@ -554,11 +567,11 @@ export function ChatContainer({ session }: ChatContainerProps) {
                 aria-expanded={isRoleMenuOpen}
                 aria-haspopup="listbox"
                 aria-label={`Select perspective, current: ${getRoleLabel(selectedRole)}`}
-                className={`p-1.5 rounded-full focus:outline-none focus:ring-2 focus:ring-primary/50 ${
+                className={`p-2 rounded-forge transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-forge-ember/50 ${
                   theme === "dark"
-                    ? "text-gray-400 hover:text-gray-200 hover:bg-dark-border/40"
-                    : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
-                } ${selectedRole !== "auto" ? "bg-blue-500/10" : ""}`}
+                    ? "text-forge-silver hover:text-stone-200 hover:bg-forge-iron/50"
+                    : "text-stone-500 hover:text-stone-700 hover:bg-stone-100"
+                } ${selectedRole !== "auto" ? "bg-forge-ember/10 text-forge-ember" : ""}`}
                 title={`Perspective: ${getRoleLabel(selectedRole)}`}
               >
                 {selectedRole === "auto" && <Sparkles className="w-4 h-4" aria-hidden="true" />}
@@ -566,24 +579,24 @@ export function ChatContainer({ session }: ChatContainerProps) {
                 {selectedRole === "operator" && <User className="w-4 h-4" aria-hidden="true" />}
                 <span className="sr-only">Select perspective</span>
               </button>
-              
+
               {/* Role selector dropdown */}
               {isRoleMenuOpen && (
-                <div 
+                <div
                   role="listbox"
                   aria-label="Select perspective"
                   aria-activedescendant={`role-option-${selectedRole}`}
-                  className={`absolute bottom-full right-0 mb-1 w-56 rounded-lg shadow-lg border py-1 z-50 ${
-                    theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"
+                  className={`absolute bottom-full right-0 mb-2 w-56 rounded-forge-lg shadow-forge-lg border py-1 z-50 ${
+                    theme === "dark" ? "bg-forge-steel border-forge-iron" : "bg-white border-stone-200"
                   }`}
                 >
-                  <div 
-                    className={`px-3 py-2 text-xs font-medium ${
-                    theme === "dark" ? "text-gray-400" : "text-gray-600"
+                  <div
+                    className={`px-3 py-2 text-overline uppercase tracking-wider font-display ${
+                    theme === "dark" ? "text-forge-zinc" : "text-stone-500"
                     }`}
                     id="role-selector-label"
                   >
-                    Ask questions from...
+                    Perspective
                   </div>
                   {(["auto", "developer", "operator"] as const).map((role) => (
                     <button
@@ -593,24 +606,24 @@ export function ChatContainer({ session }: ChatContainerProps) {
                       role="option"
                       aria-selected={selectedRole === role}
                       onClick={() => handleRoleSelect(role)}
-                      className={`w-full px-4 py-2 text-left text-sm flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary/50 ${
+                      className={`w-full px-4 py-2.5 text-left text-sm flex items-center justify-between transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-forge-ember/50 ${
                         selectedRole === role
-                          ? theme === "dark" 
-                            ? "bg-dark-border/60 text-white" 
-                            : "bg-gray-100 text-gray-900"
+                          ? theme === "dark"
+                            ? "bg-forge-ember/10 text-forge-ember"
+                            : "bg-forge-ember/5 text-forge-ember"
                           : theme === "dark"
-                            ? "text-gray-300 hover:bg-dark-border/40 hover:text-white"
-                            : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                            ? "text-stone-300 hover:bg-forge-iron/50 hover:text-stone-100"
+                            : "text-stone-700 hover:bg-stone-50 hover:text-stone-900"
                       }`}
                     >
                       <div className="flex items-center gap-2">
                         {role === "auto" && <Sparkles className="w-4 h-4" aria-hidden="true" />}
                         {role === "developer" && <Code className="w-4 h-4" aria-hidden="true" />}
                         {role === "operator" && <User className="w-4 h-4" aria-hidden="true" />}
-                        <span>{getRoleLabel(role)}</span>
+                        <span className="font-medium">{getRoleLabel(role)}</span>
                       </div>
                       {selectedRole === role && (
-                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                        <svg className="w-4 h-4 text-forge-ember" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                           <path d="M5 13L9 17L19 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                         </svg>
                       )}
@@ -619,17 +632,17 @@ export function ChatContainer({ session }: ChatContainerProps) {
                 </div>
               )}
             </div>
-            
+
             {/* Send/Stop button */}
             {isLoading ? (
               <button
                 type="button"
                 onClick={stop}
                 aria-label="Stop generating response"
-                className={`p-1.5 rounded-full focus:outline-none focus:ring-2 focus:ring-red-500/50 ${
+                className={`p-2 rounded-forge transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-red-500/50 ${
                   theme === "dark"
-                    ? "text-red-400 hover:text-red-300 hover:bg-red-500/20"
-                    : "text-red-500 hover:text-red-600 hover:bg-red-100"
+                    ? "text-forge-error hover:bg-forge-error/10"
+                    : "text-red-500 hover:bg-red-50"
                 }`}
                 title="Stop generating"
               >
@@ -642,12 +655,12 @@ export function ChatContainer({ session }: ChatContainerProps) {
                 disabled={!input.trim()}
                 aria-label={input.trim() ? "Send message" : "Send message (disabled - type a message first)"}
                 aria-disabled={!input.trim()}
-                className={`p-1.5 rounded-full focus:outline-none focus:ring-2 focus:ring-primary/50 ${
+                className={`p-2 rounded-forge transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-forge-ember/50 ${
                   !input.trim()
-                  ? theme === "dark" ? "text-gray-600 cursor-not-allowed" : "text-gray-300 cursor-not-allowed"
+                  ? theme === "dark" ? "text-forge-zinc cursor-not-allowed" : "text-stone-300 cursor-not-allowed"
                   : theme === "dark"
-                    ? "text-gray-400 hover:text-gray-200 hover:bg-dark-border/40"
-                    : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                    ? "text-forge-ember hover:bg-forge-ember/10"
+                    : "text-forge-ember hover:bg-forge-ember/10"
               }`}
                 title="Send message"
             >

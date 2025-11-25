@@ -18,11 +18,11 @@ export const LoadingSpinner = memo(function LoadingSpinner({
   return (
     <div className="flex items-center gap-2" role="status" aria-live="polite">
       <div
-        className={`flex-shrink-0 animate-spin rounded-full border border-t-transparent border-primary ${sizeClasses}`}
+        className={`flex-shrink-0 animate-spin rounded-full border-2 border-forge-iron border-t-forge-ember ${sizeClasses}`}
         aria-hidden="true"
       />
       {message && (
-        <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
+        <div className={`text-xs ${theme === "dark" ? "text-forge-zinc" : "text-stone-500"}`}>
           {message}
         </div>
       )}

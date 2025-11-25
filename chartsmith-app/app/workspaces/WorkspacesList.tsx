@@ -6,8 +6,7 @@ type SortField = 'name' | 'createdAt' | 'lastUpdatedAt';
 type SortDirection = 'asc' | 'desc';
 
 import { useTheme } from "@/contexts/ThemeContext";
-import { Card } from "@/components/ui/Card";
-import { ArrowUpDown, Trash2 } from "lucide-react";
+import { ArrowUpDown, Trash2, ArrowLeft, FolderOpen, Plus, Clock, Calendar, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { DeleteWorkspaceModal } from "./DeleteWorkspaceModal";
 import { Workspace } from "@/lib/types/workspace";
@@ -60,99 +59,278 @@ export function WorkspacesList({ initialWorkspaces }: WorkspacesListProps) {
     }).format(date);
   };
 
-  const DateCell = ({ date }: { date: Date }) => (
-    <td
-      className={`px-6 py-4 text-sm ${theme === "dark" ? "text-gray-300" : "text-gray-600"}`}
-      suppressHydrationWarning
+  const formatRelativeDate = (date: Date) => {
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays} days ago`;
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
+    return formatDate(date);
+  };
+
+  const SortButton = ({
+    field,
+    children
+  }: {
+    field: SortField;
+    children: React.ReactNode
+  }) => (
+    <button
+      onClick={() => handleSort(field)}
+      className={`
+        flex items-center gap-2 font-display font-semibold text-overline uppercase tracking-wider
+        transition-colors duration-150
+        ${sortField === field
+          ? 'text-forge-ember'
+          : theme === "dark"
+            ? "text-forge-silver hover:text-stone-200"
+            : "text-stone-500 hover:text-stone-700"
+        }
+      `}
     >
-      {formatDate(date)}
-    </td>
+      {children}
+      <ArrowUpDown className={`w-3.5 h-3.5 ${sortField === field ? 'text-forge-ember' : 'opacity-50'}`} />
+    </button>
   );
 
   return (
-    <div className="min-h-screen bg-[var(--background)]">
-      <div className="max-w-7xl mx-auto py-8 px-4">
-        <div className="flex items-center mb-4">
-          <Link href="/" className="text-primary hover:underline flex items-center">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M9.707 14.707a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 1.414L7.414 9H15a1 1 0 110 2H7.414l2.293 2.293a1 1 0 010 1.414z" clipRule="evenodd" />
-            </svg>
-            Return Home
+    <div className={`
+      min-h-screen
+      ${theme === "dark" ? "bg-forge-black" : "bg-stone-50"}
+    `}>
+      {/* Background pattern */}
+      <div className={`
+        fixed inset-0 pattern-dots pointer-events-none
+        ${theme === "dark" ? "opacity-30" : "opacity-20"}
+      `} />
+
+      <div className="relative z-10 max-w-6xl mx-auto py-8 px-6">
+        {/* Header */}
+        <div className="mb-8">
+          {/* Breadcrumb */}
+          <Link
+            href="/"
+            className={`
+              inline-flex items-center gap-2 text-sm font-medium mb-6
+              transition-colors duration-150 group
+              ${theme === "dark"
+                ? "text-forge-silver hover:text-forge-ember"
+                : "text-stone-500 hover:text-forge-ember"
+              }
+            `}
+          >
+            <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" />
+            Back to Home
           </Link>
+
+          {/* Title row */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className={`
+                p-3 rounded-forge-lg
+                ${theme === "dark"
+                  ? "bg-forge-iron/50 border border-forge-zinc"
+                  : "bg-stone-100 border border-stone-200"
+                }
+              `}>
+                <FolderOpen className="w-6 h-6 text-forge-ember" />
+              </div>
+              <div>
+                <h1 className={`
+                  font-display text-display-sm font-bold tracking-tight
+                  ${theme === "dark" ? "text-stone-100" : "text-stone-900"}
+                `}>
+                  My Workspaces
+                </h1>
+                <p className={`
+                  text-sm mt-0.5
+                  ${theme === "dark" ? "text-forge-silver" : "text-stone-500"}
+                `}>
+                  {workspaces.length} {workspaces.length === 1 ? 'workspace' : 'workspaces'}
+                </p>
+              </div>
+            </div>
+
+            <Link
+              href="/workspace/new"
+              className="btn-forge"
+            >
+              <Plus className="w-4 h-4" />
+              New Workspace
+            </Link>
+          </div>
         </div>
-        <h1 className={`text-2xl font-bold mb-8 ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
-          My Workspaces
-        </h1>
-        <Card className="overflow-hidden">
-          <table className="w-full">
-            <thead className={`text-sm ${theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-gray-50 border-gray-200"}`}>
-              <tr>
-                <th className="px-6 py-3 text-left">
-                  <button
-                    onClick={() => handleSort('name')}
-                    className={`flex items-center gap-2 font-medium ${theme === "dark" ? "text-gray-300 hover:text-white" : "text-gray-600 hover:text-gray-900"}`}
-                  >
-                    Name
-                    <ArrowUpDown className={`w-4 h-4 ${sortField === 'name' ? 'text-primary' : ''}`} />
-                  </button>
-                </th>
-                <th className="px-6 py-3 text-left">
-                  <button
-                    onClick={() => handleSort('createdAt')}
-                    className={`flex items-center gap-2 font-medium ${theme === "dark" ? "text-gray-300 hover:text-white" : "text-gray-600 hover:text-gray-900"}`}
-                  >
-                    Created
-                    <ArrowUpDown className={`w-4 h-4 ${sortField === 'createdAt' ? 'text-primary' : ''}`} />
-                  </button>
-                </th>
-                <th className="px-6 py-3 text-left">
-                  <button
-                    onClick={() => handleSort('lastUpdatedAt')}
-                    className={`flex items-center gap-2 font-medium ${theme === "dark" ? "text-gray-300 hover:text-white" : "text-gray-600 hover:text-gray-900"}`}
-                  >
-                    Last Modified
-                    <ArrowUpDown className={`w-4 h-4 ${sortField === 'lastUpdatedAt' ? 'text-primary' : ''}`} />
-                  </button>
-                </th>
-                <th className="px-6 py-3 text-left">
-                  <span className="sr-only">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--border)]">
-              {sortedWorkspaces.map((workspace) => (
-                <tr
-                  key={workspace.id}
-                  className={`group ${theme === "dark" ? "hover:bg-dark-border/40" : "hover:bg-gray-50"}`}
-                >
-                  <td className="px-6 py-4">
-                    <Link
-                      href={`/workspace/${workspace.id}`}
-                      className={`text-primary hover:text-primary/80`}
-                    >
-                      {workspace.name}
-                    </Link>
-                  </td>
-                  <DateCell date={workspace.createdAt} />
-                  <DateCell date={workspace.lastUpdatedAt} />
-                  <td className="px-6 py-4 text-sm">
-                    <button
-                      onClick={() => setDeleteModal({ isOpen: true, workspace })}
-                      className={`p-2 rounded-lg cursor-pointer ${
-                        theme === "dark"
-                          ? "text-gray-400 hover:bg-dark-border/60 hover:text-error"
-                          : "text-gray-500 hover:bg-gray-100 hover:text-error"
-                      }`}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      <span className="sr-only">Delete workspace</span>
-                    </button>
-                  </td>
+
+        {/* Empty state */}
+        {workspaces.length === 0 ? (
+          <div className={`
+            rounded-forge-lg border-2 border-dashed p-12 text-center
+            ${theme === "dark"
+              ? "border-forge-iron bg-forge-charcoal/50"
+              : "border-stone-300 bg-white"
+            }
+          `}>
+            <div className={`
+              w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center
+              ${theme === "dark" ? "bg-forge-iron" : "bg-stone-100"}
+            `}>
+              <FolderOpen className={`
+                w-8 h-8
+                ${theme === "dark" ? "text-forge-zinc" : "text-stone-400"}
+              `} />
+            </div>
+            <h3 className={`
+              font-display text-lg font-semibold mb-2
+              ${theme === "dark" ? "text-stone-200" : "text-stone-700"}
+            `}>
+              No workspaces yet
+            </h3>
+            <p className={`
+              text-sm mb-6
+              ${theme === "dark" ? "text-forge-silver" : "text-stone-500"}
+            `}>
+              Start forging your first Helm chart
+            </p>
+            <Link href="/workspace/new" className="btn-forge inline-flex">
+              <Plus className="w-4 h-4" />
+              Create Workspace
+            </Link>
+          </div>
+        ) : (
+          /* Table */
+          <div className={`
+            rounded-forge-lg overflow-hidden
+            ${theme === "dark"
+              ? "bg-forge-charcoal border border-forge-iron"
+              : "bg-white border border-stone-200 shadow-sm"
+            }
+          `}>
+            <table className="w-full">
+              <thead>
+                <tr className={`
+                  border-b
+                  ${theme === "dark"
+                    ? "border-forge-iron bg-forge-steel/50"
+                    : "border-stone-200 bg-stone-50"
+                  }
+                `}>
+                  <th className="px-6 py-4 text-left">
+                    <SortButton field="name">Name</SortButton>
+                  </th>
+                  <th className="px-6 py-4 text-left">
+                    <SortButton field="createdAt">Created</SortButton>
+                  </th>
+                  <th className="px-6 py-4 text-left">
+                    <SortButton field="lastUpdatedAt">Last Modified</SortButton>
+                  </th>
+                  <th className="px-6 py-4 w-20">
+                    <span className="sr-only">Actions</span>
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </Card>
+              </thead>
+              <tbody>
+                {sortedWorkspaces.map((workspace, index) => (
+                  <tr
+                    key={workspace.id}
+                    className={`
+                      group transition-colors duration-150
+                      ${index !== sortedWorkspaces.length - 1 ? 'border-b' : ''}
+                      ${theme === "dark"
+                        ? "border-forge-iron/50 hover:bg-forge-iron/30"
+                        : "border-stone-100 hover:bg-stone-50"
+                      }
+                    `}
+                  >
+                    <td className="px-6 py-4">
+                      <Link
+                        href={`/workspace/${workspace.id}`}
+                        className="flex items-center gap-3 group/link"
+                      >
+                        <div className={`
+                          p-2 rounded-forge transition-colors duration-150
+                          ${theme === "dark"
+                            ? "bg-forge-iron/50 group-hover/link:bg-forge-ember/20"
+                            : "bg-stone-100 group-hover/link:bg-forge-ember/10"
+                          }
+                        `}>
+                          <FolderOpen className={`
+                            w-4 h-4 transition-colors duration-150
+                            ${theme === "dark"
+                              ? "text-forge-silver group-hover/link:text-forge-ember"
+                              : "text-stone-400 group-hover/link:text-forge-ember"
+                            }
+                          `} />
+                        </div>
+                        <span className={`
+                          font-medium transition-colors duration-150
+                          ${theme === "dark"
+                            ? "text-stone-100 group-hover/link:text-forge-ember"
+                            : "text-stone-900 group-hover/link:text-forge-ember"
+                          }
+                        `}>
+                          {workspace.name}
+                        </span>
+                        <ChevronRight className={`
+                          w-4 h-4 opacity-0 -translate-x-2 transition-all duration-150
+                          group-hover/link:opacity-100 group-hover/link:translate-x-0
+                          text-forge-ember
+                        `} />
+                      </Link>
+                    </td>
+                    <td
+                      className={`px-6 py-4 text-sm ${theme === "dark" ? "text-forge-silver" : "text-stone-500"}`}
+                      suppressHydrationWarning
+                    >
+                      <div className="flex items-center gap-2">
+                        <Calendar className="w-4 h-4 opacity-50" />
+                        {formatDate(workspace.createdAt)}
+                      </div>
+                    </td>
+                    <td
+                      className={`px-6 py-4 text-sm ${theme === "dark" ? "text-forge-silver" : "text-stone-500"}`}
+                      suppressHydrationWarning
+                    >
+                      <div className="flex items-center gap-2">
+                        <Clock className="w-4 h-4 opacity-50" />
+                        {formatRelativeDate(workspace.lastUpdatedAt)}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <button
+                        onClick={() => setDeleteModal({ isOpen: true, workspace })}
+                        className={`
+                          p-2 rounded-forge opacity-0 group-hover:opacity-100
+                          transition-all duration-150
+                          ${theme === "dark"
+                            ? "text-forge-zinc hover:text-forge-error hover:bg-forge-error/10"
+                            : "text-stone-400 hover:text-red-600 hover:bg-red-50"
+                          }
+                        `}
+                        title="Delete workspace"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        <span className="sr-only">Delete workspace</span>
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Footer info */}
+        {workspaces.length > 0 && (
+          <div className={`
+            mt-4 text-center text-xs
+            ${theme === "dark" ? "text-forge-zinc" : "text-stone-400"}
+          `}>
+            Click a workspace to open it in the editor
+          </div>
+        )}
       </div>
 
       <DeleteWorkspaceModal

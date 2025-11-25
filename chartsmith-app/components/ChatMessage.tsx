@@ -60,11 +60,11 @@ function LoadingSpinner({ message }: { message: string }) {
   const { theme } = useTheme();
   return (
     <div className="flex items-center gap-2" role="status" aria-live="polite">
-      <div 
-        className="flex-shrink-0 animate-spin rounded-full h-3 w-3 border border-t-transparent border-primary"
+      <div
+        className="flex-shrink-0 animate-spin rounded-full h-3 w-3 border border-t-transparent border-forge-ember"
         aria-hidden="true"
       />
-      <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
+      <div className={`text-xs font-medium ${theme === "dark" ? "text-forge-silver" : "text-stone-500"}`}>
         {message}
       </div>
     </div>
@@ -79,13 +79,13 @@ function ToolInvocationDisplay({ tool, theme }: { tool: ToolInvocation; theme: s
   const getStateColor = (state: string) => {
     switch (state) {
       case 'result':
-        return theme === 'dark' ? 'text-green-400' : 'text-green-600';
+        return theme === 'dark' ? 'text-forge-success' : 'text-green-600';
       case 'call':
-        return theme === 'dark' ? 'text-blue-400' : 'text-blue-600';
+        return theme === 'dark' ? 'text-forge-ember' : 'text-forge-ember-dim';
       case 'partial-call':
-        return theme === 'dark' ? 'text-yellow-400' : 'text-yellow-600';
+        return theme === 'dark' ? 'text-forge-warning' : 'text-yellow-600';
       default:
-        return theme === 'dark' ? 'text-gray-400' : 'text-gray-500';
+        return theme === 'dark' ? 'text-forge-zinc' : 'text-stone-500';
     }
   };
 
@@ -94,28 +94,39 @@ function ToolInvocationDisplay({ tool, theme }: { tool: ToolInvocation; theme: s
       case 'result':
         return 'completed';
       case 'call':
-        return 'running';
+        return 'forging...';
       case 'partial-call':
-        return 'preparing';
+        return 'heating up...';
       default:
         return state;
     }
   };
 
   return (
-    <div 
-      className={`flex items-center gap-2 px-2 py-1.5 rounded text-xs ${
-        theme === 'dark' ? 'bg-dark-border/30' : 'bg-gray-50'
+    <div
+      className={`flex items-center gap-2 px-3 py-2 rounded-forge text-xs border ${
+        theme === 'dark'
+          ? 'bg-forge-iron/30 border-forge-zinc/30'
+          : 'bg-stone-50 border-stone-200'
       }`}
       role="status"
       aria-label={`Tool ${tool.toolName}: ${getStateLabel(tool.state)}`}
     >
-      <span className="flex-shrink-0" aria-hidden="true">🔧</span>
-      <span className={`font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+      <span
+        className={`flex-shrink-0 w-5 h-5 flex items-center justify-center rounded-full ${
+          theme === 'dark' ? 'bg-forge-ember/20 text-forge-ember' : 'bg-forge-ember/10 text-forge-ember-dim'
+        }`}
+        aria-hidden="true"
+      >
+        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+        </svg>
+      </span>
+      <span className={`font-mono font-medium ${theme === 'dark' ? 'text-stone-200' : 'text-stone-700'}`}>
         {tool.toolName}
       </span>
-      <span 
-        className={`ml-auto ${getStateColor(tool.state)}`}
+      <span
+        className={`ml-auto font-medium ${getStateColor(tool.state)}`}
         aria-hidden="true"
       >
         {getStateLabel(tool.state)}
@@ -243,45 +254,52 @@ function CodeBlock({
   };
 
   return (
-    <figure 
-      className={`relative group rounded-md overflow-hidden my-2 ${
-        theme === 'dark' ? 'bg-dark' : 'bg-gray-900'
+    <figure
+      className={`relative group rounded-forge overflow-hidden my-3 border ${
+        theme === 'dark'
+          ? 'bg-forge-black border-forge-iron'
+          : 'bg-stone-900 border-stone-700'
       }`}
       role="figure"
       aria-label={language ? `${language.toUpperCase()} code block` : 'Code block'}
     >
-      {/* Language label */}
+      {/* Language label with ember accent */}
       {language && (
-        <div 
-          className={`px-3 py-1 text-[10px] font-mono ${
-            theme === 'dark' ? 'bg-dark-border/50 text-gray-500' : 'bg-gray-800 text-gray-400'
+        <div
+          className={`px-3 py-1.5 text-[10px] font-mono font-semibold uppercase tracking-wider border-b flex items-center gap-2 ${
+            theme === 'dark'
+              ? 'bg-forge-charcoal border-forge-iron text-forge-ember'
+              : 'bg-stone-800 border-stone-700 text-forge-ember-bright'
           }`}
           aria-hidden="true"
         >
-          {language.toUpperCase()}
+          <span className="w-2 h-2 rounded-full bg-forge-ember/60" />
+          {language}
         </div>
       )}
-      
-      {/* Copy button with accessible label and status */}
+
+      {/* Copy button with forge styling */}
       <button
         onClick={handleCopy}
         aria-label={copied ? "Copied to clipboard" : "Copy code to clipboard"}
         aria-live="polite"
-        className={`absolute top-2 right-2 p-1.5 rounded opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity focus:outline-none focus:ring-2 focus:ring-primary/50 ${
-          theme === 'dark' 
-            ? 'bg-dark-border/60 hover:bg-dark-border text-gray-400 hover:text-gray-200' 
-            : 'bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white'
+        className={`absolute top-2 right-2 p-1.5 rounded-forge opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-forge-ember/50 ${
+          copied
+            ? 'bg-forge-success/20 text-forge-success'
+            : theme === 'dark'
+              ? 'bg-forge-iron/60 hover:bg-forge-ember/20 text-forge-silver hover:text-forge-ember'
+              : 'bg-stone-700 hover:bg-forge-ember/20 text-stone-300 hover:text-forge-ember'
         }`}
         title={copied ? "Copied!" : "Copy code"}
       >
         {copied ? <Check className="w-3 h-3" aria-hidden="true" /> : <Copy className="w-3 h-3" aria-hidden="true" />}
         <span className="sr-only">{copied ? "Copied to clipboard" : "Copy code"}</span>
       </button>
-      
+
       {/* Code content */}
-      <pre 
-        className={`p-3 overflow-x-auto text-xs font-mono ${
-          theme === 'dark' ? 'text-gray-200' : 'text-gray-100'
+      <pre
+        className={`p-4 overflow-x-auto text-xs font-mono leading-relaxed ${
+          theme === 'dark' ? 'text-stone-200' : 'text-stone-100'
         }`}
         tabIndex={0}
         aria-label={`Code: ${codeContent.substring(0, 50)}${codeContent.length > 50 ? '...' : ''}`}
@@ -294,42 +312,36 @@ function CodeBlock({
   );
 }
 
-// Streaming indicator component with animated bouncing dots and cursor
+// Streaming indicator component with animated bouncing dots and cursor - forge styled
 function StreamingIndicator({ theme, showCursor = false }: { theme: string; showCursor?: boolean }) {
   if (showCursor) {
     // Show blinking cursor for inline streaming
     return (
-      <span 
-        className="streaming-cursor" 
-        role="status" 
-        aria-label="Generating response"
+      <span
+        className="streaming-cursor"
+        role="status"
+        aria-label="Forging response"
       />
     );
   }
-  
+
   return (
-    <span 
-      className="inline-flex items-center gap-1 ml-1" 
-      role="status" 
-      aria-label="Generating response"
+    <span
+      className="inline-flex items-center gap-1.5 ml-1"
+      role="status"
+      aria-label="Forging response"
     >
-      <span 
-        className={`inline-block w-1.5 h-1.5 rounded-full animate-bounce ${
-          theme === 'dark' ? 'bg-primary/70' : 'bg-primary/60'
-        }`}
-        style={{ animationDelay: '0ms', animationDuration: '600ms' }}
+      <span
+        className="inline-block w-1.5 h-1.5 rounded-full bg-forge-ember animate-bounce"
+        style={{ animationDelay: '0ms', animationDuration: '500ms' }}
       />
-      <span 
-        className={`inline-block w-1.5 h-1.5 rounded-full animate-bounce ${
-          theme === 'dark' ? 'bg-primary/70' : 'bg-primary/60'
-        }`}
-        style={{ animationDelay: '150ms', animationDuration: '600ms' }}
+      <span
+        className="inline-block w-1.5 h-1.5 rounded-full bg-forge-ember-bright animate-bounce"
+        style={{ animationDelay: '150ms', animationDuration: '500ms' }}
       />
-      <span 
-        className={`inline-block w-1.5 h-1.5 rounded-full animate-bounce ${
-          theme === 'dark' ? 'bg-primary/70' : 'bg-primary/60'
-        }`}
-        style={{ animationDelay: '300ms', animationDuration: '600ms' }}
+      <span
+        className="inline-block w-1.5 h-1.5 rounded-full bg-forge-ember animate-bounce"
+        style={{ animationDelay: '300ms', animationDuration: '500ms' }}
       />
     </span>
   );
@@ -596,49 +608,61 @@ function ChatMessageInner({
     : '';
 
   return (
-    <div className="space-y-2" data-testid="chat-message">
+    <div className="space-y-3" data-testid="chat-message">
       {/* User Message */}
-      <div 
-        className="px-2 py-1" 
+      <div
+        className="px-2 py-1"
         data-testid="user-message"
         role="group"
         aria-label={`Your message${formattedTime ? ` at ${formattedTime}` : ''}`}
       >
-        <div className={`p-3 rounded-lg ${theme === "dark" ? "bg-primary/20" : "bg-primary/10"} rounded-tr-sm w-full`}>
-          <div className="flex items-start gap-2">
+        <div className={`p-4 rounded-forge-lg rounded-tr-sm w-full border ${
+          theme === "dark"
+            ? "bg-forge-ember/10 border-forge-ember/20"
+            : "bg-forge-ember/5 border-forge-ember/15"
+        }`}>
+          <div className="flex items-start gap-3">
             <Image
               src={session.user.imageUrl}
               alt=""
               aria-hidden="true"
-              width={24}
-              height={24}
-              className="w-6 h-6 rounded-full flex-shrink-0"
+              width={28}
+              height={28}
+              className="w-7 h-7 rounded-full flex-shrink-0 ring-2 ring-forge-ember/30"
             />
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               {/* Screen reader only user name */}
               <span className="sr-only">{session.user.name} said:</span>
-              <div 
-                className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} text-[12px] pt-0.5 ${message.isCanceled ? "opacity-50" : ""}`}
+              <div
+                className={`text-sm leading-relaxed ${
+                  theme === "dark" ? "text-stone-100" : "text-stone-800"
+                } ${message.isCanceled ? "opacity-50 line-through" : ""}`}
                 aria-label={message.isCanceled ? "Message canceled" : undefined}
               >
                 {message.prompt}
               </div>
               {!message.isIntentComplete && !message.isCanceled && (
-                <div 
-                  className="flex items-center gap-2 mt-2 border-t border-primary/20 pt-2"
+                <div
+                  className={`flex items-center gap-2 mt-3 pt-3 border-t ${
+                    theme === "dark" ? "border-forge-ember/20" : "border-forge-ember/15"
+                  }`}
                   role="status"
                   aria-live="polite"
                 >
-                  <div 
-                    className="flex-shrink-0 animate-spin rounded-full h-3 w-3 border border-t-transparent border-primary"
+                  <div
+                    className="flex-shrink-0 animate-spin rounded-full h-3 w-3 border-2 border-forge-ember border-t-transparent"
                     aria-hidden="true"
                   />
-                  <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
-                    thinking...
+                  <div className={`text-xs font-medium ${theme === "dark" ? "text-forge-ember-bright" : "text-forge-ember-dim"}`}>
+                    forging response...
                   </div>
                   <button
                     aria-label="Cancel message generation"
-                    className={`ml-auto text-xs px-1.5 py-0.5 rounded border focus:outline-none focus:ring-2 focus:ring-primary/50 ${theme === "dark" ? "border-dark-border text-gray-400 hover:text-gray-200" : "border-gray-300 text-gray-500 hover:text-gray-700"} hover:bg-dark-border/40`}
+                    className={`ml-auto text-xs px-2 py-1 rounded-forge font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-forge-ember/50 ${
+                      theme === "dark"
+                        ? "bg-forge-iron/50 border border-forge-zinc text-forge-silver hover:text-stone-100 hover:bg-forge-iron"
+                        : "bg-stone-100 border border-stone-300 text-stone-500 hover:text-stone-700 hover:bg-stone-200"
+                    }`}
                     onClick={async (e) => {
                       e.preventDefault();
                       e.stopPropagation();
@@ -653,13 +677,15 @@ function ChatMessageInner({
                 </div>
               )}
               {message.isCanceled && (
-                <div 
-                  className="flex items-center gap-2 mt-2 border-t border-primary/20 pt-2"
+                <div
+                  className={`flex items-center gap-2 mt-3 pt-3 border-t ${
+                    theme === "dark" ? "border-forge-ember/20" : "border-forge-ember/15"
+                  }`}
                   role="status"
                   aria-live="polite"
                 >
-                  <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
-                    Message generation canceled
+                  <div className={`text-xs font-medium ${theme === "dark" ? "text-forge-zinc" : "text-stone-400"}`}>
+                    Forging canceled
                   </div>
                 </div>
               )}
@@ -670,24 +696,48 @@ function ChatMessageInner({
 
       {/* Assistant Message */}
       {(message.response || message.content || message.responsePlanId || message.responseRenderId || message.responseConversionId || message.toolInvocations?.length || (message.isIntentComplete && !message.responsePlanId)) && (
-        <div 
-          className="px-2 py-1" 
+        <div
+          className="px-2 py-1"
           data-testid="assistant-message"
           role="group"
-          aria-label={`ChartSmith response${message.isStreaming ? ', generating' : ''}`}
+          aria-label={`ChartSmith response${message.isStreaming ? ', forging' : ''}`}
         >
-          <div className={`p-3 rounded-lg ${theme === "dark" ? "bg-dark-border/40" : "bg-gray-100"} rounded-tl-sm w-full`}>
-            <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"} mb-1 flex items-center justify-between`}>
-              <div aria-hidden="true">ChartSmith</div>
-              <div className="text-[10px] opacity-70" aria-label={`Revision ${
+          <div className={`p-4 rounded-forge-lg rounded-tl-sm w-full border ${
+            theme === "dark"
+              ? "bg-forge-steel/50 border-forge-iron"
+              : "bg-stone-50 border-stone-200"
+          }`}>
+            {/* Header with forge styling */}
+            <div className={`text-xs mb-3 flex items-center justify-between`}>
+              <div className="flex items-center gap-2">
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
+                  theme === "dark" ? "bg-forge-iron" : "bg-stone-200"
+                }`}>
+                  <svg className="w-3.5 h-3.5 text-forge-ember" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+                  </svg>
+                </div>
+                <span className={`font-display font-semibold ${theme === "dark" ? "text-stone-200" : "text-stone-700"}`}>
+                  ChartSmith
+                </span>
+                {message.isStreaming && (
+                  <span className="flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-forge-ember ember-pulse" />
+                  </span>
+                )}
+              </div>
+              <div className={`text-[10px] px-2 py-0.5 rounded-full font-mono ${
+                theme === "dark"
+                  ? "bg-forge-iron/50 text-forge-zinc"
+                  : "bg-stone-200 text-stone-500"
+              }`} aria-label={`Revision ${
                 message.revisionNumber !== undefined
                   ? message.revisionNumber
                   : message.id
                     ? Array.from(message.id).reduce((sum, char) => sum + char.charCodeAt(0), 0) % 100
                     : "unknown"
               }`}>
-                Rev #{
-                  // Try to get actual revision number, otherwise use a hash of the message ID to generate a stable pseudo-revision
+                rev #{
                   message.revisionNumber !== undefined
                     ? message.revisionNumber
                     : message.id
@@ -698,8 +748,10 @@ function ChatMessageInner({
             </div>
             {/* Screen reader only assistant name */}
             <span className="sr-only">ChartSmith responded:</span>
-            <div 
-              className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} ${message.isIgnored ? "opacity-50 line-through" : ""} text-[12px] markdown-content`}
+            <div
+              className={`text-sm leading-relaxed ${
+                theme === "dark" ? "text-stone-200" : "text-stone-700"
+              } ${message.isIgnored ? "opacity-50 line-through" : ""} markdown-content`}
               aria-busy={message.isStreaming}
               aria-live={message.isStreaming ? "polite" : "off"}
             >
@@ -713,13 +765,19 @@ function ChatMessageInner({
               {message.responseRollbackToRevisionNumber !== undefined &&
                workspace.currentRevisionNumber !== message.responseRollbackToRevisionNumber &&
                isFirstForRevision && (
-                <div className="mt-2 text-[9px] border-t border-gray-200 dark:border-dark-border/30 pt-1 flex justify-end">
+                <div className={`mt-3 text-[10px] border-t pt-3 flex justify-end ${
+                  theme === "dark" ? "border-forge-iron/50" : "border-stone-200"
+                }`}>
                   <button
                     aria-label={`Rollback to revision ${message.responseRollbackToRevisionNumber}`}
-                    className={`${theme === "dark" ? "text-gray-500 hover:text-gray-300" : "text-gray-400 hover:text-gray-600"} hover:underline flex items-center focus:outline-none focus:ring-2 focus:ring-primary/50 rounded px-1`}
+                    className={`flex items-center gap-1.5 px-2 py-1 rounded-forge font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-forge-ember/50 ${
+                      theme === "dark"
+                        ? "text-forge-zinc hover:text-forge-ember hover:bg-forge-ember/10"
+                        : "text-stone-400 hover:text-forge-ember-dim hover:bg-forge-ember/5"
+                    }`}
                     onClick={() => setShowRollbackModal(true)}
                   >
-                    <svg className="w-2 h-2 mr-1" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                       <path d="M3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12Z" stroke="currentColor" strokeWidth="2"/>
                       <path d="M12 8L12 13M12 13L15 10M12 13L9 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                     </svg>
@@ -729,18 +787,20 @@ function ChatMessageInner({
               )}
             </div>
             {message.followupActions && message.followupActions.length > 0 && (
-              <nav 
-                className="mt-4 flex gap-2 justify-end"
+              <nav
+                className={`mt-4 pt-4 flex flex-wrap gap-2 justify-end border-t ${
+                  theme === "dark" ? "border-forge-iron/50" : "border-stone-200"
+                }`}
                 aria-label="Suggested follow-up actions"
               >
                 {message.followupActions.map((action, index) => (
                   <button
                     key={index}
                     aria-label={`Follow-up action: ${action.label}`}
-                    className={`text-xs px-2 py-1 rounded focus:outline-none focus:ring-2 focus:ring-primary/50 ${
+                    className={`text-xs px-3 py-1.5 rounded-forge font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-forge-ember/50 ${
                       theme === "dark"
-                        ? "bg-dark border-dark-border/60 text-gray-300 hover:text-white hover:bg-dark-border/40"
-                        : "bg-white border border-gray-300 text-gray-600 hover:text-gray-800 hover:bg-gray-50"
+                        ? "bg-forge-iron/50 border border-forge-zinc/50 text-stone-300 hover:text-forge-ember hover:border-forge-ember/50 hover:bg-forge-ember/10"
+                        : "bg-white border border-stone-300 text-stone-600 hover:text-forge-ember-dim hover:border-forge-ember/50 hover:bg-forge-ember/5"
                     }`}
                     onClick={async () => {
                       const chatMessage = await performFollowupAction(session, workspace.id, message.id, action.action);
@@ -755,60 +815,64 @@ function ChatMessageInner({
               </nav>
             )}
             {showChatInput && (
-              <div className="mt-6 border-t border-dark-border/20">
-                <div className={`pt-4 ${message.responsePlanId ? "border-t border-dark-border/10" : ""}`}>
-                  <form 
-                    onSubmit={handleSubmitChat} 
-                    className="relative"
-                    role="form"
-                    aria-label="Reply to this message"
-                  >
-                    <label htmlFor={`chat-reply-${messageId}`} className="sr-only">
-                      Type your reply
-                    </label>
-                    <textarea
-                      id={`chat-reply-${messageId}`}
-                      ref={textareaRef}
-                      value={chatInput}
-                      onChange={(e) => {
-                        setChatInput(e.target.value);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault();
-                          if (chatInput.trim() && handleSubmitChat) {
-                            handleSubmitChat(e);
-                          }
-                        } else if (e.key === 'Escape') {
-                          e.currentTarget.blur();
+              <div className={`mt-6 border-t pt-4 ${
+                theme === "dark" ? "border-forge-iron/50" : "border-stone-200"
+              }`}>
+                <form
+                  onSubmit={handleSubmitChat}
+                  className="relative"
+                  role="form"
+                  aria-label="Reply to this message"
+                >
+                  <label htmlFor={`chat-reply-${messageId}`} className="sr-only">
+                    Type your reply
+                  </label>
+                  <textarea
+                    id={`chat-reply-${messageId}`}
+                    ref={textareaRef}
+                    value={chatInput}
+                    onChange={(e) => {
+                      setChatInput(e.target.value);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        if (chatInput.trim() && handleSubmitChat) {
+                          handleSubmitChat(e);
                         }
-                      }}
-                      placeholder="Ask a question or suggest changes..."
-                      rows={1}
-                      style={{ height: 'auto', minHeight: '34px', maxHeight: '150px' }}
-                      aria-describedby={`chat-reply-hint-${messageId}`}
-                      className={`w-full px-3 py-1.5 pr-10 text-sm rounded-md border resize-none overflow-hidden ${
-                        theme === "dark"
-                          ? "bg-dark border-dark-border/60 text-white placeholder-gray-500"
-                          : "bg-white border-gray-200 text-gray-900 placeholder-gray-400"
-                      } focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50`}
-                    />
-                    <div id={`chat-reply-hint-${messageId}`} className="sr-only">
-                      Press Enter to send, Shift+Enter for new line
-                    </div>
-                    <button
-                      type="submit"
-                      aria-label="Send reply"
-                      disabled={!chatInput.trim()}
-                      className={`absolute right-2 top-[5px] p-1.5 rounded-full focus:outline-none focus:ring-2 focus:ring-primary/50 ${
-                        theme === "dark" ? "text-gray-400 hover:text-gray-200" : "text-gray-500 hover:text-gray-700"
-                      } hover:bg-gray-100 dark:hover:bg-dark-border/40 disabled:opacity-50 disabled:cursor-not-allowed`}
-                    >
-                      <Send className="w-4 h-4" aria-hidden="true" />
-                      <span className="sr-only">Send reply</span>
-                    </button>
-                  </form>
-                </div>
+                      } else if (e.key === 'Escape') {
+                        e.currentTarget.blur();
+                      }
+                    }}
+                    placeholder="Continue the conversation..."
+                    rows={1}
+                    style={{ height: 'auto', minHeight: '40px', maxHeight: '150px' }}
+                    aria-describedby={`chat-reply-hint-${messageId}`}
+                    className={`w-full px-4 py-2.5 pr-12 text-sm rounded-forge border resize-none overflow-hidden transition-all duration-200 ${
+                      theme === "dark"
+                        ? "bg-forge-charcoal border-forge-iron text-stone-100 placeholder-forge-zinc"
+                        : "bg-white border-stone-300 text-stone-900 placeholder-stone-400"
+                    } focus:outline-none focus:ring-2 focus:ring-forge-ember/50 focus:border-forge-ember/50`}
+                  />
+                  <div id={`chat-reply-hint-${messageId}`} className="sr-only">
+                    Press Enter to send, Shift+Enter for new line
+                  </div>
+                  <button
+                    type="submit"
+                    aria-label="Send reply"
+                    disabled={!chatInput.trim()}
+                    className={`absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-forge transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-forge-ember/50 ${
+                      chatInput.trim()
+                        ? "bg-forge-ember text-white hover:bg-forge-ember-bright"
+                        : theme === "dark"
+                          ? "text-forge-zinc hover:text-forge-silver hover:bg-forge-iron/50"
+                          : "text-stone-400 hover:text-stone-600 hover:bg-stone-100"
+                    } disabled:cursor-not-allowed`}
+                  >
+                    <Send className="w-4 h-4" aria-hidden="true" />
+                    <span className="sr-only">Send reply</span>
+                  </button>
+                </form>
               </div>
             )}
           </div>

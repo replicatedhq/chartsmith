@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Sparkles, Upload, Search, Download, Link, ArrowRight, Loader2, AlertCircle } from "lucide-react";
+import { Sparkles, Upload, Search, Download, Link, ArrowRight, Loader2, AlertCircle, Flame } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { PromptModal } from "./PromptModal";
 import { createWorkspaceFromArchiveAction } from "@/lib/workspace/actions/create-workspace-from-archive";
@@ -109,46 +109,58 @@ export function CreateChartOptions() {
 
   return (
     <div className="w-full max-w-4xl mx-auto px-4">
-      <div className="bg-gray-900/80 backdrop-blur-sm rounded-lg border border-gray-800">
-        <div className="p-4 sm:p-6 relative">
-          <textarea
-            ref={textareaRef}
-            placeholder="Tell me about the application you want to create a Helm chart for"
-            value={prompt}
-            onChange={(e) => {
-              // Prevent input beyond the character limit
-              if (e.target.value.length <= MAX_CHARS) {
-                setPrompt(e.target.value);
-              }
-            }}
-            onKeyDown={handleKeyDown}
-            disabled={isPromptLoading}
-            className="w-full min-h-[80px] sm:min-h-[120px] bg-transparent text-white placeholder-gray-500 text-base sm:text-lg resize-none focus:outline-none disabled:opacity-50"
-            maxLength={MAX_CHARS}
-          />
-          
-          {isApproachingLimit && (
-            <div className="flex items-center mt-2 text-xs text-amber-500/90">
-              <AlertCircle className="w-3.5 h-3.5 mr-1.5 flex-shrink-0" />
-              <span>ChartSmith works best with clear, concise prompts. Start simple and refine through conversation.</span>
-            </div>
-          )}
-          
-          {prompt.trim() && (
-            <button
-              onClick={handlePromptSubmit}
+      {/* Main prompt card with forge styling */}
+      <div className="relative group">
+        {/* Ember glow on focus/hover */}
+        <div className="absolute -inset-0.5 bg-gradient-to-r from-forge-ember/20 via-forge-ember/10 to-forge-ember/20 rounded-forge-lg blur opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-500" />
+
+        <div className="relative bg-forge-charcoal/90 backdrop-blur-sm rounded-forge-lg border border-forge-iron/50 overflow-hidden">
+          <div className="p-4 sm:p-6 relative">
+            <textarea
+              ref={textareaRef}
+              placeholder="Describe your application and I'll forge a Helm chart for you..."
+              value={prompt}
+              onChange={(e) => {
+                if (e.target.value.length <= MAX_CHARS) {
+                  setPrompt(e.target.value);
+                }
+              }}
+              onKeyDown={handleKeyDown}
               disabled={isPromptLoading}
-              className="absolute top-3 sm:top-4 right-3 sm:right-4 p-1.5 sm:p-2 bg-blue-500 hover:bg-blue-600 disabled:bg-blue-500/50 text-white rounded-md transition-colors"
-            >
-              <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
-            </button>
-          )}
-          {isPromptLoading && (
-            <div className="absolute bottom-3 sm:bottom-4 right-3 sm:right-4">
-              <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500 animate-spin" />
-            </div>
-          )}
-        </div>
+              className="w-full min-h-[80px] sm:min-h-[120px] bg-transparent text-stone-100 placeholder-forge-zinc text-base sm:text-lg resize-none focus:outline-none disabled:opacity-50 font-body"
+              maxLength={MAX_CHARS}
+            />
+
+            {isApproachingLimit && (
+              <div className="flex items-center mt-2 text-xs text-forge-ember-bright/90">
+                <AlertCircle className="w-3.5 h-3.5 mr-1.5 flex-shrink-0" />
+                <span>ChartSmith works best with clear, concise prompts. Start simple and refine through conversation.</span>
+              </div>
+            )}
+
+            {prompt.trim() && (
+              <button
+                onClick={handlePromptSubmit}
+                disabled={isPromptLoading}
+                className="
+                  absolute top-3 sm:top-4 right-3 sm:right-4
+                  p-2 sm:p-2.5 rounded-forge
+                  bg-forge-ember text-white
+                  hover:bg-forge-ember-bright hover:shadow-ember
+                  disabled:bg-forge-ember/50 disabled:cursor-not-allowed
+                  transition-all duration-200 active:scale-95
+                "
+              >
+                <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
+              </button>
+            )}
+            {isPromptLoading && (
+              <div className="absolute bottom-3 sm:bottom-4 right-3 sm:right-4 flex items-center gap-2">
+                <Flame className="w-4 h-4 sm:w-5 sm:h-5 text-forge-ember animate-pulse" />
+                <span className="text-xs text-forge-ember font-medium">Heating up...</span>
+              </div>
+            )}
+          </div>
         {/* Icons under prompt box commented out
         <div className="border-t border-gray-800 p-3 sm:p-4 flex items-center gap-3 sm:gap-4">
           <button
@@ -170,32 +182,58 @@ export function CreateChartOptions() {
           </button>
         </div>
         */}
+        </div>
       </div>
 
-      <div className="mt-3 sm:mt-4 flex flex-wrap gap-1.5 sm:gap-2 justify-center">
+      {/* Action buttons with forge styling */}
+      <div className="mt-4 sm:mt-6 flex flex-wrap gap-2 sm:gap-3 justify-center">
         <button
           onClick={() => triggerFileUpload('helm')}
           disabled={isUploading || isPromptLoading}
-          className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm rounded-full bg-gray-800/60 backdrop-blur-sm border border-gray-700 hover:bg-gray-700/60 transition-colors text-gray-300 hover:text-white disabled:opacity-50 disabled:hover:bg-gray-800/60 disabled:cursor-not-allowed"
+          className="
+            group flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5
+            text-xs sm:text-sm font-medium rounded-forge
+            bg-forge-iron/40 backdrop-blur-sm border border-forge-zinc/30
+            text-forge-silver hover:text-stone-100
+            hover:bg-forge-iron/60 hover:border-forge-ember/30
+            transition-all duration-200
+            disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-forge-iron/40 disabled:hover:border-forge-zinc/30
+          "
         >
-          <Upload className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-          Upload a Helm chart
+          <Upload className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-forge-ember group-hover:scale-110 transition-transform" />
+          Upload Helm chart
         </button>
         <button
           onClick={() => triggerFileUpload('k8s')}
           disabled={isUploading || isPromptLoading}
-          className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm rounded-full bg-gray-800/60 backdrop-blur-sm border border-gray-700 hover:bg-gray-700/60 transition-colors text-gray-300 hover:text-white disabled:opacity-50 disabled:hover:bg-gray-800/60 disabled:cursor-not-allowed"
+          className="
+            group flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5
+            text-xs sm:text-sm font-medium rounded-forge
+            bg-forge-iron/40 backdrop-blur-sm border border-forge-zinc/30
+            text-forge-silver hover:text-stone-100
+            hover:bg-forge-iron/60 hover:border-forge-ember/30
+            transition-all duration-200
+            disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-forge-iron/40 disabled:hover:border-forge-zinc/30
+          "
         >
-          <Upload className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-          Upload Kubernetes manifests
+          <Upload className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-forge-ember group-hover:scale-110 transition-transform" />
+          Upload K8s manifests
         </button>
         <button
           onClick={() => setShowArtifactHubSearch(true)}
           disabled={isUploading || isPromptLoading}
-          className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm rounded-full bg-gray-800/60 backdrop-blur-sm border border-gray-700 hover:bg-gray-700/60 transition-colors text-gray-300 hover:text-white disabled:opacity-50 disabled:hover:bg-gray-800/60 disabled:cursor-not-allowed"
+          className="
+            group flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5
+            text-xs sm:text-sm font-medium rounded-forge
+            bg-forge-iron/40 backdrop-blur-sm border border-forge-zinc/30
+            text-forge-silver hover:text-stone-100
+            hover:bg-forge-iron/60 hover:border-forge-ember/30
+            transition-all duration-200
+            disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-forge-iron/40 disabled:hover:border-forge-zinc/30
+          "
         >
-          <Search className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-          Start from a chart in Artifact Hub
+          <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-forge-ember group-hover:scale-110 transition-transform" />
+          Search Artifact Hub
         </button>
       </div>
 

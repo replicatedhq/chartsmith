@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { X, AlertTriangle } from "lucide-react";
+import { X, AlertTriangle, FileX } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 
 interface DeleteFileModalProps {
@@ -18,35 +18,97 @@ export function DeleteFileModal({ isOpen, onClose, filePath, isRequired, onConfi
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
-      <div className={`w-full max-w-md rounded-lg shadow-lg border ${theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"}`}>
-        <div className={`flex items-center justify-between p-4 border-b ${theme === "dark" ? "border-dark-border" : "border-gray-200"}`}>
-          <div className="flex items-center gap-2">
-            <AlertTriangle className={isRequired ? "w-5 h-5 text-error" : "w-5 h-5 text-yellow-500"} />
-            <h2 className={`text-lg font-semibold ${theme === "dark" ? "text-white" : "text-gray-900"}`}>{isRequired ? "Required File" : "Delete File"}</h2>
+    <div className="fixed inset-0 bg-forge-black/80 backdrop-blur-sm flex items-center justify-center z-[100]">
+      <div className={`
+        w-full max-w-md rounded-forge-lg shadow-2xl border overflow-hidden
+        ${theme === "dark"
+          ? "bg-forge-charcoal border-forge-iron"
+          : "bg-white border-stone-200"
+        }
+      `}>
+        {/* Header */}
+        <div className={`
+          flex items-center justify-between p-4 border-b
+          ${theme === "dark"
+            ? `border-forge-iron ${isRequired ? 'bg-red-500/5' : 'bg-yellow-500/5'}`
+            : `border-stone-200 ${isRequired ? 'bg-red-50' : 'bg-yellow-50'}`
+          }
+        `}>
+          <div className="flex items-center gap-3">
+            <div className={`
+              w-8 h-8 rounded-forge flex items-center justify-center
+              ${isRequired ? 'bg-red-500/20' : 'bg-yellow-500/20'}
+            `}>
+              {isRequired ? (
+                <AlertTriangle className="w-4 h-4 text-red-400" />
+              ) : (
+                <FileX className="w-4 h-4 text-yellow-400" />
+              )}
+            </div>
+            <h2 className={`
+              text-lg font-display font-semibold
+              ${theme === "dark" ? "text-stone-100" : "text-stone-900"}
+            `}>
+              {isRequired ? "Required File" : "Delete File"}
+            </h2>
           </div>
-          <button onClick={onClose} className={`${theme === "dark" ? "text-gray-400 hover:text-white" : "text-gray-500 hover:text-gray-700"} transition-colors`}>
+          <button
+            onClick={onClose}
+            className={`
+              p-2 rounded-forge transition-all
+              ${theme === "dark"
+                ? "text-forge-zinc hover:text-stone-100 hover:bg-forge-iron/50"
+                : "text-stone-400 hover:text-stone-600 hover:bg-stone-100"
+              }
+            `}
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {/* Content */}
         <div className="p-6">
           {isRequired ? (
-            <p className={theme === "dark" ? "text-gray-300" : "text-gray-600"}>
-              The file <span className="font-mono">{filePath}</span> is required and cannot be deleted. This file is essential for the proper functioning of your Helm chart.
+            <p className={theme === "dark" ? "text-forge-silver" : "text-stone-600"}>
+              The file <span className="font-mono text-forge-ember">{filePath}</span> is required and cannot be deleted.
+              This file is essential for the proper functioning of your Helm chart.
             </p>
           ) : (
-            <p className={theme === "dark" ? "text-gray-300" : "text-gray-600"}>
-              Are you sure you want to delete <span className="font-mono">{filePath}</span>? This action cannot be undone.
+            <p className={theme === "dark" ? "text-forge-silver" : "text-stone-600"}>
+              Are you sure you want to delete{' '}
+              <span className="font-mono text-red-400">{filePath}</span>?
+              This action cannot be undone.
             </p>
           )}
         </div>
-        <div className={`flex justify-end gap-2 p-4 border-t ${theme === "dark" ? "border-dark-border" : "border-gray-200"}`}>
-          <button onClick={onClose} className={`px-4 py-2 text-sm rounded-lg transition-colors ${theme === "dark" ? "text-gray-300 hover:text-white bg-dark-border/40 hover:bg-dark-border/60" : "text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200"}`}>
+
+        {/* Footer */}
+        <div className={`
+          flex justify-end gap-3 p-4 border-t
+          ${theme === "dark" ? "border-forge-iron" : "border-stone-200"}
+        `}>
+          <button
+            onClick={onClose}
+            className={`
+              px-4 py-2.5 text-sm font-medium rounded-forge transition-all
+              ${theme === "dark"
+                ? "text-forge-silver hover:text-stone-100 bg-forge-iron/50 hover:bg-forge-iron"
+                : "text-stone-600 hover:text-stone-900 bg-stone-100 hover:bg-stone-200"
+              }
+            `}
+          >
             {isRequired ? "Close" : "Cancel"}
           </button>
           {!isRequired && (
-            <button onClick={onConfirm} className="px-4 py-2 text-sm text-white bg-error hover:bg-error/90 rounded-lg transition-colors">
-              Delete
+            <button
+              onClick={onConfirm}
+              className="
+                px-4 py-2.5 text-sm font-medium text-white
+                bg-red-500 hover:bg-red-600
+                rounded-forge transition-all
+              "
+            >
+              Delete File
             </button>
           )}
         </div>

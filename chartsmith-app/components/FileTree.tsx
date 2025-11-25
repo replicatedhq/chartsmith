@@ -386,7 +386,7 @@ export function FileTree({ files = [], charts = [] }: FileTreeProps) {
             }
           }
         }}
-        className={`flex items-center py-1 px-2 cursor-pointer rounded-sm group ${isSelected ? `bg-primary/10 text-primary` : theme === "dark" ? "text-gray-300 hover:text-gray-100 hover:bg-dark-border/40" : "text-gray-700 hover:text-gray-900 hover:bg-gray-100"}`}
+        className={`flex items-center py-1.5 px-2 cursor-pointer rounded-forge group transition-all ${isSelected ? `bg-forge-ember/10 text-forge-ember border-l-2 border-forge-ember` : theme === "dark" ? "text-forge-silver hover:text-stone-100 hover:bg-forge-iron/40 border-l-2 border-transparent" : "text-stone-600 hover:text-stone-900 hover:bg-stone-100 border-l-2 border-transparent"}`}
         style={{ paddingLeft: `${level * 16}px` }}
         onClick={() => {
           if (node.type === "folder") {
@@ -413,7 +413,7 @@ export function FileTree({ files = [], charts = [] }: FileTreeProps) {
             </div>
           ) : null
         ) : (
-          <FileText className={`w-4 h-4 mr-2 ${selectedFile?.filePath === node.filePath ? "text-primary" : theme === "dark" ? "text-gray-400" : "text-gray-500"}`} />
+          <FileText className={`w-4 h-4 mr-2 ${selectedFile?.filePath === node.filePath ? "text-forge-ember" : theme === "dark" ? "text-forge-zinc" : "text-stone-400"}`} />
         )}
         <div className="flex-1 flex items-center min-w-0">
           <span className="text-xs truncate">{node.name}</span>
@@ -434,12 +434,12 @@ export function FileTree({ files = [], charts = [] }: FileTreeProps) {
         </div>
         <button
           onClick={(e) => node.type === "file" && handleDelete(node, e)}
-          className={`p-1 rounded w-5 flex-shrink-0 ${
+          className={`p-1 rounded-forge w-5 flex-shrink-0 ${
             node.type === "file"
-              ? `opacity-0 group-hover:opacity-100 transition-opacity ${
+              ? `opacity-0 group-hover:opacity-100 transition-all ${
                   theme === "dark"
-                    ? "hover:bg-dark-border/60 text-gray-400 hover:text-white"
-                    : "hover:bg-gray-200 text-gray-500 hover:text-gray-700"
+                    ? "hover:bg-red-500/20 text-forge-zinc hover:text-red-400"
+                    : "hover:bg-red-50 text-stone-400 hover:text-red-500"
                 }`
               : "invisible"
           }`}

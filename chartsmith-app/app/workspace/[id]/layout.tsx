@@ -41,9 +41,12 @@ export default async function WorkspaceLayout({
 
   return (
     <WorkspaceUIProvider initialChatVisible={true} initialFileTreeVisible={hasRevision}>
-      <div className="min-h-screen bg-[var(--background)] flex w-full" suppressHydrationWarning>
+      <div className="min-h-screen bg-forge-black flex w-full relative" suppressHydrationWarning>
+        {/* Subtle background pattern */}
+        <div className="fixed inset-0 pattern-dots opacity-20 pointer-events-none" />
+
         <SideNavWrapper workspaceID={id} />
-        <div className="flex-1">
+        <div className="flex-1 relative z-10">
           {children}
         </div>
       </div>
