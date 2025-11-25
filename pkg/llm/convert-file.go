@@ -26,7 +26,8 @@ func ConvertFile(ctx context.Context, opts ConvertFileOpts) (map[string]string, 
 		zap.String("path", opts.Path),
 	)
 
-	return convertFileUsingGroq(ctx, opts)
+	// Use Claude instead of Groq for consistency and reliability
+	return convertFileUsingClaude(ctx, opts)
 }
 
 func convertFileUsingGroq(ctx context.Context, opts ConvertFileOpts) (map[string]string, string, error) {
@@ -146,7 +147,7 @@ Convert the following Kubernetes manifest to a helm template:
 	}
 
 	response, err := client.Messages.New(context.TODO(), anthropic.MessageNewParams{
-		Model:     anthropic.F(anthropic.ModelClaude3_7Sonnet20250219),
+		Model:     anthropic.F(anthropic.ModelClaude3_5Haiku20241022),
 		MaxTokens: anthropic.F(int64(8192)),
 		Messages:  anthropic.F(messages),
 	})

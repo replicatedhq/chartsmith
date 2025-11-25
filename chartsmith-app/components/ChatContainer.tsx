@@ -492,7 +492,7 @@ export function ChatContainer({ session }: ChatContainerProps) {
         setIsRoleMenuOpen(false);
       }
     };
-
+    
     document.addEventListener('mousedown', handleClickOutside);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
@@ -507,7 +507,7 @@ export function ChatContainer({ session }: ChatContainerProps) {
         // Return focus to the role button
         const roleButton = roleMenuRef.current?.querySelector('button');
         roleButton?.focus();
-      }
+  }
     };
 
     document.addEventListener('keydown', handleKeyDown);
@@ -630,7 +630,7 @@ export function ChatContainer({ session }: ChatContainerProps) {
   const handleConversationSaved = useCallback((id: string) => {
     setCurrentConversationId(id);
   }, []);
-
+    
   if (!messages || !workspace) {
     return null;
   }
@@ -730,8 +730,8 @@ export function ChatContainer({ session }: ChatContainerProps) {
                   }}
                 >
                   <ChatMessage
-                    messageId={item.id}
-                    session={session}
+                  messageId={item.id}
+                  session={session}
                     onContentUpdate={handleContentUpdate}
                   />
                 </article>
@@ -747,7 +747,7 @@ export function ChatContainer({ session }: ChatContainerProps) {
                   onStop={stop}
                 />
               )}
-            </div>
+              </div>
             
             {/* Error state */}
             {error && showError && (
@@ -812,10 +812,10 @@ export function ChatContainer({ session }: ChatContainerProps) {
                 {selectedRole === "operator" && <User className="w-4 h-4" aria-hidden="true" />}
                 <span className="sr-only">Select perspective</span>
               </button>
-
+              
               {/* Role selector dropdown */}
               {isRoleMenuOpen && (
-                <div
+                <div 
                   role="listbox"
                   aria-label="Select perspective"
                   aria-activedescendant={`role-option-${selectedRole}`}
@@ -825,7 +825,7 @@ export function ChatContainer({ session }: ChatContainerProps) {
                 >
                   <div 
                     className={`px-3 py-2 text-xs font-medium ${
-                      theme === "dark" ? "text-gray-400" : "text-gray-600"
+                    theme === "dark" ? "text-gray-400" : "text-gray-600"
                     }`}
                     id="role-selector-label"
                   >
@@ -841,8 +841,8 @@ export function ChatContainer({ session }: ChatContainerProps) {
                       onClick={() => handleRoleSelect(role)}
                       className={`w-full px-4 py-2 text-left text-sm flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary/50 ${
                         selectedRole === role
-                          ? theme === "dark"
-                            ? "bg-dark-border/60 text-white"
+                          ? theme === "dark" 
+                            ? "bg-dark-border/60 text-white" 
                             : "bg-gray-100 text-gray-900"
                           : theme === "dark"
                             ? "text-gray-300 hover:bg-dark-border/40 hover:text-white"
@@ -865,7 +865,7 @@ export function ChatContainer({ session }: ChatContainerProps) {
                 </div>
               )}
             </div>
-
+            
             {/* Send/Stop button */}
             {isLoading ? (
               <button
@@ -883,23 +883,23 @@ export function ChatContainer({ session }: ChatContainerProps) {
                 <span className="sr-only">Stop generating</span>
               </button>
             ) : (
-              <button
-                type="submit"
+            <button
+              type="submit"
                 disabled={!input.trim()}
                 aria-label={input.trim() ? "Send message" : "Send message (disabled - type a message first)"}
                 aria-disabled={!input.trim()}
                 className={`p-1.5 rounded-full focus:outline-none focus:ring-2 focus:ring-primary/50 ${
                   !input.trim()
-                    ? theme === "dark" ? "text-gray-600 cursor-not-allowed" : "text-gray-300 cursor-not-allowed"
-                    : theme === "dark"
-                      ? "text-gray-400 hover:text-gray-200 hover:bg-dark-border/40"
-                      : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
-                }`}
+                  ? theme === "dark" ? "text-gray-600 cursor-not-allowed" : "text-gray-300 cursor-not-allowed"
+                  : theme === "dark"
+                    ? "text-gray-400 hover:text-gray-200 hover:bg-dark-border/40"
+                    : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+              }`}
                 title="Send message"
-              >
+            >
                 <Send className="w-4 h-4" aria-hidden="true" />
                 <span className="sr-only">Send message</span>
-              </button>
+            </button>
             )}
           </div>
         </form>

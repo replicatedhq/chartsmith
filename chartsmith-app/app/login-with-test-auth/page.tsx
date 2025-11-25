@@ -1,72 +1,42 @@
-"use client";
-
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { validateTestAuth } from "@/lib/auth/actions/test-auth";
-import { Loader2 } from "lucide-react";
-import { Card } from "@/components/ui/Card";
 
-export default function TestAuthPage() {
-  const router = useRouter();
-  const [publicEnv, setPublicEnv] = useState<Record<string, string>>({});
+export default async function TestAuthPage() {
+  // Check if test auth is enabled
+  if (process.env.NODE_ENV === 'production') {
+    redirect('/auth-error?error=test_auth_not_available_in_production');
+  }
 
-  useEffect(() => {
-    const fetchConfig = async () => {
-      try {
-        const res = await fetch("/api/config");
-        if (!res.ok) throw new Error("Failed to fetch config");
-        const data = await res.json();
-        setPublicEnv(data);
-      } catch (err) {
-        console.error("Failed to load public env config:", err);
-      }
-    };
+  if (process.env.NEXT_PUBLIC_ENABLE_TEST_AUTH !== 'true') {
+    redirect('/auth-error?error=test_auth_not_enabled');
+  }
 
-    fetchConfig();
-  }, []);
+  try {
+    // Generate JWT server-side
+    const jwt = await validateTestAuth();
 
-  useEffect(() => {
-    async function handleTestAuth() {
-      if (Object.keys(publicEnv).length === 0) {
-        return;
-      }
-      
-      if (publicEnv.NEXT_PUBLIC_ENABLE_TEST_AUTH !== 'true') {
-        router.push('/auth-error?error=test_auth_not_enabled');
-        return;
-      }
-
-      try {
-        const jwt = await validateTestAuth();
-        if (jwt) {
-          const expires = new Date();
-          expires.setDate(expires.getDate() + 7);
-          document.cookie = `session=${jwt}; expires=${expires.toUTCString()}; path=/; SameSite=Lax`;
-          window.location.href = '/';
-        } else {
-          console.error("Test auth returned null JWT");
-          router.push('/auth-error?error=test_auth_failed_null_jwt');
-        }
-      } catch (error) {
-        console.error("Test auth failed:", error);
-        router.push(`/auth-error?error=test_auth_exception&message=${encodeURIComponent(error?.toString() || "Unknown error")}`);
-      }
+    if (!jwt) {
+      redirect('/auth-error?error=test_auth_failed_null_jwt');
     }
 
-    handleTestAuth();
-  }, [router, publicEnv]);
+    // Set cookie server-side using Next.js cookies API
+    const cookieStore = await cookies();
+    const expires = new Date();
+    expires.setDate(expires.getDate() + 7); // 7 days from now
 
-  return (
-    <div className="container mx-auto flex items-center justify-center min-h-screen">
-      <Card className="w-full max-w-md p-6">
-        <div className="flex flex-col items-center justify-center space-y-4 text-center">
-          <div className="flex items-center space-x-2">
-            <Loader2 className="h-6 w-6 animate-spin" />
-            <h2 className="text-2xl font-bold">Logging you in</h2>
-          </div>
-          <p className="text-sm text-muted-foreground">Please wait while we complete test authentication...</p>
-        </div>
-      </Card>
-    </div>
-  );
+    cookieStore.set('session', jwt, {
+      expires,
+      path: '/',
+      sameSite: 'lax',
+      httpOnly: false, // Must be false so client-side hooks can read it
+      secure: process.env.NODE_ENV === 'production',
+    });
+
+    // Redirect to home page
+    redirect('/');
+  } catch (error) {
+    console.error("Test auth failed:", error);
+    redirect(`/auth-error?error=test_auth_exception&message=${encodeURIComponent((error as Error)?.toString() || "Unknown error")}`);
+  }
 } 

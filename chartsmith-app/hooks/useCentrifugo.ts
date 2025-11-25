@@ -497,6 +497,11 @@ export function useCentrifugo({
 
     // Move setupCentrifuge outside of the effect to avoid recreating on each render
     const setupCentrifuge = async () => {
+      // Wait for config to be loaded
+      if (!publicEnv.NEXT_PUBLIC_CENTRIFUGO_ADDRESS) {
+        return;
+      }
+
       // Prevent multiple connection attempts if already connecting
       if (centrifugeRef.current) {
         return;
@@ -604,7 +609,7 @@ export function useCentrifugo({
 
     setupCentrifuge();
     return () => cleanup?.();
-  }, [session?.user?.id, workspace?.id]); // Removed handleCentrifugoMessage from dependencies
+  }, [session?.user?.id, workspace?.id, publicEnv]); // Added publicEnv to dependencies
 
   return {
     handleCentrifugoMessage,

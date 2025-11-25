@@ -37,7 +37,13 @@ func handleConversionNormalizeValuesNotification(ctx context.Context, payload st
 
 	normalizedValuesYAML, err := llm.CleanUpConvertedValuesYAML(ctx, c.ValuesYAML)
 	if err != nil {
-		return fmt.Errorf("failed to clean up converted values.yaml: %w", err)
+		// If cleanup fails, log a warning but continue with the original values.yaml
+		// This prevents the entire conversion from failing due to a non-critical cleanup step
+		logger.Warn("Failed to clean up converted values.yaml, using original",
+			zap.String("conversionId", p.ConversionID),
+			zap.Error(err),
+		)
+		normalizedValuesYAML = c.ValuesYAML
 	}
 
 	if err := workspace.UpdateValuesYAMLForConversion(ctx, p.ConversionID, normalizedValuesYAML); err != nil {

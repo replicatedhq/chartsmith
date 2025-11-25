@@ -179,11 +179,8 @@ export function NewChartChatMessage({
                 <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">Conversion Progress:</div>
               </div>
             )}
-            {conversion ? (
+            {/* Always render ConversionProgress so it can handle loading and polling */}
               <ConversionProgress conversionId={message.responseConversionId} />
-            ) : (
-              <LoadingSpinner message="Loading conversion status..." />
-            )}
           </div>
         )}
 
@@ -212,11 +209,21 @@ export function NewChartChatMessage({
             <div className="flex-1">
               <div className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} text-[12px] pt-0.5 ${message.isCanceled ? "opacity-50" : ""}`}>{message.prompt}</div>
               {!message.isIntentComplete && !message.isCanceled && (
-                <div className="flex items-center gap-2 mt-2 border-t border-primary/20 pt-2">
-                  <div className="flex-shrink-0 animate-spin rounded-full h-3 w-3 border border-t-transparent border-primary"></div>
-                  <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>thinking...</div>
+                <div 
+                  className="flex items-center gap-2 mt-2 border-t border-primary/20 pt-2 message-sending"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <div 
+                    className="flex-shrink-0 animate-spin rounded-full h-3 w-3 border border-t-transparent border-primary"
+                    aria-hidden="true"
+                  />
+                  <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
+                    thinking...
+                  </div>
                   <button
-                    className={`ml-auto text-xs px-1.5 py-0.5 rounded border ${theme === "dark" ? "border-dark-border text-gray-400 hover:text-gray-200" : "border-gray-300 text-gray-500 hover:text-gray-700"} hover:bg-dark-border/40`}
+                    aria-label="Cancel message generation"
+                    className={`ml-auto text-xs px-1.5 py-0.5 rounded border focus:outline-none focus:ring-2 focus:ring-primary/50 ${theme === "dark" ? "border-dark-border text-gray-400 hover:text-gray-200" : "border-gray-300 text-gray-500 hover:text-gray-700"} hover:bg-dark-border/40`}
                     onClick={async (e) => {
                       e.preventDefault();
                       e.stopPropagation();

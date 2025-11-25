@@ -1,13 +1,14 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useAtom } from "jotai";
 import { FileSearch, FileCheck, Loader2, ArrowRight } from 'lucide-react';
 import { useTheme } from "../contexts/ThemeContext";
-import { conversionByIdAtom, conversionsAtom, handleConversionUpdatedAtom } from "@/atoms/workspace";
+import { conversionByIdAtom, conversionsAtom, handleConversionUpdatedAtom, selectedFileAtom, workspaceAtom } from "@/atoms/workspace";
 import { FileList } from './FileList';
 import type { ConversionStep, FileConversion } from "./conversion-types";
 import { getWorkspaceConversionAction } from "@/lib/workspace/actions/get-workspace-conversion";
+import { getWorkspaceAction } from "@/lib/workspace/actions/get-workspace";
 import { useSession } from "@/app/hooks/useSession";
 import { Conversion, ConversionStatus } from "@/lib/types/workspace";
 
@@ -112,9 +113,12 @@ export function ConversionProgress({ conversionId }: { conversionId: string }) {
   const [conversionGetter] = useAtom(conversionByIdAtom);
   const [conversions] = useAtom(conversionsAtom);
   const [, handleConversionUpdated] = useAtom(handleConversionUpdatedAtom);
+  const [workspace, setWorkspace] = useAtom(workspaceAtom);
+  const [, setSelectedFile] = useAtom(selectedFileAtom);
   const conversion = conversionGetter(conversionId);
   const [isLoading, setIsLoading] = useState(true);
   const [currentFileIndex] = useState(0);
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const [steps, setSteps] = useState<ConversionStep[]>([
     {
@@ -182,7 +186,46 @@ export function ConversionProgress({ conversionId }: { conversionId: string }) {
     }
 
     loadConversion();
-  }, [session, conversion, conversionId, handleConversionUpdated]);
+    
+    // Stop any existing polling
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+    
+    // Stop polling if conversion is already complete
+    if (conversion?.status === ConversionStatus.Complete) {
+      return;
+    }
+    
+    // Poll for updates if conversion is not complete (fallback if Centrifugo updates are missed)
+    // Poll even if conversion is null initially, until we get a complete status
+    pollIntervalRef.current = setInterval(async () => {
+      if (!session) return;
+      
+      try {
+        const result = await getWorkspaceConversionAction(session, conversionId);
+        handleConversionUpdated(result);
+        setIsLoading(false);
+        // Stop polling if conversion is complete
+        if (result.status === ConversionStatus.Complete) {
+          if (pollIntervalRef.current) {
+            clearInterval(pollIntervalRef.current);
+            pollIntervalRef.current = null;
+          }
+        }
+      } catch (error) {
+        console.error('Failed to poll conversion status:', error);
+      }
+    }, 2000); // Poll every 2 seconds for faster updates
+    
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+    };
+  }, [session, conversion, conversionId, handleConversionUpdated, conversionGetter]);
 
   // Add effect to update steps based on conversion status
   useEffect(() => {
@@ -247,8 +290,51 @@ export function ConversionProgress({ conversionId }: { conversionId: string }) {
     );
   }
 
-  const handleContinue = () => {
-    console.log('Continue clicked - implement next action');
+  const handleContinue = async () => {
+    console.log('Continue clicked');
+    
+    let currentWorkspace = workspace;
+    
+    // Refresh workspace if needed (e.g. to get new files)
+    if (session && (!currentWorkspace || !currentWorkspace.files || currentWorkspace.files.length === 0)) {
+      try {
+        console.log('Refreshing workspace...');
+        const refreshedWorkspace = await getWorkspaceAction(session, conversion.workspaceId);
+        if (refreshedWorkspace) {
+          setWorkspace(refreshedWorkspace);
+          currentWorkspace = refreshedWorkspace;
+        }
+      } catch (error) {
+        console.error('Failed to refresh workspace:', error);
+      }
+    }
+
+    // Combine loose files and chart files
+    const allFiles = [...(currentWorkspace.files || [])];
+    if (currentWorkspace.charts) {
+      currentWorkspace.charts.forEach(chart => {
+        if (chart.files) {
+          allFiles.push(...chart.files);
+        }
+      });
+    }
+
+    if (allFiles.length > 0) {
+      console.log('All files:', allFiles);
+      // Try to find Chart.yaml to select
+      const chartFile = allFiles.find(f => f.filePath.endsWith('Chart.yaml')) || 
+                        allFiles.find(f => f.filePath.endsWith('values.yaml')) ||
+                        allFiles[0];
+      
+      if (chartFile) {
+        console.log('Selecting file:', chartFile);
+        setSelectedFile(chartFile);
+      } else {
+        console.warn('No matching file found to select');
+      }
+    } else {
+      console.warn('No files found in workspace or charts');
+    }
   };
 
   return (
@@ -279,11 +365,15 @@ export function ConversionProgress({ conversionId }: { conversionId: string }) {
               conversion={conversion}
               isCurrent={index === currentStatusIndex}
               isPrevious={index < currentStatusIndex}
-              isFuture={false} // We no longer need this since future steps won't be rendered
+              isFuture={false}
             />
           );
         })}
       </div>
+      
+      {conversion.status === ConversionStatus.Complete && (
+        <ContinueButton onClick={handleContinue} />
+      )}
     </div>
   );
 }

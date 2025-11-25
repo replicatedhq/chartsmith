@@ -200,7 +200,8 @@ clusters:
 	}
 
 	// helm template with values
-	templateCmd := exec.Command(helmCmd, "template", "chartsmith", ".", "--include-crds", "--values", "/dev/stdin")
+	// Use a modern Kubernetes version to satisfy kubeVersion constraints in charts
+	templateCmd := exec.Command(helmCmd, "template", "chartsmith", ".", "--include-crds", "--kube-version", "1.30.0", "--values", "/dev/stdin")
 	templateCmd.Env = []string{"KUBECONFIG=" + fakeKubeconfigPath}
 	templateCmd.Dir = workingDir
 
