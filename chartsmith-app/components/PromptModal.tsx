@@ -33,7 +33,7 @@ export function PromptModal({ isOpen, onClose }: PromptModalProps) {
         const data = await res.json();
         setPublicEnv(data);
       } catch (err) {
-        console.error("Failed to load public env config:", err);
+        logger.error("Failed to load public env config", { error: err });
       }
     };
 

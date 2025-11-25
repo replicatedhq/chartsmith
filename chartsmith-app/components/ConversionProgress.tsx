@@ -11,6 +11,7 @@ import { getWorkspaceConversionAction } from "@/lib/workspace/actions/get-worksp
 import { getWorkspaceAction } from "@/lib/workspace/actions/get-workspace";
 import { useSession } from "@/app/hooks/useSession";
 import { Conversion, ConversionStatus } from "@/lib/types/workspace";
+import { logger } from "@/lib/utils/logger";
 
 // Placeholder components - to be implemented later
 const Header = () => (
@@ -177,7 +178,7 @@ export function ConversionProgress({ conversionId }: { conversionId: string }) {
           handleConversionUpdated(result);
           setIsLoading(false);
         } catch (error) {
-          console.error('Failed to load conversion:', error);
+          logger.error('Failed to load conversion', { error });
           setIsLoading(false);
         }
       } else {
@@ -215,7 +216,7 @@ export function ConversionProgress({ conversionId }: { conversionId: string }) {
           }
         }
       } catch (error) {
-        console.error('Failed to poll conversion status:', error);
+        logger.error('Failed to poll conversion status', { error });
       }
     }, 2000); // Poll every 2 seconds for faster updates
     
@@ -291,27 +292,27 @@ export function ConversionProgress({ conversionId }: { conversionId: string }) {
   }
 
   const handleContinue = async () => {
-    console.log('Continue clicked');
+    logger.debug('Continue clicked');
     
     let currentWorkspace = workspace;
     
     // Refresh workspace if needed (e.g. to get new files)
     if (session && (!currentWorkspace || !currentWorkspace.files || currentWorkspace.files.length === 0)) {
       try {
-        console.log('Refreshing workspace...');
+        logger.debug('Refreshing workspace...');
         const refreshedWorkspace = await getWorkspaceAction(session, conversion.workspaceId);
         if (refreshedWorkspace) {
           setWorkspace(refreshedWorkspace);
           currentWorkspace = refreshedWorkspace;
         }
       } catch (error) {
-        console.error('Failed to refresh workspace:', error);
+        logger.error('Failed to refresh workspace', { error });
       }
     }
 
     // Combine loose files and chart files
-    const allFiles = [...(currentWorkspace.files || [])];
-    if (currentWorkspace.charts) {
+    const allFiles = [...(currentWorkspace?.files || [])];
+    if (currentWorkspace?.charts) {
       currentWorkspace.charts.forEach(chart => {
         if (chart.files) {
           allFiles.push(...chart.files);
@@ -320,20 +321,20 @@ export function ConversionProgress({ conversionId }: { conversionId: string }) {
     }
 
     if (allFiles.length > 0) {
-      console.log('All files:', allFiles);
+      logger.debug('All files', { count: allFiles.length });
       // Try to find Chart.yaml to select
       const chartFile = allFiles.find(f => f.filePath.endsWith('Chart.yaml')) || 
                         allFiles.find(f => f.filePath.endsWith('values.yaml')) ||
                         allFiles[0];
       
       if (chartFile) {
-        console.log('Selecting file:', chartFile);
+        logger.debug('Selecting file', { path: chartFile.filePath });
         setSelectedFile(chartFile);
       } else {
-        console.warn('No matching file found to select');
+        logger.warn('No matching file found to select');
       }
     } else {
-      console.warn('No files found in workspace or charts');
+      logger.warn('No files found in workspace or charts');
     }
   };
 

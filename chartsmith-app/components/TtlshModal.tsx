@@ -6,6 +6,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { useSession } from "@/app/hooks/useSession";
 import { publishToTtlshAction } from "@/lib/workspace/actions/publish-to-ttlsh";
 import { getPublishStatusAction, PublishStatus } from "@/lib/workspace/actions/get-publish-status";
+import { logger } from "@/lib/utils/logger";
 
 interface TtlshModalProps {
   isOpen: boolean;
@@ -23,6 +24,68 @@ export function TtlshModal({ isOpen, onClose }: TtlshModalProps) {
   const [workspaceId, setWorkspaceId] = useState("");
   const [statusPollingInterval, setStatusPollingInterval] = useState<NodeJS.Timeout | null>(null);
 
+  // Poll for status updates - defined first since checkExistingPublish depends on it
+  const startStatusPolling = useCallback((wsId: string) => {
+    // Use functional update to avoid stale closure
+    setStatusPollingInterval(prev => {
+      if (prev) {
+        clearInterval(prev);
+      }
+      
+      const interval = setInterval(async () => {
+        if (!session) return;
+
+        try {
+          const status = await getPublishStatusAction(session, wsId);
+
+          if (status) {
+            setPublishStatus(status);
+
+            if (status.status === "completed") {
+              setIsPublished(true);
+              setIsPublishing(false);
+              clearInterval(interval);
+              setStatusPollingInterval(null);
+            } else if (status.status === "failed") {
+              setIsPublishing(false);
+              setError(status.error || "Publishing failed");
+              clearInterval(interval);
+              setStatusPollingInterval(null);
+            }
+          }
+        } catch (err) {
+          logger.error("Error polling publish status", { error: err });
+        }
+      }, 2000); // Poll every 2 seconds
+
+      return interval;
+    });
+  }, [session]);
+
+  // Check if there's an existing publish for this workspace
+  const checkExistingPublish = useCallback(async (wsId: string) => {
+    if (!session) return;
+
+    try {
+      const status = await getPublishStatusAction(session, wsId);
+
+      if (status) {
+        setPublishStatus(status);
+
+        if (status.status === "completed") {
+          setIsPublished(true);
+        } else if (status.status === "pending" || status.status === "processing") {
+          setIsPublishing(true);
+          startStatusPolling(wsId);
+        } else if (status.status === "failed") {
+          setError(status.error || "Publishing failed");
+        }
+      }
+    } catch (err) {
+      logger.error("Error checking publish status", { error: err });
+    }
+  }, [session, startStatusPolling]);
+
   // Reset state when modal is opened/closed
   useEffect(() => {
     if (isOpen) {
@@ -38,14 +101,18 @@ export function TtlshModal({ isOpen, onClose }: TtlshModalProps) {
         setWorkspaceId(match[1]);
         checkExistingPublish(match[1]);
       }
-    } else {
-      // Clear polling interval when modal closes
-      if (statusPollingInterval) {
-        clearInterval(statusPollingInterval);
-        setStatusPollingInterval(null);
-      }
     }
-  }, [isOpen]);
+    
+    // Cleanup function to clear polling when modal closes or component unmounts
+    return () => {
+      setStatusPollingInterval(prev => {
+        if (prev) {
+          clearInterval(prev);
+        }
+        return null;
+      });
+    };
+  }, [isOpen, checkExistingPublish]);
 
   // Cleanup interval on unmount
   useEffect(() => {
@@ -55,69 +122,6 @@ export function TtlshModal({ isOpen, onClose }: TtlshModalProps) {
       }
     };
   }, [statusPollingInterval]);
-
-  // Check if there's an existing publish for this workspace
-  const checkExistingPublish = useCallback(async (wsId: string) => {
-    if (!session) return;
-
-    try {
-      const status = await getPublishStatusAction(session, wsId);
-
-      if (status) {
-        setPublishStatus(status);
-
-        // No need to update repoUrl anymore as we're using a fixed ttl.sh URL
-
-        if (status.status === "completed") {
-          setIsPublished(true);
-        } else if (status.status === "pending" || status.status === "processing") {
-          setIsPublishing(true);
-          startStatusPolling(wsId);
-        } else if (status.status === "failed") {
-          setError(status.error || "Publishing failed");
-        }
-      }
-    } catch (err) {
-      console.error("Error checking publish status:", err);
-    }
-  }, [session]);
-
-  // Poll for status updates
-  const startStatusPolling = (wsId: string) => {
-    if (statusPollingInterval) {
-      clearInterval(statusPollingInterval);
-    }
-
-    const interval = setInterval(async () => {
-      if (!session) return;
-
-      try {
-        const status = await getPublishStatusAction(session, wsId);
-
-        if (status) {
-          setPublishStatus(status);
-
-          // No need to update repoUrl anymore as we're using a fixed ttl.sh URL
-
-          if (status.status === "completed") {
-            setIsPublished(true);
-            setIsPublishing(false);
-            clearInterval(interval);
-            setStatusPollingInterval(null);
-          } else if (status.status === "failed") {
-            setIsPublishing(false);
-            setError(status.error || "Publishing failed");
-            clearInterval(interval);
-            setStatusPollingInterval(null);
-          }
-        }
-      } catch (err) {
-        console.error("Error polling publish status:", err);
-      }
-    }, 2000); // Poll every 2 seconds
-
-    setStatusPollingInterval(interval);
-  };
 
   if (!isOpen) return null;
 
@@ -142,7 +146,7 @@ export function TtlshModal({ isOpen, onClose }: TtlshModalProps) {
       }
     } catch (err) {
       setError("An unexpected error occurred. Please try again.");
-      console.error("Error publishing to ttl.sh:", err);
+      logger.error("Error publishing to ttl.sh", { error: err });
       setIsPublishing(false);
     }
   };

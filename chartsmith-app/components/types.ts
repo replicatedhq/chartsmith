@@ -159,13 +159,6 @@ export interface RawArtifact {
   contentPending?: string;
 }
 
-// Interface for raw message from server before normalization
-export interface RawMessage {
-  id: string;
-  prompt: string;
-  response?: string;
-}
-
 export interface RawPlan {
   id: string;
   description: string;

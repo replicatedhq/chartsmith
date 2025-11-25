@@ -96,7 +96,7 @@ const DeleteConfirmModal = memo(function DeleteConfirmModal({
               Delete Conversation
             </h3>
             <p className={`mt-1 text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
-              Are you sure you want to delete "{title}"? This action cannot be undone.
+              Are you sure you want to delete &quot;{title}&quot;? This action cannot be undone.
             </p>
           </div>
         </div>

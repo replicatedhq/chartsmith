@@ -7,6 +7,7 @@ import debounce from "lodash/debounce";
 import { useSession } from "@/app/hooks/useSession";
 import { useRouter } from "next/navigation";
 import { createWorkspaceFromUrlAction } from "@/lib/workspace/actions/create-workspace-from-url";
+import { logger } from "@/lib/utils/logger";
 
 interface ArtifactHubSearchModalProps {
   isOpen: boolean;
@@ -35,7 +36,7 @@ export function ArtifactHubSearchModal({ isOpen, onClose }: ArtifactHubSearchMod
       const searchResults = await searchArtifactHubAction(query);
       setResults(searchResults);
     } catch (error) {
-      console.error('Search failed:', error);
+      logger.error('Search failed', { error });
     } finally {
       setIsSearching(false);
     }
@@ -80,7 +81,7 @@ export function ArtifactHubSearchModal({ isOpen, onClose }: ArtifactHubSearchMod
       const workspace = await createWorkspaceFromUrlAction(session, url);
       router.push(`/workspace/${workspace.id}`);
     } catch (error) {
-      console.error('Failed to create workspace:', error);
+      logger.error('Failed to create workspace', { error });
       setIsImporting(false);
     }
   };

@@ -6,6 +6,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { Session } from "@/lib/types/session";
 import { rollbackWorkspaceAction } from "@/lib/workspace/actions/rollback";
 import { getWorkspaceMessagesAction } from "@/lib/workspace/actions/get-workspace-messages";
+import { logger } from "@/lib/utils/logger";
 
 interface RollbackModalProps {
   isOpen: boolean;
@@ -70,7 +71,7 @@ export function RollbackModal({
         onClose();
       }, 500);
     } catch (error) {
-      console.error("Error during rollback:", error);
+      logger.error("Error during rollback", { error });
     }
   }, [session, workspaceId, revisionNumber, onSuccess, onClose]);
 

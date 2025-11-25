@@ -1,7 +1,9 @@
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { validateTestAuth } from "@/lib/auth/actions/test-auth";
 
+/**
+ * Test auth page - redirects to the API route handler which can properly set cookies.
+ * In Next.js 15, Server Components cannot set cookies directly, so we delegate to a Route Handler.
+ */
 export default async function TestAuthPage() {
   // Check if test auth is enabled
   if (process.env.NODE_ENV === 'production') {
@@ -12,31 +14,6 @@ export default async function TestAuthPage() {
     redirect('/auth-error?error=test_auth_not_enabled');
   }
 
-  try {
-    // Generate JWT server-side
-    const jwt = await validateTestAuth();
-
-    if (!jwt) {
-      redirect('/auth-error?error=test_auth_failed_null_jwt');
-    }
-
-    // Set cookie server-side using Next.js cookies API
-    const cookieStore = await cookies();
-    const expires = new Date();
-    expires.setDate(expires.getDate() + 7); // 7 days from now
-
-    cookieStore.set('session', jwt, {
-      expires,
-      path: '/',
-      sameSite: 'lax',
-      httpOnly: false, // Must be false so client-side hooks can read it
-      secure: process.env.NODE_ENV === 'production',
-    });
-
-    // Redirect to home page
-    redirect('/');
-  } catch (error) {
-    console.error("Test auth failed:", error);
-    redirect(`/auth-error?error=test_auth_exception&message=${encodeURIComponent((error as Error)?.toString() || "Unknown error")}`);
-  }
+  // Redirect to API route which can set cookies in Next.js 15
+  redirect('/api/test-auth');
 } 

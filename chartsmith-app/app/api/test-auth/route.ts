@@ -6,9 +6,11 @@ import { upsertUser } from '@/lib/auth/user';
 import { getDB } from '@/lib/data/db';
 import { getParam } from '@/lib/data/param';
 
+import { logger } from "@/lib/utils/logger";
+
 export async function GET() {
   // Check if test auth is enabled
-  if (process.env.NODE_ENV === 'production') {
+  if ((process.env.NODE_ENV as string) === 'production') {
     return NextResponse.redirect(new URL('/auth-error?error=test_auth_not_available_in_production', process.env.NEXT_PUBLIC_API_ENDPOINT || 'http://localhost:3000'));
   }
 
@@ -79,12 +81,12 @@ export async function GET() {
       path: '/',
       sameSite: 'lax',
       httpOnly: false,
-      secure: process.env.NODE_ENV === 'production',
+      secure: (process.env.NODE_ENV as string) === 'production',
     });
 
     return response;
   } catch (error) {
-    console.error("Test auth failed:", error);
+    logger.error("Test auth failed", { error });
     return NextResponse.redirect(
       new URL(`/auth-error?error=test_auth_exception&message=${encodeURIComponent((error as Error)?.toString() || "Unknown error")}`,
       process.env.NEXT_PUBLIC_API_ENDPOINT || 'http://localhost:3000')

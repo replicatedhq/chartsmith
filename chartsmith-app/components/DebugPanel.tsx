@@ -13,7 +13,6 @@ export function DebugPanel({ isVisible }: DebugPanelProps) {
 
   if (!isVisible) return null;
 
-  console.log("selectedFile", selectedFile);
   return (
     <div
       className={`fixed right-0 top-0 bottom-0 w-1/4 border-l shadow-lg overflow-auto z-10 ${

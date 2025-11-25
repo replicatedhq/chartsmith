@@ -41,8 +41,8 @@
  */
 
 "use client";
-import React, { useState, useRef, useEffect, useMemo, useCallback, memo } from "react";
-import { Send, Loader2, Users, Code, User, Sparkles, Square, AlertCircle, RefreshCw, Clock } from "lucide-react";
+import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { Send, Code, User, Sparkles, Square } from "lucide-react";
 import { useTheme } from "../contexts/ThemeContext";
 import { Session } from "@/lib/types/session";
 import { ChatMessage } from "./ChatMessage";
@@ -53,254 +53,8 @@ import { NewChartContent } from "./NewChartContent";
 import { useStreamingChat } from '@/hooks/useStreamingChat';
 import { Message } from "./types";
 import { ConversationManager } from "./ConversationManager";
-
-/**
- * Animated typing indicator with three bouncing dots.
- * Memoized to prevent unnecessary re-renders during streaming.
- */
-const TypingIndicator = memo(function TypingIndicator({ theme }: { theme: string }) {
-  return (
-    <div className="flex items-center gap-1.5" role="status" aria-label="ChartSmith is typing">
-      <span 
-        className={`w-2 h-2 rounded-full animate-bounce ${
-          theme === 'dark' ? 'bg-primary/70' : 'bg-primary/60'
-        }`} 
-        style={{ animationDelay: '0ms', animationDuration: '600ms' }} 
-      />
-      <span 
-        className={`w-2 h-2 rounded-full animate-bounce ${
-          theme === 'dark' ? 'bg-primary/70' : 'bg-primary/60'
-        }`} 
-        style={{ animationDelay: '150ms', animationDuration: '600ms' }} 
-      />
-      <span 
-        className={`w-2 h-2 rounded-full animate-bounce ${
-          theme === 'dark' ? 'bg-primary/70' : 'bg-primary/60'
-        }`} 
-        style={{ animationDelay: '300ms', animationDuration: '600ms' }} 
-      />
-    </div>
-  );
-});
-
-/**
- * Loading state component shown during AI response generation.
- * Memoized to prevent unnecessary re-renders.
- * 
- * Accessibility:
- * - role="status" announces to screen readers
- * - aria-live="polite" for non-intrusive announcements
- * - Clear visual and text indicators
- */
-const LoadingState = memo(function LoadingState({ 
-  theme, 
-  isLongRunning,
-  onStop 
-}: { 
-  theme: string; 
-  isLongRunning: boolean;
-  onStop: () => void;
-}) {
-  return (
-    <div 
-      className={`mx-2 my-2 p-3 rounded-lg ${
-        theme === 'dark' ? 'bg-dark-border/30' : 'bg-gray-50'
-      }`}
-      role="status"
-      aria-live="polite"
-      aria-label={isLongRunning ? "ChartSmith is thinking, taking longer than expected" : "ChartSmith is thinking"}
-    >
-      <div className="flex items-center gap-3">
-        <div 
-          className={`p-2 rounded-full ${
-            theme === 'dark' ? 'bg-primary/20' : 'bg-primary/10'
-          }`}
-          aria-hidden="true"
-        >
-          <TypingIndicator theme={theme} />
-        </div>
-        <div className="flex-1">
-          <span className={`text-sm font-medium ${
-            theme === 'dark' ? 'text-gray-200' : 'text-gray-700'
-          }`}>
-            ChartSmith is thinking...
-          </span>
-          {isLongRunning && (
-            <div 
-              className={`flex items-center gap-1.5 mt-1 text-xs ${
-                theme === 'dark' ? 'text-amber-400' : 'text-amber-600'
-              }`}
-              role="alert"
-            >
-              <Clock className="w-3 h-3" aria-hidden="true" />
-              <span>This is taking longer than expected...</span>
-            </div>
-          )}
-        </div>
-        <button
-          onClick={onStop}
-          aria-label="Stop generating response"
-          className={`px-3 py-1.5 text-xs rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-red-500/50 ${
-            theme === 'dark'
-              ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30 hover:text-red-300'
-              : 'bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700'
-          }`}
-          title="Stop generating"
-        >
-          <span className="flex items-center gap-1.5">
-            <Square className="w-3 h-3 fill-current" aria-hidden="true" />
-            Stop
-          </span>
-        </button>
-      </div>
-    </div>
-  );
-});
-
-/**
- * Get user-friendly error message based on error type.
- */
-function getErrorMessage(error: Error): { title: string; description: string; canRetry: boolean } {
-  const message = error.message.toLowerCase();
-  
-  if (message.includes('rate limit') || message.includes('429')) {
-    return {
-      title: 'Rate limit exceeded',
-      description: 'Too many requests. Please wait a moment before trying again.',
-      canRetry: true,
-    };
-  }
-  
-  if (message.includes('network') || message.includes('fetch') || message.includes('failed to fetch')) {
-    return {
-      title: 'Connection error',
-      description: 'Unable to connect to the server. Please check your internet connection.',
-      canRetry: true,
-    };
-  }
-  
-  if (message.includes('timeout') || message.includes('504')) {
-    return {
-      title: 'Request timeout',
-      description: 'The request took too long to complete. Please try again.',
-      canRetry: true,
-    };
-  }
-  
-  if (message.includes('401') || message.includes('unauthorized')) {
-    return {
-      title: 'Authentication error',
-      description: 'Your session may have expired. Please refresh the page.',
-      canRetry: false,
-    };
-  }
-  
-  if (message.includes('500') || message.includes('server error')) {
-    return {
-      title: 'Server error',
-      description: 'Something went wrong on our end. Please try again later.',
-      canRetry: true,
-    };
-  }
-  
-  return {
-    title: 'Something went wrong',
-    description: error.message || 'An unexpected error occurred.',
-    canRetry: true,
-  };
-}
-
-/**
- * Error state component with retry functionality.
- * Memoized to prevent unnecessary re-renders.
- * 
- * Accessibility:
- * - role="alert" for immediate announcement
- * - aria-live="assertive" for urgent errors
- * - Proper heading hierarchy
- * - Focus management for interactive elements
- */
-const ErrorState = memo(function ErrorState({ 
-  error, 
-  theme, 
-  onRetry,
-  onDismiss 
-}: { 
-  error: Error; 
-  theme: string; 
-  onRetry?: () => void;
-  onDismiss: () => void;
-}) {
-  const { title, description, canRetry } = getErrorMessage(error);
-  
-  return (
-    <div 
-      className={`mx-2 my-2 p-4 rounded-lg border ${
-        theme === 'dark' 
-          ? 'bg-red-950/30 border-red-900/50' 
-          : 'bg-red-50 border-red-200'
-      }`}
-      role="alert"
-      aria-live="assertive"
-      aria-describedby="error-description"
-    >
-      <div className="flex items-start gap-3">
-        <div 
-          className={`p-2 rounded-full flex-shrink-0 ${
-            theme === 'dark' ? 'bg-red-900/50' : 'bg-red-100'
-          }`}
-          aria-hidden="true"
-        >
-          <AlertCircle className={`w-4 h-4 ${
-            theme === 'dark' ? 'text-red-400' : 'text-red-600'
-          }`} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <h4 className={`text-sm font-medium ${
-            theme === 'dark' ? 'text-red-300' : 'text-red-800'
-          }`}>
-            {title}
-          </h4>
-          <p 
-            id="error-description"
-            className={`mt-1 text-xs ${
-              theme === 'dark' ? 'text-red-400/80' : 'text-red-600'
-            }`}
-          >
-            {description}
-          </p>
-          <div className="flex items-center gap-2 mt-3" role="group" aria-label="Error actions">
-            {canRetry && onRetry && (
-              <button
-                onClick={onRetry}
-                aria-label="Try again"
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-red-500/50 ${
-                  theme === 'dark'
-                    ? 'bg-red-900/50 text-red-300 hover:bg-red-900/70 hover:text-red-200'
-                    : 'bg-red-100 text-red-700 hover:bg-red-200 hover:text-red-800'
-                }`}
-              >
-                <RefreshCw className="w-3 h-3" aria-hidden="true" />
-                Try again
-              </button>
-            )}
-            <button
-              onClick={onDismiss}
-              aria-label="Dismiss error"
-              className={`px-3 py-1.5 text-xs rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500/50 ${
-                theme === 'dark'
-                  ? 'text-gray-400 hover:text-gray-300 hover:bg-dark-border/40'
-                  : 'text-gray-600 hover:text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              Dismiss
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-});
+import { logger } from "@/lib/utils/logger";
+import { ChatLoadingState, ChatErrorState } from "./chat";
 
 /**
  * Chart context structure sent to the API.
@@ -392,7 +146,7 @@ export function ChatContainer({ session }: ChatContainerProps) {
       looseFiles: looseFilesContext,
     },
     onError: (err) => {
-      console.error("Chat error:", err);
+      logger.error("Chat error", { error: err });
     }
   });
 
@@ -741,18 +495,18 @@ export function ChatContainer({ session }: ChatContainerProps) {
             {/* Loading state with aria-busy */}
             <div aria-busy={isLoading} aria-live="polite">
               {isLoading && (
-                <LoadingState 
-                  theme={theme} 
+                <ChatLoadingState
+                  theme={theme}
                   isLongRunning={isLongRunning}
                   onStop={stop}
                 />
               )}
               </div>
-            
+
             {/* Error state */}
             {error && showError && (
-              <ErrorState 
-                error={error} 
+              <ChatErrorState
+                error={error}
                 theme={theme}
                 onRetry={handleErrorRetry}
                 onDismiss={handleErrorDismiss}

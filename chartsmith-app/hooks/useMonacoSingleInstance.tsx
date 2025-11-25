@@ -3,6 +3,7 @@
 import React, { useRef, useEffect } from "react";
 import type { editor } from "monaco-editor";
 import type { WorkspaceFile } from "@/lib/types/workspace";
+import { logger } from "@/lib/utils/logger";
 
 // Global registry for Monaco models
 declare global {
@@ -115,9 +116,9 @@ export function parseDiff(originalContent: string, diffContent: string): string 
     }
 
     return lines.join('\n');
-  } catch (error) {
+  } catch {
     // If the simple approach fails, try the more complex structured diff parsing
-    console.warn("Simple content-based diff failed, falling back to structured parsing:", error);
+    logger.debug("Simple content-based diff failed, falling back to structured parsing");
   }
 
   // Fallback to the structured diff approach
@@ -231,7 +232,7 @@ export function parseDiff(originalContent: string, diffContent: string): string 
               if (modifiedLines[k] === lineToRemove) {
                 position = k;
                 foundRemovalLine = true;
-                console.log(`Found line to remove "${lineToRemove}" at position ${k} (far from expected position ${newStart})`);
+                logger.debug(`Found line to remove at position ${k} (far from expected position ${newStart})`);
                 break;
               }
             }
@@ -257,7 +258,7 @@ export function parseDiff(originalContent: string, diffContent: string): string 
               }
 
               if (!found) {
-                console.warn("Could not find context line or line to remove - patch may be misapplied");
+                logger.debug("Could not find context line or line to remove - patch may be misapplied");
                 // We'll still attempt to use the position from the patch
               }
             }
@@ -270,7 +271,7 @@ export function parseDiff(originalContent: string, diffContent: string): string 
           } else {
             // No match found or multiple lines to remove - try to keep going
             // In this case we'll use the patch location even though we couldn't verify it
-            console.warn("Line to remove doesn't match expected content - patch may be misapplied");
+            logger.debug("Line to remove doesn't match expected content - patch may be misapplied");
             modifiedLines.splice(position, linesToRemove);
           }
         }
@@ -320,14 +321,14 @@ export function parseDiff(originalContent: string, diffContent: string): string 
                   if (modifiedLines[k] === firstContextLine) {
                     position = k + 1; // Insert after the first context line
                     found = true;
-                    console.log(`Found context line "${firstContextLine}" at position ${k} (far from expected position ${newStart})`);
+                    logger.debug(`Found context line at position ${k} (far from expected position ${newStart})`);
                     break;
                   }
                 }
               }
 
               if (!found) {
-                console.warn("Could not find context line - patch may be misapplied");
+                logger.debug("Could not find context line - patch may be misapplied");
               }
             }
             // If context appears before additions, add after the context
@@ -346,7 +347,7 @@ export function parseDiff(originalContent: string, diffContent: string): string 
               }
 
               if (!found) {
-                console.warn("Could not find context line - patch may be misapplied");
+                logger.debug("Could not find context line - patch may be misapplied");
               }
             }
             // If context appears after additions, add before the context
@@ -365,7 +366,7 @@ export function parseDiff(originalContent: string, diffContent: string): string 
               }
 
               if (!found) {
-                console.warn("Could not find context line - patch may be misapplied");
+                logger.debug("Could not find context line - patch may be misapplied");
               }
             }
           }
@@ -424,7 +425,7 @@ export function parseDiff(originalContent: string, diffContent: string): string 
               }
 
               if (!found) {
-                console.warn("Could not find context line or line to replace - patch may be misapplied");
+                logger.debug("Could not find context line or line to replace - patch may be misapplied");
               }
             }
           }
@@ -442,8 +443,8 @@ export function parseDiff(originalContent: string, diffContent: string): string 
               if (modifiedLines[position] === firstLineToRemove) {
                 safeToReplace = true;
               } else {
-                // If we can't match the first line exactly, log a warning but continue
-                console.warn("First line to replace doesn't match - patch may be misapplied");
+                // If we can't match the first line exactly, continue anyway
+                logger.debug("First line to replace doesn't match - patch may be misapplied");
               }
             }
           }
@@ -457,7 +458,7 @@ export function parseDiff(originalContent: string, diffContent: string): string 
             modifiedLines.splice(position, linesToRemove, ...addedLines);
           } else {
             // No exact match found - just try our best by using the line number from the patch
-            console.warn("Could not safely match lines to replace - using patch line number");
+            logger.debug("Could not safely match lines to replace - using patch line number");
             modifiedLines.splice(position, linesToRemove, ...addedLines);
           }
         }
@@ -465,8 +466,8 @@ export function parseDiff(originalContent: string, diffContent: string): string 
 
       return modifiedLines.join('\n');
     }
-  } catch (diffError) {
-    console.warn("Error applying structured diff, falling back to simpler approach:", diffError);
+  } catch {
+    logger.debug("Error applying structured diff, falling back to simpler approach");
   }
 
   // For new files (empty original content), extract only the added lines
@@ -522,8 +523,8 @@ export function parseDiff(originalContent: string, diffContent: string): string 
       }
 
       return contentLines.join('\n');
-    } catch (error) {
-      console.warn("Error applying removal diff:", error);
+    } catch {
+      logger.debug("Error applying removal diff");
     }
   }
 
@@ -626,8 +627,8 @@ export function parseDiff(originalContent: string, diffContent: string): string 
       }
 
       return contentLines.join('\n');
-    } catch (error) {
-      console.warn("Error applying addition diff:", error);
+    } catch {
+      logger.debug("Error applying addition diff");
     }
   }
 
@@ -704,8 +705,8 @@ export function parseDiff(originalContent: string, diffContent: string): string 
 
     // Ultimate fallback
     return originalContent;
-  } catch (error) {
-    console.error("Error parsing diff:", error);
+  } catch {
+    logger.debug("Error parsing diff");
     return originalContent;
   }
 }
@@ -760,8 +761,8 @@ export function getLanguage(filePath: string): string {
 // Custom hook for Monaco Editor with single instance approach
 export function useMonacoSingleInstance(
   selectedFile: WorkspaceFile | null,
-  editorRef: React.RefObject<editor.IStandaloneCodeEditor>,
-  monacoRef: React.RefObject<typeof import("monaco-editor")>,
+  editorRef: React.RefObject<editor.IStandaloneCodeEditor | null>,
+  monacoRef: React.RefObject<typeof import("monaco-editor") | null>,
 ) {
   // Track if we're in diff mode
   const [inDiffMode, setInDiffMode] = React.useState(false);
@@ -795,7 +796,7 @@ export function useMonacoSingleInstance(
 
     // Check if editor is available - might not be available during transitions
     if (!editorRef.current) {
-      console.log("Editor reference not available, skipping model update");
+      logger.debug("Editor reference not available, skipping model update");
       return;
     }
 
@@ -821,8 +822,8 @@ export function useMonacoSingleInstance(
             if (window.__monacoModels) {
               window.__monacoModels[fileKey] = model;
             }
-          } catch (modelError) {
-            console.warn("Error creating model:", modelError);
+          } catch {
+            logger.debug("Error creating model");
           }
         } else {
           // Update existing model if content changed
@@ -830,8 +831,8 @@ export function useMonacoSingleInstance(
             if (model.getValue() !== selectedFile.content) {
               model.setValue(selectedFile.content || '');
             }
-          } catch (updateError) {
-            console.warn("Error updating model value:", updateError);
+          } catch {
+            logger.debug("Error updating model value");
           }
         }
 
@@ -839,12 +840,12 @@ export function useMonacoSingleInstance(
         if (model && !model.isDisposed() && editor) {
           try {
             editor.setModel(model);
-          } catch (setModelError) {
-            console.warn("Error setting model on editor:", setModelError);
+          } catch {
+            logger.debug("Error setting model on editor");
           }
         }
-      } catch (error) {
-        console.warn("Error in Monaco model management:", error);
+      } catch {
+        logger.debug("Error in Monaco model management");
         // Just log errors, don't try to manipulate references
       }
     }
@@ -911,8 +912,8 @@ export function useMonacoSingleInstance(
                   delete window.__monacoModels[key];
                 }
               }
-            } catch (e) {
-              console.warn("Error checking model usage:", e);
+            } catch {
+              logger.debug("Error checking model usage");
             }
           }
         });
