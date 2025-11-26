@@ -75,7 +75,6 @@ export function SettingsModal({ isOpen, onClose, session }: SettingsModalProps) 
 
   const handleReplicatedConnect = () => {
     if (!publicEnv.NEXT_PUBLIC_REPLICATED_REDIRECT_URI) {
-      console.log(`Failed to get Replicated redirect URI`);
       return;
     }
 

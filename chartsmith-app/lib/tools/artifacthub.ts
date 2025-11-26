@@ -54,8 +54,6 @@ export async function fetchLatestSubchartVersion(
       url.searchParams.append('kind', '0'); // Helm chart type
       url.searchParams.append('name', chartName.trim());
 
-      console.log(`[ArtifactHub] Searching for: ${chartName}`);
-
       const response = await fetch(url.toString(), {
         method: 'GET',
         headers: {
@@ -80,9 +78,6 @@ export async function fetchLatestSubchartVersion(
       );
 
       if (exactMatch && exactMatch.version) {
-        console.log(
-          `[ArtifactHub] Found ${chartName} version ${exactMatch.version}`
-        );
         return exactMatch.version;
       }
 

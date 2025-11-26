@@ -157,8 +157,6 @@ export function getModel(): LanguageModel {
     );
   }
   
-  console.log(`[AI Provider] Using ${provider} with model ${modelName}`);
-  
   switch (provider) {
     case 'openai':
       return openai(modelName);

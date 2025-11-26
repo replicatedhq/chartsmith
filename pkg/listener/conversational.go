@@ -54,7 +54,7 @@ func handleConverationalNotification(ctx context.Context, payload string) error 
 	doneCh := make(chan error, 1)
 	go func() {
 		if err := llm.ConversationalChatMessage(ctx, streamCh, doneCh, w, chatMessage); err != nil {
-			fmt.Printf("Failed to create conversational chat message: %v\n", err)
+			logger.Error("Failed to create conversational chat message", zap.Error(err))
 			doneCh <- fmt.Errorf("error creating conversational chat message: %w", err)
 		}
 	}()

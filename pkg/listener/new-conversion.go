@@ -178,7 +178,6 @@ func extractGVKAndName(content string) (string, string) {
 	var resource k8sResource
 	if err := yaml.Unmarshal([]byte(content), &resource); err != nil {
 		// If parsing fails, return empty strings
-		fmt.Printf("Failed to parse YAML content: %v\n", err)
 		logger.Debug("Failed to parse YAML content", zap.Error(err))
 		return "", ""
 	}

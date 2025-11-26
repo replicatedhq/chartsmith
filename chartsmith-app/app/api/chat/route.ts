@@ -182,7 +182,6 @@ export async function POST(req: NextRequest) {
 
     // Parse request body
     const body = await req.json();
-    console.log('[/api/chat] Raw body:', JSON.stringify(body, null, 2));
     const { messages, workspaceId, workspaceName, currentRevision, charts, looseFiles } = body;
 
     // Validate required fields
@@ -223,49 +222,21 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Log request for debugging
-    console.log('[/api/chat] POST request received:', {
-      messageCount: messages.length,
-      hasWorkspaceId: !!workspaceId,
-      workspaceName: workspaceName || 'not provided',
-      currentRevision: currentRevision ?? 'not provided',
-      chartCount: charts?.length || 0,
-      looseFileCount: looseFiles?.length || 0,
-      firstMessage: messages[0]?.content?.substring(0, 50) + '...',
-    });
-
     // Inject workspace context into environment for tool handlers
     // The textEditorTool will read WORKSPACE_ID from process.env
     if (workspaceId) {
       process.env.WORKSPACE_ID = workspaceId;
-      console.log('[/api/chat] Workspace context injected:', { workspaceId });
     }
 
     // Build dynamic system prompt with chart context
     const chartContextPrompt = buildChartContextPrompt(workspaceName, currentRevision, charts, looseFiles);
     const fullSystemPrompt = CHARTSMITH_SYSTEM_PROMPT + chartContextPrompt;
 
-    console.log('[/api/chat] System prompt built:', {
-      basePromptLength: CHARTSMITH_SYSTEM_PROMPT.length,
-      contextPromptLength: chartContextPrompt.length,
-      totalLength: fullSystemPrompt.length,
-    });
-
     // Get AI model from provider factory
     // Supports switching between Anthropic and OpenAI via LLM_PROVIDER env var
     const model = getModel();
 
-    console.log('[/api/chat] AI provider configured:', {
-      provider: providerInfo.provider,
-      model: providerInfo.model,
-      apiKeyConfigured: providerInfo.apiKeyConfigured,
-      toolCount: Object.keys(chartsmithTools).length,
-      systemPromptLength: fullSystemPrompt.length,
-    });
-
     // Stream response using AI SDK with tool support
-    console.log('[/api/chat] Starting AI SDK streaming with tool support...');
-
     const result = streamText({
       model,
       messages,
@@ -275,15 +246,9 @@ export async function POST(req: NextRequest) {
       // Allow up to 5 steps for tool execution (default is stepCountIs(1) which stops immediately)
       stopWhen: stepCountIs(5),
       onStepFinish: ({ text, toolCalls, toolResults }) => {
-        console.log('[/api/chat] Step finished:', {
-          textLength: text?.length || 0,
-          toolCallCount: toolCalls?.length || 0,
-          toolResultCount: toolResults?.length || 0,
-        });
+        // Step finished
       },
     });
-
-    console.log('[/api/chat] Stream initialized successfully with tool support');
 
     // Return streaming response
     return result.toTextStreamResponse();

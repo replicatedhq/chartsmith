@@ -190,7 +190,6 @@ async function downloadChartFilesFromArtifactHub(url: string): Promise<Workspace
     const chart = await getArtifactHubChart(org, name);
 
     if (chart && chart.content_url) {
-      console.log(`Using cached chart from local database: ${org}/${name} v${chart.version}`);
       // We found the chart in our local database
       const extractPath = await downloadChartArchiveFromURL(chart.content_url);
       await removeBinaryFilesInPath(extractPath);

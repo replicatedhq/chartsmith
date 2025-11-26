@@ -42,12 +42,6 @@ export function getPool(): Pool {
     connectionTimeoutMillis: 5000, // Return error after 5 seconds if connection not available
   };
 
-  console.log('[db] Creating PostgreSQL connection pool', {
-    max: config.max,
-    idleTimeout: config.idleTimeoutMillis,
-    connectionTimeout: config.connectionTimeoutMillis,
-  });
-
   pool = new Pool(config);
 
   // Handle pool errors
@@ -65,7 +59,6 @@ export function getPool(): Pool {
  */
 export async function closePool(): Promise<void> {
   if (pool) {
-    console.log('[db] Closing PostgreSQL connection pool');
     await pool.end();
     pool = null;
   }
@@ -90,11 +83,6 @@ export async function query<T = any>(
   try {
     const result = await pool.query(text, params);
     const duration = Date.now() - start;
-
-    console.log('[db] Query executed', {
-      duration: `${duration}ms`,
-      rows: result.rowCount,
-    });
 
     return result.rows as T;
   } catch (error) {

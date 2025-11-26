@@ -51,10 +51,6 @@ export async function viewFile(
       };
     }
 
-    console.log(
-      `[textEditorDb] Viewing file: workspace=${workspaceId}, path=${filePath}`
-    );
-
     // Query for the latest revision of the file
     const sql = `
       SELECT content
@@ -80,10 +76,6 @@ export async function viewFile(
     }
 
     const file = rows[0];
-
-    console.log(
-      `[textEditorDb] File retrieved: ${filePath}, content length: ${file.content.length}`
-    );
 
     return {
       success: true,
@@ -121,13 +113,6 @@ export async function replaceTextInFile(
         error: 'Missing required parameters',
       };
     }
-
-    console.log(
-      `[textEditorDb] Replacing in file: workspace=${workspaceId}, path=${filePath}`
-    );
-    console.log(
-      `[textEditorDb] Pattern length: ${oldStr.length}, will ${oldStr.length > 50 ? 'use fuzzy matching' : 'use exact match'}`
-    );
 
     // Step 1: Get current file content
     const selectSql = `
@@ -202,10 +187,6 @@ export async function replaceTextInFile(
     }
 
     if (!found) {
-      console.warn(
-        `[textEditorDb] String not found in file: ${filePath}, old_str length: ${oldStr.length}`
-      );
-
       // Log the failed replacement attempt
       const logId = uuidv4();
       const logSql = `
@@ -280,10 +261,6 @@ export async function replaceTextInFile(
       contextAfter,
     ]);
 
-    console.log(
-      `[textEditorDb] Replacement successful: ${filePath}, ${replacementCount} occurrence(s) replaced`
-    );
-
     return {
       success: true,
       old_str_found: true,
@@ -327,10 +304,6 @@ export async function createFile(
         error: 'Content parameter is required',
       };
     }
-
-    console.log(
-      `[textEditorDb] Creating file: workspace=${workspaceId}, path=${filePath}, size=${content.length} bytes`
-    );
 
     // Step 1: Check if file already exists
     const checkSql = `
@@ -390,26 +363,6 @@ export async function createFile(
       content,
       currentRevision,
     ]);
-
-    console.log(
-      `[textEditorDb] File created successfully: ${filePath}, id: ${fileId}, revision: ${currentRevision}`
-    );
-
-    // Step 4: (Optional) Generate embeddings
-    // Note: Embeddings generation with Voyage API would be implemented here
-    // For now, we'll skip this as it requires additional API integration
-    // The embeddings column allows NULL values, so this is acceptable
-
-    // Future implementation would look like:
-    // if (content.length > 0) {
-    //   const embeddings = await generateEmbeddings(content);
-    //   const updateEmbeddingsSql = `
-    //     UPDATE workspace_file
-    //     SET embeddings = $1
-    //     WHERE id = $2
-    //   `;
-    //   await query(updateEmbeddingsSql, [embeddings, fileId]);
-    // }
 
     return {
       success: true,

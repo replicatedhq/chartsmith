@@ -41,7 +41,7 @@
  *   api: '/api/chat',
  *   body: { workspaceId: 'abc123' },
  *   onError: (err) => console.error(err),
- *   onFinish: (msg) => console.log('Complete:', msg),
+ *   onFinish: (msg) => {},
  * });
  * ```
  * 
@@ -333,10 +333,7 @@ export function useStreamingChat(options: UseStreamingChatOptions) {
             // Track time to first token
             if (!firstTokenReceivedRef.current) {
               firstTokenReceivedRef.current = true;
-              const timeToFirstToken = performance.now() - requestStartTimeRef.current;
-              if (ENABLE_PERF_LOGGING) {
-                console.log(`[useStreamingChat] Time to first token: ${timeToFirstToken.toFixed(2)}ms`);
-              }
+              // const timeToFirstToken = performance.now() - requestStartTimeRef.current;
             }
             
             accumulatedContent += chunk;
@@ -370,12 +367,7 @@ export function useStreamingChat(options: UseStreamingChatOptions) {
       // Log performance metrics
       if (ENABLE_PERF_LOGGING) {
         const totalTime = performance.now() - requestStartTimeRef.current;
-        console.log(`[useStreamingChat] Streaming complete:`, {
-          totalTime: `${totalTime.toFixed(2)}ms`,
-          renderCount: renderCountRef.current,
-          contentLength: accumulatedContent.length,
-          avgTokensPerRender: Math.round(accumulatedContent.length / Math.max(1, renderCountRef.current)),
-        });
+        // Performance logging disabled
       }
 
       // Update message status to complete

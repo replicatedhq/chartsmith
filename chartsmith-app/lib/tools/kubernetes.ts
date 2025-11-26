@@ -27,7 +27,6 @@ const CACHE_DURATION = 60 * 60 * 1000; // 1 hour
 export async function fetchLatestK8sVersion(): Promise<K8sVersionInfo> {
   // Check cache first
   if (cachedVersion && Date.now() - cacheTimestamp < CACHE_DURATION) {
-    console.log('[Kubernetes] Using cached version');
     return cachedVersion;
   }
 
@@ -58,7 +57,6 @@ export async function fetchLatestK8sVersion(): Promise<K8sVersionInfo> {
         cachedVersion = version;
         cacheTimestamp = Date.now();
 
-        console.log(`[Kubernetes] Fetched version: ${version.full}`);
         return version;
       }
 
@@ -124,9 +122,6 @@ function getFallbackK8sVersion(): K8sVersionInfo {
     full: '1.32.1',
   };
 
-  console.log(
-    '[Kubernetes] Using fallback version (hardcoded): ' + version.full
-  );
   return version;
 }
 

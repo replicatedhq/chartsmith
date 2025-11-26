@@ -149,12 +149,6 @@ The tool maintains workspace state and logs all operations for debugging.`,
     }
 
     try {
-      console.log('[textEditorTool] Executing command', {
-        command,
-        path,
-        workspaceId,
-      });
-
       let result;
 
       switch (command) {
@@ -186,9 +180,7 @@ The tool maintains workspace state and logs all operations for debugging.`,
       }
 
       // Log the result
-      if (result.success) {
-        console.log(`[textEditorTool] Command succeeded: ${command}`);
-      } else {
+      if (!result.success) {
         console.warn(`[textEditorTool] Command failed: ${command}`, result.error);
       }
 
@@ -227,10 +219,6 @@ Returns "?" if the chart is not found in ArtifactHub.`,
     const { chart_name } = input;
 
     try {
-      console.log(
-        `[latestSubchartVersionTool] Querying ArtifactHub for: ${chart_name}`
-      );
-
       // Query ArtifactHub for the chart version
       const version = await fetchLatestSubchartVersion(chart_name);
 
@@ -243,10 +231,6 @@ Returns "?" if the chart is not found in ArtifactHub.`,
           message: `Chart "${chart_name}" not found in ArtifactHub`,
         };
       }
-
-      console.log(
-        `[latestSubchartVersionTool] Found version ${version} for ${chart_name}`
-      );
 
       return {
         version,
@@ -294,16 +278,8 @@ Can return major (e.g., "1"), minor (e.g., "1.32"), or patch (e.g., "1.32.1") ve
     const { semver_field } = input;
 
     try {
-      console.log(
-        `[latestKubernetesVersionTool] Getting K8s version: ${semver_field}`
-      );
-
       // Fetch the version component (major, minor, or patch)
       const version = await getK8sVersionComponent(semver_field);
-
-      console.log(
-        `[latestKubernetesVersionTool] Retrieved ${semver_field}: ${version}`
-      );
 
       return {
         version,
@@ -354,10 +330,6 @@ Ranks results by popularity, official status, maintenance, and relevance.`,
     const { requirement } = input;
 
     try {
-      console.log(
-        `[recommendedDependencyTool] Finding charts for: ${requirement}`
-      );
-
       // Search ArtifactHub for relevant charts
       const results = await searchArtifactHub(requirement);
 
@@ -384,10 +356,6 @@ Ranks results by popularity, official status, maintenance, and relevance.`,
       // Return top recommendation with alternatives
       const topRecommendation = ranked[0];
       const alternatives = ranked.slice(1, 3);
-
-      console.log(
-        `[recommendedDependencyTool] Top recommendation: ${topRecommendation.name}@${topRecommendation.version}`
-      );
 
       return {
         found: true,

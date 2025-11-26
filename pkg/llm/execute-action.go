@@ -594,7 +594,7 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 				switch event := event.AsUnion().(type) {
 				case anthropic.ContentBlockDeltaEvent:
 					if event.Delta.Text != "" {
-						fmt.Printf("%s", event.Delta.Text)
+						// fmt.Printf("%s", event.Delta.Text)
 					}
 				}
 			}

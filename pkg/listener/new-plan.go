@@ -61,12 +61,12 @@ func handleNewPlanNotification(ctx context.Context, payload string) error {
 	go func() {
 		if w.CurrentRevision == 0 {
 			if err := createInitialPlan(ctx, streamCh, doneCh, w, plan, p.AdditionalFiles); err != nil {
-				fmt.Printf("Failed to create initial plan: %v\n", err)
+				logger.Error("Failed to create initial plan", zap.Error(err))
 				doneCh <- fmt.Errorf("error creating initial plan: %w", err)
 			}
 		} else {
 			if err := createUpdatePlan(ctx, streamCh, doneCh, w, plan, p.AdditionalFiles); err != nil {
-				fmt.Printf("Failed to create update plan: %v\n", err)
+				logger.Error("Failed to create update plan", zap.Error(err))
 				doneCh <- fmt.Errorf("error creating update plan: %w", err)
 			}
 		}
@@ -108,7 +108,7 @@ func handleNewPlanNotification(ctx context.Context, payload string) error {
 			}
 
 			if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
-				fmt.Printf("Failed to send final plan update: %v\n", err)
+				logger.Error("Failed to send final plan update", zap.Error(err))
 				return fmt.Errorf("failed to send final plan update: %w", err)
 			}
 			done = true
@@ -176,7 +176,7 @@ func createUpdatePlan(ctx context.Context, streamCh chan string, doneCh chan err
 	)
 
 	for _, file := range relevantFiles {
-		fmt.Printf("Relevant file: %s, similarity: %f\n", file.File.FilePath, file.Similarity)
+		logger.Debug("Relevant file found", zap.String("file", file.File.FilePath), zap.Float64("similarity", file.Similarity))
 	}
 
 	// make sure we only change 10 files max, and nothing lower than a 0.8 similarity score

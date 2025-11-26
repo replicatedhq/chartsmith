@@ -492,10 +492,6 @@ function ChatMessageInner({
     };
   }, []);
 
-  const handleApplyChanges = async () => {
-    console.log("handleApplyChanges");
-  }
-
   // Create a pure sorted content component
   // This ensures the order is always correct by hard-coding it
   // Supports both legacy message format (response) and AI SDK format (content)
