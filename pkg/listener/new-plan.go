@@ -13,6 +13,7 @@ import (
 	realtimetypes "github.com/replicatedhq/chartsmith/pkg/realtime/types"
 	"github.com/replicatedhq/chartsmith/pkg/workspace"
 	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
+	"go.uber.org/zap"
 )
 
 type newPlanPayload struct {

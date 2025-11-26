@@ -7,7 +7,7 @@ import { ChatMessage } from "../types/workspace";
 import { getChatMessage } from "./workspace";
 
 export async function setMessageIgnored(_workspaceID: string, _chatMessageID: string): Promise<void> {
-  // TODO
+  // Implementation pending
 }
 
 export async function cancelChatMessage(chatMessageId: string): Promise<ChatMessage> {

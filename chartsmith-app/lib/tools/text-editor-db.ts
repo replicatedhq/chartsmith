@@ -29,7 +29,6 @@ interface WorkspaceFile {
   file_path: string;
   content: string;
   content_pending: string | null;
-  embeddings: any;
 }
 
 /**
