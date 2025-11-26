@@ -6,7 +6,10 @@ import (
 	"fmt"
 
 	"github.com/replicatedhq/chartsmith/pkg/logger"
+	"github.com/replicatedhq/chartsmith/pkg/realtime"
+	realtimetypes "github.com/replicatedhq/chartsmith/pkg/realtime/types"
 	"github.com/replicatedhq/chartsmith/pkg/workspace"
+	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 	"go.uber.org/zap"
 )
 
@@ -51,15 +54,15 @@ func handleConversionSimplifyNotification(ctx context.Context, payload string) e
 		return fmt.Errorf("failed to create chart: %w", err)
 	}
 
-	if err := workspace.AddFileToChart(ctx, chart.ID, w.ID, 1, "values.yaml", c.ValuesYAML); err != nil {
+	if _, err := workspace.AddFileToChart(ctx, chart.ID, w.ID, 1, "values.yaml", c.ValuesYAML); err != nil {
 		return fmt.Errorf("failed to add file to chart: %w", err)
 	}
-	if err := workspace.AddFileToChart(ctx, chart.ID, w.ID, 1, "Chart.yaml", c.ChartYAML); err != nil {
+	if _, err := workspace.AddFileToChart(ctx, chart.ID, w.ID, 1, "Chart.yaml", c.ChartYAML); err != nil {
 		return fmt.Errorf("failed to add file to chart: %w", err)
 	}
 
 	for filePath, fileContent := range convertedFiles {
-		if err := workspace.AddFileToChart(ctx, chart.ID, w.ID, 1, filePath, fileContent); err != nil {
+		if _, err := workspace.AddFileToChart(ctx, chart.ID, w.ID, 1, filePath, fileContent); err != nil {
 			return fmt.Errorf("failed to add file to chart: %w", err)
 		}
 	}
@@ -72,6 +75,37 @@ func handleConversionSimplifyNotification(ctx context.Context, payload string) e
 	_, err = workspace.SetCurrentRevision(ctx, nil, w, 1)
 	if err != nil {
 		return fmt.Errorf("failed to set revision complete: %w", err)
+	}
+
+	// Send final conversion status update
+	if err := workspace.SetConversionStatus(ctx, p.ConversionID, workspacetypes.ConversionStatusComplete); err != nil {
+		logger.Warn("Failed to set conversion status to complete", zap.Error(err))
+		// Don't fail the whole operation if status update fails
+	}
+
+	// Get updated conversion and send status event
+	c, err = workspace.GetConversion(ctx, p.ConversionID)
+	if err != nil {
+		return fmt.Errorf("failed to get conversion: %w", err)
+	}
+
+	userIDs, err := workspace.ListUserIDsForWorkspace(ctx, p.WorkspaceID)
+	if err != nil {
+		logger.Warn("Failed to list user IDs for workspace", zap.Error(err))
+	} else {
+		realtimeRecipient := realtimetypes.Recipient{
+			UserIDs: userIDs,
+		}
+
+		e := realtimetypes.ConversionStatusEvent{
+			WorkspaceID: w.ID,
+			Conversion:  *c,
+		}
+
+		if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
+			logger.Warn("Failed to send final conversion status event", zap.Error(err))
+			// Don't fail the whole operation if event send fails
+		}
 	}
 
 	return nil

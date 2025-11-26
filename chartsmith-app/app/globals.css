@@ -2,40 +2,335 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================================
+ * FORGE DESIGN SYSTEM - ChartSmith Industrial Aesthetic
+ * ============================================================================
+ * An intentional, bold design language inspired by the forge:
+ * - Molten ember orange as primary accent
+ * - Deep charcoal and steel surfaces
+ * - Industrial precision with subtle warmth
+ * - Atmospheric textures and glows
+ * ============================================================================ */
+
+/* ============================================================================
+ * CSS Custom Properties - Design Tokens
+ * ============================================================================ */
+
 :root {
   color-scheme: light;
+
+  /* Forge palette variables */
+  --forge-black: #09090b;
+  --forge-charcoal: #0c0c0e;
+  --forge-steel: #18181b;
+  --forge-iron: #27272a;
+  --forge-zinc: #3f3f46;
+  --forge-silver: #71717a;
+  --forge-ember: #f97316;
+  --forge-ember-bright: #fb923c;
+  --forge-ember-dim: #ea580c;
+  --forge-ember-glow: #fdba74;
+  --forge-quench: #0ea5e9;
 }
 
+/* Light theme - warm stone aesthetic */
 :root[class='light'] {
-  --background: #ffffff;
-  --surface: #f1f5f9;    /* Slightly more saturated surface */
-  --border: #e2e8f0;     /* More visible border */
-  --text: #0f172a;       /* Darker text for better contrast */
+  --background: #fafaf9;
+  --surface: #f5f5f4;
+  --surface-elevated: #ffffff;
+  --border: #e7e5e4;
+  --border-subtle: #d6d3d1;
+  --text: #1c1917;
+  --text-secondary: #57534e;
+  --text-muted: #a8a29e;
   color-scheme: light;
 }
 
+/* Dark theme - forged steel aesthetic */
 :root[class='dark'] {
-  --background: #0f0f0f;  /* Darker background */
-  --surface: #1a1a1a;    /* Darker surface */
-  --border: #2f2f2f;     /* More visible border */
-  --text: #ffffff;
+  --background: #09090b;
+  --surface: #0c0c0e;
+  --surface-elevated: #18181b;
+  --border: #27272a;
+  --border-subtle: #3f3f46;
+  --text: #fafaf9;
+  --text-secondary: #a1a1aa;
+  --text-muted: #71717a;
   color-scheme: dark;
 }
 
-/* Ensure theme variables are set even before JS loads */
+/* Default fallback */
 :root:not([class]) {
-  --background: #ffffff;
-  --surface: #f1f5f9;
-  --border: #e2e8f0;
-  --text: #0f172a;
+  --background: #fafaf9;
+  --surface: #f5f5f4;
+  --surface-elevated: #ffffff;
+  --border: #e7e5e4;
+  --border-subtle: #d6d3d1;
+  --text: #1c1917;
+  --text-secondary: #57534e;
+  --text-muted: #a8a29e;
 }
+
+/* ============================================================================
+ * Base Styles
+ * ============================================================================ */
 
 body {
   @apply bg-app text-text;
+  font-feature-settings: "ss01", "ss02", "cv01", "cv02";
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
+/* Selection styling */
+::selection {
+  background-color: rgba(249, 115, 22, 0.3);
+  color: inherit;
+}
+
+/* Focus styles - ember glow */
+:focus-visible {
+  outline: 2px solid var(--forge-ember);
+  outline-offset: 2px;
+}
+
+/* ============================================================================
+ * Scrollbar Styling - Industrial aesthetic
+ * ============================================================================ */
+
+/* Webkit browsers */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--surface);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-subtle);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--forge-zinc);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-subtle) var(--surface);
+}
+
+/* ============================================================================
+ * Utility Classes - Forge Components
+ * ============================================================================ */
+
+@layer utilities {
+  /* Noise texture overlay */
+  .texture-noise {
+    position: relative;
+  }
+
+  .texture-noise::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    opacity: 0.03;
+    pointer-events: none;
+    mix-blend-mode: overlay;
+    z-index: 1;
+  }
+
+  /* Grid pattern background */
+  .pattern-grid {
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  /* Dot pattern background */
+  .pattern-dots {
+    background-image: radial-gradient(var(--border-subtle) 1px, transparent 1px);
+    background-size: 16px 16px;
+  }
+
+  /* Ember glow effect */
+  .glow-ember {
+    box-shadow: 0 0 20px rgba(249, 115, 22, 0.3),
+                0 0 40px rgba(249, 115, 22, 0.1);
+  }
+
+  .glow-ember-intense {
+    box-shadow: 0 0 30px rgba(249, 115, 22, 0.5),
+                0 0 60px rgba(249, 115, 22, 0.2),
+                0 0 100px rgba(249, 115, 22, 0.1);
+  }
+
+  /* Quench glow (cool accent) */
+  .glow-quench {
+    box-shadow: 0 0 20px rgba(14, 165, 233, 0.3),
+                0 0 40px rgba(14, 165, 233, 0.1);
+  }
+
+  /* Gradient text */
+  .text-gradient-ember {
+    background: linear-gradient(135deg, #fbbf24 0%, #f97316 50%, #ea580c 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .text-gradient-heat {
+    background: linear-gradient(180deg, #fef3c7 0%, #fbbf24 25%, #f97316 50%, #ef4444 75%, #dc2626 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Surface styles */
+  .surface-forge {
+    background: var(--surface);
+    border: 1px solid var(--border);
+  }
+
+  .surface-elevated {
+    background: var(--surface-elevated);
+    border: 1px solid var(--border);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
+                0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  }
+
+  /* Interactive states */
+  .interactive-ember {
+    @apply transition-all duration-200 ease-out;
+  }
+
+  .interactive-ember:hover {
+    @apply shadow-ember-sm;
+    border-color: rgba(249, 115, 22, 0.3);
+  }
+
+  .interactive-ember:active {
+    transform: scale(0.98);
+  }
+
+  /* Badge styles */
+  .badge-ember {
+    @apply inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full;
+    background: rgba(249, 115, 22, 0.15);
+    color: var(--forge-ember);
+    border: 1px solid rgba(249, 115, 22, 0.3);
+  }
+
+  .badge-quench {
+    @apply inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full;
+    background: rgba(14, 165, 233, 0.15);
+    color: var(--forge-quench);
+    border: 1px solid rgba(14, 165, 233, 0.3);
+  }
+}
+
+/* ============================================================================
+ * Component Classes
+ * ============================================================================ */
+
+@layer components {
+  /* Forge Button - Primary */
+  .btn-forge {
+    @apply relative inline-flex items-center justify-center gap-2 px-4 py-2;
+    @apply font-display font-semibold text-sm;
+    @apply rounded-forge transition-all duration-200 ease-out;
+    @apply bg-forge-ember text-white;
+    @apply hover:bg-forge-ember-dim hover:shadow-ember-md;
+    @apply active:scale-[0.98];
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forge-ember focus-visible:ring-offset-2 focus-visible:ring-offset-app;
+  }
+
+  /* Forge Button - Secondary */
+  .btn-forge-secondary {
+    @apply relative inline-flex items-center justify-center gap-2 px-4 py-2;
+    @apply font-display font-semibold text-sm;
+    @apply rounded-forge transition-all duration-200 ease-out;
+    @apply bg-transparent border border-border text-text;
+    @apply hover:bg-surface hover:border-forge-ember/30;
+    @apply active:scale-[0.98];
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forge-ember focus-visible:ring-offset-2 focus-visible:ring-offset-app;
+  }
+
+  /* Forge Button - Ghost */
+  .btn-forge-ghost {
+    @apply relative inline-flex items-center justify-center gap-2 px-4 py-2;
+    @apply font-display font-semibold text-sm;
+    @apply rounded-forge transition-all duration-200 ease-out;
+    @apply bg-transparent text-forge-silver;
+    @apply hover:bg-surface hover:text-text;
+    @apply active:scale-[0.98];
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forge-ember focus-visible:ring-offset-2 focus-visible:ring-offset-app;
+  }
+
+  /* Input field */
+  .input-forge {
+    @apply w-full px-3 py-2;
+    @apply font-sans text-sm text-text;
+    @apply bg-surface border border-border rounded-forge;
+    @apply placeholder:text-forge-zinc;
+    @apply transition-all duration-200 ease-out;
+    @apply focus:outline-none focus:border-forge-ember/50 focus:ring-2 focus:ring-forge-ember/20;
+  }
+
+  /* Card component */
+  .card-forge {
+    @apply bg-surface border border-border rounded-forge-lg;
+    @apply overflow-hidden;
+    @apply transition-all duration-200 ease-out;
+  }
+
+  .card-forge-interactive {
+    @apply card-forge cursor-pointer;
+    @apply hover:border-forge-ember/30 hover:shadow-forge-md;
+    @apply active:scale-[0.99];
+  }
+
+  /* Table styles */
+  .table-forge {
+    @apply w-full text-sm;
+  }
+
+  .table-forge th {
+    @apply px-4 py-3 text-left font-display font-semibold text-forge-silver;
+    @apply text-overline uppercase tracking-wider;
+    @apply border-b border-border bg-surface;
+  }
+
+  .table-forge td {
+    @apply px-4 py-3 border-b border-border;
+  }
+
+  .table-forge tr {
+    @apply transition-colors duration-150;
+  }
+
+  .table-forge tbody tr:hover {
+    @apply bg-surface-elevated;
+  }
+}
+
+/* ============================================================================
+ * Typography - Markdown Content
+ * ============================================================================ */
+
 .markdown-content {
-  @apply text-[11px];
+  @apply text-body-sm;
 }
 
 .dark .markdown-content {
@@ -43,54 +338,78 @@ body {
 }
 
 .markdown-content p {
-  @apply mb-2;
+  @apply mb-3 leading-relaxed;
 }
 
 .markdown-content ul {
-  @apply list-disc list-inside my-2;
+  @apply list-disc list-inside my-3 space-y-1;
 }
 
 .markdown-content ol {
-  @apply list-decimal my-2 pl-8;
+  @apply list-decimal my-3 pl-6 space-y-1;
 }
 
 .markdown-content code {
-  @apply font-mono text-[11px];
+  @apply font-mono text-caption px-1.5 py-0.5 rounded;
+  background: rgba(249, 115, 22, 0.1);
+  color: var(--forge-ember);
 }
 
 .markdown-content pre {
-  @apply bg-dark-surface/40 p-4 rounded-md my-2 overflow-x-auto;
+  @apply my-4 rounded-forge-lg overflow-hidden;
+  background: var(--forge-charcoal);
+  border: 1px solid var(--forge-iron);
 }
 
 .markdown-content pre code {
-  @apply p-0 bg-transparent;
+  @apply block p-4 text-caption;
+  background: transparent;
+  color: var(--text);
 }
 
-.markdown-content h1, 
-.markdown-content h2, 
-.markdown-content h3, 
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3,
 .markdown-content h4 {
-  @apply font-semibold mt-4 mb-2;
+  @apply font-display font-semibold mt-6 mb-3;
 }
 
 .markdown-content h1 {
-  @apply text-xl;
+  @apply text-display-sm;
 }
 
 .markdown-content h2 {
-  @apply text-lg;
+  @apply text-xl;
 }
 
 .markdown-content h3 {
-  @apply text-base;
+  @apply text-lg text-forge-ember;
 }
 
 .markdown-content h4 {
-  @apply text-sm;
+  @apply text-base;
 }
 
+.markdown-content a {
+  @apply text-forge-ember hover:text-forge-ember-bright underline underline-offset-2;
+  @apply transition-colors duration-150;
+}
+
+.markdown-content blockquote {
+  @apply pl-4 border-l-2 border-forge-ember/50 italic;
+  @apply text-forge-silver my-4;
+}
+
+.markdown-content hr {
+  @apply my-8 border-border;
+}
+
+/* ============================================================================
+ * Prose styling (for longer content)
+ * ============================================================================ */
+
 .prose {
-  @apply text-[11px];
+  @apply text-body;
 }
 
 .dark .prose {
@@ -106,75 +425,320 @@ body {
 }
 
 .prose ol {
-  @apply list-decimal my-4 pl-8 space-y-2;
+  @apply list-decimal my-4 pl-6 space-y-2;
 }
 
 .prose code {
-  @apply font-mono text-[11px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-dark-border/40;
+  @apply font-mono text-body-sm px-1.5 py-0.5 rounded;
+  background: rgba(249, 115, 22, 0.1);
+  color: var(--forge-ember);
 }
 
 .prose pre {
-  @apply bg-dark-surface/40 p-4 rounded-md my-4 overflow-x-auto;
+  @apply my-6 rounded-forge-lg overflow-hidden;
+  background: var(--forge-charcoal);
+  border: 1px solid var(--forge-iron);
 }
 
 .prose pre code {
-  @apply p-0 bg-transparent;
+  @apply block p-4;
+  background: transparent;
+  color: var(--text);
 }
 
 .prose h1 {
-  @apply text-2xl font-bold mb-6 pb-2 border-b border-gray-200 dark:border-dark-border;
+  @apply font-display text-display-md font-bold mb-6 pb-3 border-b border-border;
 }
 
 .prose h2 {
-  @apply text-xl font-semibold mt-8 mb-4;
+  @apply font-display text-display-sm font-semibold mt-10 mb-4;
 }
 
 .prose h3 {
-  @apply text-lg font-medium mt-6 mb-3 text-primary;
+  @apply font-display text-xl font-medium mt-8 mb-3 text-forge-ember;
 }
 
 .prose h4 {
-  @apply text-base font-medium mt-4 mb-2;
+  @apply font-display text-lg font-medium mt-6 mb-2;
 }
 
 .prose li {
-  @apply text-[11px] leading-relaxed;
+  @apply leading-relaxed;
 }
 
 .prose li::marker {
-  @apply text-primary/60;
+  color: var(--forge-ember);
+  opacity: 0.6;
 }
 
-@keyframes progress-color {
-  0% { 
-    background-color: rgba(99, 102, 241, 0.3);
-    transform: scale(1);
-  }
-  50% { 
-    background-color: rgba(99, 102, 241, 0.9);
-    transform: scale(1.5);
-  }
-  100% { 
-    background-color: rgba(99, 102, 241, 0.3);
-    transform: scale(1);
-  }
+.prose a {
+  @apply text-forge-ember hover:text-forge-ember-bright;
+  @apply underline underline-offset-2 transition-colors duration-150;
 }
 
-/* Add these styles for the Monaco editor */
+.prose blockquote {
+  @apply pl-4 border-l-2 border-forge-ember/50 italic;
+  @apply text-forge-silver my-6;
+}
+
+.prose hr {
+  @apply my-10 border-border;
+}
+
+.prose strong {
+  @apply font-semibold text-text;
+}
+
+/* ============================================================================
+ * Monaco Editor Styles
+ * ============================================================================ */
+
 .monaco-editor {
   white-space: pre !important;
-  font-family: "Monaco", "Menlo", "Ubuntu Mono", "Consolas", "source-code-pro", monospace !important;
+  font-family: var(--font-jetbrains-mono), "Monaco", "Menlo", "Consolas", monospace !important;
 }
 
 .monaco-editor .view-line {
   white-space: pre !important;
 }
 
-/* Add tab styles */
+/* Custom Monaco theme overrides for forge aesthetic */
+.monaco-editor .margin {
+  background: var(--surface) !important;
+}
+
+.monaco-editor .line-numbers {
+  color: var(--forge-zinc) !important;
+}
+
+.monaco-editor .current-line ~ .line-numbers {
+  color: var(--forge-ember) !important;
+}
+
+/* ============================================================================
+ * Tab Styles
+ * ============================================================================ */
+
 .tab-active {
-  @apply border-b-2 border-primary text-primary;
+  @apply border-b-2 border-forge-ember text-forge-ember font-medium;
 }
 
 .tab-inactive {
-  @apply text-gray-500 hover:text-gray-300;
+  @apply text-forge-zinc hover:text-forge-silver transition-colors duration-150;
+}
+
+/* ============================================================================
+ * Chat Message Animations
+ * ============================================================================ */
+
+@keyframes message-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes sending-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+@keyframes cursor-blink {
+  0%, 50% {
+    opacity: 1;
+  }
+  51%, 100% {
+    opacity: 0;
+  }
+}
+
+@keyframes ember-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(249, 115, 22, 0);
+  }
+}
+
+@keyframes typing-dot {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+.message-animate-in {
+  animation: message-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.message-sending {
+  animation: sending-pulse 1.5s ease-in-out infinite;
+}
+
+.streaming-cursor::after {
+  content: '▋';
+  animation: cursor-blink 1s step-end infinite;
+  margin-left: 2px;
+  color: var(--forge-ember);
+  opacity: 0.8;
+}
+
+.message-content {
+  transition: opacity 0.15s ease-out;
+}
+
+.status-indicator {
+  transition: all 0.2s ease-out;
+}
+
+/* Ember pulse for active states */
+.ember-pulse {
+  animation: ember-pulse 2s ease-in-out infinite;
+}
+
+/* Typing indicator dots */
+.typing-dot {
+  animation: typing-dot 1.4s ease-in-out infinite;
+}
+
+.typing-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+/* ============================================================================
+ * Scroll Button Animation
+ * ============================================================================ */
+
+@keyframes bounce-subtle {
+  0%, 100% {
+    transform: translateX(-50%) translateY(0);
+  }
+  50% {
+    transform: translateX(-50%) translateY(-4px);
+  }
+}
+
+.scroll-button-bounce {
+  animation: bounce-subtle 2s ease-in-out infinite;
+}
+
+/* ============================================================================
+ * Loading States
+ * ============================================================================ */
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--surface) 0%,
+    var(--surface-elevated) 50%,
+    var(--surface) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* ============================================================================
+ * Progress/Status Animations
+ * ============================================================================ */
+
+@keyframes progress-glow {
+  0% {
+    background-color: rgba(249, 115, 22, 0.3);
+    transform: scale(1);
+  }
+  50% {
+    background-color: rgba(249, 115, 22, 0.9);
+    transform: scale(1.5);
+  }
+  100% {
+    background-color: rgba(249, 115, 22, 0.3);
+    transform: scale(1);
+  }
+}
+
+.progress-dot {
+  animation: progress-glow 1.5s ease-in-out infinite;
+}
+
+/* ============================================================================
+ * Forge-specific decorative elements
+ * ============================================================================ */
+
+/* Spark particles */
+@keyframes spark-float {
+  0% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-20px) scale(0);
+    opacity: 0;
+  }
+}
+
+.spark {
+  @apply absolute w-1 h-1 rounded-full bg-forge-ember;
+  animation: spark-float 1s ease-out forwards;
+}
+
+/* Heat wave distortion effect */
+@keyframes heat-wave {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(1px);
+  }
+  75% {
+    transform: translateX(-1px);
+  }
+}
+
+.heat-wave {
+  animation: heat-wave 0.1s ease-in-out infinite;
+}
+
+/* Gradient border animation */
+@keyframes gradient-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.gradient-border {
+  background: linear-gradient(90deg, var(--forge-ember), var(--forge-ember-bright), var(--forge-ember));
+  background-size: 200% 200%;
+  animation: gradient-shift 3s ease infinite;
 }

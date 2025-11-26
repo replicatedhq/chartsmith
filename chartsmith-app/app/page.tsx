@@ -46,16 +46,20 @@ export default function HomePage() {
   }
 
   return (
-    <div
-      className="min-h-screen bg-black text-white bg-cover bg-center bg-no-repeat flex flex-col"
-      style={{
-        backgroundImage: 'url("https://images.unsplash.com/photo-1667372459510-55b5e2087cd0?auto=format&fit=crop&q=80&w=2072")',
-      }}
-    >
-      {/* Dark overlay */}
-      <div className="absolute inset-0 bg-black/80" />
+    <div className="min-h-screen bg-forge-black text-white flex flex-col relative overflow-hidden">
+      {/* Animated background pattern */}
+      <div className="fixed inset-0 pattern-grid opacity-30 pointer-events-none" />
 
-      <div className="relative flex-1 flex flex-col">
+      {/* Ember glow at bottom */}
+      <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-[1000px] h-[500px] opacity-30 pointer-events-none">
+        <div className="absolute inset-0 blur-[120px] bg-gradient-to-t from-forge-ember via-forge-ember/40 to-transparent rounded-full" />
+      </div>
+
+      {/* Subtle side glows */}
+      <div className="fixed top-1/4 -left-32 w-64 h-64 bg-forge-ember/10 rounded-full blur-[100px] pointer-events-none" />
+      <div className="fixed bottom-1/4 -right-32 w-64 h-64 bg-forge-ember/10 rounded-full blur-[100px] pointer-events-none" />
+
+      <div className="relative flex-1 flex flex-col z-10">
         <HomeNav />
         <main className="container mx-auto px-6 pt-12 sm:pt-20 lg:pt-32 flex-1">
           <HomeHeader />

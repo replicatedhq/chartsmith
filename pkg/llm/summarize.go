@@ -12,7 +12,6 @@ import (
 	anthropic "github.com/anthropics/anthropic-sdk-go"
 	"github.com/jackc/pgx/v5"
 	"github.com/jpoz/groq"
-	"github.com/ollama/ollama/api"
 	ollama "github.com/ollama/ollama/api"
 	"github.com/replicatedhq/chartsmith/pkg/logger"
 	"github.com/replicatedhq/chartsmith/pkg/param"
@@ -109,7 +108,7 @@ func summarizeContentWithClaude(ctx context.Context, content string) (string, er
 	startTime := time.Now()
 
 	resp, err := client.Messages.New(ctx, anthropic.MessageNewParams{
-		Model:     anthropic.F(anthropic.ModelClaude3_7Sonnet20250219),
+		Model:     anthropic.F(anthropic.ModelClaude3_5Haiku20241022),
 		MaxTokens: anthropic.F(int64(8192)),
 		Messages:  anthropic.F([]anthropic.MessageParam{anthropic.NewUserMessage(anthropic.NewTextBlock(userMessage))}),
 	})
@@ -163,7 +162,7 @@ func summarizeContentWithOllama(ctx context.Context, content string) (string, er
 	}
 
 	var summary string
-	respFunc := func(resp api.GenerateResponse) error {
+	respFunc := func(resp ollama.GenerateResponse) error {
 		summary = resp.Response
 		return nil
 	}

@@ -6,6 +6,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { useSession } from "@/app/hooks/useSession";
 import { publishToTtlshAction } from "@/lib/workspace/actions/publish-to-ttlsh";
 import { getPublishStatusAction, PublishStatus } from "@/lib/workspace/actions/get-publish-status";
+import { logger } from "@/lib/utils/logger";
 
 interface TtlshModalProps {
   isOpen: boolean;
@@ -23,6 +24,68 @@ export function TtlshModal({ isOpen, onClose }: TtlshModalProps) {
   const [workspaceId, setWorkspaceId] = useState("");
   const [statusPollingInterval, setStatusPollingInterval] = useState<NodeJS.Timeout | null>(null);
 
+  // Poll for status updates - defined first since checkExistingPublish depends on it
+  const startStatusPolling = useCallback((wsId: string) => {
+    // Use functional update to avoid stale closure
+    setStatusPollingInterval(prev => {
+      if (prev) {
+        clearInterval(prev);
+      }
+      
+      const interval = setInterval(async () => {
+        if (!session) return;
+
+        try {
+          const status = await getPublishStatusAction(session, wsId);
+
+          if (status) {
+            setPublishStatus(status);
+
+            if (status.status === "completed") {
+              setIsPublished(true);
+              setIsPublishing(false);
+              clearInterval(interval);
+              setStatusPollingInterval(null);
+            } else if (status.status === "failed") {
+              setIsPublishing(false);
+              setError(status.error || "Publishing failed");
+              clearInterval(interval);
+              setStatusPollingInterval(null);
+            }
+          }
+        } catch (err) {
+          logger.error("Error polling publish status", { error: err });
+        }
+      }, 2000); // Poll every 2 seconds
+
+      return interval;
+    });
+  }, [session]);
+
+  // Check if there's an existing publish for this workspace
+  const checkExistingPublish = useCallback(async (wsId: string) => {
+    if (!session) return;
+
+    try {
+      const status = await getPublishStatusAction(session, wsId);
+
+      if (status) {
+        setPublishStatus(status);
+
+        if (status.status === "completed") {
+          setIsPublished(true);
+        } else if (status.status === "pending" || status.status === "processing") {
+          setIsPublishing(true);
+          startStatusPolling(wsId);
+        } else if (status.status === "failed") {
+          setError(status.error || "Publishing failed");
+        }
+      }
+    } catch (err) {
+      logger.error("Error checking publish status", { error: err });
+    }
+  }, [session, startStatusPolling]);
+
   // Reset state when modal is opened/closed
   useEffect(() => {
     if (isOpen) {
@@ -38,14 +101,18 @@ export function TtlshModal({ isOpen, onClose }: TtlshModalProps) {
         setWorkspaceId(match[1]);
         checkExistingPublish(match[1]);
       }
-    } else {
-      // Clear polling interval when modal closes
-      if (statusPollingInterval) {
-        clearInterval(statusPollingInterval);
-        setStatusPollingInterval(null);
-      }
     }
-  }, [isOpen]);
+    
+    // Cleanup function to clear polling when modal closes or component unmounts
+    return () => {
+      setStatusPollingInterval(prev => {
+        if (prev) {
+          clearInterval(prev);
+        }
+        return null;
+      });
+    };
+  }, [isOpen, checkExistingPublish]);
 
   // Cleanup interval on unmount
   useEffect(() => {
@@ -55,69 +122,6 @@ export function TtlshModal({ isOpen, onClose }: TtlshModalProps) {
       }
     };
   }, [statusPollingInterval]);
-
-  // Check if there's an existing publish for this workspace
-  const checkExistingPublish = useCallback(async (wsId: string) => {
-    if (!session) return;
-
-    try {
-      const status = await getPublishStatusAction(session, wsId);
-
-      if (status) {
-        setPublishStatus(status);
-
-        // No need to update repoUrl anymore as we're using a fixed ttl.sh URL
-
-        if (status.status === "completed") {
-          setIsPublished(true);
-        } else if (status.status === "pending" || status.status === "processing") {
-          setIsPublishing(true);
-          startStatusPolling(wsId);
-        } else if (status.status === "failed") {
-          setError(status.error || "Publishing failed");
-        }
-      }
-    } catch (err) {
-      console.error("Error checking publish status:", err);
-    }
-  }, [session]);
-
-  // Poll for status updates
-  const startStatusPolling = (wsId: string) => {
-    if (statusPollingInterval) {
-      clearInterval(statusPollingInterval);
-    }
-
-    const interval = setInterval(async () => {
-      if (!session) return;
-
-      try {
-        const status = await getPublishStatusAction(session, wsId);
-
-        if (status) {
-          setPublishStatus(status);
-
-          // No need to update repoUrl anymore as we're using a fixed ttl.sh URL
-
-          if (status.status === "completed") {
-            setIsPublished(true);
-            setIsPublishing(false);
-            clearInterval(interval);
-            setStatusPollingInterval(null);
-          } else if (status.status === "failed") {
-            setIsPublishing(false);
-            setError(status.error || "Publishing failed");
-            clearInterval(interval);
-            setStatusPollingInterval(null);
-          }
-        }
-      } catch (err) {
-        console.error("Error polling publish status:", err);
-      }
-    }, 2000); // Poll every 2 seconds
-
-    setStatusPollingInterval(interval);
-  };
 
   if (!isOpen) return null;
 
@@ -142,7 +146,7 @@ export function TtlshModal({ isOpen, onClose }: TtlshModalProps) {
       }
     } catch (err) {
       setError("An unexpected error occurred. Please try again.");
-      console.error("Error publishing to ttl.sh:", err);
+      logger.error("Error publishing to ttl.sh", { error: err });
       setIsPublishing(false);
     }
   };
@@ -228,10 +232,10 @@ export function TtlshModal({ isOpen, onClose }: TtlshModalProps) {
                 </p>
                 <div className="relative">
                   <pre className={`p-3 rounded-lg font-mono text-sm whitespace-normal break-all ${theme === "dark" ? "bg-dark text-gray-300" : "bg-gray-100 text-gray-700"}`}>
-                    {`helm pull oci://ttl.sh/${publishStatus?.chartName || 'chart'} --version ${publishStatus?.chartVersion || '0.1.0'}`}
+                    {`helm pull oci://ttl.sh/chartsmith-${workspaceId}/${publishStatus?.chartName || 'chart'} --version ${publishStatus?.chartVersion || '0.1.0'}`}
                   </pre>
                   <button
-                    onClick={() => handleCopy(`helm pull oci://ttl.sh/${publishStatus?.chartName || 'chart'} --version ${publishStatus?.chartVersion || '0.1.0'}`)}
+                    onClick={() => handleCopy(`helm pull oci://ttl.sh/chartsmith-${workspaceId}/${publishStatus?.chartName || 'chart'} --version ${publishStatus?.chartVersion || '0.1.0'}`)}
                     className={`absolute top-2 right-2 p-1 rounded ${theme === "dark" ? "text-gray-400 hover:text-white" : "text-gray-500 hover:text-gray-700"}`}
                     title="Copy to clipboard"
                   >
@@ -245,10 +249,10 @@ export function TtlshModal({ isOpen, onClose }: TtlshModalProps) {
                 </p>
                 <div className="relative">
                   <pre className={`p-3 rounded-lg font-mono text-sm whitespace-normal break-all ${theme === "dark" ? "bg-dark text-gray-300" : "bg-gray-100 text-gray-700"}`}>
-                    {`helm install my-release oci://ttl.sh/${publishStatus?.chartName || 'chart'} --version ${publishStatus?.chartVersion || '0.1.0'}`}
+                    {`helm install my-release oci://ttl.sh/chartsmith-${workspaceId}/${publishStatus?.chartName || 'chart'} --version ${publishStatus?.chartVersion || '0.1.0'}`}
                   </pre>
                   <button
-                    onClick={() => handleCopy(`helm install my-release oci://ttl.sh/${publishStatus?.chartName || 'chart'} --version ${publishStatus?.chartVersion || '0.1.0'}`)}
+                    onClick={() => handleCopy(`helm install my-release oci://ttl.sh/chartsmith-${workspaceId}/${publishStatus?.chartName || 'chart'} --version ${publishStatus?.chartVersion || '0.1.0'}`)}
                     className={`absolute top-2 right-2 p-1 rounded ${theme === "dark" ? "text-gray-400 hover:text-white" : "text-gray-500 hover:text-gray-700"}`}
                     title="Copy to clipboard"
                   >

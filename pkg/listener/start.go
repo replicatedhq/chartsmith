@@ -52,7 +52,7 @@ func StartListeners(ctx context.Context) error {
 		return nil
 	}, nil)
 
-	l.AddHandler(ctx, "apply_plan", 10, time.Minute*10, func(notification *pgconn.Notification) error {
+	l.AddHandler(ctx, "apply_plan", 2, time.Minute*10, func(notification *pgconn.Notification) error {
 		if err := handleApplyPlanNotification(ctx, notification.Payload); err != nil {
 			logger.Error(fmt.Errorf("failed to handle apply plan notification: %w", err))
 			return fmt.Errorf("failed to handle apply plan notification: %w", err)

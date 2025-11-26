@@ -43,16 +43,16 @@ export const CodeEditor = React.memo(function CodeEditor({
   onCommandK,
 }: CodeEditorProps) {
   // Container ref for the single editor
-  const editorContainerRef = useRef<HTMLDivElement>(null as unknown as HTMLDivElement);
+  const editorContainerRef = useRef<HTMLDivElement | null>(null);
 
   const [selectedFile, setSelectedFile] = useAtom(selectedFileAtom);
   const [workspace, setWorkspace] = useAtom(workspaceAtom);
   const [, addFileToWorkspace] = useAtom(addFileToWorkspaceAtom);
   const [plans] = useAtom(plansAtom);
 
-  // References for Monaco - Use non-null assertion to satisfy TypeScript
-  const editorRef = useRef<editor.IStandaloneCodeEditor>(null as unknown as editor.IStandaloneCodeEditor);
-  const monacoRef = useRef<typeof import("monaco-editor")>(null as unknown as typeof import("monaco-editor"));
+  // References for Monaco - initialized as null, properly typed
+  const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
+  const monacoRef = useRef<typeof import("monaco-editor") | null>(null);
 
   const [allFilesWithContentPending] = useAtom(allFilesWithContentPendingAtom);
 
@@ -247,12 +247,12 @@ export const CodeEditor = React.memo(function CodeEditor({
                     setWorkspace(freshWorkspace);
                   }
                 }
-              } catch (reloadError) {
-                console.error("Error reloading workspace:", reloadError);
+              } catch {
+                // Silently ignore reload errors - workspace will be refreshed on next action
               }
             }, 500); // Allow time for database updates
-          } catch (serverError) {
-            console.error("Server-side patch application failed, using client-side fallback:", serverError);
+          } catch {
+            // Server-side patch application failed, using client-side fallback
 
             // If server action fails, use client-side fallback
             const updatedFile = {
@@ -283,10 +283,8 @@ export const CodeEditor = React.memo(function CodeEditor({
             }, 0);
           }
         }
-      } catch (error) {
-        console.error("Error accepting patch:", error);
-
-        // Last-ditch effort: just clear the pending patch without applying it
+      } catch {
+        // Error accepting patch - last-ditch effort: just clear the pending patch without applying it
         try {
           const updatedFile = {
             ...selectedFile,
@@ -313,8 +311,8 @@ export const CodeEditor = React.memo(function CodeEditor({
           setTimeout(() => {
             updateFileContent(updatedFile);
           }, 0);
-        } catch (fallbackError) {
-          console.error("Even fallback failed:", fallbackError);
+        } catch {
+          // Even fallback failed - nothing more we can do
         }
 
         // Make sure dropdown is closed
@@ -371,12 +369,12 @@ export const CodeEditor = React.memo(function CodeEditor({
               setWorkspace(freshWorkspace);
             }
           }
-        } catch (reloadError) {
-          console.error("Error reloading workspace:", reloadError);
-        }
-      }, 500); // Allow time for database updates
-    } catch (error) {
-      console.error("Error accepting all patches:", error);
+            } catch {
+              // Silently ignore reload errors
+            }
+          }, 500); // Allow time for database updates
+        } catch {
+          // Error accepting all patches
       // Make sure dropdown is closed in case of error
       setAcceptDropdownOpen(false);
     }
@@ -459,13 +457,13 @@ export const CodeEditor = React.memo(function CodeEditor({
                   setWorkspace(freshWorkspace);
                 }
               }
-            } catch (reloadError) {
-              console.error("Error reloading workspace:", reloadError);
+            } catch {
+              // Silently ignore reload errors
             }
           }, 500); // Allow time for database updates
         }
-      } catch (error) {
-        console.error("Error rejecting patch:", error);
+      } catch {
+        // Error rejecting patch
 
         // Fall back to client-side rejection for any errors
         try {
@@ -495,8 +493,8 @@ export const CodeEditor = React.memo(function CodeEditor({
           setTimeout(() => {
             updateFileContent(updatedFile);
           }, 10);
-        } catch (clientError) {
-          console.error("Failed to reject patch on client too:", clientError);
+        } catch {
+          // Failed to reject patch on client too - nothing more we can do
         }
       }
     }
@@ -552,13 +550,13 @@ export const CodeEditor = React.memo(function CodeEditor({
                 setWorkspace(freshWorkspace);
               }
             }
-          } catch (reloadError) {
-            console.error("Error reloading workspace:", reloadError);
+          } catch {
+            // Silently ignore reload errors
           }
         }, 500); // Allow time for database updates
       }
-    } catch (error) {
-      console.error("Error rejecting all patches:", error);
+    } catch {
+      // Error rejecting all patches - silently ignore
     }
   };
 

@@ -54,14 +54,16 @@ export function FeedbackModal({ isOpen, onClose, message, chatId, workspaceId, s
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]" onClick={handleClickOutside}>
-      <div className={`w-full max-w-4xl rounded-lg shadow-lg border ${theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"}`} onClick={e => e.stopPropagation()}>
-        <div className={`flex items-center justify-between p-4 border-b ${theme === "dark" ? "border-dark-border" : "border-gray-200"}`}>
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="w-5 h-5 text-error" />
-            <h2 className={`text-lg font-semibold ${theme === "dark" ? "text-white" : "text-gray-900"}`}>Provide Feedback</h2>
+    <div className="fixed inset-0 bg-forge-black/80 backdrop-blur-sm flex items-center justify-center z-[100]" onClick={handleClickOutside}>
+      <div className={`w-full max-w-4xl rounded-forge-lg shadow-2xl border overflow-hidden ${theme === "dark" ? "bg-forge-charcoal border-forge-iron" : "bg-white border-stone-200"}`} onClick={e => e.stopPropagation()}>
+        <div className={`flex items-center justify-between p-4 border-b ${theme === "dark" ? "border-forge-iron bg-forge-ember/5" : "border-stone-200 bg-orange-50"}`}>
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-forge flex items-center justify-center bg-forge-ember/20">
+              <AlertTriangle className="w-4 h-4 text-forge-ember" />
+            </div>
+            <h2 className={`text-lg font-display font-semibold ${theme === "dark" ? "text-stone-100" : "text-stone-900"}`}>Provide Feedback</h2>
           </div>
-          <button onClick={onClose} className={`${theme === "dark" ? "text-gray-400 hover:text-white" : "text-gray-500 hover:text-gray-700"} transition-colors`}>
+          <button onClick={onClose} className={`p-2 rounded-forge transition-all ${theme === "dark" ? "text-forge-zinc hover:text-stone-100 hover:bg-forge-iron/50" : "text-stone-400 hover:text-stone-600 hover:bg-stone-100"}`}>
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -71,20 +73,20 @@ export function FeedbackModal({ isOpen, onClose, message, chatId, workspaceId, s
             <div className="flex-1 space-y-4">
               {/* Your Prompt */}
               <div>
-                <h3 className={`text-sm font-medium mb-2 ${theme === "dark" ? "text-gray-300" : "text-gray-700"}`}>Your Prompt</h3>
-                <div className={`p-4 rounded-lg ${theme === "dark" ? "bg-dark/40 text-gray-300" : "bg-gray-50 text-gray-700"}`}>
+                <h3 className={`text-sm font-medium mb-2 ${theme === "dark" ? "text-forge-silver" : "text-stone-700"}`}>Your Prompt</h3>
+                <div className={`p-4 rounded-forge ${theme === "dark" ? "bg-forge-black/40 text-forge-silver border border-forge-iron/50" : "bg-stone-50 text-stone-700"}`}>
                   {message.prompt}
                 </div>
               </div>
 
               {/* Files Sent */}
               <div>
-                <h3 className={`text-sm font-medium mb-2 ${theme === "dark" ? "text-gray-300" : "text-gray-700"}`}>Files Sent</h3>
-                <div className={`p-4 rounded-lg ${theme === "dark" ? "bg-dark/40 text-gray-300" : "bg-gray-50 text-gray-700"}`}>
+                <h3 className={`text-sm font-medium mb-2 ${theme === "dark" ? "text-forge-silver" : "text-stone-700"}`}>Files Sent</h3>
+                <div className={`p-4 rounded-forge ${theme === "dark" ? "bg-forge-black/40 text-forge-silver border border-forge-iron/50" : "bg-stone-50 text-stone-700"}`}>
                   {prompt?.filesSent ? (
                     <ul className="space-y-1">
                       {prompt.filesSent.map((path, index) => (
-                        <li key={index} className="font-mono text-sm">
+                        <li key={index} className="font-mono text-sm text-forge-ember">
                           {path}
                         </li>
                       ))}
@@ -97,8 +99,8 @@ export function FeedbackModal({ isOpen, onClose, message, chatId, workspaceId, s
 
               {/* Response Received */}
               <div>
-                <h3 className={`text-sm font-medium mb-2 ${theme === "dark" ? "text-gray-300" : "text-gray-700"}`}>Response Received</h3>
-                <div className={`p-4 rounded-lg ${theme === "dark" ? "bg-dark/40 text-gray-300" : "bg-gray-50 text-gray-700"} h-48 overflow-y-auto`}>
+                <h3 className={`text-sm font-medium mb-2 ${theme === "dark" ? "text-forge-silver" : "text-stone-700"}`}>Response Received</h3>
+                <div className={`p-4 rounded-forge ${theme === "dark" ? "bg-forge-black/40 text-forge-silver border border-forge-iron/50" : "bg-stone-50 text-stone-700"} h-48 overflow-y-auto`}>
                   {message.response}
                 </div>
               </div>
@@ -108,7 +110,7 @@ export function FeedbackModal({ isOpen, onClose, message, chatId, workspaceId, s
             <div className="flex-1 space-y-6">
               {/* Rating */}
               <div>
-                <h3 className={`text-sm font-medium mb-2 ${theme === "dark" ? "text-gray-300" : "text-gray-700"}`}>Rate this response</h3>
+                <h3 className={`text-sm font-medium mb-2 ${theme === "dark" ? "text-forge-silver" : "text-stone-700"}`}>Rate this response</h3>
                 <div className="flex items-center gap-4">
                   <div className="flex gap-2">
                     {[1, 2, 3, 4, 5].map((star) => (
@@ -116,14 +118,14 @@ export function FeedbackModal({ isOpen, onClose, message, chatId, workspaceId, s
                         key={star}
                         type="button"
                         onClick={() => setRating(star)}
-                        className={`p-1 rounded hover:bg-primary/10 transition-colors ${rating >= star ? "text-primary" : theme === "dark" ? "text-gray-600" : "text-gray-400"}`}
+                        className={`p-1 rounded-forge hover:bg-forge-ember/10 transition-all ${rating >= star ? "text-forge-ember" : theme === "dark" ? "text-forge-zinc" : "text-stone-400"}`}
                       >
                         <Star className="w-6 h-6" fill={rating >= star ? "currentColor" : "none"} />
                       </button>
                     ))}
                   </div>
                   {rating > 0 && (
-                    <span className={`text-sm ${theme === "dark" ? "text-gray-300" : "text-gray-700"}`}>
+                    <span className={`text-sm ${theme === "dark" ? "text-forge-silver" : "text-stone-700"}`}>
                       {rating === 1 && "Terrible response"}
                       {rating === 2 && "Poor response"}
                       {rating === 3 && "Okay response"}
@@ -136,20 +138,20 @@ export function FeedbackModal({ isOpen, onClose, message, chatId, workspaceId, s
 
               {/* Feedback Text */}
               <div className="flex-1">
-                <label className={`block text-sm font-medium mb-2 ${theme === "dark" ? "text-gray-300" : "text-gray-700"}`}>Additional Feedback</label>
+                <label className={`block text-sm font-medium mb-2 ${theme === "dark" ? "text-forge-silver" : "text-stone-700"}`}>Additional Feedback</label>
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Please provide any additional feedback..."
-                  className={`w-full px-4 py-3 rounded-lg border resize-none h-[300px] ${theme === "dark" ? "bg-dark border-dark-border text-gray-300 placeholder-gray-500" : "bg-white border-gray-300 text-gray-900 placeholder-gray-400"} focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent`}
+                  className={`w-full px-4 py-3 rounded-forge border resize-none h-[300px] ${theme === "dark" ? "bg-forge-charcoal border-forge-iron text-stone-100 placeholder-forge-zinc" : "bg-white border-stone-300 text-stone-900 placeholder-stone-400"} focus:outline-none focus:ring-2 focus:ring-forge-ember/50 focus:border-forge-ember/50`}
                 />
               </div>
 
-              <div className="flex justify-end gap-2 pt-4">
-                <button type="button" onClick={onClose} className={`px-4 py-2 text-sm rounded-lg transition-colors ${theme === "dark" ? "text-gray-300 hover:text-white bg-dark-border/40 hover:bg-dark-border/60" : "text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200"}`}>
+              <div className="flex justify-end gap-3 pt-4">
+                <button type="button" onClick={onClose} className={`px-4 py-2.5 text-sm font-medium rounded-forge transition-all ${theme === "dark" ? "text-forge-silver hover:text-stone-100 bg-forge-iron/50 hover:bg-forge-iron" : "text-stone-600 hover:text-stone-900 bg-stone-100 hover:bg-stone-200"}`}>
                   Cancel
                 </button>
-                <button type="submit" disabled={!description.trim()} className={`px-4 py-2 text-sm text-white rounded-lg transition-colors ${description.trim() ? "bg-primary hover:bg-primary/90" : "bg-gray-500 cursor-not-allowed"}`}>
+                <button type="submit" disabled={!description.trim()} className={`px-4 py-2.5 text-sm font-medium text-white rounded-forge transition-all ${description.trim() ? "bg-forge-ember hover:bg-forge-ember-bright hover:shadow-ember" : "bg-forge-zinc cursor-not-allowed"}`}>
                   Submit Feedback
                 </button>
               </div>

@@ -88,7 +88,7 @@ func CreatePlan(ctx context.Context, streamCh chan string, doneCh chan error, op
 	// }
 
 	stream := client.Messages.NewStreaming(context.TODO(), anthropic.MessageNewParams{
-		Model:     anthropic.F(anthropic.ModelClaude3_7Sonnet20250219),
+		Model:     anthropic.F(anthropic.ModelClaude3_5Haiku20241022),
 		MaxTokens: anthropic.F(int64(8192)),
 		// Tools:     anthropic.F(tools),
 		Messages: anthropic.F(messages),

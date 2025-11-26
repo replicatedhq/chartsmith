@@ -177,52 +177,65 @@ export function useCentrifugo({
       // Check if the file belongs to a chart
       let fileUpdated = false;
 
+      const updatedFile = {
+        id: artifactFile.id,
+        revisionNumber: artifactFile.revision_number,
+        filePath: artifactFile.filePath,
+        content: artifactFile.content || "",
+        contentPending: artifactFile.content_pending
+      };
+
       // Look for the file in charts
       if (artifactFile.chart_id) {
-        updatedWorkspace.charts = updatedWorkspace.charts.map(chart => {
-          if (chart.id === artifactFile.chart_id) {
-            // Check if the file already exists in the chart
-            const fileIndex = chart.files.findIndex(f => f.id === artifactFile.id || f.filePath === artifactFile.filePath);
+        // Check if the chart exists
+        const chartExists = updatedWorkspace.charts.some(chart => chart.id === artifactFile.chart_id);
 
-            const updatedFile = {
-              id: artifactFile.id,
-              revisionNumber: artifactFile.revision_number,
-              filePath: artifactFile.filePath,
-              content: artifactFile.content || "",
-              contentPending: artifactFile.content_pending
-            };
+        if (chartExists) {
+          // Update existing chart
+          updatedWorkspace.charts = updatedWorkspace.charts.map(chart => {
+            if (chart.id === artifactFile.chart_id) {
+              // Check if the file already exists in the chart
+              const fileIndex = chart.files.findIndex(f => f.id === artifactFile.id || f.filePath === artifactFile.filePath);
 
-            if (fileIndex >= 0) {
-              // Update existing file
-              const updatedFiles = [...chart.files];
-              updatedFiles[fileIndex] = updatedFile;
-              fileUpdated = true;
-              return {
-                ...chart,
-                files: updatedFiles
-              };
-            } else {
-              // Add new file
-              fileUpdated = true;
-              return {
-                ...chart,
-                files: [...chart.files, updatedFile]
-              };
+              if (fileIndex >= 0) {
+                // Update existing file
+                const updatedFiles = [...chart.files];
+                updatedFiles[fileIndex] = updatedFile;
+                fileUpdated = true;
+                return {
+                  ...chart,
+                  files: updatedFiles
+                };
+              } else {
+                // Add new file
+                fileUpdated = true;
+                return {
+                  ...chart,
+                  files: [...chart.files, updatedFile]
+                };
+              }
             }
-          }
-          return chart;
-        });
+            return chart;
+          });
+        } else {
+          // Chart doesn't exist yet - create it with the file
+          // Use a placeholder name that can be updated when Chart.yaml is received
+          const chartName = artifactFile.filePath.includes('Chart.yaml')
+            ? 'New Chart'
+            : artifactFile.chart_id;
+
+          const newChart = {
+            id: artifactFile.chart_id,
+            name: chartName,
+            files: [updatedFile]
+          };
+
+          updatedWorkspace.charts = [...updatedWorkspace.charts, newChart];
+          fileUpdated = true;
+        }
       } else {
         // Check loose files
         const fileIndex = updatedWorkspace.files.findIndex(f => f.id === artifactFile.id || f.filePath === artifactFile.filePath);
-
-        const updatedFile = {
-          id: artifactFile.id,
-          revisionNumber: artifactFile.revision_number,
-          filePath: artifactFile.filePath,
-          content: artifactFile.content || "",
-          contentPending: artifactFile.content_pending
-        };
 
         if (fileIndex >= 0) {
           // Update existing file
@@ -321,7 +334,6 @@ export function useCentrifugo({
               );
 
               if (alreadyHasRenderForRevision) {
-                console.debug(`Skipping duplicate render for revision ${formattedRender.revisionNumber}`);
                 return prev;
               }
 
@@ -497,6 +509,11 @@ export function useCentrifugo({
 
     // Move setupCentrifuge outside of the effect to avoid recreating on each render
     const setupCentrifuge = async () => {
+      // Wait for config to be loaded
+      if (!publicEnv.NEXT_PUBLIC_CENTRIFUGO_ADDRESS) {
+        return;
+      }
+
       // Prevent multiple connection attempts if already connecting
       if (centrifugeRef.current) {
         return;
@@ -504,12 +521,10 @@ export function useCentrifugo({
 
       const token = await getCentrifugoTokenAction(session);
       if (!token) {
-        console.log(`Failed to get Centrifugo token`);
         return;
       }
 
       if (!publicEnv.NEXT_PUBLIC_CENTRIFUGO_ADDRESS) {
-        console.log(`Failed to get Centrifugo address`);
         return;
       }
 
@@ -517,7 +532,6 @@ export function useCentrifugo({
         timeout: 5000,
         token,
         getToken: async () => {
-          console.log(`Centrifugo refreshing token`);
           const token = await getCentrifugoTokenAction(session);
           return token;
         }
@@ -527,17 +541,14 @@ export function useCentrifugo({
 
       // Memoize event handlers to prevent recreating them
       const handleConnect = () => {
-        console.log(`Centrifugo connected`);
         setIsReconnecting(false);
       };
 
       const handleDisconnect = async (ctx: any) => {
-        console.log(`Centrifugo disconnected`, { ctx });
         setIsReconnecting(true);
 
         if (session && centrifugeRef.current) {
           try {
-            console.log(`Attempting to refresh Centrifugo token`);
             const newToken = await getCentrifugoTokenAction(session);
             if (centrifugeRef.current && newToken) {
               centrifugeRef.current.setToken(newToken);
@@ -546,7 +557,7 @@ export function useCentrifugo({
               }, RECONNECT_DELAY_MS);
             }
           } catch (err) {
-            console.log('Failed to refresh Centrifugo token after error', { err });
+            // error handling
           }
         }
       };
@@ -554,7 +565,6 @@ export function useCentrifugo({
       centrifuge.on("connected", handleConnect);
       centrifuge.on("disconnected", handleDisconnect);
       centrifuge.on("error", (ctx) => {
-        console.log(`Centrifugo error`, { ctx });
         if (ctx.error.code === 109) {
           handleDisconnect(ctx);
         }
@@ -566,10 +576,9 @@ export function useCentrifugo({
 
       sub.on("publication", handleCentrifugoMessage);
       sub.on("error", (ctx) => {
-        console.log(`Subscription error`, { ctx });
+        // subscription error
       });
       sub.on("subscribed", async () => {
-        console.log('Successfully subscribed to:', channel);
 
         // call a server action to replay the events we maybe missed
         // when we first connected
@@ -604,7 +613,7 @@ export function useCentrifugo({
 
     setupCentrifuge();
     return () => cleanup?.();
-  }, [session?.user?.id, workspace?.id]); // Removed handleCentrifugoMessage from dependencies
+  }, [session?.user?.id, workspace?.id, publicEnv]); // Added publicEnv to dependencies
 
   return {
     handleCentrifugoMessage,

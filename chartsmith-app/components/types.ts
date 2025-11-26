@@ -21,6 +21,15 @@ export interface Prompt {
   filesSent: string[];
 }
 
+// Tool invocation type for AI SDK compatibility
+export interface ToolInvocation {
+  toolCallId: string;
+  toolName: string;
+  args: Record<string, unknown>;
+  state: 'partial-call' | 'call' | 'result';
+  result?: unknown;
+}
+
 export interface Message {
   id: string;
   prompt: string;
@@ -41,6 +50,12 @@ export interface Message {
   responseRollbackToRevisionNumber?: number;
   planId?: string;
   revisionNumber?: number;
+  // AI SDK compatibility fields
+  role?: 'user' | 'assistant' | 'system' | 'tool';
+  content?: string; // Alternative to response for AI SDK format
+  toolInvocations?: ToolInvocation[];
+  // Streaming state
+  isStreaming?: boolean;
 }
 
 // Interface for raw message from server before normalization
@@ -142,13 +157,6 @@ export interface RawArtifact {
   path: string;
   content: string;
   contentPending?: string;
-}
-
-// Interface for raw message from server before normalization
-export interface RawMessage {
-  id: string;
-  prompt: string;
-  response?: string;
 }
 
 export interface RawPlan {

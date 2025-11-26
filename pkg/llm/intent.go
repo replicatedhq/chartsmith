@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
-	"github.com/jpoz/groq"
+	anthropic "github.com/anthropics/anthropic-sdk-go"
 	"github.com/replicatedhq/chartsmith/pkg/logger"
-	"github.com/replicatedhq/chartsmith/pkg/param"
 	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 	"go.uber.org/zap"
 )
@@ -17,9 +17,12 @@ func GetChatMessageIntent(ctx context.Context, prompt string, isInitialPrompt bo
 		zap.String("prompt", prompt),
 		zap.Bool("isInitialPrompt", isInitialPrompt))
 
-	client := groq.NewClient(groq.WithAPIKey(param.Get().GroqAPIKey))
+	client, err := newAnthropicClient(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create anthropic client: %w", err)
+	}
 
-	// deepseek r1 recommends no system prompt, include everything in the user prompt
+	// Build the user message based on persona
 	userMessage := ""
 
 	if messageFromPersona == nil || *messageFromPersona == workspacetypes.ChatMessageFromPersonaAuto {
@@ -83,26 +86,37 @@ func GetChatMessageIntent(ctx context.Context, prompt string, isInitialPrompt bo
 
 	}
 
-	response, err := client.CreateChatCompletion(groq.CompletionCreateParams{
-		Model: "llama-3.3-70b-versatile",
-		ResponseFormat: groq.ResponseFormat{
-			Type: "json_object",
-		},
-		Messages: []groq.Message{
-			{
-				Role:    "user",
-				Content: userMessage,
-			},
-		},
+	response, err := client.Messages.New(ctx, anthropic.MessageNewParams{
+		Model:     anthropic.F(anthropic.ModelClaude3_5Haiku20241022),
+		MaxTokens: anthropic.F(int64(1024)),
+		Messages: anthropic.F([]anthropic.MessageParam{
+			anthropic.NewUserMessage(anthropic.NewTextBlock(userMessage)),
+		}),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get chat message intent: %w", err)
 	}
 
+	// Extract text content from response
+	responseText := ""
+	for _, block := range response.Content {
+		if block.Type == anthropic.ContentBlockTypeText {
+			responseText = block.Text
+			break
+		}
+	}
+
+	// Clean up the response - remove markdown code blocks if present
+	responseText = strings.TrimSpace(responseText)
+	responseText = strings.TrimPrefix(responseText, "```json")
+	responseText = strings.TrimPrefix(responseText, "```")
+	responseText = strings.TrimSuffix(responseText, "```")
+	responseText = strings.TrimSpace(responseText)
+
 	var parsedResponse map[string]interface{}
-	err = json.Unmarshal([]byte(response.Choices[0].Message.Content), &parsedResponse)
+	err = json.Unmarshal([]byte(responseText), &parsedResponse)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+		return nil, fmt.Errorf("failed to unmarshal response: %w (response was: %s)", err, responseText)
 	}
 
 	intent := &workspacetypes.Intent{}
@@ -146,29 +160,36 @@ func FeedbackOnNotDeveloperIntentWhenRequested(ctx context.Context, streamCh cha
 	logger.Debug("FeedbackOnNotDeveloperIntentWhenRequested",
 		zap.String("prompt", chatMessage.Prompt),
 	)
-	client := groq.NewClient(groq.WithAPIKey(param.Get().GroqAPIKey))
 
-	chatCompletion, err := client.CreateChatCompletion(groq.CompletionCreateParams{
-		Model:  "llama-3.3-70b-versatile",
-		Stream: true,
-		Messages: []groq.Message{
-			{
-				Role:    "system",
-				Content: "You are Chartsmith, an expert Helm chart developer. You are currently pairing with a user who is trying to create a Helm chart. They asked you the following question and asked you to answer it as a developer. However, you are unable to answer the question as a developer. Explain to the user that the message cannot be answered as a chart developer and why.",
-			},
-			{
-				Role:    "user",
-				Content: chatMessage.Prompt,
-			},
-		},
-	})
-
+	client, err := newAnthropicClient(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to get chat message intent: %w", err)
+		doneCh <- fmt.Errorf("failed to create anthropic client: %w", err)
+		return err
 	}
 
-	for delta := range chatCompletion.Stream {
-		streamCh <- delta.Choices[0].Delta.Content
+	systemPrompt := "You are Chartsmith, an expert Helm chart developer. You are currently pairing with a user who is trying to create a Helm chart. They asked you the following question and asked you to answer it as a developer. However, you are unable to answer the question as a developer. Explain to the user that the message cannot be answered as a chart developer and why."
+
+	stream := client.Messages.NewStreaming(ctx, anthropic.MessageNewParams{
+		Model:     anthropic.F(anthropic.ModelClaude3_5Haiku20241022),
+		MaxTokens: anthropic.F(int64(1024)),
+		System:    anthropic.F([]anthropic.TextBlockParam{anthropic.NewTextBlock(systemPrompt)}),
+		Messages: anthropic.F([]anthropic.MessageParam{
+			anthropic.NewUserMessage(anthropic.NewTextBlock(chatMessage.Prompt)),
+		}),
+	})
+
+	for stream.Next() {
+		event := stream.Current()
+		if delta, ok := event.Delta.(anthropic.ContentBlockDeltaEventDelta); ok {
+			if delta.Text != "" {
+				streamCh <- delta.Text
+			}
+		}
+	}
+
+	if err := stream.Err(); err != nil {
+		doneCh <- fmt.Errorf("streaming error: %w", err)
+		return err
 	}
 
 	doneCh <- nil
@@ -179,29 +200,36 @@ func FeedbackOnNotOperatorIntentWhenRequested(ctx context.Context, streamCh chan
 	logger.Debug("FeedbackOnNotOperatorIntentWhenRequested",
 		zap.String("prompt", chatMessage.Prompt),
 	)
-	client := groq.NewClient(groq.WithAPIKey(param.Get().GroqAPIKey))
 
-	chatCompletion, err := client.CreateChatCompletion(groq.CompletionCreateParams{
-		Model:  "llama-3.3-70b-versatile",
-		Stream: true,
-		Messages: []groq.Message{
-			{
-				Role:    "system",
-				Content: "You are Chartsmith, an expert Helm chart developer. You are currently pairing with a user who is trying to create a Helm chart. They asked you the following question and asked you to answer it as an operator. However, you are unable to answer the question as an operator. Explain to the user that the message cannot be answered as a chart operator / end-user and why.",
-			},
-			{
-				Role:    "user",
-				Content: chatMessage.Prompt,
-			},
-		},
-	})
-
+	client, err := newAnthropicClient(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to get chat message intent: %w", err)
+		doneCh <- fmt.Errorf("failed to create anthropic client: %w", err)
+		return err
 	}
 
-	for delta := range chatCompletion.Stream {
-		streamCh <- delta.Choices[0].Delta.Content
+	systemPrompt := "You are Chartsmith, an expert Helm chart developer. You are currently pairing with a user who is trying to create a Helm chart. They asked you the following question and asked you to answer it as an operator. However, you are unable to answer the question as an operator. Explain to the user that the message cannot be answered as a chart operator / end-user and why."
+
+	stream := client.Messages.NewStreaming(ctx, anthropic.MessageNewParams{
+		Model:     anthropic.F(anthropic.ModelClaude3_5Haiku20241022),
+		MaxTokens: anthropic.F(int64(1024)),
+		System:    anthropic.F([]anthropic.TextBlockParam{anthropic.NewTextBlock(systemPrompt)}),
+		Messages: anthropic.F([]anthropic.MessageParam{
+			anthropic.NewUserMessage(anthropic.NewTextBlock(chatMessage.Prompt)),
+		}),
+	})
+
+	for stream.Next() {
+		event := stream.Current()
+		if delta, ok := event.Delta.(anthropic.ContentBlockDeltaEventDelta); ok {
+			if delta.Text != "" {
+				streamCh <- delta.Text
+			}
+		}
+	}
+
+	if err := stream.Err(); err != nil {
+		doneCh <- fmt.Errorf("streaming error: %w", err)
+		return err
 	}
 
 	doneCh <- nil
@@ -209,29 +237,35 @@ func FeedbackOnNotOperatorIntentWhenRequested(ctx context.Context, streamCh chan
 }
 
 func FeedbackOnAmbiguousIntent(ctx context.Context, streamCh chan string, doneCh chan error, chatMessage *workspacetypes.Chat) error {
-	client := groq.NewClient(groq.WithAPIKey(param.Get().GroqAPIKey))
-
-	chatCompletion, err := client.CreateChatCompletion(groq.CompletionCreateParams{
-		Model:  "llama-3.3-70b-versatile",
-		Stream: true,
-		Messages: []groq.Message{
-			{
-				Role:    "system",
-				Content: "You are Chartsmith, an expert Helm chart developer. You are currently pairing with a user who is trying to create a Helm chart. You are given a prompt from the user, and you are unable to figure out it's intent. Politelty ask the user to clarify their message.",
-			},
-			{
-				Role:    "user",
-				Content: chatMessage.Prompt,
-			},
-		},
-	})
-
+	client, err := newAnthropicClient(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to get chat message intent: %w", err)
+		doneCh <- fmt.Errorf("failed to create anthropic client: %w", err)
+		return err
 	}
 
-	for delta := range chatCompletion.Stream {
-		streamCh <- delta.Choices[0].Delta.Content
+	systemPrompt := "You are Chartsmith, an expert Helm chart developer. You are currently pairing with a user who is trying to create a Helm chart. You are given a prompt from the user, and you are unable to figure out it's intent. Politelty ask the user to clarify their message."
+
+	stream := client.Messages.NewStreaming(ctx, anthropic.MessageNewParams{
+		Model:     anthropic.F(anthropic.ModelClaude3_5Haiku20241022),
+		MaxTokens: anthropic.F(int64(1024)),
+		System:    anthropic.F([]anthropic.TextBlockParam{anthropic.NewTextBlock(systemPrompt)}),
+		Messages: anthropic.F([]anthropic.MessageParam{
+			anthropic.NewUserMessage(anthropic.NewTextBlock(chatMessage.Prompt)),
+		}),
+	})
+
+	for stream.Next() {
+		event := stream.Current()
+		if delta, ok := event.Delta.(anthropic.ContentBlockDeltaEventDelta); ok {
+			if delta.Text != "" {
+				streamCh <- delta.Text
+			}
+		}
+	}
+
+	if err := stream.Err(); err != nil {
+		doneCh <- fmt.Errorf("streaming error: %w", err)
+		return err
 	}
 
 	doneCh <- nil
@@ -239,34 +273,35 @@ func FeedbackOnAmbiguousIntent(ctx context.Context, streamCh chan string, doneCh
 }
 
 func DeclineOffTopicChatMessage(ctx context.Context, streamCh chan string, doneCh chan error, chatMessage *workspacetypes.Chat) error {
-	client := groq.NewClient(groq.WithAPIKey(param.Get().GroqAPIKey))
-
-	chatCompletion, err := client.CreateChatCompletion(groq.CompletionCreateParams{
-		Model:  "llama-3.3-70b-versatile",
-		Stream: true,
-		Messages: []groq.Message{
-			{
-				Role:    "system",
-				Content: "You are Chartsmith, an expert Helm chart developer. You are currently pairing with a user who is trying to create a Helm chart. You are given a prompt from the user and you need to decline the prompt because it is off topic.",
-			},
-			{
-				Role:    "user",
-				Content: chatMessage.Prompt,
-			},
-		},
-	})
-
+	client, err := newAnthropicClient(ctx)
 	if err != nil {
-		doneCh <- fmt.Errorf("failed to decline off-topic chat message: %w", err)
-		return fmt.Errorf("failed to decline off-topic chat message: %w", err)
+		doneCh <- fmt.Errorf("failed to create anthropic client: %w", err)
+		return err
 	}
 
-	// anthropic and groq work differently here, and we want to limit that
-	// to this llm package.
-	// so we need to make sure we only send the delta to the streamCh
+	systemPrompt := "You are Chartsmith, an expert Helm chart developer. You are currently pairing with a user who is trying to create a Helm chart. You are given a prompt from the user and you need to decline the prompt because it is off topic."
 
-	for delta := range chatCompletion.Stream {
-		streamCh <- delta.Choices[0].Delta.Content
+	stream := client.Messages.NewStreaming(ctx, anthropic.MessageNewParams{
+		Model:     anthropic.F(anthropic.ModelClaude3_5Haiku20241022),
+		MaxTokens: anthropic.F(int64(1024)),
+		System:    anthropic.F([]anthropic.TextBlockParam{anthropic.NewTextBlock(systemPrompt)}),
+		Messages: anthropic.F([]anthropic.MessageParam{
+			anthropic.NewUserMessage(anthropic.NewTextBlock(chatMessage.Prompt)),
+		}),
+	})
+
+	for stream.Next() {
+		event := stream.Current()
+		if delta, ok := event.Delta.(anthropic.ContentBlockDeltaEventDelta); ok {
+			if delta.Text != "" {
+				streamCh <- delta.Text
+			}
+		}
+	}
+
+	if err := stream.Err(); err != nil {
+		doneCh <- fmt.Errorf("streaming error: %w", err)
+		return err
 	}
 
 	doneCh <- nil

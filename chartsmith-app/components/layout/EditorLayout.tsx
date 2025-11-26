@@ -24,11 +24,18 @@ export function EditorLayout({ children }: EditorLayoutProps) {
   } = useCommandMenu();
 
   return (
-    <div className={`h-screen flex flex-col overflow-hidden ${theme === "dark" ? "bg-dark" : "bg-white"}`}>
-      <div className="flex-none">
+    <div className={`h-screen flex flex-col overflow-hidden ${
+      theme === "dark" ? "bg-forge-black" : "bg-stone-50"
+    }`}>
+      {/* Subtle background pattern */}
+      <div className={`fixed inset-0 pattern-dots pointer-events-none ${
+        theme === "dark" ? "opacity-20" : "opacity-10"
+      }`} />
+
+      <div className="flex-none relative z-20">
         <TopNav />
       </div>
-      <div className="flex-1 flex min-h-0 w-full max-w-[100vw] overflow-hidden">
+      <div className="flex-1 flex min-h-0 w-full max-w-[100vw] overflow-hidden relative z-10">
         {children}
         <DebugPanel isVisible={isDebugVisible} />
       </div>

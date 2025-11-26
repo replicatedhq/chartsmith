@@ -4,3 +4,11 @@ bin
 test-results/
 .envrc
 .specstory/
+
+# Temp and backup files
+*.bak
+temp_*/
+temp_chart/
+*.tgz
+cmd/repro*/
+**/repro_test.go

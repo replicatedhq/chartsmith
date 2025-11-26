@@ -352,6 +352,16 @@ func SetCurrentRevision(ctx context.Context, tx pgx.Tx, workspace *types.Workspa
 		return nil, fmt.Errorf("error updating workspace: %w", err)
 	}
 
+	// Promote pending content to content for all files in this revision
+	_, err = tx.Exec(ctx, `
+		UPDATE workspace_file
+		SET content = content_pending, content_pending = NULL
+		WHERE workspace_id = $1 AND revision_number = $2 AND content_pending IS NOT NULL
+	`, workspace.ID, revision)
+	if err != nil {
+		return nil, fmt.Errorf("failed to promote content pending: %w", err)
+	}
+
 	query = `UPDATE workspace_revision set is_complete = true WHERE workspace_id = $1 AND revision_number = $2`
 	_, err = tx.Exec(ctx, query, workspace.ID, revision)
 	if err != nil {

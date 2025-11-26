@@ -20,17 +20,33 @@ const (
 	TextEditor_Sonnet37 = "text_editor_20250124"
 	TextEditor_Sonnet35 = "text_editor_20241022"
 
-	Model_Sonnet37 = "claude-3-7-sonnet-20250219"
-	Model_Sonnet35 = "claude-3-5-sonnet-20241022"
+	Model_Sonnet37 = "claude-sonnet-4-5-20250929"
+	Model_Sonnet35 = "claude-sonnet-4-5-20250929"
 
 	minFuzzyMatchLen  = 50 // Minimum length for fuzzy matching
 	fuzzyMatchTimeout = 10 * time.Second
 	chunkSize         = 200 // Increased chunk size for better performance
+
+	// Rate limit retry parameters
+	maxRateLimitRetries = 5
+	initialRetryDelay   = 30 * time.Second // Start with 30 seconds for rate limits
+	maxRetryDelay       = 2 * time.Minute  // Cap at 2 minutes
 )
 
 type CreateWorkspaceFromArchiveAction struct {
 	ArchivePath string `json:"archivePath"`
 	ArchiveType string `json:"archiveType"` // New field: "helm" or "k8s"
+}
+
+// isRateLimitError checks if an error is a rate limit (429) error
+func isRateLimitError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	return strings.Contains(errStr, "429") ||
+		strings.Contains(errStr, "rate_limit") ||
+		strings.Contains(errStr, "Too Many Requests")
 }
 
 // StrReplaceLog represents a record in the str_replace_log table
@@ -239,23 +255,23 @@ func PerformStringReplacement(content, oldStr, newStr string) (string, bool, err
 	// Add logging to track performance
 	startTime := time.Now()
 	defer func() {
-		logger.Debug("String replacement operation completed", 
+		logger.Debug("String replacement operation completed",
 			zap.Duration("time_taken", time.Since(startTime)))
 	}()
-	
+
 	// Log content sizes for diagnostics
-	logger.Debug("Starting string replacement", 
-		zap.Int("content_size", len(content)), 
+	logger.Debug("Starting string replacement",
+		zap.Int("content_size", len(content)),
 		zap.Int("old_string_size", len(oldStr)),
 		zap.Int("new_string_size", len(newStr)))
-	
+
 	// First try exact match
 	if strings.Contains(content, oldStr) {
 		logger.Debug("Found exact match, performing replacement")
 		updatedContent := strings.ReplaceAll(content, oldStr, newStr)
 		return updatedContent, true, nil
 	}
-	
+
 	logger.Debug("No exact match found, attempting fuzzy matching")
 
 	// Create a context with timeout for fuzzy matching
@@ -272,19 +288,19 @@ func PerformStringReplacement(content, oldStr, newStr string) (string, bool, err
 	go func() {
 		logger.Debug("Starting fuzzy match search")
 		fuzzyStartTime := time.Now()
-		
+
 		start, end := findBestMatchRegion(content, oldStr, minFuzzyMatchLen)
-		
-		logger.Debug("Fuzzy match search completed", 
+
+		logger.Debug("Fuzzy match search completed",
 			zap.Duration("time_taken", time.Since(fuzzyStartTime)),
 			zap.Int("start_pos", start),
 			zap.Int("end_pos", end))
-			
+
 		if start == -1 || end == -1 {
 			resultCh <- struct {
 				start, end int
 				err        error
-			}{-1, -1, fmt.Errorf("Approximate match for replacement not found")}
+			}{-1, -1, fmt.Errorf("approximate match for replacement not found")}
 			return
 		}
 		resultCh <- struct {
@@ -301,15 +317,15 @@ func PerformStringReplacement(content, oldStr, newStr string) (string, bool, err
 			return content, false, result.err
 		}
 		// Replace the matched region with newStr
-		logger.Debug("Found fuzzy match, performing replacement", 
-			zap.Int("match_start", result.start), 
+		logger.Debug("Found fuzzy match, performing replacement",
+			zap.Int("match_start", result.start),
 			zap.Int("match_end", result.end),
-			zap.Int("match_length", result.end - result.start))
-			
+			zap.Int("match_length", result.end-result.start))
+
 		updatedContent := content[:result.start] + newStr + content[result.end:]
 		return updatedContent, false, nil
 	case <-ctx.Done():
-		logger.Warn("Fuzzy matching timed out", 
+		logger.Warn("Fuzzy matching timed out",
 			zap.Duration("timeout", fuzzyMatchTimeout),
 			zap.Duration("time_elapsed", time.Since(startTime)))
 		return content, false, fmt.Errorf("fuzzy matching timed out after %v", fuzzyMatchTimeout)
@@ -319,8 +335,8 @@ func PerformStringReplacement(content, oldStr, newStr string) (string, bool, err
 func findBestMatchRegion(content, oldStr string, minMatchLen int) (int, int) {
 	// Early return if strings are too small
 	if len(oldStr) < minMatchLen {
-		logger.Debug("String too small for fuzzy matching", 
-			zap.Int("length", len(oldStr)), 
+		logger.Debug("String too small for fuzzy matching",
+			zap.Int("length", len(oldStr)),
 			zap.Int("min_length", minMatchLen))
 		return -1, -1
 	}
@@ -328,7 +344,7 @@ func findBestMatchRegion(content, oldStr string, minMatchLen int) (int, int) {
 	bestStart := -1
 	bestEnd := -1
 	bestLen := 0
-	
+
 	// Set a max number of chunks to process to prevent excessive computation
 	maxChunks := 100
 	chunksProcessed := 0
@@ -344,32 +360,32 @@ func findBestMatchRegion(content, oldStr string, minMatchLen int) (int, int) {
 
 		// Get the current chunk
 		chunk := oldStr[i:chunkEnd]
-		
+
 		// Skip empty or tiny chunks
 		if len(chunk) < 10 {
 			continue
 		}
-		
+
 		chunksProcessed++
-		
+
 		// Find all occurrences of this chunk in the content
 		start := 0
-		maxOccurrences := 100  // Limit number of occurrences to check
+		maxOccurrences := 100 // Limit number of occurrences to check
 		occurrencesChecked := 0
-		
-		logger.Debug("Processing chunk", 
-			zap.Int("chunk_index", i), 
+
+		logger.Debug("Processing chunk",
+			zap.Int("chunk_index", i),
 			zap.Int("chunk_size", len(chunk)),
 			zap.Int("chunks_processed", chunksProcessed))
-		
+
 		for occurrencesChecked < maxOccurrences {
 			idx := strings.Index(content[start:], chunk)
 			if idx == -1 {
 				break
 			}
-			
+
 			occurrencesChecked++
-			
+
 			// Adjust index to be relative to the start of content
 			idx += start
 
@@ -377,7 +393,7 @@ func findBestMatchRegion(content, oldStr string, minMatchLen int) (int, int) {
 			matchStart := idx
 			matchEnd := idx + len(chunk)
 			matchLen := len(chunk)
-			
+
 			// Store the original i value, we'll need it for backward extension
 			originalI := i
 
@@ -393,7 +409,7 @@ func findBestMatchRegion(content, oldStr string, minMatchLen int) (int, int) {
 
 			// Try to extend backward
 			// Critical fix: don't modify the outer loop variable i here
-			backPos := originalI - 1  // Start one position before chunk
+			backPos := originalI - 1 // Start one position before chunk
 			for matchStart > 0 && backPos >= 0 {
 				if content[matchStart-1] == oldStr[backPos] {
 					matchStart--
@@ -408,8 +424,8 @@ func findBestMatchRegion(content, oldStr string, minMatchLen int) (int, int) {
 				bestStart = matchStart
 				bestEnd = matchEnd
 				bestLen = matchLen
-				
-				logger.Debug("Found better match", 
+
+				logger.Debug("Found better match",
 					zap.Int("match_length", matchLen),
 					zap.Int("match_start", matchStart),
 					zap.Int("match_end", matchEnd))
@@ -421,13 +437,13 @@ func findBestMatchRegion(content, oldStr string, minMatchLen int) (int, int) {
 	}
 
 	if bestLen >= minMatchLen {
-		logger.Debug("Found best match", 
+		logger.Debug("Found best match",
 			zap.Int("best_length", bestLen),
 			zap.Int("best_start", bestStart),
 			zap.Int("best_end", bestEnd))
 		return bestStart, bestEnd
 	}
-	
+
 	logger.Debug("No match found with minimum length",
 		zap.Int("best_length", bestLen),
 		zap.Int("required_min_length", minMatchLen))
@@ -540,34 +556,68 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 	disabled = "disabled"
 
 	for {
-		stream := client.Messages.NewStreaming(ctx, anthropic.MessageNewParams{
-			Model:     anthropic.F(Model_Sonnet35),
-			MaxTokens: anthropic.F(int64(8192)),
-			Messages:  anthropic.F(messages),
-			Tools:     anthropic.F(toolUnionParams),
-			Thinking: anthropic.F[anthropic.ThinkingConfigParamUnion](anthropic.ThinkingConfigEnabledParam{
-				Type: anthropic.F(disabled),
-			}),
-		})
+		// Retry loop for rate limit errors
+		var message anthropic.Message
+		retryDelay := initialRetryDelay
 
-		message := anthropic.Message{}
-		for stream.Next() {
-			event := stream.Current()
-			err := message.Accumulate(event)
-			if err != nil {
-				return "", err
-			}
-
-			switch event := event.AsUnion().(type) {
-			case anthropic.ContentBlockDeltaEvent:
-				if event.Delta.Text != "" {
-					fmt.Printf("%s", event.Delta.Text)
+		for attempt := 0; attempt <= maxRateLimitRetries; attempt++ {
+			if attempt > 0 {
+				logger.Info("Rate limit retry attempt",
+					zap.Int("attempt", attempt),
+					zap.Duration("delay", retryDelay))
+				time.Sleep(retryDelay)
+				// Exponential backoff with cap
+				retryDelay = retryDelay * 2
+				if retryDelay > maxRetryDelay {
+					retryDelay = maxRetryDelay
 				}
 			}
-		}
 
-		if stream.Err() != nil {
-			return "", stream.Err()
+			stream := client.Messages.NewStreaming(ctx, anthropic.MessageNewParams{
+				Model:     anthropic.F(Model_Sonnet35),
+				MaxTokens: anthropic.F(int64(8192)),
+				Messages:  anthropic.F(messages),
+				Tools:     anthropic.F(toolUnionParams),
+				Thinking: anthropic.F[anthropic.ThinkingConfigParamUnion](anthropic.ThinkingConfigEnabledParam{
+					Type: anthropic.F(disabled),
+				}),
+			})
+
+			message = anthropic.Message{}
+			for stream.Next() {
+				event := stream.Current()
+				err := message.Accumulate(event)
+				if err != nil {
+					return "", err
+				}
+
+				switch event := event.AsUnion().(type) {
+				case anthropic.ContentBlockDeltaEvent:
+					if event.Delta.Text != "" {
+						// do nothing
+					}
+				}
+			}
+
+			streamErr := stream.Err()
+			if streamErr == nil {
+				break // Success, exit retry loop
+			}
+
+			// Check if it's a rate limit error
+			if isRateLimitError(streamErr) {
+				if attempt == maxRateLimitRetries {
+					return "", fmt.Errorf("rate limit exceeded after %d retries: %w", maxRateLimitRetries, streamErr)
+				}
+				logger.Warn("Rate limit error, will retry",
+					zap.Error(streamErr),
+					zap.Int("attempt", attempt+1),
+					zap.Int("maxRetries", maxRateLimitRetries))
+				continue // Retry
+			}
+
+			// Not a rate limit error, return immediately
+			return "", streamErr
 		}
 
 		messages = append(messages, message.ToParam())

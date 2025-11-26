@@ -12,7 +12,62 @@ import yaml from 'yaml';
 export async function getFilesFromBytes(bytes: ArrayBuffer, fileName: string): Promise<WorkspaceFile[]> {
   const id = srs.default({ length: 12, alphanumeric: true });
 
-  // save the bytes to a tmp file
+  // Check if the file is a plain YAML file (not an archive)
+  const fileBuffer = Buffer.from(bytes);
+  const isYamlFile = fileName.toLowerCase().endsWith('.yaml') || fileName.toLowerCase().endsWith('.yml');
+  
+  // Check if it's gzipped (tar.gz) - if so, it's definitely an archive
+  const isGzipped = fileBuffer[0] === 0x1f && fileBuffer[1] === 0x8b;
+  
+  // If it's a YAML file and not gzipped, treat it as a plain file(s)
+  // Kubernetes manifests often have multiple documents separated by ---
+  if (isYamlFile && !isGzipped) {
+    const content = fileBuffer.toString('utf-8');
+    
+    // Split by --- separator to handle multi-document YAML files
+    const documents = content.split(/^---\s*$/m).filter(doc => doc.trim().length > 0);
+    
+    // If it's a single document or multiple documents, create files
+    if (documents.length === 1) {
+      // Single file
+      return [{
+        id: srs.default({ length: 12, alphanumeric: true }),
+        filePath: fileName,
+        content: documents[0].trim(),
+        revisionNumber: 0,
+      }];
+    } else {
+      // Multiple documents - create separate files
+      const files: WorkspaceFile[] = [];
+      for (let i = 0; i < documents.length; i++) {
+        const doc = documents[i].trim();
+        if (doc.length === 0) continue;
+        
+        // Try to extract a name from the YAML document
+        let docName = `manifest-${i + 1}.yaml`;
+        try {
+          const parsed = yaml.parse(doc);
+          if (parsed.kind && parsed.metadata?.name) {
+            docName = `${parsed.kind.toLowerCase()}-${parsed.metadata.name}.yaml`;
+          } else if (parsed.kind) {
+            docName = `${parsed.kind.toLowerCase()}-${i + 1}.yaml`;
+          }
+        } catch (e) {
+          // If parsing fails, use default name
+        }
+        
+        files.push({
+          id: srs.default({ length: 12, alphanumeric: true }),
+          filePath: docName,
+          content: doc,
+          revisionNumber: 0,
+        });
+      }
+      return files;
+    }
+  }
+
+  // Otherwise, treat it as an archive and extract it
   const tmpDir = path.join(os.tmpdir(), 'chartsmith-chart-archive-' + Date.now());
   await fs.mkdir(tmpDir);
 
@@ -23,10 +78,6 @@ export async function getFilesFromBytes(bytes: ArrayBuffer, fileName: string): P
   // Create extraction directory with base name (without extension)
   const extractPath = path.join(tmpDir, 'extracted');
   await fs.mkdir(extractPath);
-
-  // Check if the file is gzipped by looking at magic numbers
-  const fileBuffer = Buffer.from(bytes);
-  const isGzipped = fileBuffer[0] === 0x1f && fileBuffer[1] === 0x8b;
 
   // Extract the file based on whether it's gzipped or not
   await new Promise<void>((resolve, reject) => {
@@ -139,7 +190,6 @@ async function downloadChartFilesFromArtifactHub(url: string): Promise<Workspace
     const chart = await getArtifactHubChart(org, name);
 
     if (chart && chart.content_url) {
-      console.log(`Using cached chart from local database: ${org}/${name} v${chart.version}`);
       // We found the chart in our local database
       const extractPath = await downloadChartArchiveFromURL(chart.content_url);
       await removeBinaryFilesInPath(extractPath);

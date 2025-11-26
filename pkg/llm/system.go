@@ -106,6 +106,7 @@ const cleanupConvertedValuesSystemPrompt = commonSystemPrompt + `
   - Remove any stray and leftover patch markers.
   - Remove any comments that show it was added or merged.
   - Leave comments that explain the values only.
+  - Your response MUST contain a <chartsmithArtifact path="values.yaml">...</chartsmithArtifact> block with the cleaned up content.
 </cleanup_instructions>`
 
 const executePlanSystemPrompt = commonSystemPrompt + `
@@ -117,6 +118,7 @@ const executePlanSystemPrompt = commonSystemPrompt + `
   5. You don't need to explain the change, just provide the artifact(s) in your response.
   6. Do not provide any other comments, just edit the files.
   7. Do not describe what you are going to do, just do it.
+  8. Wrap your output in <chartsmithArtifact path="path/to/file">...</chartsmithArtifact> tags.
 </execution_instructions>`
 
 const convertFileSystemPrompt = commonSystemPrompt + `
@@ -136,5 +138,8 @@ const convertFileSystemPrompt = commonSystemPrompt + `
      - Only add/remove lines should have "+" or "-" prefixes
   - When asked to convert a Kubernetes manifest, you MUST return the entire converted manifest.
   - When creating new values for the values.yaml, expect that this will be a complex chart and you should not have a very flat values.yaml schema
+  - Your response MUST contain one or more <chartsmithArtifact path="path/to/file">...</chartsmithArtifact> blocks.
+  - For the converted manifest, use path="templates/filename.yaml" (e.g., templates/deployment.yaml).
+  - For the updated values.yaml, use path="values.yaml".
 </convert_file_instructions>
 `

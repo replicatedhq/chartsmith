@@ -1,4 +1,3 @@
-"use server"
 import { WorkspaceContent } from "@/components/WorkspaceContent";
 import { getWorkspaceAction } from "@/lib/workspace/actions/get-workspace";
 import { validateSession } from "@/lib/auth/actions/validate-session";

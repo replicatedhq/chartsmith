@@ -31,6 +31,8 @@ export function SettingsModal({ isOpen, onClose, session }: SettingsModalProps) 
   const [savingAutoAccept, setSavingAutoAccept] = useState(false);
   const [savingValidate, setSavingValidate] = useState(false);
   const [publicEnv, setPublicEnv] = useState<Record<string, string>>({});
+  const [showMinimap, setShowMinimap] = useState(true);
+  const [tabSize, setTabSize] = useState('2 spaces');
 
   useEffect(() => {
     const fetchConfig = async () => {
@@ -73,7 +75,6 @@ export function SettingsModal({ isOpen, onClose, session }: SettingsModalProps) 
 
   const handleReplicatedConnect = () => {
     if (!publicEnv.NEXT_PUBLIC_REPLICATED_REDIRECT_URI) {
-      console.log(`Failed to get Replicated redirect URI`);
       return;
     }
 
@@ -113,10 +114,10 @@ export function SettingsModal({ isOpen, onClose, session }: SettingsModalProps) 
           <button
             onClick={handleDeleteChats}
             disabled={isDeleting}
-            className="flex items-center gap-2 px-4 py-2 bg-error/10 hover:bg-error/20 text-error rounded-lg transition-colors"
+            className="flex items-center gap-2 px-4 py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-forge transition-all border border-red-500/20"
           >
             <Trash2 className="w-4 h-4" />
-            <span>{isDeleting ? 'Deleting...' : 'Delete All Chats'}</span>
+            <span className="font-medium">{isDeleting ? 'Deleting...' : 'Delete All Chats'}</span>
           </button>
         </div>
       ),
@@ -127,16 +128,16 @@ export function SettingsModal({ isOpen, onClose, session }: SettingsModalProps) 
       icon: <Key className="w-4 h-4" />,
       content: (
         <div className="space-y-6">
-          <div className={`p-4 rounded-lg ${theme === 'dark' ? 'bg-dark border-dark-border' : 'bg-gray-50 border-gray-200'} border`}>
-            <h3 className={`text-sm font-medium mb-2 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+          <div className={`p-4 rounded-forge ${theme === 'dark' ? 'bg-forge-steel border-forge-iron' : 'bg-stone-50 border-stone-200'} border`}>
+            <h3 className={`text-sm font-display font-semibold mb-2 ${theme === 'dark' ? 'text-stone-100' : 'text-stone-900'}`}>
               Link Replicated Account
             </h3>
-            <p className={`text-sm mb-4 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+            <p className={`text-sm mb-4 ${theme === 'dark' ? 'text-forge-zinc' : 'text-stone-500'}`}>
               Connect your Replicated account to access your application.
             </p>
             <button
               onClick={handleReplicatedConnect}
-              className="w-full px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
+              className="w-full px-4 py-2.5 bg-forge-ember hover:bg-forge-ember-bright text-white rounded-forge transition-all flex items-center justify-center gap-2 font-medium hover:shadow-ember"
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M12 4L10.59 5.41L16.17 11H4V13H16.17L10.59 18.59L12 20L20 12L12 4Z" fill="currentColor"/>
@@ -145,32 +146,32 @@ export function SettingsModal({ isOpen, onClose, session }: SettingsModalProps) 
             </button>
           </div>
 
-          <div className={`p-4 rounded-lg ${theme === 'dark' ? 'bg-dark border-dark-border' : 'bg-gray-50 border-gray-200'} border`}>
-            <h3 className={`text-sm font-medium mb-2 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+          <div className={`p-4 rounded-forge ${theme === 'dark' ? 'bg-forge-steel border-forge-iron' : 'bg-stone-50 border-stone-200'} border`}>
+            <h3 className={`text-sm font-display font-semibold mb-2 ${theme === 'dark' ? 'text-stone-100' : 'text-stone-900'}`}>
               Replicated API Token
             </h3>
-            <p className={`text-sm mb-4 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+            <p className={`text-sm mb-4 ${theme === 'dark' ? 'text-forge-zinc' : 'text-stone-500'}`}>
               Alternatively, you can manually enter your Replicated API token.
             </p>
-            <div className="space-y-2">
+            <div className="space-y-3">
               <input
                 type="password"
                 value={apiToken}
                 onChange={(e) => setApiToken(e.target.value)}
                 placeholder="Paste your Replicated API token"
-                className={`w-full px-3 py-2 rounded-lg transition-colors ${
+                className={`w-full px-3 py-2.5 rounded-forge transition-all ${
                   theme === 'dark'
-                    ? 'bg-dark border-dark-border text-gray-300 placeholder-gray-500'
-                    : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
-                } border focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent`}
+                    ? 'bg-forge-charcoal border-forge-iron text-stone-100 placeholder-forge-zinc'
+                    : 'bg-white border-stone-300 text-stone-900 placeholder-stone-400'
+                } border focus:outline-none focus:ring-2 focus:ring-forge-ember/50 focus:border-forge-ember/50`}
               />
               <button
                 onClick={handleSaveToken}
                 disabled={!apiToken}
-                className={`w-full px-4 py-2 rounded-lg text-white transition-colors ${
+                className={`w-full px-4 py-2.5 rounded-forge text-white font-medium transition-all ${
                   apiToken
-                    ? 'bg-primary hover:bg-primary/90'
-                    : 'bg-gray-500 cursor-not-allowed'
+                    ? 'bg-forge-ember hover:bg-forge-ember-bright hover:shadow-ember'
+                    : 'bg-forge-zinc/50 cursor-not-allowed'
                 }`}
               >
                 Save Token
@@ -229,7 +230,10 @@ export function SettingsModal({ isOpen, onClose, session }: SettingsModalProps) 
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Tab Size
             </label>
-            <select className={`w-full px-3 py-2 rounded-lg transition-colors ${
+            <select
+              value={tabSize}
+              onChange={(e) => setTabSize(e.target.value)}
+              className={`w-full px-3 py-2 rounded-lg transition-colors ${
               theme === 'dark'
                 ? 'bg-dark border-dark-border text-gray-300'
                 : 'bg-white border-gray-300 text-gray-900'
@@ -243,6 +247,8 @@ export function SettingsModal({ isOpen, onClose, session }: SettingsModalProps) 
             <input
               type="checkbox"
               id="minimap"
+              checked={showMinimap}
+              onChange={(e) => setShowMinimap(e.target.checked)}
               className={`rounded border transition-colors ${
                 theme === 'dark'
                   ? 'border-dark-border bg-dark text-primary'
@@ -321,49 +327,63 @@ export function SettingsModal({ isOpen, onClose, session }: SettingsModalProps) 
   ];
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
-      <div className={`w-full max-w-3xl h-[600px] rounded-lg shadow-lg border flex ${
-        theme === 'dark'
-          ? 'bg-dark-surface border-dark-border'
-          : 'bg-white border-gray-200'
-      }`}>
-        <div className={`w-48 border-r p-2 ${
-          theme === 'dark' ? 'border-dark-border' : 'border-gray-200'
-        }`}>
+    <div className="fixed inset-0 bg-forge-black/80 backdrop-blur-sm flex items-center justify-center z-[100]">
+      <div className={`
+        w-full max-w-3xl h-[600px] rounded-forge-lg shadow-2xl border flex overflow-hidden
+        ${theme === 'dark'
+          ? 'bg-forge-charcoal border-forge-iron'
+          : 'bg-white border-stone-200'
+        }
+      `}>
+        {/* Sidebar */}
+        <div className={`
+          w-48 border-r p-3 flex flex-col gap-1
+          ${theme === 'dark' ? 'border-forge-iron bg-forge-steel/30' : 'border-stone-200 bg-stone-50'}
+        `}>
           {sections.map((section) => (
             <button
               key={section.id}
               onClick={() => setActiveSection(section.id)}
-              className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-2 ${
-                activeSection === section.id
-                  ? 'bg-primary/10 text-primary'
+              className={`
+                w-full text-left px-3 py-2.5 rounded-forge text-sm font-medium
+                transition-all duration-200 flex items-center gap-2.5
+                ${activeSection === section.id
+                  ? 'bg-forge-ember/15 text-forge-ember border-l-2 border-forge-ember'
                   : theme === 'dark'
-                    ? 'text-gray-300 hover:bg-dark-border/40'
-                    : 'text-gray-700 hover:bg-gray-100'
-              }`}
+                    ? 'text-forge-silver hover:bg-forge-iron/50 hover:text-stone-100 border-l-2 border-transparent'
+                    : 'text-stone-600 hover:bg-stone-100 hover:text-stone-900 border-l-2 border-transparent'
+                }
+              `}
             >
-              {section.icon}
+              <span className={activeSection === section.id ? 'text-forge-ember' : ''}>
+                {section.icon}
+              </span>
               {section.label}
             </button>
           ))}
         </div>
 
+        {/* Main content */}
         <div className="flex-1 flex flex-col">
-          <div className={`flex items-center justify-between p-4 border-b ${
-            theme === 'dark' ? 'border-dark-border' : 'border-gray-200'
-          }`}>
-            <h2 className={`text-lg font-semibold ${
-              theme === 'dark' ? 'text-white' : 'text-gray-900'
-            }`}>
+          <div className={`
+            flex items-center justify-between p-4 border-b
+            ${theme === 'dark' ? 'border-forge-iron' : 'border-stone-200'}
+          `}>
+            <h2 className={`
+              text-lg font-display font-semibold
+              ${theme === 'dark' ? 'text-stone-100' : 'text-stone-900'}
+            `}>
               {sections.find((s) => s.id === activeSection)?.label} Settings
             </h2>
             <button
               onClick={onClose}
-              className={`${
-                theme === 'dark'
-                  ? 'text-gray-400 hover:text-white'
-                  : 'text-gray-500 hover:text-gray-700'
-              } transition-colors`}
+              className={`
+                p-2 rounded-forge transition-all
+                ${theme === 'dark'
+                  ? 'text-forge-zinc hover:text-stone-100 hover:bg-forge-iron/50'
+                  : 'text-stone-400 hover:text-stone-600 hover:bg-stone-100'
+                }
+              `}
             >
               <X className="w-5 h-5" />
             </button>

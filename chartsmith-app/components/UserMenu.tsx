@@ -34,54 +34,109 @@ export function UserMenu() {
 
   return (
     <div className="relative" ref={menuRef}>
-      <button onClick={() => setIsOpen(!isOpen)} className="w-10 h-10 flex items-center justify-center">
-        <Image src={user.avatar} alt={user.name} width={32} height={32} className="w-8 h-8 rounded-full" />
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-10 h-10 flex items-center justify-center group"
+      >
+        <div className="relative">
+          <Image
+            src={user.avatar}
+            alt={user.name}
+            width={32}
+            height={32}
+            className="w-8 h-8 rounded-full ring-2 ring-forge-iron group-hover:ring-forge-ember/50 transition-all duration-200"
+          />
+          <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-forge-ember rounded-full border-2 border-forge-charcoal" />
+        </div>
       </button>
 
       {isOpen && (
-        <div className={`absolute ${pathname === '/' ? 'right-0 top-full mt-2' : 'left-16 bottom-full mb-2'} w-64 rounded-lg shadow-lg border py-1 z-50 ${theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"}`}>
-          <div className={`px-4 py-2 border-b ${theme === "dark" ? "border-dark-border" : "border-gray-200"}`}>
-            <div className={`font-medium ${theme === "dark" ? "text-white" : "text-gray-900"}`}>{user.name}</div>
-            <div className={`text-sm ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>{user.email}</div>
+        <div className={`
+          absolute ${pathname === '/' ? 'right-0 top-full mt-2' : 'left-16 bottom-full mb-2'}
+          w-64 rounded-forge-lg shadow-xl border py-1 z-50
+          ${theme === "dark"
+            ? "bg-forge-charcoal border-forge-iron"
+            : "bg-white border-stone-200"
+          }
+        `}>
+          {/* User info header */}
+          <div className={`px-4 py-3 border-b ${theme === "dark" ? "border-forge-iron" : "border-stone-200"}`}>
+            <div className={`font-display font-semibold ${theme === "dark" ? "text-stone-100" : "text-stone-900"}`}>
+              {user.name}
+            </div>
+            <div className={`text-sm ${theme === "dark" ? "text-forge-zinc" : "text-stone-500"}`}>
+              {user.email}
+            </div>
           </div>
-          <Link 
-            href="/workspaces"
-            onClick={() => setIsOpen(false)}
-            className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 ${theme === "dark" ? "text-gray-300 hover:bg-dark-border/40" : "text-gray-700 hover:bg-gray-50"}`}
-          >
-            <FolderOpen className="w-4 h-4" />
-            My Workspaces
-          </Link>
-          
-          {/* Only show Admin link if user is an admin */}
-          {isAdmin && (
-            <Link 
-              href="/admin"
+
+          {/* Menu items */}
+          <div className="py-1">
+            <Link
+              href="/workspaces"
               onClick={() => setIsOpen(false)}
-              className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 ${theme === "dark" ? "text-gray-300 hover:bg-dark-border/40" : "text-gray-700 hover:bg-gray-50"}`}
+              className={`
+                w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 transition-colors
+                ${theme === "dark"
+                  ? "text-forge-silver hover:bg-forge-iron/50 hover:text-stone-100"
+                  : "text-stone-600 hover:bg-stone-50 hover:text-stone-900"
+                }
+              `}
             >
-              <ShieldCheck className="w-4 h-4" />
-              Admin Panel
+              <FolderOpen className="w-4 h-4 text-forge-ember" />
+              My Workspaces
             </Link>
-          )}
-          
-          <button 
-            onClick={() => {
-              setShowSettings(true);
-              setIsOpen(false);
-            }} 
-            className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 ${theme === "dark" ? "text-gray-300 hover:bg-dark-border/40" : "text-gray-700 hover:bg-gray-50"}`}
-          >
-            <Settings className="w-4 h-4" />
-            Settings
-          </button>
-          <button 
-            onClick={signOut} 
-            className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 ${theme === "dark" ? "text-gray-300 hover:bg-dark-border/40" : "text-gray-700 hover:bg-gray-50"}`}
-          >
-            <LogOut className="w-4 h-4" />
-            Log Out
-          </button>
+
+            {isAdmin && (
+              <Link
+                href="/admin"
+                onClick={() => setIsOpen(false)}
+                className={`
+                  w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 transition-colors
+                  ${theme === "dark"
+                    ? "text-forge-silver hover:bg-forge-iron/50 hover:text-stone-100"
+                    : "text-stone-600 hover:bg-stone-50 hover:text-stone-900"
+                  }
+                `}
+              >
+                <ShieldCheck className="w-4 h-4 text-forge-ember" />
+                Admin Panel
+              </Link>
+            )}
+
+            <button
+              onClick={() => {
+                setShowSettings(true);
+                setIsOpen(false);
+              }}
+              className={`
+                w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 transition-colors
+                ${theme === "dark"
+                  ? "text-forge-silver hover:bg-forge-iron/50 hover:text-stone-100"
+                  : "text-stone-600 hover:bg-stone-50 hover:text-stone-900"
+                }
+              `}
+            >
+              <Settings className="w-4 h-4 text-forge-ember" />
+              Settings
+            </button>
+          </div>
+
+          {/* Logout - separate section */}
+          <div className={`border-t py-1 ${theme === "dark" ? "border-forge-iron" : "border-stone-200"}`}>
+            <button
+              onClick={signOut}
+              className={`
+                w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 transition-colors
+                ${theme === "dark"
+                  ? "text-forge-zinc hover:bg-red-500/10 hover:text-red-400"
+                  : "text-stone-500 hover:bg-red-50 hover:text-red-600"
+                }
+              `}
+            >
+              <LogOut className="w-4 h-4" />
+              Log Out
+            </button>
+          </div>
         </div>
       )}
       {showSettings && session && (

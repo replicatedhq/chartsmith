@@ -54,27 +54,27 @@ export default function CommandMenu({ isOpen, onClose, onToggleDebug, isDebugVis
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50">
+    <div className="fixed inset-0 bg-forge-black/80 backdrop-blur-sm z-50">
       <div className="fixed top-[20%] left-1/2 -translate-x-1/2 w-full max-w-[640px]">
         <Command
-          className={`rounded-lg shadow-lg border overflow-hidden ${
+          className={`rounded-forge-lg shadow-2xl border overflow-hidden ${
             resolvedTheme === "dark"
-              ? "bg-dark-surface border-dark-border text-gray-300"
-              : "bg-white border-gray-200 text-gray-700"
+              ? "bg-forge-charcoal border-forge-iron text-forge-silver"
+              : "bg-white border-stone-200 text-stone-700"
           }`}
           loop
         >
           <Command.Input
             ref={inputRef}
             placeholder="Type a command or search..."
-            className={`w-full px-4 py-3 outline-none border-b ${
+            className={`w-full px-4 py-4 outline-none border-b text-base ${
               resolvedTheme === "dark"
-                ? "bg-dark-surface border-dark-border"
-                : "bg-white border-gray-200"
+                ? "bg-forge-charcoal border-forge-iron placeholder-forge-zinc"
+                : "bg-white border-stone-200 placeholder-stone-400"
             }`}
           />
           <Command.List className="max-h-[300px] overflow-auto p-2">
-            <Command.Group heading="Theme">
+            <Command.Group heading="Theme" className="text-xs font-medium text-forge-zinc uppercase tracking-wider px-2 py-2">
               {getAvailableThemes().map((themeOption) => (
                 <Command.Item
                   key={themeOption}
@@ -82,26 +82,26 @@ export default function CommandMenu({ isOpen, onClose, onToggleDebug, isDebugVis
                     setTheme(themeOption);
                     onClose();
                   }}
-                  className={`px-3 py-2 rounded-sm text-sm cursor-pointer ${
+                  className={`px-3 py-2.5 rounded-forge text-sm cursor-pointer transition-all ${
                     resolvedTheme === "dark"
-                      ? "hover:bg-dark-border/40 aria-selected:bg-dark-border/40"
-                      : "hover:bg-gray-100 aria-selected:bg-gray-100"
+                      ? "hover:bg-forge-iron/50 aria-selected:bg-forge-ember/15 aria-selected:text-forge-ember"
+                      : "hover:bg-stone-100 aria-selected:bg-orange-50 aria-selected:text-forge-ember"
                   }`}
                 >
                   Switch to {themeOption} theme
                 </Command.Item>
               ))}
             </Command.Group>
-            <Command.Group heading="Tools">
+            <Command.Group heading="Tools" className="text-xs font-medium text-forge-zinc uppercase tracking-wider px-2 py-2">
               <Command.Item
                 onSelect={() => {
                   onToggleDebug();
                   onClose();
                 }}
-                className={`px-3 py-2 rounded-sm text-sm cursor-pointer ${
+                className={`px-3 py-2.5 rounded-forge text-sm cursor-pointer transition-all ${
                   resolvedTheme === "dark"
-                    ? "hover:bg-dark-border/40 aria-selected:bg-dark-border/40"
-                    : "hover:bg-gray-100 aria-selected:bg-gray-100"
+                    ? "hover:bg-forge-iron/50 aria-selected:bg-forge-ember/15 aria-selected:text-forge-ember"
+                    : "hover:bg-stone-100 aria-selected:bg-orange-50 aria-selected:text-forge-ember"
                 }`}
               >
                 {isDebugVisible ? "Hide" : "Show"} Debug Terminal

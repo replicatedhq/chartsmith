@@ -129,7 +129,14 @@ func handleApplyPlanNotification(ctx context.Context, payload string) error {
 
 		// Process the file
 		if err := processActionFile(ctx, w, updatedPlan, actionFile, realtimeRecipient); err != nil {
-			return fmt.Errorf("failed to process action file: %w", err)
+			logger.Error(fmt.Errorf("failed to process action file %s: %w", actionFile.Path, err))
+			
+			// Update status to failed but continue
+			if updateErr := updateActionFileStatus(ctx, plan.ID, actionFile.Path, "failed"); updateErr != nil {
+				logger.Error(fmt.Errorf("failed to update action file status to failed: %w", updateErr))
+			}
+			// Continue to next file instead of aborting
+			continue
 		}
 	}
 
@@ -258,17 +265,9 @@ func processActionFile(ctx context.Context, w *workspacetypes.Workspace, plan *w
 	lastActivity := time.Now()
 
 	// Get the file from the workspace, if it exists
-	files, err := workspace.ListFiles(ctx, w.ID, w.CurrentRevision, chartID)
+	file, err := workspace.GetFileByPath(ctx, w.ID, w.CurrentRevision, actionFile.Path)
 	if err != nil {
-		return fmt.Errorf("failed to list files: %w", err)
-	}
-
-	var file *workspacetypes.File
-	for _, f := range files {
-		if f.FilePath == actionFile.Path {
-			file = &f
-			break
-		}
+		return fmt.Errorf("failed to get file by path: %w", err)
 	}
 
 	// Process updates until done
@@ -297,21 +296,19 @@ func processActionFile(ctx context.Context, w *workspacetypes.Workspace, plan *w
 
 			if file == nil {
 				// We need to create the file since we got content
-				err := workspace.AddFileToChart(ctx, chartID, w.ID, w.CurrentRevision, actionFile.Path, "")
+				fileID, err := workspace.AddFileToChart(ctx, chartID, w.ID, w.CurrentRevision, actionFile.Path, "")
 				if err != nil {
 					return fmt.Errorf("failed to add file to chart: %w", err)
 				}
 
-				files, err := workspace.ListFiles(ctx, w.ID, w.CurrentRevision, chartID)
-				if err != nil {
-					return fmt.Errorf("failed to list files: %w", err)
-				}
-
-				for _, f := range files {
-					if f.FilePath == actionFile.Path {
-						file = &f
-						break
-					}
+				// Instead of listing files again, manually create the file object
+				file = &workspacetypes.File{
+					ID:             fileID,
+					RevisionNumber: w.CurrentRevision,
+					ChartID:        chartID,
+					WorkspaceID:    w.ID,
+					FilePath:       actionFile.Path,
+					Content:        "",
 				}
 			}
 

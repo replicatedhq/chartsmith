@@ -13,7 +13,7 @@ interface StatusItem {
 }
 
 interface StatusDropdownProps {
-  label: string;
+  label: React.ReactNode;
   items: StatusItem[];
   showStatus?: boolean;
   theme?: "light" | "dark";
@@ -71,17 +71,17 @@ export function StatusDropdown({ label, items, showStatus = true, theme = "dark"
   return (
     <>
       <div className="relative" ref={dropdownRef} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
-        <button className={`px-3 py-1.5 text-sm flex items-center gap-2 rounded hover:bg-opacity-40 ${theme === "dark" ? "text-gray-300 hover:text-white hover:bg-dark-border/40" : "text-gray-700 hover:text-gray-900 hover:bg-gray-100"}`}>
+        <button className={`px-3 py-1.5 text-sm flex items-center gap-2 rounded-forge transition-all ${theme === "dark" ? "text-forge-silver hover:text-stone-100 hover:bg-forge-iron/50" : "text-stone-700 hover:text-stone-900 hover:bg-stone-100"}`}>
           {label}
           <ChevronDown className="w-4 h-4" />
         </button>
 
         {isOpen && (
-          <div className={`absolute top-full right-0 mt-1 w-48 rounded-lg shadow-lg border py-1 z-[60] ${theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"}`} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
+          <div className={`absolute top-full right-0 mt-1 w-48 rounded-forge-lg shadow-xl border py-1 z-[60] ${theme === "dark" ? "bg-forge-charcoal border-forge-iron" : "bg-white border-stone-200"}`} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
             {items.map((item, index) => (
               <React.Fragment key={index}>
-                {index === 2 && label === "Eval" && <div className={`my-1 border-t ${theme === "dark" ? "border-dark-border" : "border-gray-200"}`} />}
-                <button onClick={() => handleItemClick(item)} className={`w-full px-4 py-2 text-left text-sm flex items-center justify-between group ${theme === "dark" ? "text-gray-300 hover:bg-dark-border/40 hover:text-white" : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"}`}>
+                {index === 2 && typeof label === "string" && label === "Eval" && <div className={`my-1 border-t ${theme === "dark" ? "border-forge-iron" : "border-stone-200"}`} />}
+                <button onClick={() => handleItemClick(item)} className={`w-full px-4 py-2 text-left text-sm flex items-center justify-between group transition-all ${theme === "dark" ? "text-forge-silver hover:bg-forge-iron/50 hover:text-stone-100" : "text-stone-700 hover:bg-stone-100 hover:text-stone-900"}`}>
                   <span>{item.label}</span>
                   {showStatus && item.status && <StatusIndicator status={item.status} />}
                 </button>

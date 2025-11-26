@@ -42,7 +42,19 @@ export async function POST(req: NextRequest) {
       content: new Uint8Array(bytes),
     };
 
-    const workspace = await createWorkspaceFromArchiveAction(userId, formData, "helm");
+    // Detect file type to determine archive type
+    const fileName = file.name.toLowerCase();
+    const isYamlFile = fileName.endsWith('.yaml') || fileName.endsWith('.yml');
+
+    // Check if it's gzipped by looking at magic numbers
+    const fileBuffer = new Uint8Array(bytes);
+    const isGzipped = fileBuffer[0] === 0x1f && fileBuffer[1] === 0x8b;
+
+    // If it's a YAML file and not gzipped, treat as k8s manifests
+    // Otherwise treat as a Helm chart archive
+    const archiveType = (isYamlFile && !isGzipped) ? 'k8s' : 'helm';
+
+    const workspace = await createWorkspaceFromArchiveAction(userId, formData, archiveType);
 
     return NextResponse.json({ workspaceId: workspace.id });
   } catch (error) {

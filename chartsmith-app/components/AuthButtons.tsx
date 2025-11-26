@@ -118,12 +118,30 @@ export function AuthButtons() {
   }
 
   return (
-    <div className="flex items-center gap-4">
-      <button onClick={handleLogin} className={`px-4 py-2 rounded-lg transition-colors ${theme === "dark" ? "text-gray-300 hover:text-white" : "text-gray-600 hover:text-gray-900"}`}>
+    <div className="flex items-center gap-3">
+      <button
+        onClick={handleLogin}
+        className={`
+          px-4 py-2 rounded-forge font-medium text-sm transition-all duration-200
+          ${theme === "dark"
+            ? "text-forge-silver hover:text-stone-100 hover:bg-forge-iron/50"
+            : "text-stone-500 hover:text-stone-700 hover:bg-stone-100"
+          }
+        `}
+      >
         Log In
       </button>
-      <button onClick={handleLogin} className="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg transition-colors">
-        Get Started
+      <button
+        onClick={handleLogin}
+        className="
+          group relative px-5 py-2.5 rounded-forge font-display font-semibold text-sm
+          bg-forge-ember text-white overflow-hidden
+          transition-all duration-300 hover:shadow-ember
+          active:scale-[0.98]
+        "
+      >
+        <span className="relative z-10">Get Started</span>
+        <div className="absolute inset-0 bg-gradient-to-r from-forge-ember-bright to-forge-ember opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
       </button>
     </div>
   );

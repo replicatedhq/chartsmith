@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
-import { X, Sparkles } from "lucide-react";
+import { X, Flame } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { PromptInput } from "./PromptInput";
 import { useSession } from "@/app/hooks/useSession";
@@ -33,7 +33,7 @@ export function PromptModal({ isOpen, onClose }: PromptModalProps) {
         const data = await res.json();
         setPublicEnv(data);
       } catch (err) {
-        console.error("Failed to load public env config:", err);
+        logger.error("Failed to load public env config", { error: err });
       }
     };
 
@@ -112,20 +112,59 @@ export function PromptModal({ isOpen, onClose }: PromptModalProps) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
-      <div className={`w-full max-w-2xl rounded-lg shadow-lg border ${theme === "dark" ? "bg-surface border-border" : "bg-white border-gray-200"}`}>
-        <div className={`flex items-center justify-between p-4 border-b ${theme === "dark" ? "border-border" : "border-gray-200"}`}>
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-primary" />
-            <h2 className={`text-lg font-semibold ${theme === "dark" ? "text-white" : "text-gray-900"}`}>Create Chart from Prompt</h2>
+    <div className="fixed inset-0 bg-forge-black/80 backdrop-blur-sm flex items-center justify-center z-[100]">
+      <div className={`
+        w-full max-w-2xl rounded-forge-lg shadow-2xl border overflow-hidden
+        ${theme === "dark"
+          ? "bg-forge-charcoal border-forge-iron"
+          : "bg-white border-stone-200"
+        }
+      `}>
+        {/* Header */}
+        <div className={`
+          flex items-center justify-between p-4 border-b
+          ${theme === "dark" ? "border-forge-iron bg-forge-steel/30" : "border-stone-200 bg-stone-50"}
+        `}>
+          <div className="flex items-center gap-3">
+            <div className={`
+              w-8 h-8 rounded-forge flex items-center justify-center
+              ${theme === "dark" ? "bg-forge-ember/20" : "bg-forge-ember/10"}
+            `}>
+              <Flame className="w-4 h-4 text-forge-ember" />
+            </div>
+            <h2 className={`
+              text-lg font-display font-semibold
+              ${theme === "dark" ? "text-stone-100" : "text-stone-900"}
+            `}>
+              Forge a New Chart
+            </h2>
           </div>
-          <button onClick={handleClose} className={`${theme === "dark" ? "text-white hover:text-white/80" : "text-gray-500 hover:text-gray-700"} transition-colors`}>
+          <button
+            onClick={handleClose}
+            className={`
+              p-2 rounded-forge transition-all
+              ${theme === "dark"
+                ? "text-forge-zinc hover:text-stone-100 hover:bg-forge-iron/50"
+                : "text-stone-400 hover:text-stone-600 hover:bg-stone-100"
+              }
+            `}
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {/* Content */}
         <div className="p-6">
-          {error && <div className="mb-4 p-4 bg-error/10 text-red-500 rounded-lg border border-red-200">{error}</div>}
-          <PromptInput onSubmit={createFromPrompt} isLoading={isLoading} className={theme === "dark" ? "bg-surface" : ""} />
+          {error && (
+            <div className="mb-4 p-4 bg-red-500/10 text-red-400 rounded-forge border border-red-500/20 text-sm">
+              {error}
+            </div>
+          )}
+          <PromptInput
+            onSubmit={createFromPrompt}
+            isLoading={isLoading}
+            className={theme === "dark" ? "bg-forge-steel" : ""}
+          />
         </div>
       </div>
     </div>

@@ -1,10 +1,11 @@
 import { userIdFromExtensionToken } from "@/lib/auth/extension-token";
 import { getCentrifugoToken } from "@/lib/centrifugo/centrifugo";
 import { NextRequest, NextResponse } from "next/server";
+import { logger } from "@/lib/utils/logger";
 
 
 export async function GET(req: NextRequest) {
-  console.log("GET /api/push");
+  logger.info("GET /api/push");
   try {
     // if there's an auth header, use that to find the user
     const authHeader = req.headers.get('authorization');
@@ -22,7 +23,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ pushToken }, { status: 200 });
   } catch (error) {
-    console.error("Failed to get push:", error);
+    logger.error("Failed to get push", { error });
     return NextResponse.json({ error: "Failed to get push" }, { status: 500 });
   }
 }

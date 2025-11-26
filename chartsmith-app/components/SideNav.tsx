@@ -1,7 +1,7 @@
 "use client"
 
 import React from "react";
-import { Home, Code, Lightbulb, FileJson, History } from "lucide-react";
+import { Home, Code, Lightbulb, FileJson, History, Flame } from "lucide-react";
 import { UserMenu } from "./UserMenu";
 import { useTheme } from "@/contexts/ThemeContext";
 import { usePathname } from "next/navigation";
@@ -16,46 +16,103 @@ interface SideNavProps {
 export function SideNav({ workspaceID }: SideNavProps) {
   const { theme } = useTheme();
   const { isChatVisible, setIsChatVisible, isFileTreeVisible, setIsFileTreeVisible } = useWorkspaceUI();
+  const pathname = usePathname();
+
+  const NavLink = ({
+    href,
+    icon: Icon,
+    tooltip,
+    isActive
+  }: {
+    href: string;
+    icon: React.ElementType;
+    tooltip: string;
+    isActive: boolean;
+  }) => (
+    <Tooltip content={tooltip}>
+      <Link
+        href={href}
+        className={`
+          relative w-10 h-10 flex items-center justify-center rounded-forge
+          transition-all duration-200 group
+          ${isActive
+            ? theme === "dark"
+              ? "bg-forge-ember/20 text-forge-ember"
+              : "bg-forge-ember/10 text-forge-ember-dim"
+            : theme === "dark"
+              ? "text-forge-zinc hover:text-forge-silver hover:bg-forge-iron/50"
+              : "text-stone-400 hover:text-stone-600 hover:bg-stone-100"
+          }
+        `}
+      >
+        <Icon className="w-5 h-5" />
+        {isActive && (
+          <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-6 bg-forge-ember rounded-r" />
+        )}
+      </Link>
+    </Tooltip>
+  );
 
   return (
-    <nav className={`w-16 flex-shrink-0 ${theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-light-surface border-light-border"} border-r flex flex-col justify-between`}>
+    <nav className={`
+      w-16 flex-shrink-0 border-r flex flex-col justify-between
+      ${theme === "dark"
+        ? "bg-forge-charcoal border-forge-iron"
+        : "bg-stone-50 border-stone-200"
+      }
+    `}>
+      {/* Top section */}
       <div className="py-4 flex flex-col items-center">
-        <Tooltip content="Home">
-          <Link href="/" className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${usePathname() === "/" ? "text-primary" : `text-neutral hover:${theme === "dark" ? "bg-dark-border/40" : "bg-light-border/40"}`}`}>
-            <Home className="w-5 h-5" />
-          </Link>
-        </Tooltip>
+        {/* Home link */}
+        <NavLink
+          href="/"
+          icon={Home}
+          tooltip="Home"
+          isActive={pathname === "/"}
+        />
 
-        <div className="mt-8 w-full px-3">
-          <div className={`border-t ${theme === "dark" ? "border-dark-border" : "border-light-border"}`} />
+        {/* Divider with ember accent */}
+        <div className="mt-6 w-full px-3">
+          <div className={`
+            relative h-px
+            ${theme === "dark" ? "bg-forge-iron" : "bg-stone-200"}
+          `}>
+            <div className="absolute left-1/2 -translate-x-1/2 -top-1 w-2 h-2 rounded-full bg-forge-ember/40" />
+          </div>
         </div>
 
-        <div className="mt-4">
-          <Tooltip content="Editor">
-            <Link
-              href={`/workspace/${workspaceID}`}
-              className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${usePathname() === `/workspace/${workspaceID}` ? `${theme === "dark" ? "bg-dark-border/60" : "bg-light-border/60"} text-primary` : `text-neutral hover:${theme === "dark" ? "bg-dark-border/40" : "bg-light-border/40"}`}`}
-            >
-              <Code className="w-5 h-5" />
-            </Link>
-          </Tooltip>
+        {/* Editor link */}
+        <div className="mt-6">
+          <NavLink
+            href={`/workspace/${workspaceID}`}
+            icon={Code}
+            tooltip="Editor"
+            isActive={pathname === `/workspace/${workspaceID}`}
+          />
         </div>
 
-        {/* <div className="mt-2">
-          <Tooltip content="Recommendations">
-            <Link
-              href={`/workspace/${workspaceID}/recommendations`}
-              className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors relative ${usePathname() === `/workspace/${workspaceID}/recommendations` ? `${theme === "dark" ? "bg-dark-border/60" : "bg-light-border/60"} text-primary` : `text-neutral hover:${theme === "dark" ? "bg-dark-border/40" : "bg-light-border/40"}`}`}
-            >
-              <Lightbulb className="w-5 h-5" />
-              <div className="absolute -top-1 -right-1 bg-error text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">4</div>
-            </Link>
-          </Tooltip>
-        </div> */}
-
+        {/* Recommendations link - commented out
+        <div className="mt-2">
+          <NavLink
+            href={`/workspace/${workspaceID}/recommendations`}
+            icon={Lightbulb}
+            tooltip="Recommendations"
+            isActive={pathname === `/workspace/${workspaceID}/recommendations`}
+          />
+        </div>
+        */}
       </div>
 
-      <div className="py-4 flex justify-center">
+      {/* Bottom section with user menu */}
+      <div className="py-4 flex flex-col items-center gap-3">
+        {/* Forge status indicator */}
+        <div className={`
+          w-8 h-8 rounded-full flex items-center justify-center
+          ${theme === "dark" ? "bg-forge-iron/50" : "bg-stone-100"}
+        `}>
+          <Flame className="w-4 h-4 text-forge-ember ember-pulse" />
+        </div>
+
         <UserMenu />
       </div>
     </nav>

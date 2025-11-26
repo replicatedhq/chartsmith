@@ -1,15 +1,17 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useAtom } from "jotai";
 import { FileSearch, FileCheck, Loader2, ArrowRight } from 'lucide-react';
 import { useTheme } from "../contexts/ThemeContext";
-import { conversionByIdAtom, conversionsAtom, handleConversionUpdatedAtom } from "@/atoms/workspace";
+import { conversionByIdAtom, conversionsAtom, handleConversionUpdatedAtom, selectedFileAtom, workspaceAtom } from "@/atoms/workspace";
 import { FileList } from './FileList';
 import type { ConversionStep, FileConversion } from "./conversion-types";
 import { getWorkspaceConversionAction } from "@/lib/workspace/actions/get-workspace-conversion";
+import { getWorkspaceAction } from "@/lib/workspace/actions/get-workspace";
 import { useSession } from "@/app/hooks/useSession";
 import { Conversion, ConversionStatus } from "@/lib/types/workspace";
+import { logger } from "@/lib/utils/logger";
 
 // Placeholder components - to be implemented later
 const Header = () => (
@@ -112,9 +114,13 @@ export function ConversionProgress({ conversionId }: { conversionId: string }) {
   const [conversionGetter] = useAtom(conversionByIdAtom);
   const [conversions] = useAtom(conversionsAtom);
   const [, handleConversionUpdated] = useAtom(handleConversionUpdatedAtom);
+  const [workspace, setWorkspace] = useAtom(workspaceAtom);
+  const [, setSelectedFile] = useAtom(selectedFileAtom);
   const conversion = conversionGetter(conversionId);
   const [isLoading, setIsLoading] = useState(true);
   const [currentFileIndex] = useState(0);
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [showWorkerWarning, setShowWorkerWarning] = useState(false);
 
   const [steps, setSteps] = useState<ConversionStep[]>([
     {
@@ -173,7 +179,7 @@ export function ConversionProgress({ conversionId }: { conversionId: string }) {
           handleConversionUpdated(result);
           setIsLoading(false);
         } catch (error) {
-          console.error('Failed to load conversion:', error);
+          logger.error('Failed to load conversion', { error });
           setIsLoading(false);
         }
       } else {
@@ -182,7 +188,46 @@ export function ConversionProgress({ conversionId }: { conversionId: string }) {
     }
 
     loadConversion();
-  }, [session, conversion, conversionId, handleConversionUpdated]);
+    
+    // Stop any existing polling
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+    
+    // Stop polling if conversion is already complete
+    if (conversion?.status === ConversionStatus.Complete) {
+      return;
+    }
+    
+    // Poll for updates if conversion is not complete (fallback if Centrifugo updates are missed)
+    // Poll even if conversion is null initially, until we get a complete status
+    pollIntervalRef.current = setInterval(async () => {
+      if (!session) return;
+      
+      try {
+        const result = await getWorkspaceConversionAction(session, conversionId);
+        handleConversionUpdated(result);
+        setIsLoading(false);
+        // Stop polling if conversion is complete
+        if (result.status === ConversionStatus.Complete) {
+          if (pollIntervalRef.current) {
+            clearInterval(pollIntervalRef.current);
+            pollIntervalRef.current = null;
+          }
+        }
+      } catch (error) {
+        logger.error('Failed to poll conversion status', { error });
+      }
+    }, 2000); // Poll every 2 seconds for faster updates
+    
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+    };
+  }, [session, conversion, conversionId, handleConversionUpdated, conversionGetter]);
 
   // Add effect to update steps based on conversion status
   useEffect(() => {
@@ -202,7 +247,11 @@ export function ConversionProgress({ conversionId }: { conversionId: string }) {
         ConversionStatus.Complete
       ];
 
-      const currentStatusIndex = statusOrder.indexOf(conversion.status as ConversionStatus);
+      let currentStatusIndex = statusOrder.indexOf(conversion.status as ConversionStatus);
+      // Handle pending/init state
+      if (conversion.status === ConversionStatus.Pending || currentStatusIndex === -1) {
+        currentStatusIndex = 0;
+      }
 
       newSteps.forEach((step, index) => {
         if (index < currentStatusIndex) {
@@ -222,6 +271,19 @@ export function ConversionProgress({ conversionId }: { conversionId: string }) {
       return newSteps;
     });
   }, [conversion]);
+
+  // Add effect to show warning if worker is taking too long
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (conversion?.status === ConversionStatus.Pending) {
+      timer = setTimeout(() => {
+        setShowWorkerWarning(true);
+      }, 5000);
+    } else {
+      setShowWorkerWarning(false);
+    }
+    return () => clearTimeout(timer);
+  }, [conversion?.status]);
 
   // Show loading state
   if (isLoading) {
@@ -247,8 +309,51 @@ export function ConversionProgress({ conversionId }: { conversionId: string }) {
     );
   }
 
-  const handleContinue = () => {
-    console.log('Continue clicked - implement next action');
+  const handleContinue = async () => {
+    logger.debug('Continue clicked');
+    
+    let currentWorkspace = workspace;
+    
+    // Refresh workspace if needed (e.g. to get new files)
+    if (session && (!currentWorkspace || !currentWorkspace.files || currentWorkspace.files.length === 0)) {
+      try {
+        logger.debug('Refreshing workspace...');
+        const refreshedWorkspace = await getWorkspaceAction(session, conversion.workspaceId);
+        if (refreshedWorkspace) {
+          setWorkspace(refreshedWorkspace);
+          currentWorkspace = refreshedWorkspace;
+        }
+      } catch (error) {
+        logger.error('Failed to refresh workspace', { error });
+      }
+    }
+
+    // Combine loose files and chart files
+    const allFiles = [...(currentWorkspace?.files || [])];
+    if (currentWorkspace?.charts) {
+      currentWorkspace.charts.forEach(chart => {
+        if (chart.files) {
+          allFiles.push(...chart.files);
+        }
+      });
+    }
+
+    if (allFiles.length > 0) {
+      logger.debug('All files', { count: allFiles.length });
+      // Try to find Chart.yaml to select
+      const chartFile = allFiles.find(f => f.filePath.endsWith('Chart.yaml')) || 
+                        allFiles.find(f => f.filePath.endsWith('values.yaml')) ||
+                        allFiles[0];
+      
+      if (chartFile) {
+        logger.debug('Selecting file', { path: chartFile.filePath });
+        setSelectedFile(chartFile);
+      } else {
+        logger.warn('No matching file found to select');
+      }
+    } else {
+      logger.warn('No files found in workspace or charts');
+    }
   };
 
   return (
@@ -265,7 +370,12 @@ export function ConversionProgress({ conversionId }: { conversionId: string }) {
             ConversionStatus.Finalizing,
             ConversionStatus.Complete
           ];
-          const currentStatusIndex = statusOrder.indexOf(conversion.status as ConversionStatus);
+          let currentStatusIndex = statusOrder.indexOf(conversion.status as ConversionStatus);
+          
+          // Handle pending/init state by treating it as the first step
+          if (conversion.status === ConversionStatus.Pending || currentStatusIndex === -1) {
+            currentStatusIndex = 0;
+          }
 
           // Skip rendering steps past the current one
           if (index > currentStatusIndex) {
@@ -279,11 +389,25 @@ export function ConversionProgress({ conversionId }: { conversionId: string }) {
               conversion={conversion}
               isCurrent={index === currentStatusIndex}
               isPrevious={index < currentStatusIndex}
-              isFuture={false} // We no longer need this since future steps won't be rendered
+              isFuture={false}
             />
           );
         })}
       </div>
+      
+      {showWorkerWarning && (
+        <div className="mt-4 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg flex items-start gap-2">
+          <Loader2 className="w-4 h-4 text-yellow-500 animate-spin flex-shrink-0 mt-0.5" />
+          <div className="text-xs text-yellow-500">
+            <p className="font-medium">Waiting for worker...</p>
+            <p className="opacity-80">The conversion is taking longer than expected. Please ensure the background worker process is running.</p>
+          </div>
+        </div>
+      )}
+
+      {conversion.status === ConversionStatus.Complete && (
+        <ContinueButton onClick={handleContinue} />
+      )}
     </div>
   );
 }

@@ -94,13 +94,12 @@ func handleNewIntentNotification(ctx context.Context, payload string) error {
 
 	// if it's not possible to answer the question using the personal requested, we have an error
 	if chatMessage.MessageFromPersona != nil {
-		fmt.Printf("chatMessage.MessageFromPersona: %v\n", *chatMessage.MessageFromPersona)
 		if *chatMessage.MessageFromPersona == workspacetypes.ChatMessageFromPersonaDeveloper && !intent.IsChartDeveloper {
 			streamCh := make(chan string)
 			doneCh := make(chan error)
 			go func() {
 				if err := llm.FeedbackOnNotDeveloperIntentWhenRequested(ctx, streamCh, doneCh, chatMessage); err != nil {
-					fmt.Printf("Failed to get feedback on not developer intent when requested: %v\n", err)
+					logger.Warn("failed to get feedback on not developer intent when requested", zap.Error(err))
 				}
 			}()
 
@@ -129,7 +128,7 @@ func handleNewIntentNotification(ctx context.Context, payload string) error {
 					}
 				case err := <-doneCh:
 					if err != nil {
-						fmt.Printf("Failed to get feedback on ambiguous intent: %v\n", err)
+						logger.Warn("failed to get feedback on ambiguous intent", zap.Error(err))
 					}
 					done = true
 				}
@@ -143,7 +142,7 @@ func handleNewIntentNotification(ctx context.Context, payload string) error {
 			doneCh := make(chan error)
 			go func() {
 				if err := llm.FeedbackOnNotOperatorIntentWhenRequested(ctx, streamCh, doneCh, chatMessage); err != nil {
-					fmt.Printf("Failed to get feedback on not operator intent when requested: %v\n", err)
+					logger.Warn("failed to get feedback on not operator intent when requested", zap.Error(err))
 				}
 			}()
 
@@ -172,7 +171,7 @@ func handleNewIntentNotification(ctx context.Context, payload string) error {
 					}
 				case err := <-doneCh:
 					if err != nil {
-						fmt.Printf("Failed to get feedback on ambiguous intent: %v\n", err)
+						logger.Warn("failed to get feedback on ambiguous intent", zap.Error(err))
 					}
 					done = true
 				}
@@ -188,7 +187,7 @@ func handleNewIntentNotification(ctx context.Context, payload string) error {
 		doneCh := make(chan error)
 		go func() {
 			if err := llm.FeedbackOnAmbiguousIntent(ctx, streamCh, doneCh, chatMessage); err != nil {
-				fmt.Printf("Failed to get feedback on ambiguous intent: %v\n", err)
+				logger.Warn("failed to get feedback on ambiguous intent", zap.Error(err))
 			}
 		}()
 
@@ -217,7 +216,7 @@ func handleNewIntentNotification(ctx context.Context, payload string) error {
 				}
 			case err := <-doneCh:
 				if err != nil {
-					fmt.Printf("Failed to get feedback on ambiguous intent: %v\n", err)
+					logger.Warn("failed to get feedback on ambiguous intent", zap.Error(err))
 				}
 				done = true
 			}
@@ -253,7 +252,7 @@ func handleNewIntentNotification(ctx context.Context, payload string) error {
 			doneCh := make(chan error)
 			go func() {
 				if err := llm.DeclineOffTopicChatMessage(ctx, streamCh, doneCh, chatMessage); err != nil {
-					fmt.Printf("Failed to decline off-topic chat message: %v\n", err)
+					logger.Warn("failed to decline off-topic chat message", zap.Error(err))
 				}
 			}()
 
@@ -282,7 +281,7 @@ func handleNewIntentNotification(ctx context.Context, payload string) error {
 					}
 				case err := <-doneCh:
 					if err != nil {
-						fmt.Printf("Failed to decline off-topic chat message: %v\n", err)
+						logger.Warn("failed to decline off-topic chat message", zap.Error(err))
 					}
 					done = true
 				}

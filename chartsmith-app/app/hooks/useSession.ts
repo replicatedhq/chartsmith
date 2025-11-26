@@ -1,13 +1,25 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Session } from "@/lib/types/session";
 import { validateSession, extendSessionAction } from "@/lib/auth/actions/validate-session";
 import { logger } from "@/lib/utils/logger";
 
+// Minimum interval between session extension calls (5 minutes)
+const SESSION_EXTEND_MIN_INTERVAL_MS = 5 * 60 * 1000;
+
 export const useSession = (redirectIfNotLoggedIn: boolean = false) => {
+  // Track last time we extended the session to avoid excessive calls
+  const lastExtendTimeRef = useRef<number>(0);
+
   const extendSessionOnActivity = useCallback(async () => {
+    // Only extend session if at least 5 minutes have passed since last extension
+    const now = Date.now();
+    if (now - lastExtendTimeRef.current < SESSION_EXTEND_MIN_INTERVAL_MS) {
+      return;
+    }
+
     const token = document.cookie
       .split("; ")
       .find((cookie) => cookie.startsWith("session="))
@@ -15,7 +27,10 @@ export const useSession = (redirectIfNotLoggedIn: boolean = false) => {
 
     if (token) {
       try {
-        await extendSessionAction(token);
+        // Decode the URL-encoded token
+        const decodedToken = decodeURIComponent(token);
+        await extendSessionAction(decodedToken);
+        lastExtendTimeRef.current = now; // Update last extend time on success
       } catch (error) {
         logger.error("Failed to extend session:", error);
       }
@@ -23,8 +38,9 @@ export const useSession = (redirectIfNotLoggedIn: boolean = false) => {
   }, []);
 
   useEffect(() => {
-    // Setup activity listeners
-    const events = ['mousedown', 'keydown', 'scroll', 'touchstart'];
+    // Setup activity listeners - only listen for significant events, not keydown
+    // to avoid POST requests on every keystroke
+    const events = ['mousedown', 'scroll', 'touchstart'];
     let activityTimeout: NodeJS.Timeout;
 
     const handleActivity = () => {
@@ -61,8 +77,10 @@ export const useSession = (redirectIfNotLoggedIn: boolean = false) => {
       return;
     }
 
-    const validate = async (token: string) => {
+    const validate = async (encodedToken: string) => {
       try {
+        // Decode the URL-encoded token
+        const token = decodeURIComponent(encodedToken);
         const sess = await validateSession(token);
         if (!sess && redirectIfNotLoggedIn) {
           router.replace("/");
