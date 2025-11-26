@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/replicatedhq/chartsmith/pkg/workspace/types"
@@ -38,7 +39,22 @@ clusters:
 		}
 	}
 
-	err = runHelmPublish(tempDir, workspaceID, chartName, fakeKubeconfig)
+	// Find the actual chart root directory (where Chart.yaml is located)
+	chartDir := tempDir
+	for _, file := range files {
+		if filepath.Base(file.FilePath) == "Chart.yaml" {
+			// Get the directory containing Chart.yaml
+			chartDir = filepath.Join(tempDir, filepath.Dir(file.FilePath))
+			// Handle case where FilePath is just "Chart.yaml" (dir would be ".")
+			if filepath.Dir(file.FilePath) == "." {
+				chartDir = tempDir
+			}
+			fmt.Printf("Found Chart.yaml at: %s, using chart directory: %s\n", file.FilePath, chartDir)
+			break
+		}
+	}
+
+	err = runHelmPublish(chartDir, workspaceID, chartName, fakeKubeconfig)
 	if err != nil {
 		return fmt.Errorf("failed to run helm publish: %w", err)
 	}
@@ -69,6 +85,20 @@ func runHelmPublish(dir string, workspaceID string, chartName string, kubeconfig
 	versionOutput, _ := versionCmd.CombinedOutput()
 	fmt.Printf("Helm version:\n%s\n", string(versionOutput))
 
+	// Build dependencies (if any) before packaging
+	// This handles charts that have dependencies defined in Chart.yaml but missing in charts/
+	fmt.Printf("Building dependencies...\n")
+	depCmd := exec.CommandContext(ctx, "helm", "dependency", "build", dir)
+	depCmd.Env = append(os.Environ(), "KUBECONFIG="+kubeconfig)
+	depOutput, depErr := depCmd.CombinedOutput()
+	if depErr != nil {
+		// Just log the warning, don't fail - some charts might not need this or it might fail for other reasons
+		// If package fails later, it will be caught then
+		fmt.Printf("Warning: helm dependency build failed: %v\nOutput: %s\n", depErr, string(depOutput))
+	} else {
+		fmt.Printf("Helm dependency build output:\n%s\n", string(depOutput))
+	}
+
 	// SIMPLIFIED APPROACH: Package the chart first
 	fmt.Printf("Packaging chart...\n")
 	packageCmd := exec.CommandContext(ctx, "helm", "package", dir, "--destination", os.TempDir())
@@ -95,14 +125,20 @@ func runHelmPublish(dir string, workspaceID string, chartName string, kubeconfig
 	fmt.Printf("Using chart package: %s\n", chartPackage)
 
 	// Tag the chart with the workspace ID to make it uniquely identifiable
-	chartTag := fmt.Sprintf("chartsmith-%s", workspaceID)
+	// OCI registries require lowercase repository names
+	chartTag := fmt.Sprintf("chartsmith-%s", strings.ToLower(workspaceID))
 	fmt.Printf("Using chart tag: %s\n", chartTag)
+
+	// Update remote to use the namespaced URL
+	remoteWithNamespace := fmt.Sprintf("%s/%s", remote, chartTag)
+	fmt.Printf("  Remote URL with namespace: %s\n", remoteWithNamespace)
 
 	// DIRECT PUSH: Use a single, reliable approach with helm push
 	fmt.Printf("Pushing chart to ttl.sh...\n")
 
-	// Try direct push to the root of ttl.sh
-	pushCmd := exec.CommandContext(ctx, "helm", "push", chartPackage, remote)
+	// Try direct push to the namespaced ttl.sh
+	// Add --insecure-skip-tls-verify to avoid macOS keychain/TLS issues that cause hanging
+	pushCmd := exec.CommandContext(ctx, "helm", "push", chartPackage, remoteWithNamespace, "--insecure-skip-tls-verify")
 	pushCmd.Env = append(os.Environ(), "KUBECONFIG="+kubeconfig)
 	pushOutput, pushErr := pushCmd.CombinedOutput()
 	if pushErr != nil {

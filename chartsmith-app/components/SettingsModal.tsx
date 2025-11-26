@@ -31,6 +31,8 @@ export function SettingsModal({ isOpen, onClose, session }: SettingsModalProps) 
   const [savingAutoAccept, setSavingAutoAccept] = useState(false);
   const [savingValidate, setSavingValidate] = useState(false);
   const [publicEnv, setPublicEnv] = useState<Record<string, string>>({});
+  const [showMinimap, setShowMinimap] = useState(true);
+  const [tabSize, setTabSize] = useState('2 spaces');
 
   useEffect(() => {
     const fetchConfig = async () => {
@@ -229,7 +231,10 @@ export function SettingsModal({ isOpen, onClose, session }: SettingsModalProps) 
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Tab Size
             </label>
-            <select className={`w-full px-3 py-2 rounded-lg transition-colors ${
+            <select
+              value={tabSize}
+              onChange={(e) => setTabSize(e.target.value)}
+              className={`w-full px-3 py-2 rounded-lg transition-colors ${
               theme === 'dark'
                 ? 'bg-dark border-dark-border text-gray-300'
                 : 'bg-white border-gray-300 text-gray-900'
@@ -243,6 +248,8 @@ export function SettingsModal({ isOpen, onClose, session }: SettingsModalProps) 
             <input
               type="checkbox"
               id="minimap"
+              checked={showMinimap}
+              onChange={(e) => setShowMinimap(e.target.checked)}
               className={`rounded border transition-colors ${
                 theme === 'dark'
                   ? 'border-dark-border bg-dark text-primary'

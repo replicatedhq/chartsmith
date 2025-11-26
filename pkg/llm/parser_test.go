@@ -46,6 +46,28 @@ func TestParser_ParsePlan(t *testing.T) {
 				Artifacts: []types.Artifact{},
 			},
 		},
+		{
+			name: "handles unordered attributes and spaces",
+			input: `<chartsmithArtifactPlan title="Messy Plan">
+<chartsmithActionPlan path=" clean/path.yaml " action = "create" type='file'>
+</chartsmithActionPlan>
+<chartsmithActionPlan action="update" path='quoted/path.yaml' type="file">
+</chartsmithActionPlan>`,
+			expected: HelmResponse{
+				Title: "Messy Plan",
+				Actions: map[string]types.ActionPlan{
+					"clean/path.yaml": {
+						Type:   "file",
+						Action: "create",
+					},
+					"quoted/path.yaml": {
+						Type:   "file",
+						Action: "update",
+					},
+				},
+				Artifacts: []types.Artifact{},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -55,6 +77,15 @@ func TestParser_ParsePlan(t *testing.T) {
 			result := p.GetResult()
 
 			assert.Equal(t, tt.expected.Title, result.Title, "titles should match")
+			
+			// Debug print if lengths don't match
+			if len(tt.expected.Actions) != len(result.Actions) {
+				t.Logf("Expected %d actions, got %d", len(tt.expected.Actions), len(result.Actions))
+				for k := range result.Actions {
+					t.Logf("Got action: %s", k)
+				}
+			}
+			
 			require.Equal(t, len(tt.expected.Actions), len(result.Actions), "should have same number of actions")
 
 			for path, expectedAction := range tt.expected.Actions {
@@ -74,7 +105,7 @@ func TestParser_ParseArtifacts(t *testing.T) {
 	}{
 		{
 			name: "parses complete Chart.yaml",
-			input: `<chartsmithArtifact>
+			input: `<chartsmithArtifact path="Chart.yaml">
 apiVersion: v2
 name: wordpress
 description: A Helm chart for WordPress
@@ -89,7 +120,7 @@ version: 1.0.0
 		},
 		{
 			name: "parses partial artifact",
-			input: `<chartsmithArtifact>
+			input: `<chartsmithArtifact path="Chart.yaml">
 apiVersion: v2
 name: wordpress
 description: A Helm chart`,
@@ -102,11 +133,11 @@ description: A Helm chart`,
 		},
 		{
 			name: "handles multiple artifacts with partial",
-			input: `<chartsmithArtifact>
+			input: `<chartsmithArtifact path="Chart.yaml">
 apiVersion: v2
 name: chart1
 </chartsmithArtifact>
-<chartsmithArtifact>
+<chartsmithArtifact path="Chart.yaml">
 apiVersion: v2
 name: chart2`,
 			expected: []types.Artifact{
@@ -122,13 +153,49 @@ name: chart2`,
 		},
 		{
 			name: "handles streaming chunks",
-			input: `<chartsmithArtifact>
+			input: `<chartsmithArtifact path="Chart.yaml">
 apiVersion: v2
 name: wordpr`,
 			expected: []types.Artifact{
 				{
 					Path:    "Chart.yaml",
 					Content: "apiVersion: v2\nname: wordpr",
+				},
+			},
+		},
+		{
+			name: "handles single quotes",
+			input: `<chartsmithArtifact path='Chart.yaml'>
+apiVersion: v2
+name: wordpress`,
+			expected: []types.Artifact{
+				{
+					Path:    "Chart.yaml",
+					Content: "apiVersion: v2\nname: wordpress",
+				},
+			},
+		},
+		{
+			name: "handles spaces around equals",
+			input: `<chartsmithArtifact path = "Chart.yaml">
+apiVersion: v2
+name: wordpress`,
+			expected: []types.Artifact{
+				{
+					Path:    "Chart.yaml",
+					Content: "apiVersion: v2\nname: wordpress",
+				},
+			},
+		},
+		{
+			name: "handles loose spacing and single quotes",
+			input: `<chartsmithArtifact path = 'Chart.yaml'>
+apiVersion: v2
+name: wordpress`,
+			expected: []types.Artifact{
+				{
+					Path:    "Chart.yaml",
+					Content: "apiVersion: v2\nname: wordpress",
 				},
 			},
 		},

@@ -20,17 +20,33 @@ const (
 	TextEditor_Sonnet37 = "text_editor_20250124"
 	TextEditor_Sonnet35 = "text_editor_20241022"
 
-	Model_Sonnet37 = "claude-3-7-sonnet-20250219"
-	Model_Sonnet35 = "claude-3-5-sonnet-20241022"
+	Model_Sonnet37 = "claude-sonnet-4-5-20250929"
+	Model_Sonnet35 = "claude-sonnet-4-5-20250929"
 
 	minFuzzyMatchLen  = 50 // Minimum length for fuzzy matching
 	fuzzyMatchTimeout = 10 * time.Second
 	chunkSize         = 200 // Increased chunk size for better performance
+
+	// Rate limit retry parameters
+	maxRateLimitRetries    = 5
+	initialRetryDelay      = 30 * time.Second  // Start with 30 seconds for rate limits
+	maxRetryDelay          = 2 * time.Minute   // Cap at 2 minutes
 )
 
 type CreateWorkspaceFromArchiveAction struct {
 	ArchivePath string `json:"archivePath"`
 	ArchiveType string `json:"archiveType"` // New field: "helm" or "k8s"
+}
+
+// isRateLimitError checks if an error is a rate limit (429) error
+func isRateLimitError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	return strings.Contains(errStr, "429") ||
+		   strings.Contains(errStr, "rate_limit") ||
+		   strings.Contains(errStr, "Too Many Requests")
 }
 
 // StrReplaceLog represents a record in the str_replace_log table
@@ -540,34 +556,68 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 	disabled = "disabled"
 
 	for {
-		stream := client.Messages.NewStreaming(ctx, anthropic.MessageNewParams{
-			Model:     anthropic.F(Model_Sonnet35),
-			MaxTokens: anthropic.F(int64(8192)),
-			Messages:  anthropic.F(messages),
-			Tools:     anthropic.F(toolUnionParams),
-			Thinking: anthropic.F[anthropic.ThinkingConfigParamUnion](anthropic.ThinkingConfigEnabledParam{
-				Type: anthropic.F(disabled),
-			}),
-		})
+		// Retry loop for rate limit errors
+		var message anthropic.Message
+		retryDelay := initialRetryDelay
 
-		message := anthropic.Message{}
-		for stream.Next() {
-			event := stream.Current()
-			err := message.Accumulate(event)
-			if err != nil {
-				return "", err
-			}
-
-			switch event := event.AsUnion().(type) {
-			case anthropic.ContentBlockDeltaEvent:
-				if event.Delta.Text != "" {
-					fmt.Printf("%s", event.Delta.Text)
+		for attempt := 0; attempt <= maxRateLimitRetries; attempt++ {
+			if attempt > 0 {
+				logger.Info("Rate limit retry attempt",
+					zap.Int("attempt", attempt),
+					zap.Duration("delay", retryDelay))
+				time.Sleep(retryDelay)
+				// Exponential backoff with cap
+				retryDelay = retryDelay * 2
+				if retryDelay > maxRetryDelay {
+					retryDelay = maxRetryDelay
 				}
 			}
-		}
 
-		if stream.Err() != nil {
-			return "", stream.Err()
+			stream := client.Messages.NewStreaming(ctx, anthropic.MessageNewParams{
+				Model:     anthropic.F(Model_Sonnet35),
+				MaxTokens: anthropic.F(int64(8192)),
+				Messages:  anthropic.F(messages),
+				Tools:     anthropic.F(toolUnionParams),
+				Thinking: anthropic.F[anthropic.ThinkingConfigParamUnion](anthropic.ThinkingConfigEnabledParam{
+					Type: anthropic.F(disabled),
+				}),
+			})
+
+			message = anthropic.Message{}
+			for stream.Next() {
+				event := stream.Current()
+				err := message.Accumulate(event)
+				if err != nil {
+					return "", err
+				}
+
+				switch event := event.AsUnion().(type) {
+				case anthropic.ContentBlockDeltaEvent:
+					if event.Delta.Text != "" {
+						fmt.Printf("%s", event.Delta.Text)
+					}
+				}
+			}
+
+			streamErr := stream.Err()
+			if streamErr == nil {
+				break // Success, exit retry loop
+			}
+
+			// Check if it's a rate limit error
+			if isRateLimitError(streamErr) {
+				if attempt == maxRateLimitRetries {
+					return "", fmt.Errorf("rate limit exceeded after %d retries: %w", maxRateLimitRetries, streamErr)
+				}
+				logger.Warn("Rate limit error, will retry",
+					zap.Error(streamErr),
+					zap.Int("attempt", attempt+1),
+					zap.Int("maxRetries", maxRateLimitRetries))
+				continue // Retry
+			}
+
+			// Not a rate limit error, return immediately
+			return "", streamErr
 		}
 
 		messages = append(messages, message.ToParam())

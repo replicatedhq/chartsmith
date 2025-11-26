@@ -54,15 +54,15 @@ func handleConversionSimplifyNotification(ctx context.Context, payload string) e
 		return fmt.Errorf("failed to create chart: %w", err)
 	}
 
-	if err := workspace.AddFileToChart(ctx, chart.ID, w.ID, 1, "values.yaml", c.ValuesYAML); err != nil {
+	if _, err := workspace.AddFileToChart(ctx, chart.ID, w.ID, 1, "values.yaml", c.ValuesYAML); err != nil {
 		return fmt.Errorf("failed to add file to chart: %w", err)
 	}
-	if err := workspace.AddFileToChart(ctx, chart.ID, w.ID, 1, "Chart.yaml", c.ChartYAML); err != nil {
+	if _, err := workspace.AddFileToChart(ctx, chart.ID, w.ID, 1, "Chart.yaml", c.ChartYAML); err != nil {
 		return fmt.Errorf("failed to add file to chart: %w", err)
 	}
 
 	for filePath, fileContent := range convertedFiles {
-		if err := workspace.AddFileToChart(ctx, chart.ID, w.ID, 1, filePath, fileContent); err != nil {
+		if _, err := workspace.AddFileToChart(ctx, chart.ID, w.ID, 1, filePath, fileContent); err != nil {
 			return fmt.Errorf("failed to add file to chart: %w", err)
 		}
 	}

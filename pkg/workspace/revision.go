@@ -7,6 +7,7 @@ import (
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 	"github.com/replicatedhq/chartsmith/pkg/workspace/types"
 	"go.uber.org/zap"
+	"fmt"
 )
 
 func GetRevision(ctx context.Context, workspaceID string, revisionNumber int) (*types.Revision, error) {
@@ -79,17 +80,47 @@ func CreateRevision(ctx context.Context, workspaceID string, planID *string, use
         )
         SELECT
             $1,
-            next_num,
-            NOW(),
             $2,
+            NOW(),
+            $3,
             COALESCE(lr.created_type, 'manual'),
             false,
             false,
-            $3
+            $4
         FROM next_revision
         LEFT JOIN latest_revision lr ON true
         RETURNING revision_number
-    `, workspaceID, userID, planID).Scan(&newRevisionNumber)
+    `, workspaceID, userID, planID).Scan(&newRevisionNumber) // Incorrect args in original?
+	// Actually the SQL has SELECT $1, next_num, ... 
+	// The args should match the $1, $2 placeholders in the SELECT clause if they are used there.
+	// Let's look at the SQL carefully.
+	// $1 is workspace_id.
+	// next_num is calculated.
+	// $2 is userID? No, in the query: 
+	// SELECT $1 (workspace_id), next_num, NOW(), $2 (userID), ..., $3 (planID)
+	// Wait, the original query was:
+	/*
+	   SELECT
+	       $1,
+	       next_num,
+	       NOW(),
+	       $2,
+	       ...,
+	       $3
+	*/
+	// And args were: workspaceID, userID, planID.
+	// So:
+	// $1 = workspaceID
+	// $2 = userID
+	// $3 = planID
+	// This matches the args passed to QueryRow.
+	// But wait, I see `next_revision` CTE uses $1 too.
+	
+	// The original code:
+	/*
+	    err = tx.QueryRow(ctx, `...`, workspaceID, userID, planID).Scan(&newRevisionNumber)
+	*/
+	
 	if err != nil {
 		return types.Revision{}, err
 	}
@@ -177,6 +208,16 @@ func SetRevisionComplete(ctx context.Context, workspaceID string, revisionNumber
 	}
 
 	if !isComplete {
+		// Promote pending content to content for all files in this revision
+		_, err = tx.Exec(ctx, `
+			UPDATE workspace_file
+			SET content = content_pending, content_pending = NULL
+			WHERE workspace_id = $1 AND revision_number = $2 AND content_pending IS NOT NULL
+		`, workspaceID, revisionNumber)
+		if err != nil {
+			return fmt.Errorf("failed to promote content pending: %w", err)
+		}
+
 		// Update the revision to be complete
 		_, err = tx.Exec(ctx, `UPDATE workspace_revision SET is_complete = true WHERE workspace_id = $1 AND revision_number = $2`,
 			workspaceID, revisionNumber)

@@ -177,52 +177,65 @@ export function useCentrifugo({
       // Check if the file belongs to a chart
       let fileUpdated = false;
 
+      const updatedFile = {
+        id: artifactFile.id,
+        revisionNumber: artifactFile.revision_number,
+        filePath: artifactFile.filePath,
+        content: artifactFile.content || "",
+        contentPending: artifactFile.content_pending
+      };
+
       // Look for the file in charts
       if (artifactFile.chart_id) {
-        updatedWorkspace.charts = updatedWorkspace.charts.map(chart => {
-          if (chart.id === artifactFile.chart_id) {
-            // Check if the file already exists in the chart
-            const fileIndex = chart.files.findIndex(f => f.id === artifactFile.id || f.filePath === artifactFile.filePath);
+        // Check if the chart exists
+        const chartExists = updatedWorkspace.charts.some(chart => chart.id === artifactFile.chart_id);
 
-            const updatedFile = {
-              id: artifactFile.id,
-              revisionNumber: artifactFile.revision_number,
-              filePath: artifactFile.filePath,
-              content: artifactFile.content || "",
-              contentPending: artifactFile.content_pending
-            };
+        if (chartExists) {
+          // Update existing chart
+          updatedWorkspace.charts = updatedWorkspace.charts.map(chart => {
+            if (chart.id === artifactFile.chart_id) {
+              // Check if the file already exists in the chart
+              const fileIndex = chart.files.findIndex(f => f.id === artifactFile.id || f.filePath === artifactFile.filePath);
 
-            if (fileIndex >= 0) {
-              // Update existing file
-              const updatedFiles = [...chart.files];
-              updatedFiles[fileIndex] = updatedFile;
-              fileUpdated = true;
-              return {
-                ...chart,
-                files: updatedFiles
-              };
-            } else {
-              // Add new file
-              fileUpdated = true;
-              return {
-                ...chart,
-                files: [...chart.files, updatedFile]
-              };
+              if (fileIndex >= 0) {
+                // Update existing file
+                const updatedFiles = [...chart.files];
+                updatedFiles[fileIndex] = updatedFile;
+                fileUpdated = true;
+                return {
+                  ...chart,
+                  files: updatedFiles
+                };
+              } else {
+                // Add new file
+                fileUpdated = true;
+                return {
+                  ...chart,
+                  files: [...chart.files, updatedFile]
+                };
+              }
             }
-          }
-          return chart;
-        });
+            return chart;
+          });
+        } else {
+          // Chart doesn't exist yet - create it with the file
+          // Use a placeholder name that can be updated when Chart.yaml is received
+          const chartName = artifactFile.filePath.includes('Chart.yaml')
+            ? 'New Chart'
+            : artifactFile.chart_id;
+
+          const newChart = {
+            id: artifactFile.chart_id,
+            name: chartName,
+            files: [updatedFile]
+          };
+
+          updatedWorkspace.charts = [...updatedWorkspace.charts, newChart];
+          fileUpdated = true;
+        }
       } else {
         // Check loose files
         const fileIndex = updatedWorkspace.files.findIndex(f => f.id === artifactFile.id || f.filePath === artifactFile.filePath);
-
-        const updatedFile = {
-          id: artifactFile.id,
-          revisionNumber: artifactFile.revision_number,
-          filePath: artifactFile.filePath,
-          content: artifactFile.content || "",
-          contentPending: artifactFile.content_pending
-        };
 
         if (fileIndex >= 0) {
           // Update existing file

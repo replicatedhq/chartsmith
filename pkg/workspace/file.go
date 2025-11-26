@@ -49,6 +49,44 @@ func GetFile(ctx context.Context, fileID string, revisionNumber int) (*types.Fil
 	return &file, nil
 }
 
+func GetFileByPath(ctx context.Context, workspaceID string, revisionNumber int, path string) (*types.File, error) {
+	conn := persistence.MustGetPooledPostgresSession()
+	defer conn.Release()
+
+	query := `SELECT
+		id,
+		revision_number,
+		chart_id,
+		workspace_id,
+		file_path,
+		content,
+		content_pending
+	FROM
+		workspace_file
+	WHERE
+		workspace_id = $1 AND revision_number = $2 AND file_path = $3`
+
+	row := conn.QueryRow(ctx, query, workspaceID, revisionNumber, path)
+	var file types.File
+	var chartID sql.NullString
+	var contentPending sql.NullString
+
+	err := row.Scan(&file.ID, &file.RevisionNumber, &chartID, &file.WorkspaceID, &file.FilePath, &file.Content, &contentPending)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil // Return nil if not found, not error
+		}
+		return nil, fmt.Errorf("error scanning file: %w", err)
+	}
+
+	if contentPending.Valid {
+		file.ContentPending = &contentPending.String
+	}
+
+	file.ChartID = chartID.String
+	return &file, nil
+}
+
 func SetFileEmbeddings(ctx context.Context, fileID string, revisionNumber int, embeddings string) error {
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
@@ -77,7 +115,6 @@ func ListFiles(ctx context.Context, workspaceID string, revisionNumber int, char
 	for rows.Next() {
 		var file types.File
 		var chartID sql.NullString
-
 		var contentPending sql.NullString
 
 		err := rows.Scan(&file.ID, &file.RevisionNumber, &chartID, &file.WorkspaceID, &file.FilePath, &file.Content, &contentPending)

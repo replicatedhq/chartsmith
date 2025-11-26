@@ -232,10 +232,10 @@ export function TtlshModal({ isOpen, onClose }: TtlshModalProps) {
                 </p>
                 <div className="relative">
                   <pre className={`p-3 rounded-lg font-mono text-sm whitespace-normal break-all ${theme === "dark" ? "bg-dark text-gray-300" : "bg-gray-100 text-gray-700"}`}>
-                    {`helm pull oci://ttl.sh/${publishStatus?.chartName || 'chart'} --version ${publishStatus?.chartVersion || '0.1.0'}`}
+                    {`helm pull oci://ttl.sh/chartsmith-${workspaceId}/${publishStatus?.chartName || 'chart'} --version ${publishStatus?.chartVersion || '0.1.0'}`}
                   </pre>
                   <button
-                    onClick={() => handleCopy(`helm pull oci://ttl.sh/${publishStatus?.chartName || 'chart'} --version ${publishStatus?.chartVersion || '0.1.0'}`)}
+                    onClick={() => handleCopy(`helm pull oci://ttl.sh/chartsmith-${workspaceId}/${publishStatus?.chartName || 'chart'} --version ${publishStatus?.chartVersion || '0.1.0'}`)}
                     className={`absolute top-2 right-2 p-1 rounded ${theme === "dark" ? "text-gray-400 hover:text-white" : "text-gray-500 hover:text-gray-700"}`}
                     title="Copy to clipboard"
                   >
@@ -249,10 +249,10 @@ export function TtlshModal({ isOpen, onClose }: TtlshModalProps) {
                 </p>
                 <div className="relative">
                   <pre className={`p-3 rounded-lg font-mono text-sm whitespace-normal break-all ${theme === "dark" ? "bg-dark text-gray-300" : "bg-gray-100 text-gray-700"}`}>
-                    {`helm install my-release oci://ttl.sh/${publishStatus?.chartName || 'chart'} --version ${publishStatus?.chartVersion || '0.1.0'}`}
+                    {`helm install my-release oci://ttl.sh/chartsmith-${workspaceId}/${publishStatus?.chartName || 'chart'} --version ${publishStatus?.chartVersion || '0.1.0'}`}
                   </pre>
                   <button
-                    onClick={() => handleCopy(`helm install my-release oci://ttl.sh/${publishStatus?.chartName || 'chart'} --version ${publishStatus?.chartVersion || '0.1.0'}`)}
+                    onClick={() => handleCopy(`helm install my-release oci://ttl.sh/chartsmith-${workspaceId}/${publishStatus?.chartName || 'chart'} --version ${publishStatus?.chartVersion || '0.1.0'}`)}
                     className={`absolute top-2 right-2 p-1 rounded ${theme === "dark" ? "text-gray-400 hover:text-white" : "text-gray-500 hover:text-gray-700"}`}
                     title="Copy to clipboard"
                   >

@@ -1,5 +1,3 @@
-"use server"
-
 import { SideNavWrapper } from "@/components/SideNavWrapper";
 import { WorkspaceUIProvider } from "@/contexts/WorkspaceUIContext";
 import { getWorkspace } from "@/lib/workspace/workspace";

@@ -43,9 +43,9 @@ func (p *Parser) ParseArtifacts(chunk string) {
 		content := strings.TrimSpace(match[2])
 
 		// Extract path from attributes - removed extra quote mark from regex
-		pathMatch := regexp.MustCompile(`path="([^"]*)"`).FindStringSubmatch(attributes)
+		pathMatch := regexp.MustCompile(`path\s*=\s*["']([^"']*)["']`).FindStringSubmatch(attributes)
 		if len(pathMatch) > 1 {
-			path := pathMatch[1]
+			path := strings.TrimSpace(pathMatch[1])
 			p.addArtifact(content, path)
 		}
 
@@ -59,9 +59,9 @@ func (p *Parser) ParseArtifacts(chunk string) {
 		partialContent := p.buffer[partialStart:]
 
 		// Try to extract path from the opening tag - removed extra quote mark from regex
-		pathMatch := regexp.MustCompile(`<chartsmithArtifact[^>]*path="([^"]*)"`).FindStringSubmatch(partialContent)
+		pathMatch := regexp.MustCompile(`<chartsmithArtifact[^>]*path\s*=\s*["']([^"']*)["']`).FindStringSubmatch(partialContent)
 		if len(pathMatch) > 1 {
-			path := pathMatch[1]
+			path := strings.TrimSpace(pathMatch[1])
 
 			// Only process content if we found the closing angle bracket
 			if strings.Contains(partialContent, ">") {
@@ -99,37 +99,43 @@ func (p *Parser) ParsePlan(chunk string) {
 		}
 	}
 
-	// Find all action plans - modified regex to be more flexible
-	fileStartRegex := regexp.MustCompile(`<chartsmithActionPlan\s+type="([^"]+)"\s+action="([^"]+)"\s+path="([^"]+)"[^>]*>`)
-	startMatches := fileStartRegex.FindAllStringSubmatch(p.buffer, -1)
+	// Find all action plans - modified regex to be more flexible and attribute-agnostic
+	// Use a simpler regex to find the opening tag and attributes string
+	actionTagRegex := regexp.MustCompile(`<chartsmithActionPlan([^>]*)>`)
+	startMatches := actionTagRegex.FindAllStringSubmatch(p.buffer, -1)
 
 	for _, match := range startMatches {
-		if len(match) != 4 {
-			continue
-		}
-		actionType := match[1] // "file"
-		action := match[2]     // "create" or "update"
-		path := match[3]       // file path
-		// strip any leading /
-		path = strings.TrimPrefix(path, "/")
+		attributes := match[1]
 
-		// Check if we already have this file
-		artifactExists := false
-		for _, existingArtifact := range p.result.Artifacts {
-			if existingArtifact.Path == path {
-				artifactExists = true
-				break
+		// Extract attributes individually using robust regex
+		typeMatch := regexp.MustCompile(`type\s*=\s*["']([^"']*)["']`).FindStringSubmatch(attributes)
+		actionMatch := regexp.MustCompile(`action\s*=\s*["']([^"']*)["']`).FindStringSubmatch(attributes)
+		pathMatch := regexp.MustCompile(`path\s*=\s*["']([^"']*)["']`).FindStringSubmatch(attributes)
+
+		if len(typeMatch) > 1 && len(actionMatch) > 1 && len(pathMatch) > 1 {
+			actionType := strings.TrimSpace(typeMatch[1])
+			action := strings.TrimSpace(actionMatch[1])
+			path := strings.TrimSpace(pathMatch[1])
+			// strip any leading /
+			path = strings.TrimPrefix(path, "/")
+
+			// Check if we already have this file
+			artifactExists := false
+			for _, existingArtifact := range p.result.Artifacts {
+				if existingArtifact.Path == path {
+					artifactExists = true
+					break
+				}
 			}
-		}
 
-		if !artifactExists {
-			actionPlan := types.ActionPlan{
-				Type:   actionType,
-				Action: action,
+			if !artifactExists {
+				actionPlan := types.ActionPlan{
+					Type:   actionType,
+					Action: action,
+				}
+
+				p.result.Actions[path] = actionPlan
 			}
-
-			p.result.Actions[path] = actionPlan
-
 		}
 	}
 }
