@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect, FormEvent } from "react";
-import { useAtom } from "jotai";
+import { useAtom, useSetAtom } from "jotai";
 import Image from "next/image";
 import { Send } from "lucide-react";
 import ReactMarkdown from 'react-markdown';
@@ -19,13 +19,14 @@ import { Session } from "@/lib/types/session";
 import { useTheme } from "../contexts/ThemeContext";
 
 // atoms
-import { conversionByIdAtom, messageByIdAtom, messagesAtom, renderByIdAtom, workspaceAtom } from "@/atoms/workspace";
+import { conversionByIdAtom, messageByIdAtom, messagesAtom, renderByIdAtom, workspaceAtom, rendersAtom } from "@/atoms/workspace";
 
 // actions
 import { cancelMessageAction } from "@/lib/workspace/actions/cancel-message";
 import { performFollowupAction } from "@/lib/workspace/actions/perform-followup-action";
 import { createChatMessageAction } from "@/lib/workspace/actions/create-chat-message";
 import { getWorkspaceMessagesAction } from "@/lib/workspace/actions/get-workspace-messages";
+import { getWorkspaceRenderAction } from "@/lib/workspace/actions/get-workspace-render";
 
 export interface ChatMessageProps {
   messageId: string;
@@ -88,6 +89,39 @@ export function NewChartChatMessage({
   const [renderGetter] = useAtom(renderByIdAtom);
   // Only call the getter if responseRenderId exists
   const render = message?.responseRenderId ? renderGetter(message.responseRenderId) : undefined;
+  const setRenders = useSetAtom(rendersAtom);
+
+  // Fetch render if missing
+  useEffect(() => {
+    if (message?.responseRenderId && !render && session) {
+      const fetchRender = async () => {
+        try {
+          const newRender = await getWorkspaceRenderAction(session, message.responseRenderId!);
+          if (newRender) {
+            const formattedRender = {
+              ...newRender,
+              createdAt: new Date(newRender.createdAt),
+              completedAt: newRender.completedAt ? new Date(newRender.completedAt) : undefined,
+              charts: newRender.charts.map((chart: any) => ({
+                ...chart,
+                createdAt: new Date(chart.createdAt),
+                completedAt: chart.completedAt ? new Date(chart.completedAt) : undefined,
+              }))
+            };
+
+            setRenders((prev) => {
+              if (prev.find((r) => r.id === formattedRender.id)) return prev;
+              return [...prev, formattedRender];
+            });
+          }
+        } catch (err) {
+          console.error("Failed to fetch render", err);
+        }
+      };
+      fetchRender();
+    }
+  }, [message?.responseRenderId, render, session, setRenders]);
+
   const [conversionGetter] = useAtom(conversionByIdAtom);
   // Only call the getter if responseConversionId exists
   const conversion = message?.responseConversionId ? conversionGetter(message.responseConversionId) : undefined;

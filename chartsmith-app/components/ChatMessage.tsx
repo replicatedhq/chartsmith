@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useRef, useEffect, FormEvent, useMemo, useCallback, memo } from "react";
-import { useAtom } from "jotai";
+import React, { useState, useRef, useEffect, FormEvent, useMemo, useCallback } from "react";
+import { useAtom, useSetAtom } from "jotai";
 import { atom } from "jotai";
 import Image from "next/image";
 import { Send, Copy, Check } from "lucide-react";
@@ -41,13 +41,14 @@ import { Session } from "@/lib/types/session";
 import { useTheme } from "../contexts/ThemeContext";
 
 // atoms
-import { conversionByIdAtom, messageByIdAtom, messagesAtom, renderByIdAtom, workspaceAtom } from "@/atoms/workspace";
+import { conversionByIdAtom, messageByIdAtom, messagesAtom, renderByIdAtom, workspaceAtom, rendersAtom } from "@/atoms/workspace";
 
 // actions
 import { cancelMessageAction } from "@/lib/workspace/actions/cancel-message";
 import { performFollowupAction } from "@/lib/workspace/actions/perform-followup-action";
 import { createChatMessageAction } from "@/lib/workspace/actions/create-chat-message";
 import { getWorkspaceMessagesAction } from "@/lib/workspace/actions/get-workspace-messages";
+import { getWorkspaceRenderAction } from "@/lib/workspace/actions/get-workspace-render";
 
 export interface ChatMessageProps {
   messageId: string;
@@ -407,6 +408,40 @@ function ChatMessageInner({
   const [renderGetter] = useAtom(renderByIdAtom);
   // Only call the getter if responseRenderId exists
   const render = message?.responseRenderId ? renderGetter(message.responseRenderId) : undefined;
+  const setRenders = useSetAtom(rendersAtom);
+
+  // Fetch render if missing
+  useEffect(() => {
+    if (message?.responseRenderId && !render && session) {
+      const fetchRender = async () => {
+        try {
+          const newRender = await getWorkspaceRenderAction(session, message.responseRenderId!);
+          if (newRender) {
+            // Format dates
+            const formattedRender = {
+              ...newRender,
+              createdAt: new Date(newRender.createdAt),
+              completedAt: newRender.completedAt ? new Date(newRender.completedAt) : undefined,
+              charts: newRender.charts.map((chart: any) => ({
+                ...chart,
+                createdAt: new Date(chart.createdAt),
+                completedAt: chart.completedAt ? new Date(chart.completedAt) : undefined,
+              }))
+            };
+
+            setRenders((prev) => {
+              if (prev.find((r) => r.id === formattedRender.id)) return prev;
+              return [...prev, formattedRender];
+            });
+          }
+        } catch (err) {
+          console.error("Failed to fetch render", err);
+        }
+      };
+      fetchRender();
+    }
+  }, [message?.responseRenderId, render, session, setRenders]);
+
   const [conversionGetter] = useAtom(conversionByIdAtom);
   // Only call the getter if responseConversionId exists
   const conversion = message?.responseConversionId ? conversionGetter(message.responseConversionId) : undefined;
@@ -695,7 +730,7 @@ function ChatMessageInner({
       </div>
 
       {/* Assistant Message */}
-      {(message.response || message.content || message.responsePlanId || message.responseRenderId || message.responseConversionId || message.toolInvocations?.length || (message.isIntentComplete && !message.responsePlanId)) && (
+      {(message.response || message.content || message.responsePlanId || message.responseRenderId || message.responseConversionId || message.toolInvocations?.length || (message.isIntentComplete && !message.responsePlanId) || message.isStreaming) && (
         <div
           className="px-2 py-1"
           data-testid="assistant-message"
@@ -906,15 +941,6 @@ function ChatMessageInner({
 }
 
 /**
- * Memoized ChatMessage component to prevent unnecessary re-renders.
- * Only re-renders when messageId, session, or showChatInput changes.
+ * ChatMessage component - Renders a single chat message with user prompt and assistant response.
  */
-export const ChatMessage = memo(ChatMessageInner, (prevProps, nextProps) => {
-  // Custom comparison for memo - only re-render if these props change
-  return (
-    prevProps.messageId === nextProps.messageId &&
-    prevProps.session?.id === nextProps.session?.id &&
-    prevProps.showChatInput === nextProps.showChatInput
-    // Note: onContentUpdate is intentionally excluded as it's typically a stable callback
-  );
-});
+export const ChatMessage = ChatMessageInner;

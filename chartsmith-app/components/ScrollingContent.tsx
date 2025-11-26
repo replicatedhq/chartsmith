@@ -275,14 +275,9 @@ function ScrollingContentInner({ children, forceScroll = false }: ScrollingConte
 
 /**
  * Memoized ScrollingContent component.
- * Only re-renders when forceScroll prop changes, not on children updates
- * (children updates are handled by MutationObserver for smooth scrolling).
+ * Uses default shallow comparison which properly detects children changes.
  */
-export const ScrollingContent = memo(ScrollingContentInner, (prevProps, nextProps) => {
-  // Only re-render if forceScroll changes
-  // Children changes are handled by MutationObserver
-  return prevProps.forceScroll === nextProps.forceScroll;
-});
+export const ScrollingContent = memo(ScrollingContentInner);
 
 // Expose test helpers for integration testing when in test environment
 if (typeof window !== 'undefined' && process.env.NODE_ENV === 'test') {

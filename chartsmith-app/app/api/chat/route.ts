@@ -1,4 +1,4 @@
-import { streamText } from 'ai';
+import { streamText, stepCountIs } from 'ai';
 import { NextRequest, NextResponse } from 'next/server';
 import { chartsmithTools } from '@/lib/tools';
 import { getModel, getProviderInfo, isApiKeyConfigured } from '@/lib/ai/provider';
@@ -266,17 +266,26 @@ export async function POST(req: NextRequest) {
     // Stream response using AI SDK with tool support
     console.log('[/api/chat] Starting AI SDK streaming with tool support...');
 
-    const result = await streamText({
+    const result = streamText({
       model,
       messages,
       system: fullSystemPrompt,
       tools: chartsmithTools,
-      temperature: 0.7, // Lower temperature for consistency with tool calling
+      temperature: 0.7,
+      // Allow up to 5 steps for tool execution (default is stepCountIs(1) which stops immediately)
+      stopWhen: stepCountIs(5),
+      onStepFinish: ({ text, toolCalls, toolResults }) => {
+        console.log('[/api/chat] Step finished:', {
+          textLength: text?.length || 0,
+          toolCallCount: toolCalls?.length || 0,
+          toolResultCount: toolResults?.length || 0,
+        });
+      },
     });
 
     console.log('[/api/chat] Stream initialized successfully with tool support');
 
-    // Return streaming response (Server-Sent Events format with tool support)
+    // Return streaming response
     return result.toTextStreamResponse();
 
   } catch (error) {

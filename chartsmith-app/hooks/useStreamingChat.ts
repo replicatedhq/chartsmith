@@ -327,42 +327,34 @@ export function useStreamingChat(options: UseStreamingChatOptions) {
           // Decode the chunk
           const chunk = decoder.decode(value, { stream: true });
 
-          // Parse Server-Sent Events format from AI SDK
-          // Format: 0:"text content"
-          const lines = chunk.split('\n');
-          for (const line of lines) {
-            if (line.startsWith('0:')) {
-              // Text chunk from AI SDK streaming format
-              // Remove the '0:' prefix and surrounding quotes
-              const text = line.substring(3).replace(/^"|"$/g, '');
-              if (text) {
-                // Track time to first token
-                if (!firstTokenReceivedRef.current) {
-                  firstTokenReceivedRef.current = true;
-                  const timeToFirstToken = performance.now() - requestStartTimeRef.current;
-                  if (ENABLE_PERF_LOGGING) {
-                    console.log(`[useStreamingChat] Time to first token: ${timeToFirstToken.toFixed(2)}ms`);
-                  }
-                }
-                
-                accumulatedContent += text;
-                pendingTokensRef.current = accumulatedContent;
-                
-                // Batch updates: only flush if enough time has passed (16ms = 60fps)
-                const now = performance.now();
-                if (now - lastFlushTime >= TOKEN_BATCH_INTERVAL_MS) {
-                  flushPendingTokens(assistantMessageId, accumulatedContent);
-                  lastFlushTime = now;
-                } else if (!batchTimeoutRef.current) {
-                  // Schedule a flush for the remaining time
-                  const remainingTime = TOKEN_BATCH_INTERVAL_MS - (now - lastFlushTime);
-                  batchTimeoutRef.current = window.setTimeout(() => {
-                    flushPendingTokens(assistantMessageId, pendingTokensRef.current);
-                    lastFlushTime = performance.now();
-                    batchTimeoutRef.current = null;
-                  }, remainingTime);
-                }
+          // toTextStreamResponse() returns plain text chunks, not SSE format
+          // Just accumulate the text directly
+          if (chunk) {
+            // Track time to first token
+            if (!firstTokenReceivedRef.current) {
+              firstTokenReceivedRef.current = true;
+              const timeToFirstToken = performance.now() - requestStartTimeRef.current;
+              if (ENABLE_PERF_LOGGING) {
+                console.log(`[useStreamingChat] Time to first token: ${timeToFirstToken.toFixed(2)}ms`);
               }
+            }
+            
+            accumulatedContent += chunk;
+            pendingTokensRef.current = accumulatedContent;
+            
+            // Batch updates: only flush if enough time has passed (16ms = 60fps)
+            const now = performance.now();
+            if (now - lastFlushTime >= TOKEN_BATCH_INTERVAL_MS) {
+              flushPendingTokens(assistantMessageId, accumulatedContent);
+              lastFlushTime = now;
+            } else if (!batchTimeoutRef.current) {
+              // Schedule a flush for the remaining time
+              const remainingTime = TOKEN_BATCH_INTERVAL_MS - (now - lastFlushTime);
+              batchTimeoutRef.current = window.setTimeout(() => {
+                flushPendingTokens(assistantMessageId, pendingTokensRef.current);
+                lastFlushTime = performance.now();
+                batchTimeoutRef.current = null;
+              }, remainingTime);
             }
           }
         }

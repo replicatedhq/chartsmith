@@ -120,6 +120,7 @@ export function ConversionProgress({ conversionId }: { conversionId: string }) {
   const [isLoading, setIsLoading] = useState(true);
   const [currentFileIndex] = useState(0);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [showWorkerWarning, setShowWorkerWarning] = useState(false);
 
   const [steps, setSteps] = useState<ConversionStep[]>([
     {
@@ -246,7 +247,11 @@ export function ConversionProgress({ conversionId }: { conversionId: string }) {
         ConversionStatus.Complete
       ];
 
-      const currentStatusIndex = statusOrder.indexOf(conversion.status as ConversionStatus);
+      let currentStatusIndex = statusOrder.indexOf(conversion.status as ConversionStatus);
+      // Handle pending/init state
+      if (conversion.status === ConversionStatus.Pending || currentStatusIndex === -1) {
+        currentStatusIndex = 0;
+      }
 
       newSteps.forEach((step, index) => {
         if (index < currentStatusIndex) {
@@ -266,6 +271,19 @@ export function ConversionProgress({ conversionId }: { conversionId: string }) {
       return newSteps;
     });
   }, [conversion]);
+
+  // Add effect to show warning if worker is taking too long
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (conversion?.status === ConversionStatus.Pending) {
+      timer = setTimeout(() => {
+        setShowWorkerWarning(true);
+      }, 5000);
+    } else {
+      setShowWorkerWarning(false);
+    }
+    return () => clearTimeout(timer);
+  }, [conversion?.status]);
 
   // Show loading state
   if (isLoading) {
@@ -352,7 +370,12 @@ export function ConversionProgress({ conversionId }: { conversionId: string }) {
             ConversionStatus.Finalizing,
             ConversionStatus.Complete
           ];
-          const currentStatusIndex = statusOrder.indexOf(conversion.status as ConversionStatus);
+          let currentStatusIndex = statusOrder.indexOf(conversion.status as ConversionStatus);
+          
+          // Handle pending/init state by treating it as the first step
+          if (conversion.status === ConversionStatus.Pending || currentStatusIndex === -1) {
+            currentStatusIndex = 0;
+          }
 
           // Skip rendering steps past the current one
           if (index > currentStatusIndex) {
@@ -372,6 +395,16 @@ export function ConversionProgress({ conversionId }: { conversionId: string }) {
         })}
       </div>
       
+      {showWorkerWarning && (
+        <div className="mt-4 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg flex items-start gap-2">
+          <Loader2 className="w-4 h-4 text-yellow-500 animate-spin flex-shrink-0 mt-0.5" />
+          <div className="text-xs text-yellow-500">
+            <p className="font-medium">Waiting for worker...</p>
+            <p className="opacity-80">The conversion is taking longer than expected. Please ensure the background worker process is running.</p>
+          </div>
+        </div>
+      )}
+
       {conversion.status === ConversionStatus.Complete && (
         <ContinueButton onClick={handleContinue} />
       )}

@@ -47,7 +47,7 @@ import { useTheme } from "../contexts/ThemeContext";
 import { Session } from "@/lib/types/session";
 import { ChatMessage } from "./ChatMessage";
 import { messagesAtom, workspaceAtom } from "@/atoms/workspace";
-import { useAtom } from "jotai";
+import { useAtom, useSetAtom, useAtomValue } from "jotai";
 import { ScrollingContent } from "./ScrollingContent";
 import { NewChartContent } from "./NewChartContent";
 import { useStreamingChat } from '@/hooks/useStreamingChat';
@@ -89,7 +89,8 @@ interface ChatContainerProps {
 export function ChatContainer({ session }: ChatContainerProps) {
   const { theme } = useTheme();
   const [workspace] = useAtom(workspaceAtom);
-  const [messages, setMessages] = useAtom(messagesAtom);
+  const messages = useAtomValue(messagesAtom);
+  const setMessages = useSetAtom(messagesAtom);
 
   /**
    * Build chart context from workspace.
@@ -157,11 +158,15 @@ export function ChatContainer({ session }: ChatContainerProps) {
    * 
    * The sync converts from the hook's format ({ role, content }) to the
    * workspace format ({ prompt, response, isComplete, etc. })
+   * 
+   * IMPORTANT: We need to preserve existing messages from the database
+   * and only add/update streaming messages.
    */
   useEffect(() => {
     if (!streamMessages.length) return;
 
-    const newWorkspaceMessages: Message[] = [];
+    // Convert streaming messages to workspace format
+    const streamingWorkspaceMessages: Message[] = [];
 
     // Process messages in pairs (User + Assistant)
     for (let i = 0; i < streamMessages.length; i++) {
@@ -183,24 +188,23 @@ export function ChatContainer({ session }: ChatContainerProps) {
           isStreaming: isAssistantStreaming,
         };
 
-        newWorkspaceMessages.push(workspaceMsg);
+        streamingWorkspaceMessages.push(workspaceMsg);
 
         if (hasResponse) i++; // Skip next message as it's consumed
       }
     }
 
-    // Update only if different
-    const isDifferent =
-        newWorkspaceMessages.length !== messages.length ||
-        (newWorkspaceMessages.length > 0 && messages.length > 0 &&
-         newWorkspaceMessages[newWorkspaceMessages.length - 1].id !== messages[messages.length - 1].id) ||
-        (newWorkspaceMessages.length > 0 && messages.length > 0 &&
-         newWorkspaceMessages[newWorkspaceMessages.length - 1].response !== messages[messages.length - 1].response);
-
-    if (isDifferent) {
-       setMessages(newWorkspaceMessages);
-    }
-  }, [streamMessages, workspace?.id, setMessages, messages, isLoading]);
+    // Merge: Keep existing messages that aren't from streaming, add streaming messages
+    setMessages(prev => {
+      // Filter out any previous streaming messages (they have IDs starting with "user-")
+      const existingNonStreamingMessages = prev.filter(m => !m.id.startsWith('user-'));
+      
+      // Combine existing database messages with new streaming messages
+      const merged = [...existingNonStreamingMessages, ...streamingWorkspaceMessages];
+      
+      return merged;
+    });
+  }, [streamMessages, workspace?.id, setMessages, isLoading]);
 
   const [selectedRole, setSelectedRole] = useState<"auto" | "developer" | "operator">("auto");
   const [isRoleMenuOpen, setIsRoleMenuOpen] = useState(false);
