@@ -46,7 +46,7 @@ import { Send, Code, User, Sparkles, Square } from "lucide-react";
 import { useTheme } from "../contexts/ThemeContext";
 import { Session } from "@/lib/types/session";
 import { ChatMessage } from "./ChatMessage";
-import { messagesAtom, workspaceAtom } from "@/atoms/workspace";
+import { messagesAtom, workspaceAtom, isRenderingAtom } from "@/atoms/workspace";
 import { useAtom, useSetAtom, useAtomValue } from "jotai";
 import { ScrollingContent } from "./ScrollingContent";
 import { NewChartContent } from "./NewChartContent";
@@ -55,6 +55,7 @@ import { Message } from "./types";
 import { ConversationManager } from "./ConversationManager";
 import { logger } from "@/lib/utils/logger";
 import { ChatLoadingState, ChatErrorState } from "./chat";
+import { useWorkspaceUI } from "@/contexts/WorkspaceUIContext";
 
 /**
  * Chart context structure sent to the API.
@@ -91,6 +92,8 @@ export function ChatContainer({ session }: ChatContainerProps) {
   const [workspace] = useAtom(workspaceAtom);
   const messages = useAtomValue(messagesAtom);
   const setMessages = useSetAtom(messagesAtom);
+  const { setIsForging } = useWorkspaceUI();
+  const isRendering = useAtomValue(isRenderingAtom);
 
   /**
    * Build chart context from workspace.
@@ -150,6 +153,12 @@ export function ChatContainer({ session }: ChatContainerProps) {
       logger.error("Chat error", { error: err });
     }
   });
+
+  // Sync forging state to context for TopNav display
+  // Combines both streaming chat loading and backend rendering states
+  useEffect(() => {
+    setIsForging(isLoading || isRendering);
+  }, [isLoading, isRendering, setIsForging]);
 
   /**
    * Sync streaming messages to Jotai messagesAtom.

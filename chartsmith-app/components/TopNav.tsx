@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useWorkspaceUISafe } from "@/contexts/WorkspaceUIContext";
 import { StatusDropdown } from "./StatusDropdown";
 import { TtlshModal } from "./TtlshModal";
 import { Upload, Flame } from "lucide-react";
@@ -79,6 +80,7 @@ function ForgeLogo({ className = "" }: { className?: string }) {
 export function TopNav() {
   const [showTtlshModal, setShowTtlshModal] = useState(false);
   const { resolvedTheme } = useTheme();
+  const { isForging } = useWorkspaceUISafe();
 
   return (
     <>
@@ -132,12 +134,12 @@ export function TopNav() {
         {/* Center - Status indicator dot */}
         <div className="flex-1 flex justify-center">
           <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-forge-ember ember-pulse" />
+            <div className={`w-2 h-2 rounded-full ${isForging ? "bg-forge-ember animate-pulse" : "bg-forge-ember ember-pulse"}`} />
             <span className={`
               text-xs font-medium
               ${resolvedTheme === "dark" ? "text-forge-zinc" : "text-stone-400"}
             `}>
-              Ready to forge
+              {isForging ? "Forging..." : "Ready to forge"}
             </span>
           </div>
         </div>

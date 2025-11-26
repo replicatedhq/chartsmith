@@ -1,3 +1,5 @@
+"use client";
+
 import { useTheme } from "../contexts/ThemeContext";
 import { Session } from "@/lib/types/session";
 import { Send, Loader2 } from "lucide-react";
