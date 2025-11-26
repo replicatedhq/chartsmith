@@ -67,12 +67,12 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
 
 ### AI Chat System
 
-The chat functionality uses a custom streaming implementation with support for multiple AI providers.
+The chat functionality uses the Vercel AI SDK for robust streaming with support for multiple AI providers.
 
 #### Features
 
 - **Multi-provider support**: Switch between Anthropic (Claude) and OpenAI (GPT) models
-- **Full control over streaming**: Custom SSE parsing for AI SDK format
+- **Streaming responses**: Real-time streaming using Vercel AI SDK
 - **Stop button support**: Ability to cancel in-progress requests
 - **Workspace context**: Automatic injection of chart files into AI context
 - **Better error handling**: Graceful handling of network errors and aborts
@@ -80,11 +80,8 @@ The chat functionality uses a custom streaming implementation with support for m
 #### Key Files
 
 - `lib/ai/provider.ts` - AI provider factory for switching between providers
-- `hooks/useStreamingChat.ts` - Custom React hook for streaming chat
 - `app/api/chat/route.ts` - API endpoint using AI SDK
 - `components/ChatContainer.tsx` - Main chat UI component
-
-See `MIGRATION_NOTES.md` for details on the migration from AI SDK's `useChat`.
 
 ### Switching AI Providers
 

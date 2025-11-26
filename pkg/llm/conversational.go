@@ -22,8 +22,7 @@ func ConversationalChatMessage(ctx context.Context, streamCh chan string, doneCh
 		anthropic.NewAssistantMessage(anthropic.NewTextBlock(chatOnlyInstructions)),
 	}
 
-	var c *workspacetypes.Chart
-	c = &w.Charts[0]
+	c := &w.Charts[0]
 
 	chartStructure, err := getChartStructure(ctx, c)
 	if err != nil {

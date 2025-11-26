@@ -300,7 +300,7 @@ func PerformStringReplacement(content, oldStr, newStr string) (string, bool, err
 			resultCh <- struct {
 				start, end int
 				err        error
-			}{-1, -1, fmt.Errorf("Approximate match for replacement not found")}
+			}{-1, -1, fmt.Errorf("approximate match for replacement not found")}
 			return
 		}
 		resultCh <- struct {
@@ -594,7 +594,7 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 				switch event := event.AsUnion().(type) {
 				case anthropic.ContentBlockDeltaEvent:
 					if event.Delta.Text != "" {
-						// fmt.Printf("%s", event.Delta.Text)
+						// do nothing
 					}
 				}
 			}

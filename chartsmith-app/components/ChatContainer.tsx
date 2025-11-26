@@ -2,8 +2,7 @@
  * ChatContainer - Main chat interface component for ChartSmith.
  * 
  * This component provides the primary chat UI for interacting with the AI assistant.
- * It uses a custom streaming hook (useStreamingChat) instead of AI SDK's useChat
- * for better control over streaming, cancellation, and workspace integration.
+ * It uses Vercel AI SDK's useChat for streaming, cancellation, and workspace integration.
  * 
  * ## Features
  * 
@@ -17,7 +16,7 @@
  * 
  * ```
  * ChatContainer
- *   ├── useStreamingChat (custom hook)
+ *   ├── useChat (AI SDK)
  *   │   └── /api/chat (AI SDK + Anthropic)
  *   ├── messagesAtom (Jotai) ← synced from streamMessages
  *   └── ChatMessage (renders each message)
@@ -50,7 +49,8 @@ import { messagesAtom, workspaceAtom, isRenderingAtom } from "@/atoms/workspace"
 import { useAtom, useSetAtom, useAtomValue } from "jotai";
 import { ScrollingContent } from "./ScrollingContent";
 import { NewChartContent } from "./NewChartContent";
-import { useStreamingChat } from '@/hooks/useStreamingChat';
+import { useChat } from '@ai-sdk/react';
+import { DefaultChatTransport } from 'ai';
 import { Message } from "./types";
 import { ConversationManager } from "./ConversationManager";
 import { logger } from "@/lib/utils/logger";
@@ -126,21 +126,13 @@ export function ChatContainer({ session }: ChatContainerProps) {
   }, [workspace?.files]);
 
   /**
-   * Custom streaming chat hook.
-   * Replaces AI SDK's useChat with our custom implementation that supports:
-   * - Stop button (via AbortController)
-   * - Workspace context injection
-   * - SSE streaming format parsing
+   * Vercel AI SDK useChat hook.
+   * Handles streaming chat state and API interaction.
+   * 
+   * Note: We manually manage input state because useChat in @ai-sdk/react v2+
+   * doesn't provide built-in input management helpers.
    */
-  const {
-    messages: streamMessages,
-    input,
-    handleInputChange,
-    handleSubmit: streamHandleSubmit,
-    isLoading,
-    error,
-    stop
-  } = useStreamingChat({
+  const transport = useMemo(() => new DefaultChatTransport({
     api: '/api/chat',
     body: {
       workspaceId: workspace?.id,
@@ -149,10 +141,36 @@ export function ChatContainer({ session }: ChatContainerProps) {
       charts: chartContext,
       looseFiles: looseFilesContext,
     },
-    onError: (err) => {
+  }), [workspace?.id, workspace?.name, workspace?.currentRevisionNumber, chartContext, looseFilesContext]);
+
+  const {
+    messages: streamMessages,
+    error,
+    stop,
+    sendMessage,
+    status,
+  } = useChat({
+    transport,
+    onError: (err: Error) => {
       logger.error("Chat error", { error: err });
     }
   });
+
+  // Manual input state management
+  const [input, setInput] = useState('');
+  const isLoading = status === 'streaming' || status === 'submitted';
+
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement | HTMLInputElement>) => {
+    setInput(e.target.value);
+  }, []);
+
+  const streamHandleSubmit = useCallback(async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!input.trim()) return;
+    
+    await sendMessage({ text: input });
+    setInput('');
+  }, [input, sendMessage]);
 
   // Sync forging state to context for TopNav display
   // Combines both streaming chat loading and backend rendering states
@@ -180,18 +198,33 @@ export function ChatContainer({ session }: ChatContainerProps) {
     // Process messages in pairs (User + Assistant)
     for (let i = 0; i < streamMessages.length; i++) {
       const msg = streamMessages[i];
+      
+      // Extract text content from parts (AI SDK v5 UIMessage structure)
+      const msgContent = msg.parts
+        .filter(p => p.type === 'text')
+        .map(p => p.text)
+        .join('');
 
       if (msg.role === 'user') {
         const nextMsg = streamMessages[i + 1];
         const hasResponse = nextMsg && nextMsg.role === 'assistant';
+        
+        // Extract response content
+        const responseContent = hasResponse 
+          ? nextMsg.parts
+              .filter(p => p.type === 'text')
+              .map(p => p.text)
+              .join('')
+          : undefined;
+
         const isAssistantStreaming = hasResponse && isLoading && i === streamMessages.length - 2;
 
         const workspaceMsg: Message = {
           id: msg.id,
-          prompt: msg.content,
-          response: hasResponse ? nextMsg.content : undefined,
+          prompt: msgContent,
+          response: responseContent,
           isComplete: !isAssistantStreaming,
-          createdAt: msg.createdAt || new Date(),
+          createdAt: new Date(), // UIMessage doesn't have createdAt in v5
           workspaceId: workspace?.id,
           isIntentComplete: hasResponse && !isAssistantStreaming ? true : false,
           isStreaming: isAssistantStreaming,

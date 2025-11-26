@@ -12,19 +12,28 @@ import {
   mockWorkspace,
   mockNewChartWorkspace,
   mockMessage,
-  createMockStreamingChat,
+  createMockChat,
+  createUIMessage,
 } from './test-utils';
 
-// Mock the useStreamingChat hook
-const mockUseStreamingChat = createMockStreamingChat();
+// Mock the useChat hook
+const mockUseChat = createMockChat();
 
-jest.mock('@/hooks/useStreamingChat', () => ({
-  useStreamingChat: jest.fn(() => mockUseStreamingChat),
+jest.mock('@ai-sdk/react', () => ({
+  useChat: jest.fn(() => mockUseChat),
 }));
 
+jest.mock('ai', () => {
+  return {
+    DefaultChatTransport: jest.fn().mockImplementation(() => ({})),
+  };
+});
+
 // Import the mock to modify it in tests
-import { useStreamingChat } from '@/hooks/useStreamingChat';
-const mockedUseStreamingChat = useStreamingChat as jest.MockedFunction<typeof useStreamingChat>;
+import { useChat } from '@ai-sdk/react';
+import { DefaultChatTransport } from 'ai';
+const mockedUseChat = useChat as jest.MockedFunction<typeof useChat>;
+const mockedDefaultChatTransport = DefaultChatTransport as unknown as jest.Mock;
 
 // Mock ScrollingContent to simplify testing
 jest.mock('../ScrollingContent', () => ({
@@ -67,13 +76,16 @@ jest.mock('lucide-react', () => ({
   FolderOpen: () => <span data-testid="folder-icon">Folder</span>,
   Download: () => <span data-testid="download-icon">Download</span>,
   Trash2: () => <span data-testid="trash-icon">Trash</span>,
+  Flame: () => <span data-testid="flame-icon">Flame</span>,
+  X: () => <span data-testid="x-icon">X</span>,
 }));
 
 describe('ChatContainer', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     // Reset mock to default state
-    mockedUseStreamingChat.mockReturnValue(createMockStreamingChat());
+    mockedUseChat.mockReturnValue(createMockChat() as any);
+    mockedDefaultChatTransport.mockClear();
   });
 
   describe('Rendering', () => {
@@ -83,7 +95,7 @@ describe('ChatContainer', () => {
         { initialWorkspace: mockWorkspace }
       );
 
-      expect(screen.getByPlaceholderText('Ask a question or ask for a change...')).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('Ask a question or request a change...')).toBeInTheDocument();
     });
 
     it('renders null when workspace is not available', () => {
@@ -107,7 +119,7 @@ describe('ChatContainer', () => {
     it('renders existing messages', () => {
       renderWithProviders(
         <ChatContainer session={mockSession} />,
-        { 
+        {
           initialWorkspace: mockWorkspace,
           initialMessages: [mockMessage]
         }
@@ -119,125 +131,99 @@ describe('ChatContainer', () => {
 
   describe('Input Field', () => {
     it('accepts text input', async () => {
-      const mockHandleInputChange = jest.fn();
-      mockedUseStreamingChat.mockReturnValue(
-        createMockStreamingChat({ input: '' })
-      );
-      // Update the mock to track input changes
-      mockedUseStreamingChat.mockReturnValue({
-        ...createMockStreamingChat(),
-        handleInputChange: mockHandleInputChange,
-      });
-
       renderWithProviders(
         <ChatContainer session={mockSession} />,
         { initialWorkspace: mockWorkspace }
       );
 
-      const textarea = screen.getByPlaceholderText('Ask a question or ask for a change...');
+      const textarea = screen.getByPlaceholderText('Ask a question or request a change...');
       fireEvent.change(textarea, { target: { value: 'Hello' } });
 
-      expect(mockHandleInputChange).toHaveBeenCalled();
-    });
-
-    it('clears input after submission', async () => {
-      const mockHandleSubmit = jest.fn();
-      mockedUseStreamingChat.mockReturnValue({
-        ...createMockStreamingChat({ input: 'Test message' }),
-        handleSubmit: mockHandleSubmit,
-      });
-
-      renderWithProviders(
-        <ChatContainer session={mockSession} />,
-        { initialWorkspace: mockWorkspace }
-      );
-
-      const textarea = screen.getByPlaceholderText('Ask a question or ask for a change...');
-      fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
-
-      expect(mockHandleSubmit).toHaveBeenCalled();
+      // Component manages its own input state now
+      expect(textarea).toHaveValue('Hello');
     });
   });
 
   describe('Form Submission', () => {
-    it('submits on Enter key press', async () => {
-      const mockHandleSubmit = jest.fn();
-      mockedUseStreamingChat.mockReturnValue({
-        ...createMockStreamingChat({ input: 'Test message' }),
-        handleSubmit: mockHandleSubmit,
-      });
+    it('submits on Enter key press with input', async () => {
+      const mockSendMessage = jest.fn();
+      mockedUseChat.mockReturnValue({
+        ...createMockChat(),
+        sendMessage: mockSendMessage,
+      } as any);
 
       renderWithProviders(
         <ChatContainer session={mockSession} />,
         { initialWorkspace: mockWorkspace }
       );
 
-      const textarea = screen.getByPlaceholderText('Ask a question or ask for a change...');
+      const textarea = screen.getByPlaceholderText('Ask a question or request a change...');
+      fireEvent.change(textarea, { target: { value: 'Test message' } });
       fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
 
-      expect(mockHandleSubmit).toHaveBeenCalled();
+      expect(mockSendMessage).toHaveBeenCalled();
     });
 
     it('does not submit on Shift+Enter (allows newline)', async () => {
-      const mockHandleSubmit = jest.fn();
-      mockedUseStreamingChat.mockReturnValue({
-        ...createMockStreamingChat({ input: 'Test message' }),
-        handleSubmit: mockHandleSubmit,
-      });
+      const mockSendMessage = jest.fn();
+      mockedUseChat.mockReturnValue({
+        ...createMockChat(),
+        sendMessage: mockSendMessage,
+      } as any);
 
       renderWithProviders(
         <ChatContainer session={mockSession} />,
         { initialWorkspace: mockWorkspace }
       );
 
-      const textarea = screen.getByPlaceholderText('Ask a question or ask for a change...');
+      const textarea = screen.getByPlaceholderText('Ask a question or request a change...');
+      fireEvent.change(textarea, { target: { value: 'Test message' } });
       fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: true });
 
-      expect(mockHandleSubmit).not.toHaveBeenCalled();
+      expect(mockSendMessage).not.toHaveBeenCalled();
     });
 
     it('does not submit when input is empty', async () => {
-      const mockHandleSubmit = jest.fn();
-      mockedUseStreamingChat.mockReturnValue({
-        ...createMockStreamingChat({ input: '' }),
-        handleSubmit: mockHandleSubmit,
-      });
+      const mockSendMessage = jest.fn();
+      mockedUseChat.mockReturnValue({
+        ...createMockChat(),
+        sendMessage: mockSendMessage,
+      } as any);
 
       renderWithProviders(
         <ChatContainer session={mockSession} />,
         { initialWorkspace: mockWorkspace }
       );
 
-      const textarea = screen.getByPlaceholderText('Ask a question or ask for a change...');
+      const textarea = screen.getByPlaceholderText('Ask a question or request a change...');
       fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
 
-      expect(mockHandleSubmit).not.toHaveBeenCalled();
+      expect(mockSendMessage).not.toHaveBeenCalled();
     });
 
-    it('does not submit when loading', async () => {
-      const mockHandleSubmit = jest.fn();
-      mockedUseStreamingChat.mockReturnValue({
-        ...createMockStreamingChat({ input: 'Test', isLoading: true }),
-        handleSubmit: mockHandleSubmit,
-      });
+    it('does not submit when loading (streaming)', async () => {
+      const mockSendMessage = jest.fn();
+      mockedUseChat.mockReturnValue({
+        ...createMockChat({ status: 'streaming' }),
+        sendMessage: mockSendMessage,
+      } as any);
 
       renderWithProviders(
         <ChatContainer session={mockSession} />,
         { initialWorkspace: mockWorkspace }
       );
 
-      const textarea = screen.getByPlaceholderText('Ask a question or ask for a change...');
+      const textarea = screen.getByPlaceholderText('Ask a question or request a change...');
+      fireEvent.change(textarea, { target: { value: 'Test' } });
       fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
 
-      expect(mockHandleSubmit).not.toHaveBeenCalled();
+      expect(mockSendMessage).not.toHaveBeenCalled();
     });
   });
 
   describe('Send Button', () => {
     it('is disabled when input is empty', () => {
-      mockedUseStreamingChat.mockReturnValue(
-        createMockStreamingChat({ input: '' })
-      );
+      mockedUseChat.mockReturnValue(createMockChat() as any);
 
       renderWithProviders(
         <ChatContainer session={mockSession} />,
@@ -249,14 +235,15 @@ describe('ChatContainer', () => {
     });
 
     it('is enabled when input has text', () => {
-      mockedUseStreamingChat.mockReturnValue(
-        createMockStreamingChat({ input: 'Hello' })
-      );
+      mockedUseChat.mockReturnValue(createMockChat() as any);
 
       renderWithProviders(
         <ChatContainer session={mockSession} />,
         { initialWorkspace: mockWorkspace }
       );
+
+      const textarea = screen.getByPlaceholderText('Ask a question or request a change...');
+      fireEvent.change(textarea, { target: { value: 'Hello' } });
 
       const sendButton = screen.getByTitle('Send message');
       expect(sendButton).not.toBeDisabled();
@@ -264,75 +251,67 @@ describe('ChatContainer', () => {
   });
 
   describe('Loading State', () => {
-    it('shows loading indicator when isLoading is true', () => {
-      mockedUseStreamingChat.mockReturnValue(
-        createMockStreamingChat({ isLoading: true })
-      );
+    it('shows loading indicator when status is streaming', () => {
+      mockedUseChat.mockReturnValue(createMockChat({ status: 'streaming' }) as any);
 
       renderWithProviders(
         <ChatContainer session={mockSession} />,
         { initialWorkspace: mockWorkspace }
       );
 
-      expect(screen.getByText('ChartSmith is thinking...')).toBeInTheDocument();
+      expect(screen.getByText('Forging your response...')).toBeInTheDocument();
     });
 
     it('shows stop button when loading', () => {
-      mockedUseStreamingChat.mockReturnValue(
-        createMockStreamingChat({ isLoading: true })
-      );
+      mockedUseChat.mockReturnValue(createMockChat({ status: 'streaming' }) as any);
 
       renderWithProviders(
         <ChatContainer session={mockSession} />,
         { initialWorkspace: mockWorkspace }
       );
 
-      // There are multiple stop buttons (one in loading indicator, one in input area)
-      const stopButtons = screen.getAllByTitle('Stop generating');
-      expect(stopButtons.length).toBeGreaterThan(0);
+      // The stop button is in the loading indicator
+      const stopButton = screen.getByTitle('Stop forging');
+      expect(stopButton).toBeInTheDocument();
     });
 
     it('calls stop when stop button is clicked', async () => {
       const mockStop = jest.fn();
-      mockedUseStreamingChat.mockReturnValue({
-        ...createMockStreamingChat({ isLoading: true }),
+      mockedUseChat.mockReturnValue({
+        ...createMockChat({ status: 'streaming' }),
         stop: mockStop,
-      });
+      } as any);
 
       renderWithProviders(
         <ChatContainer session={mockSession} />,
         { initialWorkspace: mockWorkspace }
       );
 
-      // Get the first stop button and click it
-      const stopButtons = screen.getAllByTitle('Stop generating');
-      fireEvent.click(stopButtons[0]);
+      // Get the stop button and click it
+      const stopButton = screen.getByTitle('Stop forging');
+      fireEvent.click(stopButton);
 
       expect(mockStop).toHaveBeenCalled();
     });
 
     it('shows stop button instead of send button when loading', () => {
-      mockedUseStreamingChat.mockReturnValue(
-        createMockStreamingChat({ isLoading: true })
-      );
+      mockedUseChat.mockReturnValue(createMockChat({ status: 'streaming' }) as any);
 
       renderWithProviders(
         <ChatContainer session={mockSession} />,
         { initialWorkspace: mockWorkspace }
       );
 
-      // Stop button should be visible (there are multiple)
-      const stopButtons = screen.getAllByTitle('Stop generating');
-      expect(stopButtons.length).toBeGreaterThan(0);
+      // Stop button should be visible
+      const stopButton = screen.getByTitle('Stop forging');
+      expect(stopButton).toBeInTheDocument();
     });
   });
 
   describe('Error State', () => {
     it('shows error message when error occurs', () => {
       const testError = new Error('Test error message');
-      mockedUseStreamingChat.mockReturnValue(
-        createMockStreamingChat({ error: testError })
-      );
+      mockedUseChat.mockReturnValue(createMockChat({ error: testError }) as any);
 
       renderWithProviders(
         <ChatContainer session={mockSession} />,
@@ -345,37 +324,31 @@ describe('ChatContainer', () => {
 
     it('shows rate limit error message', () => {
       const rateLimitError = new Error('Rate limit exceeded 429');
-      mockedUseStreamingChat.mockReturnValue(
-        createMockStreamingChat({ error: rateLimitError })
-      );
+      mockedUseChat.mockReturnValue(createMockChat({ error: rateLimitError }) as any);
 
       renderWithProviders(
         <ChatContainer session={mockSession} />,
         { initialWorkspace: mockWorkspace }
       );
 
-      expect(screen.getByText('Rate limit exceeded')).toBeInTheDocument();
+      expect(screen.getByText('Forge cooling down')).toBeInTheDocument();
     });
 
     it('shows network error message', () => {
       const networkError = new Error('Failed to fetch');
-      mockedUseStreamingChat.mockReturnValue(
-        createMockStreamingChat({ error: networkError })
-      );
+      mockedUseChat.mockReturnValue(createMockChat({ error: networkError }) as any);
 
       renderWithProviders(
         <ChatContainer session={mockSession} />,
         { initialWorkspace: mockWorkspace }
       );
 
-      expect(screen.getByText('Connection error')).toBeInTheDocument();
+      expect(screen.getByText('Connection lost')).toBeInTheDocument();
     });
 
     it('can dismiss error message', async () => {
       const testError = new Error('Test error');
-      mockedUseStreamingChat.mockReturnValue(
-        createMockStreamingChat({ error: testError })
-      );
+      mockedUseChat.mockReturnValue(createMockChat({ error: testError }) as any);
 
       renderWithProviders(
         <ChatContainer session={mockSession} />,
@@ -392,16 +365,14 @@ describe('ChatContainer', () => {
 
     it('shows retry button for retriable errors', () => {
       const networkError = new Error('Failed to fetch');
-      mockedUseStreamingChat.mockReturnValue(
-        createMockStreamingChat({ error: networkError })
-      );
+      mockedUseChat.mockReturnValue(createMockChat({ error: networkError }) as any);
 
       renderWithProviders(
         <ChatContainer session={mockSession} />,
         { initialWorkspace: mockWorkspace }
       );
 
-      expect(screen.getByText('Try again')).toBeInTheDocument();
+      expect(screen.getByText('Reheat & retry')).toBeInTheDocument();
     });
   });
 
@@ -466,13 +437,13 @@ describe('ChatContainer', () => {
   });
 
   describe('Workspace Context', () => {
-    it('passes workspace context to useStreamingChat', () => {
+    it('passes workspace context to DefaultChatTransport', () => {
       renderWithProviders(
         <ChatContainer session={mockSession} />,
         { initialWorkspace: mockWorkspace }
       );
 
-      expect(mockedUseStreamingChat).toHaveBeenCalledWith(
+      expect(mockedDefaultChatTransport).toHaveBeenCalledWith(
         expect.objectContaining({
           api: '/api/chat',
           body: expect.objectContaining({
@@ -490,7 +461,7 @@ describe('ChatContainer', () => {
         { initialWorkspace: mockWorkspace }
       );
 
-      expect(mockedUseStreamingChat).toHaveBeenCalledWith(
+      expect(mockedDefaultChatTransport).toHaveBeenCalledWith(
         expect.objectContaining({
           body: expect.objectContaining({
             charts: expect.arrayContaining([
@@ -515,14 +486,12 @@ describe('ChatContainer', () => {
         { initialWorkspace: mockWorkspace }
       );
 
-      const textarea = screen.getByPlaceholderText('Ask a question or ask for a change...');
+      const textarea = screen.getByPlaceholderText('Ask a question or request a change...');
       expect(textarea).toBeInTheDocument();
     });
 
     it('loading indicator has aria-live', () => {
-      mockedUseStreamingChat.mockReturnValue(
-        createMockStreamingChat({ isLoading: true })
-      );
+      mockedUseChat.mockReturnValue(createMockChat({ status: 'streaming' }) as any);
 
       renderWithProviders(
         <ChatContainer session={mockSession} />,
@@ -537,9 +506,7 @@ describe('ChatContainer', () => {
 
     it('error message has alert role', () => {
       const testError = new Error('Test error');
-      mockedUseStreamingChat.mockReturnValue(
-        createMockStreamingChat({ error: testError })
-      );
+      mockedUseChat.mockReturnValue(createMockChat({ error: testError }) as any);
 
       renderWithProviders(
         <ChatContainer session={mockSession} />,
@@ -554,14 +521,13 @@ describe('ChatContainer', () => {
   describe('Message Syncing', () => {
     it('syncs streaming messages to Jotai messagesAtom', () => {
       const streamMessages = [
-        { id: 'user-1', role: 'user' as const, content: 'Hello', createdAt: new Date() },
-        { id: 'assistant-1', role: 'assistant' as const, content: 'Hi there!', createdAt: new Date() },
+        createUIMessage('user-1', 'user', 'Hello'),
+        createUIMessage('assistant-1', 'assistant', 'Hi there!'),
       ];
-      
-      mockedUseStreamingChat.mockReturnValue({
-        ...createMockStreamingChat(),
-        messages: streamMessages,
-      });
+
+      mockedUseChat.mockReturnValue({
+        ...createMockChat({ messages: streamMessages }),
+      } as any);
 
       renderWithProviders(
         <ChatContainer session={mockSession} />,
@@ -573,4 +539,3 @@ describe('ChatContainer', () => {
     });
   });
 });
-

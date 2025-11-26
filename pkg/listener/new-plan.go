@@ -62,12 +62,12 @@ func handleNewPlanNotification(ctx context.Context, payload string) error {
 	go func() {
 		if w.CurrentRevision == 0 {
 			if err := createInitialPlan(ctx, streamCh, doneCh, w, plan, p.AdditionalFiles); err != nil {
-				logger.Error("Failed to create initial plan", zap.Error(err))
+				logger.Errorf("Failed to create initial plan: %v", err)
 				doneCh <- fmt.Errorf("error creating initial plan: %w", err)
 			}
 		} else {
 			if err := createUpdatePlan(ctx, streamCh, doneCh, w, plan, p.AdditionalFiles); err != nil {
-				logger.Error("Failed to create update plan", zap.Error(err))
+				logger.Errorf("Failed to create update plan: %v", err)
 				doneCh <- fmt.Errorf("error creating update plan: %w", err)
 			}
 		}
@@ -109,7 +109,7 @@ func handleNewPlanNotification(ctx context.Context, payload string) error {
 			}
 
 			if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
-				logger.Error("Failed to send final plan update", zap.Error(err))
+				logger.Errorf("Failed to send final plan update: %v", err)
 				return fmt.Errorf("failed to send final plan update: %w", err)
 			}
 			done = true

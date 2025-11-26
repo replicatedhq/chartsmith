@@ -2,12 +2,12 @@ package param
 
 import (
 	"fmt"
-	"log"
 	"os"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ssm"
+	"github.com/replicatedhq/chartsmith/pkg/logger"
 )
 
 var params *Params
@@ -105,7 +105,7 @@ func GetParamsFromSSM(paramLookup map[string]string) (map[string]string, error) 
 		}
 
 		for _, p := range output.InvalidParameters {
-			log.Printf("Ssm param %s invalid", *p)
+			logger.Infof("Ssm param %s invalid", *p)
 		}
 
 		for _, p := range output.Parameters {

@@ -8,6 +8,7 @@ import { render, RenderOptions } from '@testing-library/react';
 import { Provider } from 'jotai';
 import { useHydrateAtoms } from 'jotai/utils';
 import { ThemeProvider } from '@/contexts/ThemeContext';
+import { WorkspaceUIProvider } from '@/contexts/WorkspaceUIContext';
 import { messagesAtom, workspaceAtom, plansAtom, rendersAtom, conversionsAtom } from '@/atoms/workspace';
 import { Workspace, Plan, RenderedWorkspace, Conversion } from '@/lib/types/workspace';
 import { Message } from '@/components/types';
@@ -93,24 +94,40 @@ export const mockStreamingMessage: Message = {
   workspaceId: 'test-workspace-id',
 };
 
-// Mock useStreamingChat return value
-export interface MockStreamingChatOptions {
-  messages?: Array<{ id: string; role: 'user' | 'assistant'; content: string; createdAt: Date }>;
-  input?: string;
-  isLoading?: boolean;
-  error?: Error | null;
+// Mock UIMessage structure for AI SDK v5
+export interface MockUIMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  parts: Array<{ type: 'text'; text: string }>;
 }
 
-export const createMockStreamingChat = (options: MockStreamingChatOptions = {}) => ({
+// Mock useChat return value (from @ai-sdk/react v5)
+export interface MockChatOptions {
+  messages?: MockUIMessage[];
+  status?: 'idle' | 'streaming' | 'submitted' | 'error';
+  error?: Error | undefined;
+}
+
+// Helper to create UIMessage from simple content
+export function createUIMessage(
+  id: string,
+  role: 'user' | 'assistant',
+  content: string
+): MockUIMessage {
+  return {
+    id,
+    role,
+    parts: [{ type: 'text', text: content }],
+  };
+}
+
+export const createMockChat = (options: MockChatOptions = {}) => ({
+  id: 'test-chat-id',
   messages: options.messages ?? [],
-  input: options.input ?? '',
-  handleInputChange: jest.fn(),
-  handleSubmit: jest.fn(),
-  isLoading: options.isLoading ?? false,
-  error: options.error ?? null,
-  setInput: jest.fn(),
+  status: options.status ?? 'idle',
+  error: options.error ?? undefined,
+  setMessages: jest.fn(),
   stop: jest.fn(),
-  clearMessages: jest.fn(),
   sendMessage: jest.fn(),
 });
 
@@ -160,7 +177,9 @@ export function renderWithProviders(
       <Provider>
         <HydrateAtoms initialValues={initialValues}>
           <ThemeProvider>
-            {children}
+            <WorkspaceUIProvider>
+              {children}
+            </WorkspaceUIProvider>
           </ThemeProvider>
         </HydrateAtoms>
       </Provider>

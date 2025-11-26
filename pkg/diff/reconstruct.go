@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/replicatedhq/chartsmith/pkg/logger"
 )
 
 type hunk struct {
@@ -17,9 +19,9 @@ type hunk struct {
 	modifiedCount int
 	contextBefore []string
 	contextAfter  []string
-	contextLines  []string  // Lines with space prefix - used for fuzzy matching
-	removedLines  []string  // Lines with - prefix
-	addedLines    []string  // Lines with + prefix
+	contextLines  []string // Lines with space prefix - used for fuzzy matching
+	removedLines  []string // Lines with - prefix
+	addedLines    []string // Lines with + prefix
 }
 
 type DiffReconstructor struct {
@@ -50,7 +52,7 @@ func normalizeLineEndings(s string) string {
 
 func (d *DiffReconstructor) logDebug(format string, args ...interface{}) {
 	if d.debug {
-		fmt.Printf("[DEBUG] "+format+"\n", args...)
+		logger.Debugf(format, args...)
 	}
 }
 
@@ -63,7 +65,7 @@ func (d *DiffReconstructor) ReconstructDiff() (string, error) {
 	// Find first valid header pair
 	origFile := "file"
 	startIdx := 0
-	
+
 	// Look for standard headers
 	foundHeaders, of, _, si := d.findFirstValidHeaders(lines)
 	if foundHeaders {
@@ -77,7 +79,7 @@ func (d *DiffReconstructor) ReconstructDiff() (string, error) {
 				break
 			}
 		}
-		
+
 		if hunkIdx >= 0 {
 			startIdx = hunkIdx
 		}
@@ -133,9 +135,9 @@ func (d *DiffReconstructor) ReconstructDiff() (string, error) {
 	// Write hunks with corrected line numbers
 	for _, h := range correctedHunks {
 		// Generate updated header with corrected line numbers
-		result.WriteString(fmt.Sprintf("@@ -%d,%d +%d,%d @@\n", 
+		result.WriteString(fmt.Sprintf("@@ -%d,%d +%d,%d @@\n",
 			h.originalStart, h.originalCount, h.modifiedStart, h.modifiedCount))
-		
+
 		for _, line := range h.content {
 			result.WriteString(line + "\n")
 		}
@@ -160,7 +162,7 @@ func (d *DiffReconstructor) findFirstValidHeaders(lines []string) (bool, string,
 func (d *DiffReconstructor) parseHunks(lines []string) ([]hunk, error) {
 	var hunks []hunk
 	var currentHunk *hunk
-	
+
 	// Handle special case for missing header format like "@@" without line numbers
 	if len(lines) > 0 && lines[0] == "@@" {
 		// Initialize a hunk with default values
@@ -175,13 +177,13 @@ func (d *DiffReconstructor) parseHunks(lines []string) ([]hunk, error) {
 			removedLines:  []string{},
 			addedLines:    []string{},
 		}
-		
+
 		// Process the remaining lines
 		for i := 1; i < len(lines); i++ {
 			line := strings.TrimRight(lines[i], "\r\n")
 			if !strings.HasPrefix(line, "---") && !strings.HasPrefix(line, "+++") {
 				currentHunk.content = append(currentHunk.content, line)
-				
+
 				// Categorize by line type for later analysis
 				if strings.HasPrefix(line, " ") {
 					currentHunk.contextLines = append(currentHunk.contextLines, strings.TrimPrefix(line, " "))
@@ -192,22 +194,22 @@ func (d *DiffReconstructor) parseHunks(lines []string) ([]hunk, error) {
 				}
 			}
 		}
-		
+
 		// Add the hunk and return
 		if len(currentHunk.content) > 0 {
 			// Count the number of lines
 			addCount := len(currentHunk.addedLines)
 			removeCount := len(currentHunk.removedLines)
 			contextCount := len(currentHunk.contextLines)
-			
+
 			currentHunk.originalCount = removeCount + contextCount
 			currentHunk.modifiedCount = addCount + contextCount
-			
+
 			hunks = append(hunks, *currentHunk)
 			return hunks, nil
 		}
 	}
-	
+
 	// Standard parsing for normal hunks
 	for i := 0; i < len(lines); i++ {
 		line := strings.TrimRight(lines[i], "\r\n")
@@ -231,7 +233,7 @@ func (d *DiffReconstructor) parseHunks(lines []string) ([]hunk, error) {
 			if parts := strings.Split(line, " "); len(parts) >= 3 {
 				original := strings.TrimPrefix(parts[1], "-")
 				modified := strings.TrimPrefix(parts[2], "+")
-				
+
 				h.originalStart, h.originalCount = parseHunkRange(original)
 				h.modifiedStart, h.modifiedCount = parseHunkRange(modified)
 			} else {
@@ -241,7 +243,7 @@ func (d *DiffReconstructor) parseHunks(lines []string) ([]hunk, error) {
 				h.modifiedStart = 1
 				h.modifiedCount = 1
 			}
-			
+
 			currentHunk = h
 			continue
 		}
@@ -249,7 +251,7 @@ func (d *DiffReconstructor) parseHunks(lines []string) ([]hunk, error) {
 		if currentHunk != nil && !strings.HasPrefix(line, "---") && !strings.HasPrefix(line, "+++") {
 			// Add line to current hunk content
 			currentHunk.content = append(currentHunk.content, line)
-			
+
 			// Also categorize by line type for later analysis
 			if strings.HasPrefix(line, " ") {
 				currentHunk.contextLines = append(currentHunk.contextLines, strings.TrimPrefix(line, " "))
@@ -258,8 +260,8 @@ func (d *DiffReconstructor) parseHunks(lines []string) ([]hunk, error) {
 			} else if strings.HasPrefix(line, "+") {
 				currentHunk.addedLines = append(currentHunk.addedLines, strings.TrimPrefix(line, "+"))
 			}
-		} else if currentHunk == nil && (strings.HasPrefix(line, " ") || 
-				strings.HasPrefix(line, "+") || strings.HasPrefix(line, "-")) {
+		} else if currentHunk == nil && (strings.HasPrefix(line, " ") ||
+			strings.HasPrefix(line, "+") || strings.HasPrefix(line, "-")) {
 			// Handle case where there is no explicit hunk marker but content looks like a diff
 			currentHunk = &hunk{
 				header:        "@@",
@@ -272,10 +274,10 @@ func (d *DiffReconstructor) parseHunks(lines []string) ([]hunk, error) {
 				removedLines:  []string{},
 				addedLines:    []string{},
 			}
-			
+
 			// Add this line to the content
 			currentHunk.content = append(currentHunk.content, line)
-			
+
 			// Categorize by line type
 			if strings.HasPrefix(line, " ") {
 				currentHunk.contextLines = append(currentHunk.contextLines, strings.TrimPrefix(line, " "))
@@ -292,13 +294,13 @@ func (d *DiffReconstructor) parseHunks(lines []string) ([]hunk, error) {
 		addCount := len(currentHunk.addedLines)
 		removeCount := len(currentHunk.removedLines)
 		contextCount := len(currentHunk.contextLines)
-		
+
 		// Update line counts if this was an inferred hunk
 		if currentHunk.header == "@@" {
 			currentHunk.originalCount = removeCount + contextCount
 			currentHunk.modifiedCount = addCount + contextCount
 		}
-		
+
 		hunks = append(hunks, *currentHunk)
 	}
 
@@ -307,14 +309,14 @@ func (d *DiffReconstructor) parseHunks(lines []string) ([]hunk, error) {
 
 func (d *DiffReconstructor) enhanceHunks(hunks []hunk) ([]hunk, error) {
 	enhancedHunks := make([]hunk, len(hunks))
-	
+
 	for i, h := range hunks {
 		enhancedHunk := h
-		
+
 		// Extract context before and after the changes
 		var contextBefore, contextAfter []string
 		inChanges := false
-		
+
 		for _, line := range h.content {
 			if strings.HasPrefix(line, "-") || strings.HasPrefix(line, "+") {
 				inChanges = true
@@ -326,64 +328,64 @@ func (d *DiffReconstructor) enhanceHunks(hunks []hunk) ([]hunk, error) {
 				}
 			}
 		}
-		
+
 		enhancedHunk.contextBefore = contextBefore
 		enhancedHunk.contextAfter = contextAfter
-		
+
 		// Preserve original content exactly, including all whitespace
 		// This avoids mangling indentation in the patches
 		enhancedHunks[i] = enhancedHunk
 	}
-	
+
 	return enhancedHunks, nil
 }
 
 func (d *DiffReconstructor) findHunkPositions(hunks []hunk) ([]hunk, error) {
 	originalLines := strings.Split(d.originalContent, "\n")
 	correctedHunks := make([]hunk, 0, len(hunks))
-	
+
 	for _, h := range hunks {
 		correctedHunk := h
-		
+
 		// If the hunk has no context lines, try to use the removed lines for matching
 		effectiveContext := h.contextLines
 		if len(effectiveContext) == 0 && len(h.removedLines) > 0 {
 			effectiveContext = h.removedLines
 		}
-		
+
 		// If we still have no context, use the original start position
 		if len(effectiveContext) == 0 {
 			// Keep original position
 			correctedHunks = append(correctedHunks, correctedHunk)
 			continue
 		}
-		
+
 		// Try to find the best position for this hunk using fuzzy matching
 		bestPos, score := d.findBestMatchForHunk(originalLines, effectiveContext)
-		d.logDebug("Best match for hunk at original pos %d: new pos %d with score %.2f", 
+		d.logDebug("Best match for hunk at original pos %d: new pos %d with score %.2f",
 			h.originalStart, bestPos, score)
-		
+
 		if score > 0.6 && bestPos > 0 { // Only adjust if we have a good match
 			// Adjust the line numbers
 			deltaPos := bestPos - h.originalStart
 			correctedHunk.originalStart = bestPos
 			correctedHunk.modifiedStart = h.modifiedStart + deltaPos
-			
+
 			// Adjust content indentation if needed
 			correctedHunk.content = d.adjustIndentation(correctedHunk.content, originalLines, bestPos)
-			
+
 			correctedHunks = append(correctedHunks, correctedHunk)
 		} else {
 			// Keep original position if no good match found
 			correctedHunks = append(correctedHunks, correctedHunk)
 		}
 	}
-	
+
 	// Sort hunks by position to ensure proper ordering
 	sort.Slice(correctedHunks, func(i, j int) bool {
 		return correctedHunks[i].originalStart < correctedHunks[j].originalStart
 	})
-	
+
 	return correctedHunks, nil
 }
 
@@ -391,15 +393,15 @@ func (d *DiffReconstructor) findBestMatchForHunk(originalLines []string, context
 	if len(contextLines) == 0 || len(originalLines) == 0 {
 		return 1, 0 // No context to match
 	}
-	
+
 	bestPos := 1
 	bestScore := 0.0
-	
+
 	// Try to match each potential position
-	for pos := 1; pos <= len(originalLines) - len(contextLines) + 1; pos++ {
+	for pos := 1; pos <= len(originalLines)-len(contextLines)+1; pos++ {
 		score := 0.0
 		matchCount := 0
-		
+
 		// Calculate how well context lines match at this position
 		for i, contextLine := range contextLines {
 			if pos+i-1 < len(originalLines) {
@@ -411,21 +413,21 @@ func (d *DiffReconstructor) findBestMatchForHunk(originalLines []string, context
 				}
 			}
 		}
-		
+
 		// Normalize score
 		avgScore := score / float64(len(contextLines))
-		
+
 		// Bonus for consecutive matches
 		if matchCount > 2 {
 			avgScore += 0.1 * float64(matchCount) / float64(len(contextLines))
 		}
-		
+
 		if avgScore > bestScore {
 			bestScore = avgScore
 			bestPos = pos
 		}
 	}
-	
+
 	return bestPos, bestScore
 }
 
@@ -433,50 +435,50 @@ func (d *DiffReconstructor) adjustIndentation(lines []string, originalLines []st
 	// For whitespace-sensitive issues, just preserve the original lines
 	// This is a more conservative approach that prevents whitespace mangling
 	return lines
-	
+
 	// Below is the original, more aggressive whitespace-fixing approach
 	// Left commented for future reference if needed
 	/*
-	adjustedLines := make([]string, len(lines))
-	linePos := startPos - 1 // Convert to 0-based indexing
-	
-	for i, line := range lines {
-		if strings.HasPrefix(line, " ") {
-			// Context line - adjust indentation based on original
-			content := strings.TrimPrefix(line, " ")
-			if linePos >= 0 && linePos < len(originalLines) {
-				// Get indentation from original file
-				origIndent := extractIndentation(originalLines[linePos])
-				adjustedLines[i] = " " + origIndent + strings.TrimLeft(content, " \t")
-				linePos++
+		adjustedLines := make([]string, len(lines))
+		linePos := startPos - 1 // Convert to 0-based indexing
+
+		for i, line := range lines {
+			if strings.HasPrefix(line, " ") {
+				// Context line - adjust indentation based on original
+				content := strings.TrimPrefix(line, " ")
+				if linePos >= 0 && linePos < len(originalLines) {
+					// Get indentation from original file
+					origIndent := extractIndentation(originalLines[linePos])
+					adjustedLines[i] = " " + origIndent + strings.TrimLeft(content, " \t")
+					linePos++
+				} else {
+					adjustedLines[i] = line // Keep as-is
+				}
+			} else if strings.HasPrefix(line, "-") {
+				// Removed line - also adjust indentation
+				content := strings.TrimPrefix(line, "-")
+				if linePos >= 0 && linePos < len(originalLines) {
+					origIndent := extractIndentation(originalLines[linePos])
+					adjustedLines[i] = "-" + origIndent + strings.TrimLeft(content, " \t")
+					linePos++
+				} else {
+					adjustedLines[i] = line
+				}
+			} else if strings.HasPrefix(line, "+") {
+				// Added line - try to use same indentation as surrounding context
+				content := strings.TrimPrefix(line, "+")
+				// Use same indentation as previous line if possible
+				prevIndent := ""
+				if i > 0 && (strings.HasPrefix(lines[i-1], " ") || strings.HasPrefix(lines[i-1], "-")) {
+					prevIndent = extractIndentation(strings.TrimPrefix(strings.TrimPrefix(lines[i-1], " "), "-"))
+				}
+				adjustedLines[i] = "+" + prevIndent + strings.TrimLeft(content, " \t")
 			} else {
-				adjustedLines[i] = line // Keep as-is
+				adjustedLines[i] = line // Keep other lines as-is
 			}
-		} else if strings.HasPrefix(line, "-") {
-			// Removed line - also adjust indentation
-			content := strings.TrimPrefix(line, "-")
-			if linePos >= 0 && linePos < len(originalLines) {
-				origIndent := extractIndentation(originalLines[linePos])
-				adjustedLines[i] = "-" + origIndent + strings.TrimLeft(content, " \t")
-				linePos++
-			} else {
-				adjustedLines[i] = line
-			}
-		} else if strings.HasPrefix(line, "+") {
-			// Added line - try to use same indentation as surrounding context
-			content := strings.TrimPrefix(line, "+")
-			// Use same indentation as previous line if possible
-			prevIndent := ""
-			if i > 0 && (strings.HasPrefix(lines[i-1], " ") || strings.HasPrefix(lines[i-1], "-")) {
-				prevIndent = extractIndentation(strings.TrimPrefix(strings.TrimPrefix(lines[i-1], " "), "-"))
-			}
-			adjustedLines[i] = "+" + prevIndent + strings.TrimLeft(content, " \t")
-		} else {
-			adjustedLines[i] = line // Keep other lines as-is
 		}
-	}
-	
-	return adjustedLines
+
+		return adjustedLines
 	*/
 }
 
@@ -506,7 +508,7 @@ func calculateStringSimilarity(a, b string) float64 {
 	// Normalize strings by trimming leading/trailing whitespace and converting to lowercase
 	aNorm := strings.TrimSpace(a)
 	bNorm := strings.TrimSpace(b)
-	
+
 	// For empty strings
 	if len(aNorm) == 0 && len(bNorm) == 0 {
 		return 1.0
@@ -514,18 +516,18 @@ func calculateStringSimilarity(a, b string) float64 {
 	if len(aNorm) == 0 || len(bNorm) == 0 {
 		return 0.0
 	}
-	
+
 	// Different similarity measures:
-	
+
 	// 1. Simple character by character matching
 	charMatch := calculateCharacterMatch(aNorm, bNorm)
-	
+
 	// 2. Token-based similarity (splits by whitespace and compares tokens)
 	tokenMatch := calculateTokenMatch(aNorm, bNorm)
-	
+
 	// 3. Indentation-aware comparison (ignore indentation differences)
 	indentationMatch := calculateIndentationAwareMatch(a, b)
-	
+
 	// Combine scores giving priority to token and indentation matching
 	return 0.2*charMatch + 0.4*tokenMatch + 0.4*indentationMatch
 }
@@ -536,7 +538,7 @@ func calculateCharacterMatch(a, b string) float64 {
 	if maxLen == 0 {
 		return 1.0
 	}
-	
+
 	// Count matching characters
 	matchCount := 0
 	for i := 0; i < min(len(a), len(b)); i++ {
@@ -544,7 +546,7 @@ func calculateCharacterMatch(a, b string) float64 {
 			matchCount++
 		}
 	}
-	
+
 	return float64(matchCount) / float64(maxLen)
 }
 
@@ -552,14 +554,14 @@ func calculateCharacterMatch(a, b string) float64 {
 func calculateTokenMatch(a, b string) float64 {
 	aTokens := strings.Fields(a)
 	bTokens := strings.Fields(b)
-	
+
 	if len(aTokens) == 0 && len(bTokens) == 0 {
 		return 1.0
 	}
 	if len(aTokens) == 0 || len(bTokens) == 0 {
 		return 0.0
 	}
-	
+
 	// Count matching tokens
 	matches := 0
 	for _, at := range aTokens {
@@ -570,7 +572,7 @@ func calculateTokenMatch(a, b string) float64 {
 			}
 		}
 	}
-	
+
 	// Return match ratio
 	return float64(matches) / float64(max(len(aTokens), len(bTokens)))
 }
@@ -580,14 +582,14 @@ func calculateIndentationAwareMatch(a, b string) float64 {
 	// Strip all whitespace and compare
 	aStripped := regexp.MustCompile(`\s+`).ReplaceAllString(a, "")
 	bStripped := regexp.MustCompile(`\s+`).ReplaceAllString(b, "")
-	
+
 	if len(aStripped) == 0 && len(bStripped) == 0 {
 		return 1.0
 	}
 	if len(aStripped) == 0 || len(bStripped) == 0 {
 		return 0.0
 	}
-	
+
 	// Calculate exact match percentage
 	matchCount := 0
 	for i := 0; i < min(len(aStripped), len(bStripped)); i++ {
@@ -595,7 +597,7 @@ func calculateIndentationAwareMatch(a, b string) float64 {
 			matchCount++
 		}
 	}
-	
+
 	return float64(matchCount) / float64(max(len(aStripped), len(bStripped)))
 }
 
