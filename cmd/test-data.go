@@ -36,9 +36,6 @@ func TestData() *cobra.Command {
 
 			missingParams := []string{}
 
-			if param.Get().AnthropicAPIKey == "" {
-				missingParams = append(missingParams, "ANTHROPIC_API_KEY")
-			}
 			if param.Get().VoyageAPIKey == "" {
 				missingParams = append(missingParams, "VOYAGE_API_KEY")
 			}

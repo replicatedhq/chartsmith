@@ -18,11 +18,17 @@
     "test:parseDiff": "jest parseDiff"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^2.0.50",
+    "@ai-sdk/google": "^2.0.44",
+    "@ai-sdk/openai": "^2.0.74",
+    "@ai-sdk/react": "^2.0.104",
     "@anthropic-ai/sdk": "^0.39.0",
     "@monaco-editor/react": "^4.7.0",
+    "@openrouter/ai-sdk-provider": "^1.2.8",
     "@radix-ui/react-toast": "^1.2.7",
     "@tailwindcss/typography": "^0.5.16",
     "@types/diff": "^7.0.1",
+    "ai": "^5.0.104",
     "autoprefixer": "^10.4.20",
     "centrifuge": "^5.3.4",
     "class-variance-authority": "^0.7.1",

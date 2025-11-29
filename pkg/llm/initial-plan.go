@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	anthropic "github.com/anthropics/anthropic-sdk-go"
 	"github.com/replicatedhq/chartsmith/pkg/logger"
 	"github.com/replicatedhq/chartsmith/pkg/workspace"
 	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
@@ -16,6 +15,7 @@ type CreateInitialPlanOpts struct {
 	ChatMessages    []workspacetypes.Chat
 	PreviousPlans   []workspacetypes.Plan
 	AdditionalFiles []workspacetypes.File
+	WorkspaceID     string
 }
 
 func CreateInitialPlan(ctx context.Context, streamCh chan string, doneCh chan error, opts CreateInitialPlanOpts) error {
@@ -25,62 +25,62 @@ func CreateInitialPlan(ctx context.Context, streamCh chan string, doneCh chan er
 	}
 	logger.Info("Creating initial plan", chatMessageFields...)
 
-	client, err := newAnthropicClient(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to create anthropic client: %w", err)
-	}
-
-	messages := []anthropic.MessageParam{
-		anthropic.NewAssistantMessage(anthropic.NewTextBlock(initialPlanSystemPrompt)),
-		anthropic.NewAssistantMessage(anthropic.NewTextBlock(initialPlanInstructions)),
+	// Build messages array for Vercel AI SDK
+	messages := []MessageParam{
+		{Role: "assistant", Content: initialPlanSystemPrompt},
+		{Role: "assistant", Content: initialPlanInstructions},
 	}
 
 	// summarize the bootstrap chart and include it as a user message
-	bootsrapChartUserMessage, err := summarizeBootstrapChart(ctx)
+	bootstrapChartUserMessage, err := summarizeBootstrapChart(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to summarize bootstrap chart: %w", err)
 	}
-	messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(bootsrapChartUserMessage)))
+	messages = append(messages, MessageParam{Role: "user", Content: bootstrapChartUserMessage})
 
 	for _, chatMessage := range opts.ChatMessages {
-		messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(chatMessage.Prompt)))
+		messages = append(messages, MessageParam{Role: "user", Content: chatMessage.Prompt})
 		if chatMessage.Response != "" {
-			messages = append(messages, anthropic.NewAssistantMessage(anthropic.NewTextBlock(chatMessage.Response)))
+			messages = append(messages, MessageParam{Role: "assistant", Content: chatMessage.Response})
 		}
 	}
 
 	for _, additionalFile := range opts.AdditionalFiles {
-		messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(additionalFile.Content)))
+		messages = append(messages, MessageParam{Role: "user", Content: additionalFile.Content})
 	}
 
 	initialUserMessage := "Describe the plan only (do not write code) to create a helm chart based on the previous discussion. "
+	messages = append(messages, MessageParam{Role: "user", Content: initialUserMessage})
 
-	messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(initialUserMessage)))
-
-	stream := client.Messages.NewStreaming(context.TODO(), anthropic.MessageNewParams{
-		Model:     anthropic.F(anthropic.ModelClaude3_7Sonnet20250219),
-		MaxTokens: anthropic.F(int64(8192)),
-		Messages:  anthropic.F(messages),
+	// Use Next.js client (which uses Vercel AI SDK)
+	client := NewNextJSClient()
+	textCh, errCh := client.StreamPlan(ctx, PlanRequest{
+		Messages:    messages,
+		WorkspaceID: opts.WorkspaceID,
 	})
 
-	message := anthropic.Message{}
-	for stream.Next() {
-		event := stream.Current()
-		message.Accumulate(event)
-
-		switch delta := event.Delta.(type) {
-		case anthropic.ContentBlockDeltaEventDelta:
-			if delta.Text != "" {
-				streamCh <- delta.Text
+	// Forward streamed text to the provided channel
+	go func() {
+		for {
+			select {
+			case text, ok := <-textCh:
+				if !ok {
+					// Channel closed, wait for error
+					err := <-errCh
+					doneCh <- err
+					return
+				}
+				streamCh <- text
+			case err := <-errCh:
+				doneCh <- err
+				return
+			case <-ctx.Done():
+				doneCh <- ctx.Err()
+				return
 			}
 		}
-	}
+	}()
 
-	if stream.Err() != nil {
-		doneCh <- stream.Err()
-	}
-
-	doneCh <- nil
 	return nil
 }
 

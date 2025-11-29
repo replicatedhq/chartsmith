@@ -16,34 +16,66 @@ This doc is a development guide for how engineers can contribute to this project
 
 ### Required Secrets
 
-Before starting, ensure you have the following secrets configured locally on your computer:
+You'll need to configure secrets in two places:
 
-- `ANTHROPIC_API_KEY`: Get your own key (Create a new API key in Anthropic Console)
-- `GROQ_API_KEY`: Get your own key (Get a new API key from groq.com)
-- `VOYAGE_API_KEY`: Get your own key (Generate new key)
-- `CHARTSMITH_PG_URI=postgresql://postgres:password@localhost:5432/chartsmith?sslmode=disable`
-- `CHARTSMITH_CENTRIFUGO_ADDRESS=http://localhost:8000/api`
-- `CHARTSMITH_CENTRIFUGO_API_KEY=api_key` (Already set)
-- `CHARTSMITH_TOKEN_ENCRYPTION=` (Can ignore)
-- `CHARTSMITH_SLACK_TOKEN=` (Can ignore)
-- `CHARTSMITH_SLACK_CHANNEL=` (Can ignore)
+#### 1. Environment Variables (for Go Worker)
 
-You should also create a .env.local file in the `chartsmith-app` directory with some of the same content. You will update this with your Anthropic API key, and your Google Client secret information.
+Export these in your shell before running `make run-worker`:
 
+```bash
+# Required - API Keys
+export GROQ_API_KEY=your-groq-key                  # Get from groq.com
+export VOYAGE_API_KEY=your-voyage-key              # Get from voyageai.com
+
+# Required - Infrastructure
+export CHARTSMITH_PG_URI=postgresql://postgres:password@localhost:5432/chartsmith?sslmode=disable
+export CHARTSMITH_CENTRIFUGO_ADDRESS=http://localhost:8000/api
+export CHARTSMITH_CENTRIFUGO_API_KEY=api_key
+
+# Optional (has defaults)
+export INTERNAL_API_KEY=dev-internal-key           # For worker→Next.js auth (default: dev-internal-key)
 ```
+
+**Note:** You can ignore `CHARTSMITH_TOKEN_ENCRYPTION`, `CHARTSMITH_SLACK_TOKEN`, and `CHARTSMITH_SLACK_CHANNEL` for local development.
+
+#### 2. Next.js Environment File (`.env.local`)
+
+Create `chartsmith-app/.env.local` with the following content:
+
+```bash
+# Google Auth
 NEXT_PUBLIC_GOOGLE_CLIENT_ID=730758876435-8v7frmnqtt7k7v65edpc6u3hso9olqbe.apps.googleusercontent.com
 NEXT_PUBLIC_GOOGLE_REDIRECT_URI=http://localhost:3000/auth/google
 GOOGLE_CLIENT_SECRET=<get from 1password>
+
+# Security
 HMAC_SECRET=not-secure
+TOKEN_ENCRYPTION=H5984PaaBSbFZTMKjHiqshqRCG4dg49JAs0dDdLbvEs=
+
+# Centrifugo
 CENTRIFUGO_TOKEN_HMAC_SECRET=change.me
 NEXT_PUBLIC_CENTRIFUGO_ADDRESS=ws://localhost:8000/connection/websocket
-TOKEN_ENCRYPTION=H5984PaaBSbFZTMKjHiqshqRCG4dg49JAs0dDdLbvEs=
+
+# Replicated
 NEXT_PUBLIC_REPLICATED_REDIRECT_URI=https://vendor-web-<youruser>.okteto.repldev.com/chartsmith-login?redirect_uri=https://chartsmith-app-<youruser>.okteto.repldev.com/auth/replicated
-ANTHROPIC_API_KEY=
+
+# LLM Provider Keys - Add at least one
+# If OpenRouter is set: Uses it exclusively (ignores others)
+# Otherwise: Mix-and-match from available providers (priority: Anthropic > OpenAI > Google)
+OPENROUTER_API_KEY=sk-or-v1-...           # Recommended: Access to all models
+ANTHROPIC_API_KEY=sk-ant-...              # Alternative: Direct Anthropic
+OPENAI_API_KEY=sk-proj-...                # Alternative: Direct OpenAI
+GOOGLE_GENERATIVE_AI_API_KEY=...          # Alternative: Direct Google
+
+# Worker Communication (optional - defaults to dev-internal-key if not set)
+INTERNAL_API_KEY=dev-internal-key         # Must match worker's INTERNAL_API_KEY
+
+# Test Auth
 NEXT_PUBLIC_ENABLE_TEST_AUTH=true
 ENABLE_TEST_AUTH=true
-NEXT_PUBLIC_API_ENDPOINT=http://localhost:3000/api
 
+# API
+NEXT_PUBLIC_API_ENDPOINT=http://localhost:3000/api
 ```
 
 ### Setup Steps
@@ -144,6 +176,30 @@ This guide covers:
 - Enabling development mode
 - Debugging with the developer console
 - Testing extension features with built-in commands
+
+## LLM Integration (Updated Nov 2025)
+
+Chartsmith uses Vercel AI SDK for LLM operations to support multiple providers.
+
+### Provider Configuration
+
+**All LLM API keys are configured in Next.js only** (see the `.env.local` setup in the "Required Secrets" section above, lines 65-71).
+
+The Go worker communicates with Next.js for all LLM operations and requires:
+
+```bash
+export INTERNAL_API_KEY=dev-internal-key  # Development (default)
+# In production, use: export INTERNAL_API_KEY=$(openssl rand -hex 32)
+```
+
+This `INTERNAL_API_KEY` is used to authenticate the worker when calling Next.js LLM API endpoints. The Next.js app must have the same key in its `.env.local` file (though in development, both default to `dev-internal-key` if not set).
+
+### Architecture
+
+- **Frontend Chat:** Uses Vercel AI SDK (`@ai-sdk/react`) directly
+- **All Worker Operations:** Worker → Next.js API → Vercel AI SDK
+
+All LLM operations now go through the Next.js API layer, which handles provider selection and API key management based on the `.env.local` configuration.
 
 ## Release
 

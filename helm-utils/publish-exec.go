@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/replicatedhq/chartsmith/pkg/workspace/types"
@@ -69,6 +70,24 @@ func runHelmPublish(dir string, workspaceID string, chartName string, kubeconfig
 	versionOutput, _ := versionCmd.CombinedOutput()
 	fmt.Printf("Helm version:\n%s\n", string(versionOutput))
 
+	// Update dependencies if Chart.yaml has dependencies
+	fmt.Printf("Updating chart dependencies...\n")
+	depUpdateCmd := exec.CommandContext(ctx, "helm", "dependency", "update", dir)
+	depUpdateCmd.Env = append(os.Environ(), "KUBECONFIG="+kubeconfig)
+	depUpdateOutput, depErr := depUpdateCmd.CombinedOutput()
+	fmt.Printf("Helm dependency update output:\n%s\n", string(depUpdateOutput))
+	
+	// Check if dependency update failed with specific errors
+	depUpdateOutputStr := string(depUpdateOutput)
+	if depErr != nil {
+		// Check for common dependency errors
+		if strings.Contains(depUpdateOutputStr, "can't get a valid version") {
+			return fmt.Errorf("chart dependency error: one or more dependencies have invalid versions that don't exist in their repositories\n\nPlease check Chart.yaml and either:\n1. Remove the dependencies section if you don't need external charts\n2. Update the version numbers to valid versions available in the repositories\n3. Remove specific dependencies that aren't needed\n\nDetails: %s", depUpdateOutputStr)
+		}
+		// For other errors, just warn but continue
+		fmt.Printf("Warning: dependency update had issues (this is OK if chart has no dependencies): %v\n", depErr)
+	}
+
 	// SIMPLIFIED APPROACH: Package the chart first
 	fmt.Printf("Packaging chart...\n")
 	packageCmd := exec.CommandContext(ctx, "helm", "package", dir, "--destination", os.TempDir())
@@ -77,7 +96,12 @@ func runHelmPublish(dir string, workspaceID string, chartName string, kubeconfig
 	fmt.Printf("Helm package output:\n%s\n", string(packageOutput))
 
 	if err != nil {
-		return fmt.Errorf("failed to package chart: %w\nOutput: %s", err, string(packageOutput))
+		packageOutputStr := string(packageOutput)
+		// Check for missing dependencies error
+		if strings.Contains(packageOutputStr, "missing in charts/ directory") {
+			return fmt.Errorf("chart packaging error: Chart.yaml lists dependencies that are missing from the charts/ directory\n\nThis usually means:\n1. The dependencies couldn't be downloaded (check versions in Chart.yaml)\n2. Custom local dependencies were specified but don't exist\n\nPlease either:\n1. Remove the dependencies section from Chart.yaml if you don't need them\n2. Fix the dependency versions to valid versions that exist in the repositories\n3. Provide the local chart files if using custom dependencies\n\nDetails: %s", packageOutputStr)
+		}
+		return fmt.Errorf("failed to package chart: %w\nOutput: %s", err, packageOutputStr)
 	}
 
 	// Find the newly created package file

@@ -132,6 +132,7 @@ func createInitialPlan(ctx context.Context, streamCh chan string, doneCh chan er
 	opts := llm.CreateInitialPlanOpts{
 		ChatMessages:    chatMessages,
 		AdditionalFiles: additionalFiles,
+		WorkspaceID:     w.ID,
 	}
 	if err := llm.CreateInitialPlan(ctx, streamCh, doneCh, opts); err != nil {
 		return fmt.Errorf("error creating initial plan: %w", err)
@@ -197,6 +198,7 @@ func createUpdatePlan(ctx context.Context, streamCh chan string, doneCh chan err
 		Chart:         &w.Charts[0],
 		RelevantFiles: finalRelevantFiles,
 		IsUpdate:      true,
+		WorkspaceID:   w.ID,
 	}
 
 	if err := llm.CreatePlan(ctx, streamCh, doneCh, opts); err != nil {

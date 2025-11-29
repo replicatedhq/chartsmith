@@ -13,24 +13,20 @@ GOARCH?=$(shell go env GOARCH)
 # - make run-debug-console
 #
 # Required variables:
-#   - ANTHROPIC_API_KEY - API key for Anthropic services
 #   - GROQ_API_KEY - API key for Groq services
 #   - VOYAGE_API_KEY - API key for Voyage services
 #   - CHARTSMITH_PG_URI - PostgreSQL connection string
 #   - CHARTSMITH_CENTRIFUGO_ADDRESS - Centrifugo service address
 #   - CHARTSMITH_CENTRIFUGO_API_KEY - API key for Centrifugo
-#   - GOOGLE_CLIENT_ID - Google OAuth client ID
-#   - GOOGLE_CLIENT_SECRET - Google OAuth client secret
+#   - INTERNAL_API_KEY - Shared secret for worker-to-Next.js API calls (default: dev-internal-key)
 #
 # Example:
-#   export ANTHROPIC_API_KEY=your-key
 #   export GROQ_API_KEY=your-key
 #   export VOYAGE_API_KEY=your-key
 #   export CHARTSMITH_PG_URI=postgresql://postgres:password@localhost:5432/chartsmith?sslmode=disable
 #   export CHARTSMITH_CENTRIFUGO_ADDRESS=http://localhost:8000/api
 #   export CHARTSMITH_CENTRIFUGO_API_KEY=api_key
-#   export GOOGLE_CLIENT_ID=your-id
-#   export GOOGLE_CLIENT_SECRET=your-secret
+#   export INTERNAL_API_KEY=dev-internal-key
 #   make run-worker
 # =============================================================================
 
@@ -49,14 +45,11 @@ endef
 # Check required environment variables
 .PHONY: check-env
 check-env:
-	$(call check_env_var,ANTHROPIC_API_KEY)
 	$(call check_env_var,GROQ_API_KEY)
 	$(call check_env_var,VOYAGE_API_KEY)
 	$(call check_env_var,CHARTSMITH_PG_URI)
 	$(call check_env_var,CHARTSMITH_CENTRIFUGO_ADDRESS)
 	$(call check_env_var,CHARTSMITH_CENTRIFUGO_API_KEY)
-	$(call check_env_var,GOOGLE_CLIENT_ID)
-	$(call check_env_var,GOOGLE_CLIENT_SECRET)
 	@echo "All required environment variables are set"
 
 # =============================================================================
@@ -100,7 +93,7 @@ build:
 	@mkdir -p $(WORKER_BUILD_DIR)
 	@go build -o $(WORKER_BUILD_DIR)/$(WORKER_BINARY_NAME) main.go
 
-# Requires: ANTHROPIC_API_KEY, GROQ_API_KEY, VOYAGE_API_KEY
+# Requires: GROQ_API_KEY, VOYAGE_API_KEY, CHARTSMITH_* env vars, INTERNAL_API_KEY (optional)
 .PHONY: run-worker
 run-worker: build
 	@echo "Running $(WORKER_BINARY_NAME) with environment variables from shell..."
@@ -144,7 +137,7 @@ okteto-dev:
 	@make build
 	@printf "\n\n To build and run this project, run: \n\n   # make run-worker\n   # make run-debug-console\n\n"
 
-# Requires: ANTHROPIC_API_KEY, GROQ_API_KEY, VOYAGE_API_KEY
+# Requires: GROQ_API_KEY, VOYAGE_API_KEY, CHARTSMITH_* env vars, INTERNAL_API_KEY (optional)
 .PHONY: run-debug-console
 run-debug-console:
 	@echo "Running debug console with environment variables from shell..."

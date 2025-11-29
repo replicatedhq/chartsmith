@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	anthropic "github.com/anthropics/anthropic-sdk-go"
 	"github.com/replicatedhq/chartsmith/pkg/logger"
 	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 	"go.uber.org/zap"
@@ -16,6 +15,7 @@ type CreatePlanOpts struct {
 	Chart         *workspacetypes.Chart
 	RelevantFiles []workspacetypes.File
 	IsUpdate      bool
+	WorkspaceID   string
 }
 
 func CreatePlan(ctx context.Context, streamCh chan string, doneCh chan error, opts CreatePlanOpts) error {
@@ -29,36 +29,31 @@ func CreatePlan(ctx context.Context, streamCh chan string, doneCh chan error, op
 		zap.Bool("isUpdate", opts.IsUpdate),
 	)
 
-	client, err := newAnthropicClient(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to create anthropic client: %w", err)
-	}
-
 	chartStructure, err := getChartStructure(ctx, opts.Chart)
 	if err != nil {
 		return fmt.Errorf("failed to get chart structure: %w", err)
 	}
 
-	messages := []anthropic.MessageParam{}
+	// Build messages array for Vercel AI SDK
+	messages := []MessageParam{}
 
 	if !opts.IsUpdate {
-		messages = append(messages, anthropic.NewAssistantMessage(anthropic.NewTextBlock(initialPlanSystemPrompt)))
-		messages = append(messages, anthropic.NewAssistantMessage(anthropic.NewTextBlock(initialPlanInstructions)))
-		messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(fmt.Sprintf(`Chart structure: %s`, chartStructure))))
-
+		messages = append(messages, MessageParam{Role: "assistant", Content: initialPlanSystemPrompt})
+		messages = append(messages, MessageParam{Role: "assistant", Content: initialPlanInstructions})
+		messages = append(messages, MessageParam{Role: "user", Content: fmt.Sprintf(`Chart structure: %s`, chartStructure)})
 	} else {
-		messages = append(messages, anthropic.NewAssistantMessage(anthropic.NewTextBlock(updatePlanSystemPrompt)))
-		messages = append(messages, anthropic.NewAssistantMessage(anthropic.NewTextBlock(updatePlanInstructions)))
-		messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(fmt.Sprintf(`Chart structure: %s`, chartStructure))))
+		messages = append(messages, MessageParam{Role: "assistant", Content: updatePlanSystemPrompt})
+		messages = append(messages, MessageParam{Role: "assistant", Content: updatePlanInstructions})
+		messages = append(messages, MessageParam{Role: "user", Content: fmt.Sprintf(`Chart structure: %s`, chartStructure)})
 		for _, file := range opts.RelevantFiles {
-			messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(fmt.Sprintf(`File: %s, Content: %s`, file.FilePath, file.Content))))
+			messages = append(messages, MessageParam{Role: "user", Content: fmt.Sprintf(`File: %s, Content: %s`, file.FilePath, file.Content)})
 		}
 	}
 
 	for _, chatMessage := range opts.ChatMessages {
-		messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(chatMessage.Prompt)))
+		messages = append(messages, MessageParam{Role: "user", Content: chatMessage.Prompt})
 		if chatMessage.Response != "" {
-			messages = append(messages, anthropic.NewAssistantMessage(anthropic.NewTextBlock(chatMessage.Response)))
+			messages = append(messages, MessageParam{Role: "assistant", Content: chatMessage.Response})
 		}
 	}
 
@@ -67,50 +62,35 @@ func CreatePlan(ctx context.Context, streamCh chan string, doneCh chan error, op
 		verb = "edit"
 	}
 	initialUserMessage := fmt.Sprintf("Describe the plan only (do not write code) to %s a helm chart based on the previous discussion. ", verb)
+	messages = append(messages, MessageParam{Role: "user", Content: initialUserMessage})
 
-	messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(initialUserMessage)))
-
-	// tools := []anthropic.ToolParam{
-	// 	{
-	// 		Name:        anthropic.F("recommended_dependency"),
-	// 		Description: anthropic.F("Recommend a specific subchart or version of a subchart given a requirement"),
-	// 		InputSchema: anthropic.F(interface{}(map[string]interface{}{
-	// 			"type": "object",
-	// 			"properties": map[string]interface{}{
-	// 				"requirement": map[string]interface{}{
-	// 					"type":        "string",
-	// 					"description": "The requirement to recommend a dependency for, e.g. Redis, Mysql",
-	// 				},
-	// 			},
-	// 			"required": []string{"requirement"},
-	// 		})),
-	// 	},
-	// }
-
-	stream := client.Messages.NewStreaming(context.TODO(), anthropic.MessageNewParams{
-		Model:     anthropic.F(anthropic.ModelClaude3_7Sonnet20250219),
-		MaxTokens: anthropic.F(int64(8192)),
-		// Tools:     anthropic.F(tools),
-		Messages: anthropic.F(messages),
+	client := NewNextJSClient()
+	textCh, errCh := client.StreamPlan(ctx, PlanRequest{
+		Messages:    messages,
+		WorkspaceID: opts.WorkspaceID,
 	})
 
-	message := anthropic.Message{}
-	for stream.Next() {
-		event := stream.Current()
-		message.Accumulate(event)
-
-		switch delta := event.Delta.(type) {
-		case anthropic.ContentBlockDeltaEventDelta:
-			if delta.Text != "" {
-				streamCh <- delta.Text
+	// Forward streamed text to the provided channel
+	go func() {
+		for {
+			select {
+			case text, ok := <-textCh:
+				if !ok {
+					// Channel closed, wait for error
+					err := <-errCh
+					doneCh <- err
+					return
+				}
+				streamCh <- text
+			case err := <-errCh:
+				doneCh <- err
+				return
+			case <-ctx.Done():
+				doneCh <- ctx.Err()
+				return
 			}
 		}
-	}
+	}()
 
-	if stream.Err() != nil {
-		doneCh <- stream.Err()
-	}
-
-	doneCh <- nil
 	return nil
 }

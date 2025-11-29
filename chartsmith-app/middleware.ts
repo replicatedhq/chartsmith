@@ -9,6 +9,7 @@ const publicPaths = [
   '/api/auth/callback/google',
   '/api/auth/status',
   '/api/config',
+  '/api/models',
   '/signup',
   '/_next',
   '/favicon.ico',
@@ -23,6 +24,18 @@ const tokenAuthPaths = [
   '/api/upload-chart',
   '/api/workspace',
   '/api/push'
+];
+
+// Internal API paths that use internal API key authentication
+// (these are called by the Go worker, not by browsers)
+const internalApiPaths = [
+  '/api/llm/expand',
+  '/api/llm/summarize',
+  '/api/llm/plan',
+  '/api/llm/execute-action',
+  '/api/llm/cleanup-values',
+  '/api/llm/conversational',
+  '/api/chat'
 ];
 
 // This function can be marked `async` if using `await` inside
@@ -46,6 +59,17 @@ export function middleware(request: NextRequest) {
   
   // For token auth paths, we'll let the route handle authentication
   if (isTokenAuthPath && request.headers.get('Authorization')?.startsWith('Bearer ')) {
+    return NextResponse.next();
+  }
+  
+  // Check if this is an internal API path (called by Go worker)
+  const isInternalApiPath = internalApiPaths.some(path => 
+    pathname === path || pathname.startsWith(path + '/')
+  );
+  
+  // For internal API paths, check for internal API key header
+  if (isInternalApiPath && request.headers.get('X-Internal-API-Key')) {
+    // Let the route handle the internal API key validation
     return NextResponse.next();
   }
   

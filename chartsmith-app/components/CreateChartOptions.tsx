@@ -9,9 +9,16 @@ import { useSession } from "@/app/hooks/useSession";
 import { createWorkspaceFromPromptAction } from "@/lib/workspace/actions/create-workspace-from-prompt";
 import { logger } from "@/lib/utils/logger";
 import { ArtifactHubSearchModal } from "./ArtifactHubSearchModal";
+import { ModelInfo } from "@/lib/llm/registry";
 
 const MAX_CHARS = 512;
 const WARNING_THRESHOLD = 500;
+
+interface ModelsResponse {
+  providers: string[];
+  recommended: ModelInfo[];
+  all: ModelInfo[];
+}
 
 export function CreateChartOptions() {
   const [prompt, setPrompt] = useState('');
@@ -26,6 +33,11 @@ export function CreateChartOptions() {
   const [showArtifactHubSearch, setShowArtifactHubSearch] = useState(false);
   const [uploadType, setUploadType] = useState<'helm' | 'k8s' | null>(null);
   const [isApproachingLimit, setIsApproachingLimit] = useState(false);
+  
+  // Model selector state
+  const [models, setModels] = useState<ModelsResponse | null>(null);
+  const [selectedModelId, setSelectedModelId] = useState<string>('');
+  const [modelsLoading, setModelsLoading] = useState(true);
 
   useEffect(() => {
     // Focus the textarea on mount
@@ -36,6 +48,37 @@ export function CreateChartOptions() {
   useEffect(() => {
     setIsApproachingLimit(prompt.length >= WARNING_THRESHOLD);
   }, [prompt]);
+
+  // Fetch available models
+  useEffect(() => {
+    async function fetchModels() {
+      try {
+        const response = await fetch('/api/models');
+        if (!response.ok) {
+          throw new Error('Failed to fetch models');
+        }
+        const data = await response.json();
+        setModels(data);
+        
+        // Load saved model preference
+        const savedModelId = localStorage.getItem('preferredModelId');
+        if (savedModelId) {
+          setSelectedModelId(savedModelId);
+        }
+      } catch (err) {
+        console.error('Failed to load models:', err);
+      } finally {
+        setModelsLoading(false);
+      }
+    }
+
+    fetchModels();
+  }, []);
+
+  const handleModelChange = (modelId: string) => {
+    setSelectedModelId(modelId);
+    localStorage.setItem('preferredModelId', modelId);
+  };
 
   const handlePromptSubmit = async () => {
     if (!session) {
@@ -123,10 +166,38 @@ export function CreateChartOptions() {
             }}
             onKeyDown={handleKeyDown}
             disabled={isPromptLoading}
-            className="w-full min-h-[80px] sm:min-h-[120px] bg-transparent text-white placeholder-gray-500 text-base sm:text-lg resize-none focus:outline-none disabled:opacity-50"
+            className="w-full min-h-[80px] sm:min-h-[120px] bg-transparent text-white placeholder-gray-500 text-base sm:text-lg resize-none focus:outline-none disabled:opacity-50 pb-8"
             maxLength={MAX_CHARS}
           />
           
+          {/* Model selector in bottom left */}
+          <div className="absolute bottom-2 left-2 flex items-center gap-1.5">
+            {modelsLoading ? (
+              <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                <div className="animate-spin h-3 w-3 border border-gray-600 border-t-gray-400 rounded-full" />
+                <span>Loading models...</span>
+              </div>
+            ) : models ? (
+              <>
+                <label htmlFor="model-select-home" className="text-xs text-gray-400">
+                  Model:
+                </label>
+                 <select
+                   id="model-select-home"
+                   value={selectedModelId || models.recommended[0]?.id || ''}
+                   onChange={(e) => handleModelChange(e.target.value)}
+                   className="text-xs bg-gray-800/60 text-gray-300 border border-gray-700 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50"
+                 >
+                   {models.recommended.map((model) => (
+                     <option key={model.id} value={model.id}>
+                       {model.name}
+                     </option>
+                   ))}
+                 </select>
+              </>
+            ) : null}
+          </div>
+
           {isApproachingLimit && (
             <div className="flex items-center mt-2 text-xs text-amber-500/90">
               <AlertCircle className="w-3.5 h-3.5 mr-1.5 flex-shrink-0" />

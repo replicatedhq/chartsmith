@@ -3,16 +3,15 @@ package llm
 import (
 	"context"
 	"fmt"
-
-	anthropic "github.com/anthropics/anthropic-sdk-go"
 )
 
+// ExpandPrompt expands a user prompt with additional context and specificity
+// Now uses Vercel AI SDK via Next.js API instead of direct Anthropic SDK
 func ExpandPrompt(ctx context.Context, prompt string) (string, error) {
-	client, err := newAnthropicClient(ctx)
-	if err != nil {
-		return "", fmt.Errorf("failed to create anthropic client: %w", err)
-	}
+	// Create Next.js client (replaces Anthropic SDK)
+	client := NewNextJSClient()
 
+	// Build the expansion request with the same prompt structure
 	userMessage := fmt.Sprintf(`The following question is about developing a Helm chart.
 There is an existing chart that we will be editing.
 Look at the question, and help decide how to determine the existing files that are relevant to the question.
@@ -29,25 +28,17 @@ Here is the prompt:
 %s
 	`, prompt)
 
-	resp, err := client.Messages.New(ctx, anthropic.MessageNewParams{
-		Model:     anthropic.F(anthropic.ModelClaude3_7Sonnet20250219),
-		MaxTokens: anthropic.F(int64(8192)),
-		Messages:  anthropic.F([]anthropic.MessageParam{anthropic.NewUserMessage(anthropic.NewTextBlock(userMessage))}),
+	// Call Next.js API (which uses Vercel AI SDK)
+	expandedPrompt, err := client.ExpandPrompt(ctx, ExpandRequest{
+		Prompt: userMessage,
 	})
 	if err != nil {
-		return "", fmt.Errorf("failed to call Anthropic API: %w", err)
+		return "", fmt.Errorf("failed to expand prompt via Next.js API: %w", err)
 	}
 
-	// Check if response or response.Content is nil or empty
-	if resp == nil {
-		return "", fmt.Errorf("received nil response from Anthropic API")
+	if expandedPrompt == "" {
+		return "", fmt.Errorf("received empty expanded prompt from Next.js API")
 	}
-
-	if len(resp.Content) == 0 {
-		return "", fmt.Errorf("received empty content from Anthropic API")
-	}
-
-	expandedPrompt := resp.Content[0].Text
 
 	// we can inject some keywords into the prompt to help the match in the vector search
 	return expandedPrompt, nil

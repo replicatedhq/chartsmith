@@ -14,7 +14,6 @@ var params *Params
 var awsSession *session.Session
 
 var paramLookup = map[string]string{
-	"ANTHROPIC_API_KEY":             "/chartsmith/anthropic_api_key",
 	"GROQ_API_KEY":                  "/chartsmith/groq_api_key",
 	"VOYAGE_API_KEY":                "/chartsmith/voyage_api_key",
 	"CHARTSMITH_PG_URI":             "/chartsmith/pg_uri",
@@ -26,7 +25,6 @@ var paramLookup = map[string]string{
 }
 
 type Params struct {
-	AnthropicAPIKey   string
 	GroqAPIKey        string
 	VoyageAPIKey      string
 	PGURI             string
@@ -59,7 +57,6 @@ func Init(sess *session.Session) error {
 	}
 
 	params = &Params{
-		AnthropicAPIKey:   paramsMap["ANTHROPIC_API_KEY"],
 		GroqAPIKey:        paramsMap["GROQ_API_KEY"],
 		VoyageAPIKey:      paramsMap["VOYAGE_API_KEY"],
 		PGURI:             paramsMap["CHARTSMITH_PG_URI"],

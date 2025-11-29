@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	anthropic "github.com/anthropics/anthropic-sdk-go"
 	llmtypes "github.com/replicatedhq/chartsmith/pkg/llm/types"
 	"github.com/replicatedhq/chartsmith/pkg/logger"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
@@ -17,12 +16,6 @@ import (
 )
 
 const (
-	TextEditor_Sonnet37 = "text_editor_20250124"
-	TextEditor_Sonnet35 = "text_editor_20241022"
-
-	Model_Sonnet37 = "claude-3-7-sonnet-20250219"
-	Model_Sonnet35 = "claude-3-5-sonnet-20241022"
-
 	minFuzzyMatchLen  = 50 // Minimum length for fuzzy matching
 	fuzzyMatchTimeout = 10 * time.Second
 	chunkSize         = 200 // Increased chunk size for better performance
@@ -475,201 +468,165 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 	// Make sure to close the activity monitor when we're done
 	defer close(activityDone)
 
-	client, err := newAnthropicClient(ctx)
-	if err != nil {
-		return "", err
+	// Build messages array for Vercel AI SDK
+	messages := []MessageParam{
+		{Role: "assistant", Content: executePlanSystemPrompt},
+		{Role: "user", Content: detailedPlanInstructions},
 	}
 
-	messages := []anthropic.MessageParam{
-		anthropic.NewAssistantMessage(anthropic.NewTextBlock(executePlanSystemPrompt)),
-		anthropic.NewUserMessage(anthropic.NewTextBlock(detailedPlanInstructions)),
-	}
+	messages = append(messages, MessageParam{Role: "assistant", Content: plan.Description})
 
-	// Add more explicit instructions about the file workflow
+	// Add workflow instructions for file operations
 	workflowInstructions := `
-		Important workflow instructions:
-		1. For ANY file operation, ALWAYS use "view" command first to check if a file exists and view its contents.
-		2. Only after viewing, decide whether to use "create" (if file doesn't exist) or "str_replace" (if file exists).
-		3. Never use "create" on an existing file.
-		`
-
-	messages = append(messages, anthropic.NewAssistantMessage(anthropic.NewTextBlock(plan.Description)))
+Important workflow instructions:
+1. For ANY file operation, ALWAYS use "view" command first to check if a file exists and view its contents.
+2. Only after viewing, decide whether to use "create" (if file doesn't exist) or "str_replace" (if file exists).
+3. Never use "create" on an existing file.`
 
 	if actionPlanWithPath.Action == "create" {
 		logger.Debug("create file", zap.String("path", actionPlanWithPath.Path))
 		createMessage := fmt.Sprintf("Create the file at %s", actionPlanWithPath.Path)
-		messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(workflowInstructions+createMessage)))
+		messages = append(messages, MessageParam{Role: "user", Content: workflowInstructions + createMessage})
 	} else if actionPlanWithPath.Action == "update" {
 		logger.Debug("update file", zap.String("path", actionPlanWithPath.Path))
 		updateMessage := fmt.Sprintf(`The file at %s needs to be updated according to the plan.`,
 			actionPlanWithPath.Path)
 
-		messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(workflowInstructions+updateMessage)))
+		messages = append(messages, MessageParam{Role: "user", Content: workflowInstructions + updateMessage})
 	}
-
-	tools := []anthropic.ToolParam{
-		{
-			Name: anthropic.F(TextEditor_Sonnet35),
-			InputSchema: anthropic.F(interface{}(map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"command": map[string]interface{}{
-						"type": "string",
-						"enum": []string{"view", "str_replace", "create"},
-					},
-					"path": map[string]interface{}{
-						"type": "string",
-					},
-					"old_str": map[string]interface{}{
-						"type": "string",
-					},
-					"new_str": map[string]interface{}{
-						"type": "string",
-					},
-				},
-			})),
-		},
-	}
-
-	toolUnionParams := make([]anthropic.ToolUnionUnionParam, len(tools))
-	for i, tool := range tools {
-		toolUnionParams[i] = tool
-	}
-
-	var disabled anthropic.ThinkingConfigEnabledType
-	disabled = "disabled"
+	
+	// Use Next.js client
+	client := NewNextJSClient()
 
 	for {
-		stream := client.Messages.NewStreaming(ctx, anthropic.MessageNewParams{
-			Model:     anthropic.F(Model_Sonnet35),
-			MaxTokens: anthropic.F(int64(8192)),
-			Messages:  anthropic.F(messages),
-			Tools:     anthropic.F(toolUnionParams),
-			Thinking: anthropic.F[anthropic.ThinkingConfigParamUnion](anthropic.ThinkingConfigEnabledParam{
-				Type: anthropic.F(disabled),
-			}),
+		content, toolCalls, err := client.ExecuteAction(ctx, ExecuteActionRequest{
+			Messages: messages,
 		})
-
-		message := anthropic.Message{}
-		for stream.Next() {
-			event := stream.Current()
-			err := message.Accumulate(event)
-			if err != nil {
-				return "", err
-			}
-
-			switch event := event.AsUnion().(type) {
-			case anthropic.ContentBlockDeltaEvent:
-				if event.Delta.Text != "" {
-					fmt.Printf("%s", event.Delta.Text)
-				}
-			}
+		if err != nil {
+			return "", err
 		}
 
-		if stream.Err() != nil {
-			return "", stream.Err()
-		}
-
-		messages = append(messages, message.ToParam())
-
-		hasToolCalls := false
-		toolResults := []anthropic.ContentBlockParamUnion{}
-
-		for _, block := range message.Content {
-			if block.Type == anthropic.ContentBlockTypeToolUse {
-				hasToolCalls = true
-				var response interface{}
-
-				var input struct {
-					Command string `json:"command"`
-					Path    string `json:"path"`
-					OldStr  string `json:"old_str"`
-					NewStr  string `json:"new_str"`
-				}
-
-				if err := json.Unmarshal(block.Input, &input); err != nil {
-					return "", err
-				}
-
-				// Update last activity timestamp on each tool use
-				lastActivity = time.Now()
-
-				logger.Info("LLM text_editor tool use",
-					zap.String("command", input.Command),
-					zap.String("path", input.Path),
-					zap.Int("old_str_len", len(input.OldStr)),
-					zap.Int("new_str_len", len(input.NewStr)))
-
-				if input.Command == "view" {
-					if updatedContent == "" {
-						// File doesn't exist yet
-						response = "Error: File does not exist. Use create instead."
-					} else {
-						response = updatedContent
-					}
-				} else if input.Command == "str_replace" {
-					// First check if the string is found in the content for logging
-					found := strings.Contains(updatedContent, input.OldStr)
-
-					// Log every str_replace operation, successful or not
-					if err := logStrReplaceOperation(ctx, input.Path, input.OldStr, input.NewStr, updatedContent, found); err != nil {
-						logger.Warn("str_replace logging failed", zap.Error(err))
-					}
-
-					// Perform the actual string replacement with our extracted function
-					logger.Debug("performing string replacement")
-					newContent, success, replaceErr := PerformStringReplacement(updatedContent, input.OldStr, input.NewStr)
-					logger.Debug("string replacement complete", zap.String("success", fmt.Sprintf("%t", success)))
-
-					if !success {
-						// Create error message and update the log
-						errorMsg := "String to replace not found in file"
-						if replaceErr != nil {
-							errorMsg = replaceErr.Error()
-						}
-
-						// Update the error message in the database
-						logger.Debug("updating error message in str_replace log", zap.String("error_msg", errorMsg))
-						if err := UpdateStrReplaceLogErrorMessage(ctx, input.Path, input.OldStr, errorMsg); err != nil {
-							logger.Warn("Failed to update error message in str_replace log", zap.Error(err))
-						}
-
-						response = "Error: String to replace not found in file. Please use smaller, more precise replacements."
-					} else {
-						updatedContent = newContent
-
-						// Send updated content through the channel
-						interimContentCh <- updatedContent
-						response = "Content replaced successfully"
-					}
-				} else if input.Command == "create" {
-					if updatedContent != "" {
-						response = "Error: File already exists. Use view and str_replace instead."
-					} else {
-						updatedContent = input.NewStr
-
-						interimContentCh <- updatedContent
-						response = "Created"
-					}
-				}
-
-				b, err := json.Marshal(response)
-				if err != nil {
-					return "", err
-				}
-
-				toolResults = append(toolResults, anthropic.NewToolResultBlock(block.ID, string(b), false))
-			}
-		}
-
-		if !hasToolCalls {
+		// Add assistant message with tool calls if present
+		if len(toolCalls) > 0 {
+			// For Vercel AI SDK, we need to add the assistant message with tool calls
+			// The content can be empty or contain text before the tool calls
+			messages = append(messages, MessageParam{Role: "assistant", Content: content})
+		} else if content != "" {
+			// No tool calls, just text response - we're done
+			fmt.Printf("%s", content)
+			messages = append(messages, MessageParam{Role: "assistant", Content: content})
+			break
+		} else {
+			// No content and no tool calls - we're done
 			break
 		}
 
-		messages = append(messages, anthropic.MessageParam{
-			Role:    anthropic.F(anthropic.MessageParamRoleUser),
-			Content: anthropic.F(toolResults),
-		})
+		// Handle tool calls
+		for _, tc := range toolCalls {
+			// Update last activity timestamp
+			lastActivity = time.Now()
+
+			var response interface{}
+			var input struct {
+				Command string `json:"command"`
+				Path    string `json:"path"`
+				OldStr  string `json:"old_str"`
+				NewStr  string `json:"new_str"`
+			}
+
+			if err := json.Unmarshal([]byte(tc.Args), &input); err != nil {
+				return "", fmt.Errorf("failed to unmarshal tool input: %w", err)
+			}
+
+			logger.Info("LLM text_editor tool use",
+				zap.String("command", input.Command),
+				zap.String("path", input.Path),
+				zap.Int("old_str_len", len(input.OldStr)),
+				zap.Int("new_str_len", len(input.NewStr)))
+
+			if input.Command == "view" {
+				if updatedContent == "" {
+					// File doesn't exist yet
+					response = "Error: File does not exist. Use create instead."
+				} else {
+					response = updatedContent
+				}
+			} else if input.Command == "str_replace" {
+				// First check if the string is found in the content for logging
+				found := strings.Contains(updatedContent, input.OldStr)
+
+				// Log every str_replace operation, successful or not
+				if err := logStrReplaceOperation(ctx, input.Path, input.OldStr, input.NewStr, updatedContent, found); err != nil {
+					logger.Warn("str_replace logging failed", zap.Error(err))
+				}
+
+				// Perform the actual string replacement with our extracted function
+				logger.Debug("performing string replacement")
+				newContent, success, replaceErr := PerformStringReplacement(updatedContent, input.OldStr, input.NewStr)
+				logger.Debug("string replacement complete", zap.String("success", fmt.Sprintf("%t", success)))
+
+				if !success {
+					// Create error message and update the log
+					errorMsg := "String to replace not found in file"
+					if replaceErr != nil {
+						errorMsg = replaceErr.Error()
+					}
+
+					// Update the error message in the database
+					logger.Debug("updating error message in str_replace log", zap.String("error_msg", errorMsg))
+					if err := UpdateStrReplaceLogErrorMessage(ctx, input.Path, input.OldStr, errorMsg); err != nil {
+						logger.Warn("Failed to update error message in str_replace log", zap.Error(err))
+					}
+
+					response = "Error: String to replace not found in file. Please use smaller, more precise replacements."
+				} else {
+					updatedContent = newContent
+
+					// Send updated content through the channel
+					interimContentCh <- updatedContent
+					response = "Content replaced successfully"
+				}
+			} else if input.Command == "create" {
+				if updatedContent != "" {
+					response = "Error: File already exists. Use view and str_replace instead."
+				} else {
+					updatedContent = input.NewStr
+
+				interimContentCh <- updatedContent
+				response = "Created"
+			}
+		}
+
+			// Add tool result as a user message with clear formatting
+		// Format the response so the LLM understands what happened
+		var resultMessage string
+		switch input.Command {
+		case "view":
+			// For view commands, show the file content clearly
+			if responseStr, ok := response.(string); ok {
+				if strings.HasPrefix(responseStr, "Error:") {
+					resultMessage = responseStr
+				} else {
+					resultMessage = fmt.Sprintf("File content of %s:\n```\n%s\n```", input.Path, responseStr)
+				}
+			} else {
+				resultMessage = fmt.Sprintf("File content of %s:\n```\n%v\n```", input.Path, response)
+			}
+		case "str_replace":
+			// For str_replace, just return the status message
+			resultMessage = fmt.Sprintf("%v", response)
+		case "create":
+			// For create, just return the status message
+			resultMessage = fmt.Sprintf("%v", response)
+		default:
+			resultMessage = fmt.Sprintf("%v", response)
+		}
+
+			messages = append(messages, MessageParam{
+				Role:    "user",
+				Content: resultMessage,
+			})
+		}
 	}
 
 	return updatedContent, nil
