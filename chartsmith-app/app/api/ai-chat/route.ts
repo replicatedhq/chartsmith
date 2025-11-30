@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Get workspace context (if workspace ID is provided)
-    let systemMessages: Array<{ role: 'system' | 'assistant'; content: string }> = [];
+    const systemMessages: Array<{ role: 'system' | 'assistant'; content: string }> = [];
     
     // Add base system prompt
     const systemPrompt = getSystemPromptForPersona(messageFromPersona);
