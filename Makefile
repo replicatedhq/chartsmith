@@ -4,6 +4,12 @@ WORKER_BUILD_DIR=bin
 GOOS?=$(shell go env GOOS)
 GOARCH?=$(shell go env GOARCH)
 
+# Load environment variables from .env file if it exists
+ifneq (,$(wildcard .env))
+    include .env
+    export
+endif
+
 # =============================================================================
 # REQUIRED ENVIRONMENT VARIABLES (must be exported by the user)
 # =============================================================================

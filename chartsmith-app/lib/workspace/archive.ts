@@ -6,7 +6,6 @@ import * as path from "node:path";
 import * as os from "node:os";
 import * as tar from 'tar';
 import gunzip from 'gunzip-maybe';
-import fetch from 'node-fetch';
 import yaml from 'yaml';
 
 export async function getFilesFromBytes(bytes: ArrayBuffer, fileName: string): Promise<WorkspaceFile[]> {

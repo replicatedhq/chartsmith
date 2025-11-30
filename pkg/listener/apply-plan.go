@@ -336,6 +336,37 @@ func processActionFile(ctx context.Context, w *workspacetypes.Workspace, plan *w
 				return fmt.Errorf("failed to set file content pending: %w", err)
 			}
 
+			// Get or create the file reference if not already loaded
+			if file == nil {
+				files, err := workspace.ListFiles(ctx, w.ID, w.CurrentRevision, chartID)
+				if err != nil {
+					return fmt.Errorf("failed to list files: %w", err)
+				}
+
+				for _, f := range files {
+					if f.FilePath == actionFile.Path {
+						file = &f
+						break
+					}
+				}
+			}
+
+			if file == nil {
+				return fmt.Errorf("file not found after saving content")
+			}
+
+			// Update the file's content pending
+			file.ContentPending = &finalContent
+
+			// Send artifact updated event so UI updates immediately
+			artifactEvent := realtimetypes.ArtifactUpdatedEvent{
+				WorkspaceID:   w.ID,
+				WorkspaceFile: file,
+			}
+			if err := realtime.SendEvent(ctx, realtimeRecipient, artifactEvent); err != nil {
+				return fmt.Errorf("failed to send artifact update: %w", err)
+			}
+
 			// Update action file status
 			if err := updateActionFileStatus(ctx, plan.ID, actionFile.Path, string(llmtypes.ActionPlanStatusCreated)); err != nil {
 				return fmt.Errorf("failed to update action file status: %w", err)

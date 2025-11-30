@@ -1,6 +1,4 @@
 import { Pool, PoolConfig } from "pg";
-import { parse } from "url";
-import { parse as parseQueryString } from "querystring";
 
 let pool: Pool | null = null;
 
@@ -9,23 +7,24 @@ export function getDB(uri: string): Pool {
     return pool;
   }
 
-  const params = parse(uri);
-  const auth = params.auth?.split(":") || [];
-
+  // Use WHATWG URL API instead of deprecated url.parse()
+  const parsedUrl = new URL(uri);
+  
   let ssl: boolean | { rejectUnauthorized: boolean } = {
     rejectUnauthorized: false,
   };
-  const parsedQuery = parseQueryString(params.query || "");
-  if (parsedQuery.sslmode === "disable") {
+  
+  // Check for sslmode parameter in query string
+  if (parsedUrl.searchParams.get("sslmode") === "disable") {
     ssl = false;
   }
 
   const config: PoolConfig = {
-    user: auth[0],
-    password: auth[1],
-    host: params.hostname || "",
-    port: parseInt(params.port || "5432"),
-    database: params.pathname?.split("/")[1] || "",
+    user: parsedUrl.username || undefined,
+    password: parsedUrl.password || undefined,
+    host: parsedUrl.hostname || "localhost",
+    port: parseInt(parsedUrl.port || "5432"),
+    database: parsedUrl.pathname.split("/")[1] || "",
     ssl,
     max: 20,
     idleTimeoutMillis: 30000,

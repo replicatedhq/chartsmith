@@ -69,6 +69,13 @@ func handleConverationalNotification(ctx context.Context, payload string) error 
 
 			// Send realtime update with current state
 			chatMessage.Response = buffer.String()
+			
+			// Log streaming chunk for debugging
+			logger.Debug("[Conversational] Sending stream chunk via Centrifugo",
+				zap.String("chat_message_id", chatMessage.ID),
+				zap.Int("chunk_length", len(stream)),
+				zap.Int("total_length", len(chatMessage.Response)))
+			
 			e := realtimetypes.ChatMessageUpdatedEvent{
 				WorkspaceID: w.ID,
 				ChatMessage: chatMessage,

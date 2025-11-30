@@ -14,7 +14,7 @@ import { useCommandMenu } from '@/contexts/CommandMenuContext';
 import { EditorLayout } from "@/components/layout/EditorLayout";
 import { WorkspaceContainer } from "@/components/WorkspaceContainer";
 import { CommandMenuWrapper } from "@/components/CommandMenuWrapper";
-import { ChatContainer } from "@/components/ChatContainer";
+import { AIChatContainer } from "@/components/AIChatContainer";
 
 // server actions and types
 import { Conversion, Plan, RenderedWorkspace, Workspace } from "@/lib/types/workspace";
@@ -108,11 +108,11 @@ export function WorkspaceContent({
             (!workspace?.currentRevisionNumber && !workspace?.incompleteRevisionNumber) || (workspace.currentRevisionNumber === 0 && !workspace.incompleteRevisionNumber) ? 'inset-0 flex justify-center' : 'left-0 top-0 bottom-0'
           }`}>
           <div className={`${(!workspace?.currentRevisionNumber && !workspace?.incompleteRevisionNumber) || (workspace.currentRevisionNumber === 0 && !workspace.incompleteRevisionNumber) ? 'w-full max-w-3xl px-4' : 'w-[480px] h-full flex flex-col'}`}>
-            <div className="flex-1 overflow-y-auto">
-              <ChatContainer
-                session={session}
-              />
-            </div>
+            <AIChatContainer
+              session={session}
+              workspaceId={workspace.id}
+              messageFromPersona="auto"
+            />
           </div>
         </div>
         {showEditor && (() => {

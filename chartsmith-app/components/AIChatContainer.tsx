@@ -1,33 +1,44 @@
 "use client";
 import React, { useState, useRef, useEffect } from "react";
-import { Send, Loader2, Users, Code, User, Sparkles } from "lucide-react";
+import { Send, Loader2, Sparkles, Code, User } from "lucide-react";
 import { useTheme } from "../contexts/ThemeContext";
 import { Session } from "@/lib/types/session";
 import { ChatMessage } from "./ChatMessage";
 import { messagesAtom, workspaceAtom, isRenderingAtom } from "@/atoms/workspace";
+import { aiProviderAtom, aiModelAtom } from "@/atoms/ai-provider";
 import { useAtom } from "jotai";
 import { createChatMessageAction } from "@/lib/workspace/actions/create-chat-message";
 import { ScrollingContent } from "./ScrollingContent";
-import { NewChartChatMessage } from "./NewChartChatMessage";
 import { NewChartContent } from "./NewChartContent";
 import { ProviderSelector } from "./ProviderSelector";
 import { ModelSelector } from "./ModelSelector";
 
-interface ChatContainerProps {
+interface AIChatContainerProps {
   session: Session;
+  workspaceId: string;
+  messageFromPersona?: string;
 }
 
-export function ChatContainer({ session }: ChatContainerProps) {
+/**
+ * AI-powered chat container - now using the full Go worker flow
+ * This shows thinking, planning, rendering, and conversion states
+ */
+export function AIChatContainer({ session, workspaceId, messageFromPersona = 'auto' }: AIChatContainerProps) {
   const { theme } = useTheme();
-  const [workspace] = useAtom(workspaceAtom)
-  const [messages, setMessages] = useAtom(messagesAtom)
-  const [isRendering] = useAtom(isRenderingAtom)
+  const [workspace] = useAtom(workspaceAtom);
+  const [messages, setMessages] = useAtom(messagesAtom);
+  const [isRendering] = useAtom(isRenderingAtom);
+  const [provider] = useAtom(aiProviderAtom);
+  const [model] = useAtom(aiModelAtom);
   const [chatInput, setChatInput] = useState("");
-  const [selectedRole, setSelectedRole] = useState<"auto" | "developer" | "operator">("auto");
+  const [selectedRole, setSelectedRole] = useState<"auto" | "developer" | "operator">(messageFromPersona as "auto" | "developer" | "operator" || "auto");
   const [isRoleMenuOpen, setIsRoleMenuOpen] = useState(false);
   const roleMenuRef = useRef<HTMLDivElement>(null);
   
-  // No need for refs as ScrollingContent manages its own scrolling
+  // Log provider/model changes for debugging
+  useEffect(() => {
+    console.log('[AIChatContainer] Provider/Model changed:', { provider, model });
+  }, [provider, model]);
 
   // Close the role menu when clicking outside
   useEffect(() => {
@@ -72,8 +83,6 @@ export function ChatContainer({ session }: ChatContainerProps) {
     }
   };
 
-  // ScrollingContent will now handle all the scrolling behavior
-
   if (workspace?.currentRevisionNumber === 0) {
     // For NewChartContent, create a simpler version of handleSubmitChat that doesn't use role selector
     const handleNewChartSubmitChat = async (e: React.FormEvent) => {
@@ -116,15 +125,6 @@ export function ChatContainer({ session }: ChatContainerProps) {
         </ScrollingContent>
       </div>
       <div className={`absolute bottom-0 left-0 right-0 ${theme === "dark" ? "bg-dark-surface" : "bg-white"} border-t ${theme === "dark" ? "border-dark-border" : "border-gray-200"}`}>
-        {/* AI Provider and Model Selection */}
-        <div className="px-3 pt-3 pb-2 flex items-center gap-2 border-b border-gray-200/50 dark:border-dark-border/50">
-          <div className={`text-xs font-medium ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>
-            AI Model:
-          </div>
-          <ProviderSelector />
-          <ModelSelector />
-        </div>
-        
         <form onSubmit={handleSubmitChat} className="p-3 relative">
           <textarea
             value={chatInput}
@@ -227,6 +227,15 @@ export function ChatContainer({ session }: ChatContainerProps) {
             </button>
           </div>
         </form>
+        
+        {/* AI Provider and Model Selection - Below textbox */}
+        <div className="px-3 pb-2 pt-1 flex items-center gap-2 border-t border-gray-200/50 dark:border-dark-border/50">
+          <div className={`text-xs font-medium ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>
+            AI Model:
+          </div>
+          <ProviderSelector />
+          <ModelSelector />
+        </div>
       </div>
     </div>
   );

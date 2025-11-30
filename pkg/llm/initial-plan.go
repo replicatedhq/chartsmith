@@ -25,6 +25,12 @@ func CreateInitialPlan(ctx context.Context, streamCh chan string, doneCh chan er
 	}
 	logger.Info("Creating initial plan", chatMessageFields...)
 
+	provider := getProvider()
+	
+	if provider == "openrouter" {
+		return CreateInitialPlanOptsOpenRouter(ctx, streamCh, doneCh, opts)
+	}
+
 	client, err := newAnthropicClient(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to create anthropic client: %w", err)
@@ -58,7 +64,7 @@ func CreateInitialPlan(ctx context.Context, streamCh chan string, doneCh chan er
 	messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(initialUserMessage)))
 
 	stream := client.Messages.NewStreaming(context.TODO(), anthropic.MessageNewParams{
-		Model:     anthropic.F(anthropic.ModelClaude3_7Sonnet20250219),
+		Model:     anthropic.F(GetModel()),
 		MaxTokens: anthropic.F(int64(8192)),
 		Messages:  anthropic.F(messages),
 	})

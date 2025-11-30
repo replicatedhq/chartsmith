@@ -234,7 +234,7 @@ export function ChatMessage({
               className="w-6 h-6 rounded-full flex-shrink-0"
             />
             <div className="flex-1">
-              <div className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} text-[12px] pt-0.5 ${message.isCanceled ? "opacity-50" : ""}`}>{message.prompt}</div>
+              <div className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} text-sm pt-0.5 ${message.isCanceled ? "opacity-50" : ""}`}>{message.prompt}</div>
               {!message.isIntentComplete && !message.isCanceled && (
                 <div className="flex items-center gap-2 mt-2 border-t border-primary/20 pt-2">
                   <div className="flex-shrink-0 animate-spin rounded-full h-3 w-3 border border-t-transparent border-primary"></div>
@@ -281,7 +281,7 @@ export function ChatMessage({
                 }
               </div>
             </div>
-            <div className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} ${message.isIgnored ? "opacity-50 line-through" : ""} text-[12px] markdown-content`}>
+            <div className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} ${message.isIgnored ? "opacity-50 line-through" : ""} text-sm markdown-content`}>
               {/* Use our custom component that enforces order */}
               <SortedContent />
 

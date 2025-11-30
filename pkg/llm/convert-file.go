@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
+	openai "github.com/sashabaranov/go-openai"
 	"github.com/jpoz/groq"
 	"github.com/replicatedhq/chartsmith/pkg/logger"
 	"github.com/replicatedhq/chartsmith/pkg/param"
@@ -25,6 +26,12 @@ func ConvertFile(ctx context.Context, opts ConvertFileOpts) (map[string]string, 
 	logger.Info("Converting file",
 		zap.String("path", opts.Path),
 	)
+
+	provider := getProvider()
+	
+	if provider == "openrouter" {
+		return convertFileUsingOpenRouter(ctx, opts)
+	}
 
 	return convertFileUsingGroq(ctx, opts)
 }
@@ -120,6 +127,83 @@ Convert the following Kubernetes manifest to a helm template:
 	return artifactsMap, updatedValuesYAML, nil
 }
 
+func convertFileUsingOpenRouter(ctx context.Context, opts ConvertFileOpts) (map[string]string, string, error) {
+	client, err := newOpenRouterClient(ctx)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to create OpenRouter client: %w", err)
+	}
+
+	messages := []openai.ChatCompletionMessage{
+		{
+			Role:    openai.ChatMessageRoleSystem,
+			Content: executePlanSystemPrompt + "\n\n" + convertFileSystemPrompt,
+		},
+		{
+			Role:    openai.ChatMessageRoleUser,
+			Content: fmt.Sprintf("Here is the existing values.yaml file:\n---\n%s\n---\n", opts.ValuesYAML),
+		},
+		{
+			Role:    openai.ChatMessageRoleUser,
+			Content: fmt.Sprintf("Convert the following Kubernetes manifest to a helm template:\n---\n%s\n---\n", opts.Content),
+		},
+	}
+
+	response, err := client.ChatCompletion(ctx, messages)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to get converted file content: %w", err)
+	}
+
+	artifacts, err := parseArtifactsInResponse(response)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to parse artifacts: %w", err)
+	}
+
+	updatedValuesYAML := opts.ValuesYAML
+	artifactsMap := make(map[string]string)
+	for _, artifact := range artifacts {
+		if artifact.Path == "values.yaml" {
+			// Check if the content is a unified diff patch
+			if strings.HasPrefix(strings.TrimSpace(artifact.Content), "---") &&
+				strings.Contains(artifact.Content, "+++") &&
+				strings.Contains(artifact.Content, "@@") {
+				// It's a patch, try to apply it safely
+				logger.Info("Received values.yaml as a patch, attempting to apply")
+
+				// Try to apply the patch
+				newContent, err := applyPatch(opts.ValuesYAML, artifact.Content)
+				if err != nil {
+					// Patch application failed, fall back to merging approach
+					logger.Warn("Failed to apply patch directly, falling back to content extraction", zap.Error(err))
+
+					// Extract and merge the added content from the patch
+					extractedContent := extractAddedContent(artifact.Content)
+					mergedValues, err := mergeValuesYAML(opts.ValuesYAML, extractedContent)
+					if err != nil {
+						logger.Warn("Failed to merge values.yaml, using original content", zap.Error(err))
+					} else {
+						updatedValuesYAML = mergedValues
+					}
+				} else {
+					// Patch applied successfully
+					updatedValuesYAML = newContent
+				}
+			} else {
+				// It's not a patch, use the normal merging approach
+				mergedValues, err := mergeValuesYAML(opts.ValuesYAML, artifact.Content)
+				if err != nil {
+					logger.Warn("Failed to merge values.yaml, using original content", zap.Error(err))
+				} else {
+					updatedValuesYAML = mergedValues
+				}
+			}
+		} else {
+			artifactsMap[artifact.Path] = artifact.Content
+		}
+	}
+
+	return artifactsMap, updatedValuesYAML, nil
+}
+
 func convertFileUsingClaude(ctx context.Context, opts ConvertFileOpts) (map[string]string, string, error) {
 	client, err := newAnthropicClient(ctx)
 	if err != nil {
@@ -146,7 +230,7 @@ Convert the following Kubernetes manifest to a helm template:
 	}
 
 	response, err := client.Messages.New(context.TODO(), anthropic.MessageNewParams{
-		Model:     anthropic.F(anthropic.ModelClaude3_7Sonnet20250219),
+		Model:     anthropic.F(GetModel()),
 		MaxTokens: anthropic.F(int64(8192)),
 		Messages:  anthropic.F(messages),
 	})

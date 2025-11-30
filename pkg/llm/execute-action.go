@@ -435,6 +435,13 @@ func findBestMatchRegion(content, oldStr string, minMatchLen int) (int, int) {
 }
 
 func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWithPath, plan *workspacetypes.Plan, currentContent string, interimContentCh chan string) (string, error) {
+	provider := getProvider()
+	
+	// Route to OpenRouter implementation if configured
+	if provider == "openrouter" {
+		return ExecuteActionOpenRouter(ctx, actionPlanWithPath, plan, currentContent, interimContentCh)
+	}
+	
 	updatedContent := currentContent
 	lastActivity := time.Now()
 
