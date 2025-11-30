@@ -10,6 +10,8 @@ import { createChatMessageAction } from "@/lib/workspace/actions/create-chat-mes
 import { ScrollingContent } from "./ScrollingContent";
 import { NewChartChatMessage } from "./NewChartChatMessage";
 import { NewChartContent } from "./NewChartContent";
+import { ProviderSelector } from "./ProviderSelector";
+import { ModelSelector } from "./ModelSelector";
 
 interface ChatContainerProps {
   session: Session;
@@ -114,6 +116,15 @@ export function ChatContainer({ session }: ChatContainerProps) {
         </ScrollingContent>
       </div>
       <div className={`absolute bottom-0 left-0 right-0 ${theme === "dark" ? "bg-dark-surface" : "bg-white"} border-t ${theme === "dark" ? "border-dark-border" : "border-gray-200"}`}>
+        {/* AI Provider and Model Selection */}
+        <div className="px-3 pt-3 pb-2 flex items-center gap-2 border-b border-gray-200/50 dark:border-dark-border/50">
+          <div className={`text-xs font-medium ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>
+            AI Model:
+          </div>
+          <ProviderSelector />
+          <ModelSelector />
+        </div>
+        
         <form onSubmit={handleSubmitChat} className="p-3 relative">
           <textarea
             value={chatInput}
