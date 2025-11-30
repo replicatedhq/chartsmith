@@ -13,80 +13,94 @@ export interface ModelConfig {
   provider: 'anthropic' | 'openrouter';
 }
 
-// Anthropic Models
+// Anthropic Models (Direct API)
 export const ANTHROPIC_MODELS: ModelConfig[] = [
   {
     id: 'claude-3-7-sonnet-20250219',
     name: 'Claude 3.7 Sonnet',
-    description: 'Latest and most capable model (Feb 2025)',
+    description: '',
     contextWindow: 200000,
     provider: 'anthropic',
   },
   {
     id: 'claude-3-5-sonnet-20241022',
     name: 'Claude 3.5 Sonnet',
-    description: 'Balanced performance and speed (Oct 2024)',
+    description: '',
     contextWindow: 200000,
     provider: 'anthropic',
   },
   {
     id: 'claude-3-opus-20240229',
     name: 'Claude 3 Opus',
-    description: 'Most powerful model for complex tasks',
+    description: '',
     contextWindow: 200000,
     provider: 'anthropic',
   },
   {
     id: 'claude-3-5-haiku-20241022',
     name: 'Claude 3.5 Haiku',
-    description: 'Fast and cost-effective',
+    description: '',
     contextWindow: 200000,
     provider: 'anthropic',
   },
 ];
 
-// OpenRouter Models (Popular models available via OpenRouter)
+// OpenRouter Models - Grouped by provider
 export const OPENROUTER_MODELS: ModelConfig[] = [
+  // Google
   {
-    id: 'anthropic/claude-3.5-sonnet',
-    name: 'Claude 3.5 Sonnet (OpenRouter)',
-    description: 'Claude 3.5 Sonnet via OpenRouter',
+    id: 'google/gemini-3-pro-preview',
+    name: 'Gemini 3 Pro',
+    description: '',
+    contextWindow: 1050000,
+    provider: 'openrouter',
+  },
+  
+  // Anthropic
+  {
+    id: 'anthropic/claude-opus-4.5',
+    name: 'Claude Opus 4.5',
+    description: '',
     contextWindow: 200000,
     provider: 'openrouter',
   },
   {
-    id: 'openai/gpt-4-turbo',
-    name: 'GPT-4 Turbo',
-    description: 'OpenAI GPT-4 Turbo',
-    contextWindow: 128000,
-    provider: 'openrouter',
-  },
-  {
-    id: 'openai/gpt-4o',
-    name: 'GPT-4o',
-    description: 'OpenAI GPT-4 Omni',
-    contextWindow: 128000,
-    provider: 'openrouter',
-  },
-  {
-    id: 'google/gemini-pro-1.5',
-    name: 'Gemini 1.5 Pro',
-    description: 'Google Gemini 1.5 Pro',
+    id: 'anthropic/claude-sonnet-4.5',
+    name: 'Claude Sonnet 4.5',
+    description: '',
     contextWindow: 1000000,
     provider: 'openrouter',
   },
   {
-    id: 'meta-llama/llama-3.3-70b-instruct',
-    name: 'Llama 3.3 70B',
-    description: 'Meta Llama 3.3 70B Instruct',
+    id: 'anthropic/claude-haiku-4.5',
+    name: 'Claude Haiku 4.5',
+    description: '',
+    contextWindow: 200000,
+    provider: 'openrouter',
+  },
+  
+  // xAI
+  {
+    id: 'x-ai/grok-code-fast-1',
+    name: 'Grok Code Fast 1',
+    description: '',
     contextWindow: 128000,
     provider: 'openrouter',
   },
   {
-    id: 'mistralai/mixtral-8x7b-instruct',
-    name: 'Mixtral 8x7B',
-    description: 'Mistral Mixtral 8x7B Instruct',
-    contextWindow: 32000,
+    id: 'x-ai/grok-4.1-fast:free',
+    name: 'Grok 4.1 Fast (Free)',
+    description: '',
+    contextWindow: 128000,
+    provider: 'openrouter',
+  },
+  
+  // OpenAI
+  {
+    id: 'openai/gpt-5.1',
+    name: 'GPT-5.1',
+    description: '',
+    contextWindow: 1000000,
     provider: 'openrouter',
   },
 ];
@@ -109,6 +123,9 @@ export function getDefaultModelForProvider(provider: 'anthropic' | 'openrouter')
   if (provider === 'anthropic') {
     return 'claude-3-5-sonnet-20241022';
   }
-  return 'anthropic/claude-3.5-sonnet';
+  return 'anthropic/claude-sonnet-4.5';
 }
+
+
+
 

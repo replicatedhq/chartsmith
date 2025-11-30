@@ -13,6 +13,12 @@ import (
 func CleanUpConvertedValuesYAML(ctx context.Context, valuesYAML string) (string, error) {
 	logger.Info("Cleaning up converted values.yaml")
 
+	provider := getProvider()
+	
+	if provider == "openrouter" {
+		return CleanupConvertedValuesOpenRouter(ctx, valuesYAML)
+	}
+
 	client, err := newAnthropicClient(ctx)
 	if err != nil {
 		return "", fmt.Errorf("failed to get anthropic client: %w", err)
@@ -30,7 +36,7 @@ Here is the converted values.yaml file:
 	}
 
 	response, err := client.Messages.New(context.TODO(), anthropic.MessageNewParams{
-		Model:     anthropic.F(anthropic.ModelClaude3_7Sonnet20250219),
+		Model:     anthropic.F(GetModel()),
 		MaxTokens: anthropic.F(int64(8192)),
 		Messages:  anthropic.F(messages),
 	})

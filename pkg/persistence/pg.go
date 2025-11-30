@@ -42,8 +42,8 @@ func InitPostgres(opts PostgresOpts) error {
 	poolConfig.MaxConns = 30
 	// Set reasonable connection lifetime to prevent stale connections
 	poolConfig.MaxConnLifetime = 30 * time.Minute
-	// Set reasonable idle timeout
-	poolConfig.MaxConnIdleTime = 15 * time.Minute
+	// Close idle connections after 5 minutes of inactivity
+	poolConfig.MaxConnIdleTime = 5 * time.Minute
 	// Set health check interval
 	poolConfig.HealthCheckPeriod = 1 * time.Minute
 	

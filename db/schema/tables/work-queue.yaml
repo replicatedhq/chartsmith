@@ -15,6 +15,7 @@ schema:
       - channel
       - completed_at
       - processing_started_at
+      - retry_after
       - created_at
     columns:
     - name: id
@@ -39,3 +40,5 @@ schema:
       type: integer
     - name: last_error
       type: text
+    - name: retry_after
+      type: timestamp

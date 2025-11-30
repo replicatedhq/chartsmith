@@ -45,12 +45,25 @@ export function ModelSelector() {
     setIsOpen(false);
   };
 
-  const formatContextWindow = (tokens: number): string => {
-    if (tokens >= 1000000) {
-      return `${(tokens / 1000000).toFixed(1)}M`;
+  // Group models by provider (extracted from model ID)
+  const groupedModels = availableModels.reduce((acc, modelConfig) => {
+    const providerName = modelConfig.id.split('/')[0];
+    const displayProviderName = 
+      providerName === 'anthropic' ? 'Anthropic' :
+      providerName === 'openai' ? 'OpenAI' :
+      providerName === 'google' ? 'Google' :
+      providerName === 'x-ai' ? 'xAI' :
+      providerName;
+    
+    if (!acc[displayProviderName]) {
+      acc[displayProviderName] = [];
     }
-    return `${(tokens / 1000).toFixed(0)}K`;
-  };
+    acc[displayProviderName].push(modelConfig);
+    return acc;
+  }, {} as Record<string, ModelConfig[]>);
+
+  const providerOrder = ['Google', 'Anthropic', 'xAI', 'OpenAI'];
+  const sortedProviders = providerOrder.filter(p => groupedModels[p]);
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -70,54 +83,57 @@ export function ModelSelector() {
 
       {isOpen && (
         <div
-          className={`absolute top-full mt-1 left-0 min-w-[280px] max-h-[400px] overflow-y-auto rounded-lg border shadow-lg z-50 ${
+          className={`absolute bottom-full mb-1 left-0 min-w-[200px] max-h-[320px] overflow-y-auto rounded-lg border shadow-xl z-[100] ${
             theme === "dark"
               ? "bg-dark-surface border-dark-border"
               : "bg-white border-gray-200"
           }`}
         >
-          {availableModels.map((modelConfig: ModelConfig) => (
-            <button
-              key={modelConfig.id}
-              onClick={() => handleSelectModel(modelConfig.id)}
-              className={`w-full flex items-start gap-3 px-4 py-3 text-left transition-colors first:rounded-t-lg last:rounded-b-lg ${
-                model === modelConfig.id
-                  ? theme === "dark"
-                    ? "bg-dark-hover"
-                    : "bg-gray-100"
-                  : theme === "dark"
-                  ? "hover:bg-dark-hover"
-                  : "hover:bg-gray-50"
-              }`}
-            >
-              <div className="mt-0.5">
-                <Cpu className="w-4 h-4" />
+          {sortedProviders.map((providerName, providerIndex) => (
+            <div key={providerName}>
+              {/* Provider Header */}
+              <div className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider ${
+                providerIndex > 0 ? 'border-t' : ''
+              } ${
+                theme === "dark" 
+                  ? "text-gray-500 border-dark-border/50" 
+                  : "text-gray-400 border-gray-200"
+              }`}>
+                {providerName}
               </div>
-              <div className="flex-1 min-w-0">
-                <div className={`text-sm font-medium ${
-                  theme === "dark" ? "text-dark-text" : "text-gray-900"
-                }`}>
-                  {modelConfig.name}
-                </div>
-                <div className={`text-xs mt-0.5 ${
-                  theme === "dark" ? "text-dark-text-secondary" : "text-gray-500"
-                }`}>
-                  {modelConfig.description}
-                </div>
-                <div className={`text-xs mt-1 font-mono ${
-                  theme === "dark" ? "text-dark-text-secondary" : "text-gray-400"
-                }`}>
-                  {formatContextWindow(modelConfig.contextWindow)} tokens
-                </div>
-              </div>
-              {model === modelConfig.id && (
-                <div className="flex items-center">
-                  <div className={`w-2 h-2 rounded-full ${
-                    theme === "dark" ? "bg-blue-400" : "bg-blue-500"
-                  }`} />
-                </div>
-              )}
-            </button>
+              
+              {/* Models for this provider */}
+              {groupedModels[providerName].map((modelConfig) => (
+                <button
+                  key={modelConfig.id}
+                  onClick={() => handleSelectModel(modelConfig.id)}
+                  className={`w-full flex items-center gap-2 px-3 py-1.5 text-left transition-colors ${
+                    model === modelConfig.id
+                      ? theme === "dark"
+                        ? "bg-dark-hover"
+                        : "bg-gray-100"
+                      : theme === "dark"
+                      ? "hover:bg-dark-hover"
+                      : "hover:bg-gray-50"
+                  }`}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className={`text-xs font-medium ${
+                      theme === "dark" ? "text-dark-text" : "text-gray-900"
+                    }`}>
+                      {modelConfig.name}
+                    </div>
+                  </div>
+                  {model === modelConfig.id && (
+                    <div className="flex items-center">
+                      <div className={`w-1.5 h-1.5 rounded-full ${
+                        theme === "dark" ? "bg-blue-400" : "bg-blue-500"
+                      }`} />
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
           ))}
         </div>
       )}

@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/replicatedhq/chartsmith/pkg/logger"
 	"github.com/replicatedhq/chartsmith/pkg/param"
+	"github.com/replicatedhq/chartsmith/pkg/persistence"
 	"go.uber.org/zap"
 )
 
@@ -70,7 +71,7 @@ func (l *Listener) AddHandler(ctx context.Context, channel string, maxWorkers in
 		channel:          channel,
 		handler:          handler,
 		workerPool:       make(chan struct{}, maxWorkers),
-		pollTicker:       time.NewTicker(5 * time.Second),
+		pollTicker:       time.NewTicker(100 * time.Millisecond), // Poll every 0.1 seconds for responsive processing
 		maxWorkers:       maxWorkers,
 		maxDuration:      maxDuration,
 		lockKeyExtractor: lockKeyExtractor,
@@ -358,8 +359,13 @@ func (l *Listener) processNotifications(ctx context.Context) {
 
 		// Trigger processing if not already processing
 		if !processor.processing {
+			logger.Debug("Starting processQueue for channel",
+				zap.String("channel", notification.Channel))
 			processor.processing = true
 			go l.processQueue(ctx, processor)
+		} else {
+			logger.Debug("processQueue already running for channel",
+				zap.String("channel", notification.Channel))
 		}
 	}
 }
@@ -374,21 +380,20 @@ func (l *Listener) processQueue(ctx context.Context, processor *queueProcessor) 
 			logger.Info("Received context done, existing process queue")
 			return
 		case <-processor.pollTicker.C:
-			// Continue processing on ticker
-		default:
-			// Process immediately on notification
+			// Continue processing on ticker (every 500ms)
 		}
 
 		// Create a context with timeout for database operations
 		dbCtx, dbCancel := context.WithTimeout(ctx, 10*time.Second)
+		defer dbCancel() // CRITICAL: Always cancel context to prevent leaks
 		
-		// PHASE 1: Get queue statistics with a dedicated connection
-		statsConn, err := pgx.Connect(dbCtx, l.pgURI)
-		if err != nil {
-			logger.Error(fmt.Errorf("failed to connect to database for queue stats: %w", err))
-			dbCancel()
+		// PHASE 1: Get queue statistics using pooled connection
+		statsConn := persistence.MustGetPooledPostgresSession()
+		if statsConn == nil {
+			logger.Error(fmt.Errorf("failed to get pooled connection for queue stats"))
 			return
 		}
+		defer statsConn.Release() // Return connection to pool
 
 		// Get queue statistics
 		var total, inFlight, available int
@@ -396,33 +401,34 @@ func (l *Listener) processQueue(ctx context.Context, processor *queueProcessor) 
 			SELECT
 				COUNT(*) as total,
 				COUNT(CASE WHEN processing_started_at IS NOT NULL AND completed_at IS NULL THEN 1 END) as in_flight,
-				COUNT(CASE WHEN processing_started_at IS NULL AND completed_at IS NULL THEN 1 END) as available
+				COUNT(CASE WHEN processing_started_at IS NULL AND completed_at IS NULL AND (retry_after IS NULL OR retry_after <= NOW()) THEN 1 END) as available
 			FROM %s
 			WHERE channel = $1
 			AND completed_at IS NULL`, WorkQueueTable), processor.channel).Scan(&total, &inFlight, &available)
 		
-		// Always close the connection when done
-		statsConn.Close(dbCtx)
-
 		if err != nil {
 			logger.Error(fmt.Errorf("failed to get queue statistics: %w", err))
-			dbCancel()
 			return
-		} else {
-			logger.Info("queue status",
-				zap.String("channel", processor.channel),
-				zap.Int("total", total),
-				zap.Int("in_flight", inFlight),
-				zap.Int("available", available))
 		}
+		
+		logger.Info("queue status",
+			zap.String("channel", processor.channel),
+			zap.Int("total", total),
+			zap.Int("in_flight", inFlight),
+			zap.Int("available", available))
 
-		// PHASE 2: Get messages to process with a dedicated connection
-		fetchConn, err := pgx.Connect(dbCtx, l.pgURI)
-		if err != nil {
-			logger.Error(fmt.Errorf("failed to connect to database for message fetching: %w", err))
-			dbCancel()
+		// PHASE 2: Get messages to process using pooled connection
+		logger.Debug("Attempting to get pooled connection for message fetching",
+			zap.String("channel", processor.channel))
+		fetchConn := persistence.MustGetPooledPostgresSession()
+		if fetchConn == nil {
+			logger.Error(fmt.Errorf("failed to get pooled connection for message fetching"))
 			return
 		}
+		defer fetchConn.Release() // Return connection to pool
+		
+		logger.Debug("Got pooled connection, running fetch query",
+			zap.String("channel", processor.channel))
 
 		// Query and lock unprocessed messages atomically
 		// This SQL's logic has been fixed to NOT increment attempt_count for new messages
@@ -436,6 +442,7 @@ func (l *Listener) processQueue(ctx context.Context, processor *queueProcessor) 
 					processing_started_at IS NULL
 					OR processing_started_at < NOW() - $2::interval
 				)
+				AND (retry_after IS NULL OR retry_after <= NOW())
 				ORDER BY created_at ASC
 				LIMIT %d
 				FOR UPDATE SKIP LOCKED
@@ -455,10 +462,11 @@ func (l *Listener) processQueue(ctx context.Context, processor *queueProcessor) 
 
 		if err != nil {
 			logger.Error(fmt.Errorf("failed to query messages: %w", err))
-			fetchConn.Close(dbCtx)
-			dbCancel()
 			return
 		}
+		
+		logger.Debug("Fetch query completed, scanning rows",
+			zap.String("channel", processor.channel))
 
 		// Count how many messages we're about to process
 		messages := make([]struct {
@@ -481,9 +489,10 @@ func (l *Listener) processQueue(ctx context.Context, processor *queueProcessor) 
 		}
 		rows.Close()
 		
-		// Close the fetch connection as soon as we're done with it
-		fetchConn.Close(dbCtx)
-		dbCancel()
+		logger.Debug("Fetch complete, returning connections to pool",
+			zap.String("channel", processor.channel),
+			zap.Int("message_count", len(messages)))
+		// Connections will be returned to pool via defer Release()
 
 		if len(messages) > 0 {
 			logger.Info("processing messages",
@@ -552,13 +561,38 @@ func (l *Listener) processQueue(ctx context.Context, processor *queueProcessor) 
 				var dbErr error
 				
 				if handlerErr != nil {
-					// If processing failed, mark it as available for retry
+					// Calculate retry delay with exponential backoff (30s, 1m, 2m, 4m, 8m, max 10m)
+					// Get current attempt count first
+					var currentAttemptCount int
+					err := updateConn.QueryRow(updateCtx, fmt.Sprintf(`
+						SELECT COALESCE(attempt_count, 0) FROM %s WHERE id = $1
+					`, WorkQueueTable), messageID).Scan(&currentAttemptCount)
+					
+					if err != nil {
+						logger.Error(fmt.Errorf("failed to get attempt count for message %s: %w", messageID, err))
+						currentAttemptCount = 0
+					}
+					
+					// Calculate retry delay: start at 30 seconds, double each time, cap at 10 minutes
+					retryDelaySeconds := 30 * (1 << currentAttemptCount) // 30s, 60s, 120s, 240s, 480s...
+					if retryDelaySeconds > 600 {
+						retryDelaySeconds = 600 // Cap at 10 minutes
+					}
+					
+					logger.Info("Message processing failed, scheduling retry",
+						zap.String("messageID", messageID),
+						zap.Int("attempt", currentAttemptCount+1),
+						zap.Int("retryAfterSeconds", retryDelaySeconds),
+						zap.Error(handlerErr))
+					
+					// If processing failed, mark it as available for retry after delay
 					_, dbErr = updateConn.Exec(updateCtx, fmt.Sprintf(`
 						UPDATE %s
 						SET processing_started_at = NULL,
+							retry_after = NOW() + INTERVAL '%d seconds',
 							last_error = $2,
 							attempt_count = attempt_count + 1
-						WHERE id = $1`, WorkQueueTable),
+						WHERE id = $1`, WorkQueueTable, retryDelaySeconds),
 						messageID, handlerErr.Error())
 					if dbErr != nil {
 						logger.Error(fmt.Errorf("failed to mark message %s as failed: %w", messageID, dbErr))

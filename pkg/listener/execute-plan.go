@@ -80,28 +80,50 @@ func handleExecutePlanNotification(ctx context.Context, payload string) error {
 			chartID = &w.Charts[0].ID
 		}
 
-		relevantFiles, err := workspace.ChooseRelevantFilesForChatMessage(
-			ctx,
-			w,
-			workspace.WorkspaceFilter{
-				ChartID: chartID,
-			},
-			w.CurrentRevision,
-			expandedPrompt,
-		)
-
-		// make sure we only change 10 files max, and nothing lower than a 0.8 similarity score
-		maxFiles := 10
-		if len(relevantFiles) < maxFiles {
-			maxFiles = len(relevantFiles)
-		}
-		relevantFiles = relevantFiles[:maxFiles]
 		finalRelevantFiles := []workspacetypes.File{}
-		for _, file := range relevantFiles {
-			if file.Similarity >= 0.8 {
-				finalRelevantFiles = append(finalRelevantFiles, file.File)
+		
+		// Only select files if this is an existing chart with files
+		// Skip for new charts or charts with no existing files to avoid embeddings API hang
+		if w.CurrentRevision > 0 {
+			logger.Info("[Execute Plan] Selecting relevant files for existing chart",
+				zap.String("workspace_id", w.ID),
+				zap.Int("revision", w.CurrentRevision))
+			
+			relevantFiles, err := workspace.ChooseRelevantFilesForChatMessage(
+				ctx,
+				w,
+				workspace.WorkspaceFilter{
+					ChartID: chartID,
+				},
+				w.CurrentRevision,
+				expandedPrompt,
+			)
+			
+			if err != nil {
+				// Log the error but continue with empty relevant files
+				// This allows the plan to execute even if embeddings fail
+				logger.Warn("Failed to choose relevant files, continuing with all files",
+					zap.Error(err),
+					zap.String("workspace_id", w.ID))
+			} else {
+				// make sure we only change 10 files max, and nothing lower than a 0.8 similarity score
+				maxFiles := 10
+				if len(relevantFiles) < maxFiles {
+					maxFiles = len(relevantFiles)
+				}
+				relevantFiles = relevantFiles[:maxFiles]
+				for _, file := range relevantFiles {
+					if file.Similarity >= 0.8 {
+						finalRelevantFiles = append(finalRelevantFiles, file.File)
+					}
+				}
 			}
+		} else {
+			logger.Info("[Execute Plan] Skipping file selection for new chart",
+				zap.String("workspace_id", w.ID),
+				zap.Int("revision", w.CurrentRevision))
 		}
+		
 		llm.CreateExecutePlan(ctx, detailedPlanActionCreatedCh, detailedPlanStreamCh, detailedPlanDoneCh, w, plan, &w.Charts[0], finalRelevantFiles)
 	}()
 

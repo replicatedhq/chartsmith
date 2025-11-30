@@ -9,7 +9,7 @@
 import { streamText, tool } from 'ai';
 import { z } from 'zod';
 import { NextRequest } from 'next/server';
-import { getProviderModel, validateProviderConfig, AIProvider } from '@/lib/ai/provider-factory';
+import { getProviderModel, validateProviderConfig, parseProviderError, AIProvider } from '@/lib/ai/provider-factory';
 import { getSystemPromptForPersona, buildChartStructureContext, buildFileContext } from '@/lib/ai/system-prompts';
 import { getWorkspace } from '@/lib/workspace/workspace';
 import { logger } from '@/lib/utils/logger';
@@ -30,13 +30,19 @@ interface ChatRequest {
 }
 
 export async function POST(req: NextRequest) {
+  let provider: AIProvider = 'openrouter'; // Default for error handling
+  
   try {
     const body: ChatRequest = await req.json();
-    const { messages, workspaceId, provider, model, messageFromPersona = 'auto' } = body;
+    const { messages, workspaceId, model, messageFromPersona = 'auto' } = body;
+    provider = body.provider; // Update provider from request
+
+    logger.info('AI Chat Request', { provider, model, workspaceId, messageCount: messages.length });
 
     // Validate provider configuration
     const configError = validateProviderConfig(provider);
     if (configError) {
+      logger.error('Provider configuration error', { provider, error: configError });
       return new Response(
         JSON.stringify({ error: configError }),
         { status: 400, headers: { 'Content-Type': 'application/json' } }
@@ -140,14 +146,24 @@ export async function POST(req: NextRequest) {
     });
 
     // Return the streaming response
-    return result.toDataStreamResponse();
+    logger.info('Streaming AI response', { provider, model });
+    return result.toTextStreamResponse();
     
   } catch (error) {
-    logger.error('Error in AI chat route:', error);
+    // Parse provider-specific errors with detailed logging
+    const errorMessage = parseProviderError(error, provider);
+    
+    logger.error('Error in AI chat route:', { 
+      error: error instanceof Error ? error.message : String(error),
+      provider,
+      stack: error instanceof Error ? error.stack : undefined
+    });
+
     return new Response(
       JSON.stringify({ 
-        error: 'Internal server error',
-        message: error instanceof Error ? error.message : 'Unknown error'
+        error: errorMessage,
+        provider,
+        details: error instanceof Error ? error.message : 'Unknown error'
       }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     );

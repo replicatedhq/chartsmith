@@ -98,6 +98,12 @@ func SummarizeContent(ctx context.Context, content string) (string, error) {
 }
 
 func summarizeContentWithClaude(ctx context.Context, content string) (string, error) {
+	provider := getProvider()
+	
+	if provider == "openrouter" {
+		return summarizeContentWithOpenRouter(ctx, content)
+	}
+	
 	client, err := newAnthropicClient(ctx)
 	if err != nil {
 		return "", fmt.Errorf("failed to create anthropic client: %w", err)
@@ -109,7 +115,7 @@ func summarizeContentWithClaude(ctx context.Context, content string) (string, er
 	startTime := time.Now()
 
 	resp, err := client.Messages.New(ctx, anthropic.MessageNewParams{
-		Model:     anthropic.F(anthropic.ModelClaude3_7Sonnet20250219),
+		Model:     anthropic.F(GetModel()),
 		MaxTokens: anthropic.F(int64(8192)),
 		Messages:  anthropic.F([]anthropic.MessageParam{anthropic.NewUserMessage(anthropic.NewTextBlock(userMessage))}),
 	})

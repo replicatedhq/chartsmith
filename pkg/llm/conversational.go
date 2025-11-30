@@ -4,14 +4,22 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
+	openai "github.com/sashabaranov/go-openai"
 	"github.com/replicatedhq/chartsmith/pkg/recommendations"
 	"github.com/replicatedhq/chartsmith/pkg/workspace"
 	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 )
 
 func ConversationalChatMessage(ctx context.Context, streamCh chan string, doneCh chan error, w *workspacetypes.Workspace, chatMessage *workspacetypes.Chat) error {
+	provider := getProvider()
+	
+	if provider == "openrouter" {
+		return ConversationalChatMessageOpenRouter(ctx, streamCh, doneCh, w, chatMessage)
+	}
+	
 	client, err := newAnthropicClient(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to create anthropic client: %w", err)
@@ -134,7 +142,7 @@ func ConversationalChatMessage(ctx context.Context, streamCh chan string, doneCh
 
 	for {
 		stream := client.Messages.NewStreaming(ctx, anthropic.MessageNewParams{
-			Model:     anthropic.F(anthropic.ModelClaude3_7Sonnet20250219),
+			Model:     anthropic.F(GetModel()),
 			MaxTokens: anthropic.F(int64(8192)),
 			Messages:  anthropic.F(messages),
 			Tools:     anthropic.F(toolUnionParams),
@@ -239,4 +247,113 @@ func getChartStructure(ctx context.Context, c *workspacetypes.Chart) (string, er
 		structure += fmt.Sprintf(`File: %s`, file.FilePath)
 	}
 	return structure, nil
+}
+
+// ConversationalChatMessageOpenRouter handles conversational chat using OpenRouter
+func ConversationalChatMessageOpenRouter(ctx context.Context, streamCh chan string, doneCh chan error, w *workspacetypes.Workspace, chatMessage *workspacetypes.Chat) error {
+	log.Printf("[OpenRouter] Handling conversational chat message")
+	
+	client, err := newOpenRouterClient(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create OpenRouter client: %w", err)
+	}
+
+	// Build messages array
+	messages := []openai.ChatCompletionMessage{
+		{
+			Role:    openai.ChatMessageRoleSystem,
+			Content: chatOnlySystemPrompt + "\n\n" + chatOnlyInstructions,
+		},
+	}
+
+	var c *workspacetypes.Chart
+	c = &w.Charts[0]
+
+	chartStructure, err := getChartStructure(ctx, c)
+	if err != nil {
+		return fmt.Errorf("failed to get chart structure: %w", err)
+	}
+
+	expandedPrompt, err := ExpandPromptOpenRouter(ctx, chatMessage.Prompt)
+	if err != nil {
+		log.Printf("[OpenRouter] Failed to expand prompt, using original: %v", err)
+		expandedPrompt = chatMessage.Prompt
+	}
+
+	var chartID *string
+	if len(w.Charts) > 0 {
+		chartID = &w.Charts[0].ID
+	}
+
+	relevantFiles, err := workspace.ChooseRelevantFilesForChatMessage(
+		ctx,
+		w,
+		workspace.WorkspaceFilter{
+			ChartID: chartID,
+		},
+		w.CurrentRevision,
+		expandedPrompt,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to choose relevant files: %w", err)
+	}
+
+	// Limit files to 10
+	maxFiles := 10
+	if len(relevantFiles) < maxFiles {
+		maxFiles = len(relevantFiles)
+	}
+	relevantFiles = relevantFiles[:maxFiles]
+
+	// Add chart context
+	messages = append(messages, openai.ChatCompletionMessage{
+		Role:    openai.ChatMessageRoleAssistant,
+		Content: fmt.Sprintf(`I am working on a Helm chart that has the following structure: %s`, chartStructure),
+	})
+
+	// Add relevant files
+	for _, file := range relevantFiles {
+		messages = append(messages, openai.ChatCompletionMessage{
+			Role:    openai.ChatMessageRoleAssistant,
+			Content: fmt.Sprintf(`File: %s, Content: %s`, file.File.FilePath, file.File.Content),
+		})
+	}
+
+	// Add previous plan if exists
+	plan, err := workspace.GetMostRecentPlan(ctx, w.ID)
+	if err != nil && err != workspace.ErrNoPlan {
+		return fmt.Errorf("failed to get most recent plan: %w", err)
+	}
+
+	if plan != nil {
+		previousChatMessages, err := workspace.ListChatMessagesAfterPlan(ctx, plan.ID)
+		if err != nil {
+			return fmt.Errorf("failed to list chat messages: %w", err)
+		}
+
+		for _, chat := range previousChatMessages {
+			if chat.ID == chatMessage.ID {
+				continue
+			}
+			messages = append(messages, openai.ChatCompletionMessage{
+				Role:    openai.ChatMessageRoleAssistant,
+				Content: chat.Prompt,
+			})
+		}
+
+		messages = append(messages, openai.ChatCompletionMessage{
+			Role:    openai.ChatMessageRoleAssistant,
+			Content: plan.Description,
+		})
+	}
+
+	// Add user message
+	messages = append(messages, openai.ChatCompletionMessage{
+		Role:    openai.ChatMessageRoleUser,
+		Content: chatMessage.Prompt,
+	})
+
+	// Stream the completion
+	client.StreamChatCompletion(ctx, messages, streamCh, doneCh)
+	return nil
 }

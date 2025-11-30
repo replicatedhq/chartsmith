@@ -10,10 +10,13 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/replicatedhq/chartsmith/pkg/logger"
 	"github.com/replicatedhq/chartsmith/pkg/param"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
+	"go.uber.org/zap"
 )
 
 const VOYAGE_API_URL = "https://api.voyageai.com/v1/embeddings"
@@ -53,6 +56,7 @@ func Embeddings(content string) (string, error) {
 	}
 
 	if param.Get().VoyageAPIKey == "" {
+		logger.Warn("[VoyageAI] API key not configured")
 		return "", fmt.Errorf("VOYAGE_API_KEY environment variable not set")
 	}
 
@@ -74,8 +78,14 @@ func Embeddings(content string) (string, error) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", param.Get().VoyageAPIKey))
 
+	// Create a context with timeout to prevent hanging
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	req = req.WithContext(ctx)
+
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
+		logger.Error(err, zap.String("context", "VoyageAI - API request failed"))
 		return "", fmt.Errorf("request error: %v", err)
 	}
 	defer resp.Body.Close()
@@ -86,7 +96,12 @@ func Embeddings(content string) (string, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("API error %d: %s", resp.StatusCode, body)
+		apiErr := fmt.Errorf("VoyageAI API error %d: %s", resp.StatusCode, body)
+		logger.Error(apiErr,
+			zap.String("context", "VoyageAI - API returned error"),
+			zap.Int("status_code", resp.StatusCode),
+			zap.String("response_body", string(body)))
+		return "", apiErr
 	}
 
 	var embeddings embeddingResponse

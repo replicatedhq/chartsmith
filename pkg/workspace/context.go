@@ -42,6 +42,9 @@ func ChooseRelevantFilesForChatMessage(
 	// Get embeddings for the prompt
 	promptEmbeddings, err := embedding.Embeddings(expandedPrompt)
 	if err != nil {
+		logger.Error(err,
+			zap.String("context", "File Selection - Failed to get embeddings"),
+			zap.String("workspace_id", w.ID))
 		return nil, fmt.Errorf("error getting embeddings for prompt: %w", err)
 	}
 

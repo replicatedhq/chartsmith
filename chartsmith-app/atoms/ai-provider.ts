@@ -7,13 +7,13 @@ export type AIProvider = 'anthropic' | 'openrouter';
 // Provider atom - persisted to localStorage
 export const aiProviderAtom = atomWithStorage<AIProvider>(
   'chartsmith-ai-provider',
-  (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_DEFAULT_AI_PROVIDER as AIProvider) || 'anthropic'
+  (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_DEFAULT_AI_PROVIDER as AIProvider) || 'openrouter'
 );
 
 // Model atom - persisted to localStorage
 export const aiModelAtom = atomWithStorage<string>(
   'chartsmith-ai-model',
-  (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_DEFAULT_AI_MODEL) || 'claude-3-5-sonnet-20241022'
+  (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_DEFAULT_AI_MODEL) || 'anthropic/claude-sonnet-4.5'
 );
 
 // Loading state for provider/model changes
