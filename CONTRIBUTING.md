@@ -23,20 +23,18 @@ You'll need to configure secrets in two places:
 Export these in your shell before running `make run-worker`:
 
 ```bash
-# Required - API Keys
-export GROQ_API_KEY=your-groq-key                  # Get from groq.com
-export VOYAGE_API_KEY=your-voyage-key              # Get from voyageai.com
-
-# Required - Infrastructure
-export CHARTSMITH_PG_URI=postgresql://postgres:password@localhost:5432/chartsmith?sslmode=disable
-export CHARTSMITH_CENTRIFUGO_ADDRESS=http://localhost:8000/api
-export CHARTSMITH_CENTRIFUGO_API_KEY=api_key
+- `GROQ_API_KEY`: Get your own key (Get a new API key from groq.com)
+- `VOYAGE_API_KEY`: Get your own key (Generate new key)
+- `CHARTSMITH_PG_URI=postgresql://postgres:password@localhost:5432/chartsmith?sslmode=disable`
+- `CHARTSMITH_CENTRIFUGO_ADDRESS=http://localhost:8000/api`
+- `CHARTSMITH_CENTRIFUGO_API_KEY=api_key` (Already set)
+- `CHARTSMITH_TOKEN_ENCRYPTION=` (Can ignore)
+- `CHARTSMITH_SLACK_TOKEN=` (Can ignore)
+- `CHARTSMITH_SLACK_CHANNEL=` (Can ignore)
 
 # Optional (has defaults)
-export INTERNAL_API_KEY=dev-internal-key           # For worker→Next.js auth (default: dev-internal-key)
+INTERNAL_API_KEY=dev-internal-key           # For worker→Next.js auth (default: dev-internal-key)
 ```
-
-**Note:** You can ignore `CHARTSMITH_TOKEN_ENCRYPTION`, `CHARTSMITH_SLACK_TOKEN`, and `CHARTSMITH_SLACK_CHANNEL` for local development.
 
 #### 2. Next.js Environment File (`.env.local`)
 
@@ -122,6 +120,17 @@ NEXT_PUBLIC_API_ENDPOINT=http://localhost:3000/api
    The first user to log in will automatically be granted admin privileges and bypass the waitlist.
    You can log in at: http://localhost:3000/login?test-auth=true
 
+8. **Terminal 5: Claude Integration (optional)**
+   ```bash
+   # Use Claude for development assistance
+   ```
+
+### Additional Commands
+
+- To rebuild the worker:
+  ```bash
+  make run-worker
+  ```
 
 ### Troubleshooting
 
@@ -146,6 +155,15 @@ If you encounter any issues:
 1. Make changes to the code
 2. The frontend will automatically reload with changes
 3. The worker will need to be restarted if you make backend changes
+4. Use Claude for code assistance and development guidance
+
+### Notes
+
+- The development environment uses PostgreSQL running in Docker
+- Schemahero is used for database migrations
+- The frontend runs on the default Next.js port
+- The worker runs on a separate process
+
 
 ## VS Code Extension Development
 
@@ -186,185 +204,6 @@ All recommended models are stored in `chartsmith-app/lib/llm/registry.ts`. There
 2. **`OPENROUTER_MODELS`** - OpenRouter models
    - Use OpenRouter's format: `provider/model-id` (e.g., `anthropic/claude-3.5-sonnet`, `openai/gpt-4o`)
    - These models are shown when OpenRouter API key is configured
-
-**To add a new model:**
-
-1. Open `chartsmith-app/lib/llm/registry.ts`
-2. Add the model to the appropriate array (`VERIFIED_MODELS` or `OPENROUTER_MODELS`)
-3. Include all required fields:
-   - `id`: Model identifier (verify format matches provider's API)
-   - `name`: Display name
-   - `provider`: Provider name (`anthropic`, `openai`, `google`, or `openrouter`)
-   - `description`: Brief description for users
-   - `contextWindow`: Context window size in tokens
-   - `supportsTools`: Whether the model supports tool/function calling (usually `true`)
-
-**Important:** Verify model IDs match the official provider documentation. The models are automatically exposed via the `/api/models` endpoint and appear in the model selector UI.
-
-All LLM operations go through the Next.js API layer, which handles provider selection and API key management based on the `.env.local` configuration.
-
-## Testing
-
-Chartsmith uses a comprehensive testing strategy covering unit tests, integration tests, and end-to-end tests.
-
-### Test Frameworks
-
-| Test Type | Framework | Location | Command |
-|-----------|-----------|----------|---------|
-| **Frontend Unit** | Jest + Testing Library | `chartsmith-app/` | `npm run test:unit` |
-| **Frontend E2E** | Playwright | `chartsmith-app/tests/` | `npm run test:e2e` |
-| **Backend Unit** | Go testing | `pkg/` | `go test ./...` |
-| **Full Suite** | Both | Root | `npm test` |
-
-### Running Tests
-
-#### Frontend Unit Tests (Jest)
-
-```bash
-cd chartsmith-app
-npm run test:unit          # Run all unit tests
-npm run test:watch         # Run in watch mode
-npm run test:parseDiff     # Run specific test
-```
-
-**Test Files:**
-- `lib/llm/__tests__/config.test.ts` - Registry and model configuration
-- `lib/llm/__tests__/api-models.test.ts` - Models API endpoint
-- `lib/llm/__tests__/api-routes.test.ts` - LLM API routes
-- `atoms/__tests__/workspace.test.ts` - State management
-- `hooks/__tests__/parseDiff.test.ts` - Diff parsing
-- `components/__tests__/FileTree.test.ts` - Components
-
-#### Frontend E2E Tests (Playwright)
-
-**First-time setup:**
-```bash
-cd chartsmith-app
-npx playwright install     # Install browser binaries (required once)
-```
-
-**Running tests:**
-```bash
-cd chartsmith-app
-npm run test:e2e           # Run all E2E tests
-npm run test:e2e:headed    # Run with browser visible
-```
-
-**Test Files:**
-- `tests/login.spec.ts` - Authentication
-- `tests/chat-scrolling.spec.ts` - Chat UI
-- `tests/upload-chart.spec.ts` - Chart upload
-- `tests/import-artifactory.spec.ts` - ArtifactHub import
-- `tests/model-selection.spec.ts` - Model selection
-- `tests/multi-provider-chat.spec.ts` - Multi-provider chat
-
-#### Backend Tests (Go)
-
-```bash
-go test ./...              # Run all Go tests
-go test ./pkg/llm/...      # Run LLM package tests
-go test -v ./pkg/llm/...   # Run with verbose output
-```
-
-**Test Files:**
-- `pkg/llm/config_test.go` - Model configuration
-- `pkg/llm/execute-action_test.go` - Action execution
-- `pkg/diff/apply_test.go` - Diff application
-- `pkg/diff/reconstruct_test.go` - Diff reconstruction
-
-### Writing Tests
-
-#### Unit Test Guidelines
-
-1. Use `describe` blocks to group related tests
-2. Mock external dependencies (AI SDK, API calls, etc.)
-3. Each test should be independent
-4. Use descriptive test names
-
-#### E2E Test Guidelines
-
-1. Use `loginTestUser` helper for authenticated tests
-2. Always wait for elements to be visible before interacting
-3. Mock API endpoints when testing specific scenarios
-4. Tests should clean up after themselves
-
-#### API Route Test Guidelines
-
-1. Mock auth, workspace, and AI SDK functions
-2. Verify request format and response structure
-3. Test error cases (400, 401, 404, 500)
-4. Ensure responses match Go backend expectations
-
-### Test Coverage
-
-#### Current Coverage
-
-- Model configuration and provider detection
-- API route request/response formats
-- Message format compatibility
-- Authentication flows
-- Chat UI behavior
-- Chart upload and import workflows
-
-#### Areas Needing More Coverage
-
-- Tool calling workflows
-- Streaming response handling
-- Error recovery scenarios
-- Model switching during conversation
-
-### CI/CD Testing
-
-Tests are automatically run on pull requests, pushes to main, and pre-release validation.
-
-### Debugging Tests
-
-#### Jest Debugging
-
-```bash
-npm run test:unit -- config.test.ts    # Run specific test file
-npm run test:unit -- --coverage       # Run with coverage
-```
-
-#### Playwright Debugging
-
-```bash
-npm run test:e2e:headed                              # Run with browser visible
-npx playwright test model-selection.spec.ts          # Run specific test
-npx playwright test --debug                         # Debug mode
-npx playwright show-trace test-results/trace.zip    # Show trace
-```
-
-#### Go Test Debugging
-
-```bash
-go test -v ./pkg/llm/...                    # Run with verbose output
-go test -run TestGetModelConfig ./pkg/llm/...  # Run specific test
-go test -race ./pkg/llm/...                # Run with race detector
-```
-
-### Test Data
-
-- Test charts: `test_chart/`
-- Test fixtures: `testdata/`
-- E2E tests use test authentication (see `tests/helpers.ts`)
-
-### Best Practices
-
-1. Keep tests fast - unit tests should run in milliseconds
-2. Test behavior, not implementation
-3. Use descriptive test names
-4. One assertion per test when possible
-5. Reset mocks and state between tests
-6. Mock external services - don't make real API calls
-7. Test error cases, not just the happy path
-
-### Adding New Tests
-
-When adding new features:
-1. Write unit tests for individual functions and components
-2. Add integration tests for API routes and data flow
-3. Add E2E tests for user-facing workflows
 
 ## Release
 
