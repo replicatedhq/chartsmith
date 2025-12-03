@@ -21,7 +21,8 @@ test('login flow', async ({ page }) => {
     console.log('Current URL:', page.url());
     
     // Wait for navigation to complete (should redirect to home page)
-    await page.waitForNavigation({ timeout: 10000 });
+    // The login page redirects via window.location.href, so we wait for URL change
+    await page.waitForURL('/', { timeout: 15000 });
     
     // Log final URL
     console.log('Final URL after login:', page.url());

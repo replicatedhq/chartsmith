@@ -5,13 +5,9 @@ import { getModel } from '@/lib/llm/registry';
 import { checkApiAuth } from '@/lib/auth/api-guard';
 import { getWorkspace } from '@/lib/workspace/workspace';
 import { logger } from '@/lib/utils/logger';
+import { handleApiError } from '@/lib/utils/api-error';
 
-/**
- * Tool: Get latest subchart version from ArtifactHub
- * Ported from pkg/recommendations/subchart.go
- */
 async function getLatestSubchartVersion(chartName: string): Promise<string> {
-  // Special handling for Replicated charts
   if (chartName.toLowerCase().includes('replicated')) {
     try {
       const response = await fetch('https://api.github.com/repos/replicatedhq/replicated-sdk/releases/latest', {
@@ -30,7 +26,6 @@ async function getLatestSubchartVersion(chartName: string): Promise<string> {
     }
   }
   
-  // Search ArtifactHub for the chart
   try {
     const encodedChartName = encodeURIComponent(chartName);
     const response = await fetch(
@@ -60,10 +55,6 @@ async function getLatestSubchartVersion(chartName: string): Promise<string> {
   }
 }
 
-/**
- * Tool: Get latest Kubernetes version
- * Ported from pkg/llm/conversational.go
- */
 function getLatestKubernetesVersion(semverField: string): string {
   switch (semverField) {
     case 'major':
@@ -77,9 +68,6 @@ function getLatestKubernetesVersion(semverField: string): string {
   }
 }
 
-/**
- * Build system prompt with workspace context
- */
 function buildSystemPrompt(workspaceId: string): string {
   return `You are a helpful AI assistant for Chartsmith, a Helm chart development tool.
 You help users understand and work with Helm charts and Kubernetes configurations.
@@ -95,21 +83,15 @@ Guidelines:
 Remember: You're in conversational mode. For chart modifications, the user should use the plan feature.`;
 }
 
-/**
- * POST /api/chat
- * Handles conversational chat messages using Vercel AI SDK
- */
 export async function POST(req: NextRequest) {
   try {
     const { messages, workspaceId, modelId } = await req.json();
     
-    // Auth check
     const auth = await checkApiAuth(req);
     if (!auth.isAuthorized) {
       return auth.errorResponse!;
     }
     
-    // Validate workspace access
     if (!workspaceId) {
       return new Response('Workspace ID required', { status: 400 });
     }
@@ -119,17 +101,14 @@ export async function POST(req: NextRequest) {
       return new Response('Workspace not found', { status: 404 });
     }
     
-    // Get model instance (uses default or specified model)
     const model = getModel(modelId);
-    
-    // Build system prompt
     const systemPrompt = buildSystemPrompt(workspaceId);
     
-    // Stream response with tools
     const result = streamText({
       model,
       messages,
       system: systemPrompt,
+      abortSignal: AbortSignal.timeout(120000),
       tools: {
         latest_subchart_version: {
           description: 'Return the latest version of a subchart from name',
@@ -158,7 +137,6 @@ export async function POST(req: NextRequest) {
     
     return result.toTextStreamResponse();
   } catch (error) {
-    logger.error('Error in chat API', { error });
-    return new Response('Internal Server Error', { status: 500 });
+    return handleApiError(error, 'chat API');
   }
 }

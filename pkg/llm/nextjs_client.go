@@ -10,25 +10,22 @@ import (
 	"os"
 )
 
-// NextJSClient calls Next.js API routes for LLM operations
-// This replaces direct Anthropic SDK usage with Vercel AI SDK via Next.js
 type NextJSClient struct {
 	baseURL      string
 	internalKey  string
 	client       *http.Client
 }
 
-// NewNextJSClient creates a new client for calling Next.js LLM API routes
 func NewNextJSClient() *NextJSClient {
-	baseURL := os.Getenv("NEXTJS_API_URL")
-	if baseURL == "" {
-		baseURL = "http://localhost:3000" // Default for local development
-	}
+		baseURL := os.Getenv("NEXTJS_API_URL")
+		if baseURL == "" {
+			baseURL = "http://localhost:3000"
+		}
 
-	internalKey := os.Getenv("INTERNAL_API_KEY")
-	if internalKey == "" {
-		internalKey = "dev-internal-key" // Default for local development
-	}
+		internalKey := os.Getenv("INTERNAL_API_KEY")
+		if internalKey == "" {
+			internalKey = "dev-internal-key"
+		}
 
 	return &NextJSClient{
 		baseURL:     baseURL,
@@ -37,89 +34,73 @@ func NewNextJSClient() *NextJSClient {
 	}
 }
 
-// PlanRequest represents a request to generate a plan
 type PlanRequest struct {
 	Prompt       string          `json:"prompt,omitempty"`
 	WorkspaceID  string          `json:"workspaceId,omitempty"`
 	ChartContext string          `json:"chartContext,omitempty"`
 	ModelID      string          `json:"modelId,omitempty"`
-	Messages     []MessageParam  `json:"messages,omitempty"` // For advanced mode with full message control
+	Messages     []MessageParam  `json:"messages,omitempty"`
 }
 
-// MessageParam represents a message in the conversation
 type MessageParam struct {
-	Role       string      `json:"role"`               // "system", "user", "assistant", or "tool"
-	Content    interface{} `json:"content"`            // String for text, array for tool calls/results
-	ToolCallId string      `json:"toolCallId,omitempty"` // For tool result messages
+	Role       string      `json:"role"`
+	Content    interface{} `json:"content"`
+	ToolCallId string      `json:"toolCallId,omitempty"`
 }
 
-// ExpandRequest represents a request to expand a prompt
 type ExpandRequest struct {
 	Prompt  string `json:"prompt"`
 	ModelID string `json:"modelId,omitempty"`
 }
 
-// ExpandResponse represents the response from prompt expansion
 type ExpandResponse struct {
 	ExpandedPrompt string `json:"expandedPrompt"`
 }
 
-// SummarizeRequest represents a request to summarize content
 type SummarizeRequest struct {
 	Content string `json:"content"`
 	Context string `json:"context,omitempty"`
 	ModelID string `json:"modelId,omitempty"`
 }
 
-// SummarizeResponse represents the response from summarization
 type SummarizeResponse struct {
 	Summary string `json:"summary"`
 }
 
-// CleanupValuesRequest represents a request to cleanup values.yaml
 type CleanupValuesRequest struct {
 	ValuesYAML string `json:"valuesYAML"`
 	ModelID    string `json:"modelId,omitempty"`
 }
 
-// CleanupValuesResponse represents the response from cleanup
 type CleanupValuesResponse struct {
 	CleanedYAML string `json:"cleanedYAML"`
 }
 
-// ConversationalRequest represents a request for conversational chat
 type ConversationalRequest struct {
 	Messages []MessageParam `json:"messages"`
 	ModelID  string         `json:"modelId,omitempty"`
 }
 
-// ExecuteActionRequest represents a request to execute an action with tools
 type ExecuteActionRequest struct {
 	Messages []MessageParam `json:"messages"`
 	ModelID  string         `json:"modelId,omitempty"`
 }
 
-// ToolCall represents a tool call from the LLM
 type ToolCall struct {
 	ID       string `json:"id"`
 	Name     string `json:"name"`
-	Args     string `json:"args"` // JSON string of arguments
+	Args     string `json:"args"`
 }
 
-// ExecuteActionResponse represents the response from execute action
 type ExecuteActionResponse struct {
 	Content   string     `json:"content"`
 	ToolCalls []ToolCall `json:"toolCalls,omitempty"`
 }
 
-// StreamPlan calls the Next.js /api/llm/plan endpoint and streams the response
-// This replaces the direct Anthropic SDK streaming in pkg/llm/plan.go
 func (c *NextJSClient) StreamPlan(ctx context.Context, req PlanRequest) (<-chan string, <-chan error) {
 	return c.postStream(ctx, "/api/llm/plan", req)
 }
 
-// ExpandPrompt calls the Next.js /api/llm/expand endpoint
-// This replaces pkg/llm/expand.go
 func (c *NextJSClient) ExpandPrompt(ctx context.Context, req ExpandRequest) (string, error) {
 	var resp ExpandResponse
 	if err := c.post(ctx, "/api/llm/expand", req, &resp); err != nil {
@@ -128,8 +109,6 @@ func (c *NextJSClient) ExpandPrompt(ctx context.Context, req ExpandRequest) (str
 	return resp.ExpandedPrompt, nil
 }
 
-// Summarize calls the Next.js /api/llm/summarize endpoint
-// This replaces pkg/llm/summarize.go
 func (c *NextJSClient) Summarize(ctx context.Context, req SummarizeRequest) (string, error) {
 	var resp SummarizeResponse
 	if err := c.post(ctx, "/api/llm/summarize", req, &resp); err != nil {
@@ -138,8 +117,6 @@ func (c *NextJSClient) Summarize(ctx context.Context, req SummarizeRequest) (str
 	return resp.Summary, nil
 }
 
-// CleanupValues calls the Next.js /api/llm/cleanup-values endpoint
-// This replaces pkg/llm/cleanup-converted-values.go
 func (c *NextJSClient) CleanupValues(ctx context.Context, req CleanupValuesRequest) (string, error) {
 	var resp CleanupValuesResponse
 	if err := c.post(ctx, "/api/llm/cleanup-values", req, &resp); err != nil {
@@ -148,14 +125,10 @@ func (c *NextJSClient) CleanupValues(ctx context.Context, req CleanupValuesReque
 	return resp.CleanedYAML, nil
 }
 
-// StreamConversational calls the Next.js /api/llm/conversational endpoint and streams the response
-// This replaces pkg/llm/conversational.go
 func (c *NextJSClient) StreamConversational(ctx context.Context, req ConversationalRequest) (<-chan string, <-chan error) {
 	return c.postStream(ctx, "/api/llm/conversational", req)
 }
 
-// ExecuteAction calls the Next.js /api/llm/execute-action endpoint
-// This replaces the direct Anthropic SDK usage in pkg/llm/execute-action.go
 func (c *NextJSClient) ExecuteAction(ctx context.Context, req ExecuteActionRequest) (string, []ToolCall, error) {
 	var resp ExecuteActionResponse
 	if err := c.post(ctx, "/api/llm/execute-action", req, &resp); err != nil {
@@ -239,10 +212,8 @@ func (c *NextJSClient) postStream(ctx context.Context, path string, req any) (<-
 	return textCh, errCh
 }
 
-// parseStream parses a streaming text response from Next.js
-// Handles the Vercel AI SDK streaming format (plain text stream)
 func (c *NextJSClient) parseStream(body io.Reader, textCh chan<- string, errCh chan<- error) {
-	buf := make([]byte, 64) // Small buffer for character-level streaming
+	buf := make([]byte, 64)
 
 	for {
 		n, err := body.Read(buf)

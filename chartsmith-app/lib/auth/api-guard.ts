@@ -1,18 +1,12 @@
 import { NextRequest } from 'next/server';
 import { findSession } from '@/lib/auth/session';
 
-/**
- * Unified authentication check for API routes
- * Supports both Internal API Key (for Go worker) and Session Cookie (for Browser)
- */
 export async function checkApiAuth(req: NextRequest) {
-  // 1. Check Internal API Key (Server-to-Server)
   const internalApiKey = req.headers.get('x-internal-api-key');
   if (internalApiKey && internalApiKey === process.env.INTERNAL_API_KEY) {
     return { isAuthorized: true, isInternal: true };
   }
 
-  // 2. Check User Session (Browser)
   const token = req.cookies.get('token')?.value;
   if (token) {
     const session = await findSession(token);

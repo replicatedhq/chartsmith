@@ -3,6 +3,8 @@ package llm
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"os"
 	"testing"
 	"time"
 
@@ -12,6 +14,44 @@ import (
 )
 
 func TestExecuteAction(t *testing.T) {
+	// This is an integration test that makes real LLM API calls via the Next.js server.
+	// LLM API keys are configured in the Next.js server's .env.local.
+	// The test will skip if the Next.js server is not available.
+
+	// Skip if Next.js server is not available
+	// This test requires the Next.js API to be running
+	baseURL := os.Getenv("NEXTJS_API_URL")
+	if baseURL == "" {
+		baseURL = "http://localhost:3000"
+	}
+	
+	// Quick check if Next.js server is available (with very short timeout)
+	client := &http.Client{Timeout: 1 * time.Second}
+	req, _ := http.NewRequest("GET", baseURL+"/api/llm/execute-action", nil)
+	req.Header.Set("X-Internal-API-Key", "dev-internal-key")
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Println("")
+		fmt.Println("⚠️  NOTICE: TestExecuteAction SKIPPED - Next.js server not available")
+		fmt.Println("   This test requires the Next.js dev server to be running on", baseURL)
+		fmt.Println("   Start it with: cd chartsmith-app && npm run dev")
+		fmt.Println("   Error:", err.Error())
+		fmt.Println("")
+		t.Skip("Skipping: Next.js server not available")
+	}
+	if resp != nil {
+		resp.Body.Close()
+		// If we get a 405 (Method Not Allowed) or 400, server is up but endpoint expects POST
+		// That's fine - server is available
+		if resp.StatusCode == 404 {
+			fmt.Println("")
+			fmt.Println("⚠️  NOTICE: TestExecuteAction SKIPPED - Next.js API endpoint not found")
+			fmt.Println("   The server is running but /api/llm/execute-action endpoint is not available")
+			fmt.Println("")
+			t.Skip("Skipping: API endpoint not available")
+		}
+	}
+
 	// Add a timeout of 5 minutes for this test
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
@@ -1130,8 +1170,19 @@ unsupported:
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			patchStreamCh := make(chan string)
+			// Use buffered channel to prevent blocking when ExecuteAction sends interim content
+			patchStreamCh := make(chan string, 100)
+			
+			// Drain the channel in a goroutine to prevent blocking
+			go func() {
+				for range patchStreamCh {
+					// Discard interim updates in tests
+				}
+			}()
+			
 			got, err := ExecuteAction(ctx, tt.actionPlanWithPath, tt.plan, tt.currentContent, patchStreamCh)
+			close(patchStreamCh) // Signal goroutine to exit
+			
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ExecuteAction() error = %v, wantErr %v", err, tt.wantErr)
 				return

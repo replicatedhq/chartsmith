@@ -44,7 +44,6 @@ func ConversationalChatMessage(ctx context.Context, streamCh chan string, doneCh
 		return fmt.Errorf("failed to choose relevant files: %w", err)
 	}
 
-	// we want to limit the number of files to 10
 	maxFiles := 10
 	if len(relevantFiles) < maxFiles {
 		maxFiles = len(relevantFiles)
@@ -60,7 +59,6 @@ func ConversationalChatMessage(ctx context.Context, streamCh chan string, doneCh
 		messages = append(messages, MessageParam{Role: "assistant", Content: fmt.Sprintf(`File: %s, Content: %s`, file.File.FilePath, file.File.Content)})
 	}
 
-	// we need to get the previous plan, and then all followup chat messages since that plan
 	plan, err := workspace.GetMostRecentPlan(ctx, w.ID)
 	if err != nil && err != workspace.ErrNoPlan {
 		return fmt.Errorf("failed to get most recent plan: %w", err)
@@ -95,9 +93,14 @@ func ConversationalChatMessage(ctx context.Context, streamCh chan string, doneCh
 			select {
 			case text, ok := <-textCh:
 				if !ok {
-					// Channel closed, wait for error
-					err := <-errCh
-					doneCh <- err
+					// Channel closed, check for error or signal success
+					select {
+					case err := <-errCh:
+						doneCh <- err
+					default:
+						// No error, stream completed successfully
+						doneCh <- nil
+					}
 					return
 				}
 				streamCh <- text

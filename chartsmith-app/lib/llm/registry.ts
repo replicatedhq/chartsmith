@@ -9,6 +9,7 @@ import { LanguageModel } from 'ai';
  * These models are tested and recommended for Chartsmith
  */
 export const VERIFIED_MODELS = [
+  // Anthropic models
   {
     id: 'claude-sonnet-4-20250514',
     name: 'Claude Sonnet 4',
@@ -18,6 +19,31 @@ export const VERIFIED_MODELS = [
     supportsTools: true,
   },
   {
+    id: 'claude-3-5-sonnet-20241022',
+    name: 'Claude 3.5 Sonnet',
+    provider: 'anthropic',
+    description: 'High-performance model with excellent reasoning capabilities',
+    contextWindow: 200000,
+    supportsTools: true,
+  },
+  {
+    id: 'claude-3-opus-20240229',
+    name: 'Claude 3 Opus',
+    provider: 'anthropic',
+    description: 'Most capable Claude 3 model for complex tasks',
+    contextWindow: 200000,
+    supportsTools: true,
+  },
+  {
+    id: 'claude-3-haiku-20240307',
+    name: 'Claude 3 Haiku',
+    provider: 'anthropic',
+    description: 'Fast and cost-effective, great for simple tasks',
+    contextWindow: 200000,
+    supportsTools: true,
+  },
+  // OpenAI models
+  {
     id: 'gpt-4o',
     name: 'GPT-4o',
     provider: 'openai',
@@ -26,10 +52,51 @@ export const VERIFIED_MODELS = [
     supportsTools: true,
   },
   {
+    id: 'gpt-4o-mini',
+    name: 'GPT-4o Mini',
+    provider: 'openai',
+    description: 'Cost-effective variant of GPT-4o, faster responses',
+    contextWindow: 128000,
+    supportsTools: true,
+  },
+  {
+    id: 'gpt-4-turbo',
+    name: 'GPT-4 Turbo',
+    provider: 'openai',
+    description: 'Enhanced GPT-4 with improved performance',
+    contextWindow: 128000,
+    supportsTools: true,
+  },
+  {
+    id: 'gpt-3.5-turbo',
+    name: 'GPT-3.5 Turbo',
+    provider: 'openai',
+    description: 'Fast and affordable option for simpler tasks',
+    contextWindow: 16385,
+    supportsTools: true,
+  },
+  // Google models
+  {
     id: 'gemini-2.0-flash-exp',
     name: 'Gemini 2.0 Flash',
     provider: 'google',
     description: 'Long context window, fast responses',
+    contextWindow: 1000000,
+    supportsTools: true,
+  },
+  {
+    id: 'gemini-1.5-pro',
+    name: 'Gemini 1.5 Pro',
+    provider: 'google',
+    description: 'Advanced model with strong reasoning capabilities',
+    contextWindow: 1000000,
+    supportsTools: true,
+  },
+  {
+    id: 'gemini-1.5-flash',
+    name: 'Gemini 1.5 Flash',
+    provider: 'google',
+    description: 'Fast and efficient, good for quick responses',
     contextWindow: 1000000,
     supportsTools: true,
   },
@@ -40,6 +107,7 @@ export const VERIFIED_MODELS = [
  * These use OpenRouter's routing format (provider/model)
  */
 export const OPENROUTER_MODELS = [
+  // Anthropic models via OpenRouter
   {
     id: 'anthropic/claude-3.5-sonnet',
     name: 'Claude 3.5 Sonnet (OpenRouter)',
@@ -49,6 +117,23 @@ export const OPENROUTER_MODELS = [
     supportsTools: true,
   },
   {
+    id: 'anthropic/claude-3-opus',
+    name: 'Claude 3 Opus (OpenRouter)',
+    provider: 'openrouter',
+    description: 'Most capable Claude 3 model via OpenRouter',
+    contextWindow: 200000,
+    supportsTools: true,
+  },
+  {
+    id: 'anthropic/claude-3-haiku',
+    name: 'Claude 3 Haiku (OpenRouter)',
+    provider: 'openrouter',
+    description: 'Fast and cost-effective Claude model via OpenRouter',
+    contextWindow: 200000,
+    supportsTools: true,
+  },
+  // OpenAI models via OpenRouter
+  {
     id: 'openai/gpt-4o',
     name: 'GPT-4o (OpenRouter)',
     provider: 'openrouter',
@@ -57,19 +142,53 @@ export const OPENROUTER_MODELS = [
     supportsTools: true,
   },
   {
+    id: 'openai/gpt-4o-mini',
+    name: 'GPT-4o Mini (OpenRouter)',
+    provider: 'openrouter',
+    description: 'Cost-effective GPT-4o variant via OpenRouter',
+    contextWindow: 128000,
+    supportsTools: true,
+  },
+  {
+    id: 'openai/gpt-4-turbo',
+    name: 'GPT-4 Turbo (OpenRouter)',
+    provider: 'openrouter',
+    description: 'Enhanced GPT-4 via OpenRouter',
+    contextWindow: 128000,
+    supportsTools: true,
+  },
+  {
+    id: 'openai/gpt-3.5-turbo',
+    name: 'GPT-3.5 Turbo (OpenRouter)',
+    provider: 'openrouter',
+    description: 'Fast and affordable option via OpenRouter',
+    contextWindow: 16385,
+    supportsTools: true,
+  },
+  // Google models via OpenRouter
+  {
+    id: 'google/gemini-1.5-pro',
+    name: 'Gemini 1.5 Pro (OpenRouter)',
+    provider: 'openrouter',
+    description: 'Advanced Gemini model via OpenRouter',
+    contextWindow: 1000000,
+    supportsTools: true,
+  },
+  {
+    id: 'google/gemini-1.5-flash',
+    name: 'Gemini 1.5 Flash (OpenRouter)',
+    provider: 'openrouter',
+    description: 'Fast Gemini model via OpenRouter',
+    contextWindow: 1000000,
+    supportsTools: true,
+  },
+  // Other models
+  {
     id: 'meta-llama/llama-3.3-70b-instruct',
     name: 'Llama 3.3 70B',
     provider: 'openrouter',
     description: 'Open source, cost-effective alternative',
     contextWindow: 128000,
-    supportsTools: true,
-  },
-  {
-    id: 'deepseek/deepseek-chat',
-    name: 'DeepSeek Chat',
-    provider: 'openrouter',
-    description: 'Code-focused model, excellent for technical tasks',
-    contextWindow: 64000,
     supportsTools: true,
   },
 ] as const;

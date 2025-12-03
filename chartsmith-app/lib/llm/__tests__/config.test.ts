@@ -1,6 +1,11 @@
-import { getLLMConfig, getModel } from '../config';
+import { 
+  getAvailableProviders, 
+  getDefaultModel, 
+  createModelProvider,
+  getModel 
+} from '../registry';
 
-describe('LLM Config', () => {
+describe('LLM Registry', () => {
   const originalEnv = process.env;
 
   beforeEach(() => {
@@ -18,71 +23,143 @@ describe('LLM Config', () => {
     process.env = originalEnv;
   });
 
-  describe('getLLMConfig', () => {
-    it('should use manual override when CHARTSMITH_LLM_MODEL is set', () => {
-      process.env.CHARTSMITH_LLM_MODEL = 'custom-model';
-      process.env.OPENROUTER_API_KEY = 'sk-or-test';
-      
-      const config = getLLMConfig();
-      expect(config.model).toBe('custom-model');
+  describe('getAvailableProviders', () => {
+    it('should return empty array when no keys are set', () => {
+      const providers = getAvailableProviders();
+      expect(providers).toEqual([]);
     });
 
-    it('should use OpenRouter model when OPENROUTER_API_KEY is set', () => {
+    it('should detect OpenRouter when OPENROUTER_API_KEY is set', () => {
       process.env.OPENROUTER_API_KEY = 'sk-or-test';
-      
-      const config = getLLMConfig();
-      expect(config.model).toBe('anthropic/claude-3.5-sonnet');
+      const providers = getAvailableProviders();
+      expect(providers).toContain('openrouter');
     });
 
-    it('should use Anthropic model when ANTHROPIC_API_KEY is set', () => {
+    it('should detect Anthropic when ANTHROPIC_API_KEY is set', () => {
       process.env.ANTHROPIC_API_KEY = 'sk-ant-test';
-      
-      const config = getLLMConfig();
-      expect(config.model).toBe('claude-sonnet-4-20250514');
+      const providers = getAvailableProviders();
+      expect(providers).toContain('anthropic');
     });
 
-    it('should use OpenAI model when OPENAI_API_KEY is set', () => {
+    it('should detect OpenAI when OPENAI_API_KEY is set', () => {
       process.env.OPENAI_API_KEY = 'sk-proj-test';
-      
-      const config = getLLMConfig();
-      expect(config.model).toBe('gpt-4o');
+      const providers = getAvailableProviders();
+      expect(providers).toContain('openai');
     });
 
-    it('should use Google model when GOOGLE_GENERATIVE_AI_API_KEY is set', () => {
+    it('should detect Google when GOOGLE_GENERATIVE_AI_API_KEY is set', () => {
       process.env.GOOGLE_GENERATIVE_AI_API_KEY = 'test-google-key';
-      
-      const config = getLLMConfig();
-      expect(config.model).toBe('gemini-2.0-flash-exp');
+      const providers = getAvailableProviders();
+      expect(providers).toContain('google');
     });
 
-    it('should fallback to Claude Sonnet 4 when no keys are set', () => {
-      const config = getLLMConfig();
-      expect(config.model).toBe('claude-sonnet-4-20250514');
+    it('should detect all providers when all keys are set', () => {
+      process.env.OPENROUTER_API_KEY = 'sk-or-test';
+      process.env.ANTHROPIC_API_KEY = 'sk-ant-test';
+      process.env.OPENAI_API_KEY = 'sk-proj-test';
+      process.env.GOOGLE_GENERATIVE_AI_API_KEY = 'test-google-key';
+      const providers = getAvailableProviders();
+      expect(providers).toContain('openrouter');
+      expect(providers).toContain('anthropic');
+      expect(providers).toContain('openai');
+      expect(providers).toContain('google');
+    });
+  });
+
+  describe('getDefaultModel', () => {
+    it('should return OpenRouter model when OPENROUTER_API_KEY is set', () => {
+      process.env.OPENROUTER_API_KEY = 'sk-or-test';
+      const model = getDefaultModel();
+      expect(model).toBe('anthropic/claude-3.5-sonnet');
+    });
+
+    it('should return Anthropic model when ANTHROPIC_API_KEY is set', () => {
+      process.env.ANTHROPIC_API_KEY = 'sk-ant-test';
+      const model = getDefaultModel();
+      expect(model).toBe('claude-sonnet-4-20250514');
+    });
+
+    it('should return OpenAI model when OPENAI_API_KEY is set', () => {
+      process.env.OPENAI_API_KEY = 'sk-proj-test';
+      const model = getDefaultModel();
+      expect(model).toBe('gpt-4o');
+    });
+
+    it('should return Google model when GOOGLE_GENERATIVE_AI_API_KEY is set', () => {
+      process.env.GOOGLE_GENERATIVE_AI_API_KEY = 'test-google-key';
+      const model = getDefaultModel();
+      expect(model).toBe('gemini-2.0-flash-exp');
     });
 
     it('should prioritize OpenRouter over other providers', () => {
       process.env.OPENROUTER_API_KEY = 'sk-or-test';
       process.env.ANTHROPIC_API_KEY = 'sk-ant-test';
       process.env.OPENAI_API_KEY = 'sk-proj-test';
-      
-      const config = getLLMConfig();
-      expect(config.model).toBe('anthropic/claude-3.5-sonnet');
+      const model = getDefaultModel();
+      expect(model).toBe('anthropic/claude-3.5-sonnet');
+    });
+
+    it('should fallback to Claude Sonnet 4 when no keys are set', () => {
+      const model = getDefaultModel();
+      expect(model).toBe('claude-sonnet-4-20250514');
+    });
+  });
+
+  describe('createModelProvider', () => {
+    it('should create OpenRouter provider for OpenRouter model', () => {
+      process.env.OPENROUTER_API_KEY = 'sk-or-test';
+      const provider = createModelProvider('anthropic/claude-3.5-sonnet');
+      expect(provider).toBeDefined();
+    });
+
+    it('should create Anthropic provider for Claude model', () => {
+      process.env.ANTHROPIC_API_KEY = 'sk-ant-test';
+      const provider = createModelProvider('claude-sonnet-4-20250514');
+      expect(provider).toBeDefined();
+    });
+
+    it('should create OpenAI provider for GPT model', () => {
+      process.env.OPENAI_API_KEY = 'sk-proj-test';
+      const provider = createModelProvider('gpt-4o');
+      expect(provider).toBeDefined();
+    });
+
+    it('should create Google provider for Gemini model', () => {
+      process.env.GOOGLE_GENERATIVE_AI_API_KEY = 'test-google-key';
+      const provider = createModelProvider('gemini-2.0-flash-exp');
+      expect(provider).toBeDefined();
+    });
+
+    it('should fallback to OpenRouter for Claude when Anthropic key not available', () => {
+      process.env.OPENROUTER_API_KEY = 'sk-or-test';
+      const provider = createModelProvider('claude-sonnet-4-20250514');
+      expect(provider).toBeDefined();
+    });
+
+    it('should throw error when no provider available for model', () => {
+      expect(() => {
+        createModelProvider('claude-sonnet-4-20250514');
+      }).toThrow('no API key available');
+    });
+
+    it('should throw error for unknown model format when no fallback', () => {
+      expect(() => {
+        createModelProvider('unknown-model');
+      }).toThrow('Unknown model');
     });
   });
 
   describe('getModel', () => {
-    it('should return the configured model', () => {
+    it('should return default model when no modelId provided', () => {
       process.env.ANTHROPIC_API_KEY = 'sk-ant-test';
-      
       const model = getModel();
-      expect(model).toBe('claude-sonnet-4-20250514');
+      expect(model).toBeDefined();
     });
 
-    it('should return override model when set', () => {
-      process.env.CHARTSMITH_LLM_MODEL = 'my-custom-model';
-      
-      const model = getModel();
-      expect(model).toBe('my-custom-model');
+    it('should return specified model when modelId provided', () => {
+      process.env.ANTHROPIC_API_KEY = 'sk-ant-test';
+      const model = getModel('claude-3-5-sonnet-20241022');
+      expect(model).toBeDefined();
     });
   });
 });

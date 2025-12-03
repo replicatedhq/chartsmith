@@ -34,7 +34,6 @@ export function ChatContainer({ session }: ChatContainerProps) {
   const [selectedRole, setSelectedRole] = useState<"auto" | "developer" | "operator">("auto");
   const [isRoleMenuOpen, setIsRoleMenuOpen] = useState(false);
   const [selectedModelId, setSelectedModelId] = useState<string | undefined>(() => {
-    // Load model preference from localStorage on mount
     if (typeof window !== 'undefined') {
       return localStorage.getItem('preferredModelId') || undefined;
     }
@@ -43,11 +42,9 @@ export function ChatContainer({ session }: ChatContainerProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const roleMenuRef = useRef<HTMLDivElement>(null);
   
-  // AI SDK state for conversational chat
   const [aiMessages, setAIMessages] = useState<AIMessage[]>([]);
   const [aiIsLoading, setAIIsLoading] = useState(false);
   
-  // Append AI SDK message for conversational chat routing
   const appendAIMessage = async (message: { role: string; content: string }) => {
     setAIIsLoading(true);
     try {
@@ -58,13 +55,11 @@ export function ChatContainer({ session }: ChatContainerProps) {
       };
       setAIMessages(prev => [...prev, userMsg]);
     } catch (error) {
-      // Error handled silently - will retry on next attempt
     } finally {
       setAIIsLoading(false);
     }
   };
 
-  // Close the role menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (roleMenuRef.current && !roleMenuRef.current.contains(event.target as Node)) {
@@ -78,9 +73,7 @@ export function ChatContainer({ session }: ChatContainerProps) {
     };
   }, []);
 
-  // Sync AI SDK message to Jotai state for consistency
   const syncAIMessageToJotai = (aiMessage: AIMessage) => {
-    // Convert AI SDK message format to Chartsmith message format
     const chartsmithMessage: ChartsmithMessage = {
       id: aiMessage.id,
       prompt: aiMessage.role === 'user' ? aiMessage.content : '',
@@ -92,7 +85,6 @@ export function ChatContainer({ session }: ChatContainerProps) {
       isIntentComplete: true,
     };
     
-    // Only add if not already in messages (avoid duplicates)
     setMessages(prev => {
       const exists = prev.some(m => m.id === chartsmithMessage.id);
       if (exists) return prev;
@@ -100,12 +92,8 @@ export function ChatContainer({ session }: ChatContainerProps) {
     });
   };
 
-  // Merge messages from both sources for display
   const mergeMessages = (): ChartsmithMessage[] => {
-    // Start with Jotai messages (from Go backend)
     const merged = [...messages];
-    
-    // Add AI SDK messages that aren't already in Jotai
     const jotaiIds = new Set(messages.map(m => m.id));
     
     for (const aiMsg of aiMessages) {
@@ -123,7 +111,6 @@ export function ChatContainer({ session }: ChatContainerProps) {
       }
     }
     
-    // Sort by creation date
     return merged.sort((a, b) => {
       const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
       const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
@@ -144,18 +131,15 @@ export function ChatContainer({ session }: ChatContainerProps) {
     setIsProcessing(true);
 
     try {
-      // Determine where to route this message
       const route = await routeChatMessage(chatInput.trim());
 
       if (route.useAISDK) {
-        // Simple conversational chat -> AI SDK
         await appendAIMessage({
           role: 'user',
           content: chatInput.trim(),
         });
         setChatInput("");
       } else {
-        // Complex operations (plans, conversions) -> Go backend
         const chatMessage = await createChatMessageAction(
           session,
           workspace.id,
@@ -166,7 +150,6 @@ export function ChatContainer({ session }: ChatContainerProps) {
         setChatInput("");
       }
     } catch (error) {
-      // Error handled silently - user can retry
     } finally {
       setIsProcessing(false);
     }
@@ -184,8 +167,6 @@ export function ChatContainer({ session }: ChatContainerProps) {
         return "Auto-detect";
     }
   };
-
-  // ScrollingContent will now handle all the scrolling behavior
 
   if (workspace?.currentRevisionNumber === 0) {
     const handleNewChartSubmitChat = async (e: React.FormEvent) => {
@@ -206,7 +187,6 @@ export function ChatContainer({ session }: ChatContainerProps) {
     />
   }
 
-  // Get merged messages for display
   const displayMessages = mergeMessages();
 
   return (
@@ -228,118 +208,125 @@ export function ChatContainer({ session }: ChatContainerProps) {
         </ScrollingContent>
       </div>
       <div className={`absolute bottom-0 left-0 right-0 ${theme === "dark" ? "bg-dark-surface" : "bg-white"} border-t ${theme === "dark" ? "border-dark-border" : "border-gray-200"}`}>
-        <form onSubmit={handleSubmitChat} className="p-3 relative">
-          <textarea
-            value={chatInput}
-            onChange={(e) => setChatInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                if (!isRendering) {
-                  handleSubmitChat(e);
-                }
-              }
-            }}
-            placeholder="Ask a question or ask for a change..."
-            rows={3}
-            style={{ height: 'auto', minHeight: '72px', maxHeight: '150px' }}
-            className={`w-full px-3 py-1.5 pr-24 pb-8 text-sm rounded-md border resize-none overflow-hidden ${
-              theme === "dark"
-                ? "bg-dark border-dark-border/60 text-white placeholder-gray-500"
-                : "bg-white border-gray-200 text-gray-900 placeholder-gray-400"
-            } focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50`}
-          />
-          
-          {/* Model selector in bottom left */}
-          <div className={`absolute bottom-2 left-4 z-10 ${theme === "dark" ? "" : ""}`}>
-            <ModelSelector
-              selectedModelId={selectedModelId}
-              onModelChange={(modelId) => {
-                setSelectedModelId(modelId);
-                // Save to localStorage so it persists
-                localStorage.setItem('preferredModelId', modelId);
-              }}
-            />
-          </div>
-          <div className="absolute right-4 top-[18px] flex gap-2">
-            {/* Role selector button */}
-            <div ref={roleMenuRef} className="relative">
-              <button
-                type="button"
-                onClick={() => setIsRoleMenuOpen(!isRoleMenuOpen)}
-                className={`p-1.5 rounded-full ${
+        <form onSubmit={handleSubmitChat} className="p-3">
+          <div className={`relative flex flex-col rounded-md border ${
+            theme === "dark"
+              ? "bg-dark border-dark-border/60"
+              : "bg-white border-gray-200"
+          } focus-within:ring-1 focus-within:ring-primary/50 focus-within:border-primary/50`}>
+            <div className="relative">
+              <textarea
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    if (!isRendering) {
+                      handleSubmitChat(e);
+                    }
+                  }
+                }}
+                placeholder="Ask a question or ask for a change..."
+                rows={3}
+                style={{ height: 'auto', minHeight: '72px', maxHeight: '150px' }}
+                className={`w-full px-3 py-1.5 pr-24 text-sm resize-none overflow-hidden border-0 bg-transparent ${
                   theme === "dark"
-                    ? "text-gray-400 hover:text-gray-200 hover:bg-dark-border/40"
-                    : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
-                } ${selectedRole !== "auto" ? "bg-blue-500/10" : ""}`}
-                title={`Perspective: ${getRoleLabel(selectedRole)}`}
-              >
-                {selectedRole === "auto" && <Sparkles className="w-4 h-4" />}
-                {selectedRole === "developer" && <Code className="w-4 h-4" />}
-                {selectedRole === "operator" && <User className="w-4 h-4" />}
-              </button>
+                    ? "text-white placeholder-gray-500"
+                    : "text-gray-900 placeholder-gray-400"
+                } focus:outline-none`}
+              />
               
-              {/* Role selector dropdown */}
-              {isRoleMenuOpen && (
-                <div 
-                  className={`absolute bottom-full right-0 mb-1 w-56 rounded-lg shadow-lg border py-1 z-50 ${
-                    theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"
-                  }`}
-                >
-                  <div className={`px-3 py-2 text-xs font-medium ${
-                    theme === "dark" ? "text-gray-400" : "text-gray-600"
-                  }`}>
-                    Ask questions from...
-                  </div>
-                  {(["auto", "developer", "operator"] as const).map((role) => (
-                    <button
-                      key={role}
-                      type="button"
-                      onClick={() => {
-                        setSelectedRole(role);
-                        setIsRoleMenuOpen(false);
-                      }}
-                      className={`w-full px-4 py-2 text-left text-sm flex items-center justify-between ${
-                        selectedRole === role
-                          ? theme === "dark" 
-                            ? "bg-dark-border/60 text-white" 
-                            : "bg-gray-100 text-gray-900"
-                          : theme === "dark"
-                            ? "text-gray-300 hover:bg-dark-border/40 hover:text-white"
-                            : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+              <div className="absolute right-3 top-3 flex gap-2">
+                <div ref={roleMenuRef} className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setIsRoleMenuOpen(!isRoleMenuOpen)}
+                    className={`p-1.5 rounded-full ${
+                      theme === "dark"
+                        ? "text-gray-400 hover:text-gray-200 hover:bg-dark-border/40"
+                        : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                    } ${selectedRole !== "auto" ? "bg-blue-500/10" : ""}`}
+                    title={`Perspective: ${getRoleLabel(selectedRole)}`}
+                  >
+                    {selectedRole === "auto" && <Sparkles className="w-4 h-4" />}
+                    {selectedRole === "developer" && <Code className="w-4 h-4" />}
+                    {selectedRole === "operator" && <User className="w-4 h-4" />}
+                  </button>
+                  
+                  {isRoleMenuOpen && (
+                    <div 
+                      className={`absolute bottom-full right-0 mb-1 w-56 rounded-lg shadow-lg border py-1 z-50 ${
+                        theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"
                       }`}
                     >
-                      <div className="flex items-center gap-2">
-                        {role === "auto" && <Sparkles className="w-4 h-4" />}
-                        {role === "developer" && <Code className="w-4 h-4" />}
-                        {role === "operator" && <User className="w-4 h-4" />}
-                        <span>{getRoleLabel(role)}</span>
+                      <div className={`px-3 py-2 text-xs font-medium ${
+                        theme === "dark" ? "text-gray-400" : "text-gray-600"
+                      }`}>
+                        Ask questions from...
                       </div>
-                      {selectedRole === role && (
-                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <path d="M5 13L9 17L19 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                        </svg>
-                      )}
-                    </button>
-                  ))}
+                      {(["auto", "developer", "operator"] as const).map((role) => (
+                        <button
+                          key={role}
+                          type="button"
+                          onClick={() => {
+                            setSelectedRole(role);
+                            setIsRoleMenuOpen(false);
+                          }}
+                          className={`w-full px-4 py-2 text-left text-sm flex items-center justify-between ${
+                            selectedRole === role
+                              ? theme === "dark" 
+                                ? "bg-dark-border/60 text-white" 
+                                : "bg-gray-100 text-gray-900"
+                              : theme === "dark"
+                                ? "text-gray-300 hover:bg-dark-border/40 hover:text-white"
+                                : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            {role === "auto" && <Sparkles className="w-4 h-4" />}
+                            {role === "developer" && <Code className="w-4 h-4" />}
+                            {role === "operator" && <User className="w-4 h-4" />}
+                            <span>{getRoleLabel(role)}</span>
+                          </div>
+                          {selectedRole === role && (
+                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                              <path d="M5 13L9 17L19 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                            </svg>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
+                
+                <button
+                  type="submit"
+                  disabled={isRendering || isProcessing || aiIsLoading}
+                  className={`p-1.5 rounded-full ${
+                    isRendering || isProcessing || aiIsLoading
+                      ? theme === "dark" ? "text-gray-600 cursor-not-allowed" : "text-gray-300 cursor-not-allowed"
+                      : theme === "dark"
+                        ? "text-gray-400 hover:text-gray-200 hover:bg-dark-border/40"
+                        : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                  }`}
+                >
+                  {(isRendering || isProcessing || aiIsLoading) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
             
-            {/* Send button */}
-            <button
-              type="submit"
-              disabled={isRendering || isProcessing || aiIsLoading}
-              className={`p-1.5 rounded-full ${
-                isRendering || isProcessing || aiIsLoading
-                  ? theme === "dark" ? "text-gray-600 cursor-not-allowed" : "text-gray-300 cursor-not-allowed"
-                  : theme === "dark"
-                    ? "text-gray-400 hover:text-gray-200 hover:bg-dark-border/40"
-                    : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
-              }`}
-            >
-              {(isRendering || isProcessing || aiIsLoading) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-            </button>
+            <div className={`px-3 py-1.5 flex items-center border-t ${
+              theme === "dark" ? "border-dark-border/40" : "border-gray-200/60"
+            }`}>
+              <ModelSelector
+                selectedModelId={selectedModelId}
+                onModelChange={(modelId) => {
+                  setSelectedModelId(modelId);
+                  localStorage.setItem('preferredModelId', modelId);
+                }}
+                compact={true}
+              />
+            </div>
           </div>
         </form>
       </div>

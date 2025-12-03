@@ -76,9 +76,14 @@ func CreatePlan(ctx context.Context, streamCh chan string, doneCh chan error, op
 			select {
 			case text, ok := <-textCh:
 				if !ok {
-					// Channel closed, wait for error
-					err := <-errCh
-					doneCh <- err
+					// Channel closed, check for error or signal success
+					select {
+					case err := <-errCh:
+						doneCh <- err
+					default:
+						// No error, stream completed successfully
+						doneCh <- nil
+					}
 					return
 				}
 				streamCh <- text
