@@ -2,7 +2,6 @@
 
 import React from "react";
 import { type UIMessage } from "ai";
-import { User, Bot } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 import ReactMarkdown from "react-markdown";
 
@@ -16,82 +15,71 @@ export interface AIMessageListProps {
 /**
  * AIMessageList Component
  * 
- * Renders the list of messages from the AI SDK useChat hook.
- * Supports parts-based rendering for text, tool calls, and tool results.
- * 
- * Message structure from AI SDK v5:
- * - role: 'user' | 'assistant' | 'system' | 'data' | 'tool'
- * - content: string (for simple text messages)
- * - parts: Array of { type: 'text' | 'tool-invocation' | etc., ... }
+ * Renders messages in the same style as ChatMessage.tsx for visual consistency.
+ * Uses the same px-2 py-1 padding, bg-primary/20 for user, bg-dark-border/40 for assistant.
  */
 export function AIMessageList({ messages, className = "" }: AIMessageListProps) {
   const { theme } = useTheme();
 
   return (
-    <div className={`px-4 py-4 space-y-4 ${className}`}>
+    <div className={`${className}`}>
       {messages.map((message) => (
-        <MessageItem key={message.id} message={message} theme={theme} />
+        <AIMessageItem key={message.id} message={message} theme={theme} />
       ))}
     </div>
   );
 }
 
-interface MessageItemProps {
+interface AIMessageItemProps {
   message: UIMessage;
   theme: string;
 }
 
-function MessageItem({ message, theme }: MessageItemProps) {
+function AIMessageItem({ message, theme }: AIMessageItemProps) {
   const isUser = message.role === "user";
 
   return (
-    <div
-      className={`flex gap-3 ${isUser ? "justify-end" : "justify-start"}`}
-      data-testid={`${message.role}-message`}
-    >
-      {/* Avatar for assistant */}
-      {!isUser && (
-        <div
-          className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+    <div className="space-y-2" data-testid="chat-message">
+      {isUser ? (
+        // User Message - matches ChatMessage.tsx exactly
+        <div className="px-2 py-1" data-testid="user-message">
+          <div className={`p-3 rounded-lg ${
             theme === "dark" ? "bg-primary/20" : "bg-primary/10"
-          }`}
-        >
-          <Bot
-            className={`w-4 h-4 ${
-              theme === "dark" ? "text-primary" : "text-primary"
-            }`}
-          />
+          } rounded-tr-sm w-full`}>
+            <div className="flex items-start gap-2">
+              {/* User avatar placeholder */}
+              <div className={`w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-medium ${
+                theme === "dark" ? "bg-primary/40 text-white" : "bg-primary/30 text-gray-700"
+              }`}>
+                U
+              </div>
+              <div className="flex-1">
+                <div className={`${
+                  theme === "dark" ? "text-gray-200" : "text-gray-700"
+                } text-[12px] pt-0.5`}>
+                  <MessageContent message={message} theme={theme} />
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-      )}
-
-      {/* Message Content */}
-      <div
-        className={`max-w-[80%] rounded-lg px-4 py-3 ${
-          isUser
-            ? theme === "dark"
-              ? "bg-primary/20 text-gray-200"
-              : "bg-primary/10 text-gray-700"
-            : theme === "dark"
-              ? "bg-dark-border/40 text-gray-200"
-              : "bg-gray-100 text-gray-700"
-        }`}
-      >
-        {/* Render message content */}
-        <MessageContent message={message} theme={theme} />
-      </div>
-
-      {/* Avatar for user */}
-      {isUser && (
-        <div
-          className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-            theme === "dark" ? "bg-dark-border/60" : "bg-gray-200"
-          }`}
-        >
-          <User
-            className={`w-4 h-4 ${
+      ) : (
+        // Assistant Message - matches ChatMessage.tsx exactly
+        <div className="px-2 py-1" data-testid="assistant-message">
+          <div className={`p-3 rounded-lg ${
+            theme === "dark" ? "bg-dark-border/40" : "bg-gray-100"
+          } rounded-tl-sm w-full`}>
+            <div className={`text-xs ${
               theme === "dark" ? "text-gray-400" : "text-gray-500"
-            }`}
-          />
+            } mb-1`}>
+              ChartSmith
+            </div>
+            <div className={`${
+              theme === "dark" ? "text-gray-200" : "text-gray-700"
+            } text-[12px] markdown-content`}>
+              <MessageContent message={message} theme={theme} />
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -115,13 +103,7 @@ function MessageContent({ message, theme }: MessageContentProps) {
     );
   }
 
-  // If no parts, try to extract text from the message for display
-  // This handles edge cases where the message structure might differ
-  return (
-    <div className="text-sm text-gray-400">
-      (Empty message)
-    </div>
-  );
+  return <div className="text-gray-400">(Empty message)</div>;
 }
 
 // Type for message parts in AI SDK v5
@@ -144,7 +126,7 @@ function MessagePart({ part, theme }: MessagePartProps) {
   switch (part.type) {
     case "text":
       return (
-        <div className="text-sm markdown-content prose prose-sm dark:prose-invert max-w-none">
+        <div className="prose prose-sm dark:prose-invert max-w-none">
           <ReactMarkdown>{part.text || ""}</ReactMarkdown>
         </div>
       );
@@ -152,42 +134,30 @@ function MessagePart({ part, theme }: MessagePartProps) {
     case "tool-invocation":
       // Tool invocations will be fully handled in PR1.5
       return (
-        <div
-          className={`text-xs px-2 py-1 rounded ${
-            theme === "dark"
-              ? "bg-dark-border/60 text-gray-400"
-              : "bg-gray-200 text-gray-500"
-          }`}
-        >
+        <div className={`text-xs px-2 py-1 rounded inline-block ${
+          theme === "dark"
+            ? "bg-dark-border/60 text-gray-400"
+            : "bg-gray-200 text-gray-500"
+        }`}>
           🔧 {part.state === "call" ? "Calling" : "Tool"}: {part.toolName}
         </div>
       );
 
     case "reasoning":
-      // Reasoning parts (if model supports it)
       return (
-        <div
-          className={`text-xs px-2 py-1 rounded italic ${
-            theme === "dark"
-              ? "bg-dark-border/40 text-gray-500"
-              : "bg-gray-100 text-gray-400"
-          }`}
-        >
+        <div className={`text-xs px-2 py-1 rounded italic ${
+          theme === "dark"
+            ? "bg-dark-border/40 text-gray-500"
+            : "bg-gray-100 text-gray-400"
+        }`}>
           💭 {part.text}
         </div>
       );
 
     default:
-      // Unknown part type - just render if it has text
       if (part.text) {
-        return (
-          <div className="text-sm">
-            {part.text}
-          </div>
-        );
+        return <div className="text-sm">{part.text}</div>;
       }
-      // Log for debugging
-      console.warn("Unknown message part type:", part.type, part);
       return null;
   }
 }

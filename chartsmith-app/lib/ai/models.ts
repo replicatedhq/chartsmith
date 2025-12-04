@@ -29,32 +29,21 @@ export interface ProviderConfig {
  * Available models configuration
  * 
  * These are the models users can select from in the ProviderSelector.
- * All models are accessed via OpenRouter.
+ * 
+ * Model IDs use the format: provider/model-name
+ * - For direct API calls, the provider prefix is stripped
+ * - For OpenRouter, the full ID is used
  * 
  * Primary model: Claude Sonnet 4 - latest and recommended for Chartsmith
  */
 export const AVAILABLE_MODELS: ModelConfig[] = [
-  // Anthropic Claude 4 family (preferred)
+  // Anthropic Claude 4 (preferred)
   {
     id: 'claude-sonnet-4',
     name: 'Claude Sonnet 4',
     provider: 'anthropic',
-    modelId: 'anthropic/claude-sonnet-4',
+    modelId: 'anthropic/claude-sonnet-4-20250514',
     description: 'Anthropic\'s latest balanced model - recommended for Chartsmith',
-  },
-  {
-    id: 'claude-sonnet-4.5',
-    name: 'Claude Sonnet 4.5',
-    provider: 'anthropic',
-    modelId: 'anthropic/claude-sonnet-4-5',
-    description: 'Anthropic\'s newest Sonnet model with enhanced capabilities',
-  },
-  {
-    id: 'claude-opus-4.5',
-    name: 'Claude Opus 4.5',
-    provider: 'anthropic',
-    modelId: 'anthropic/claude-opus-4-5',
-    description: 'Anthropic\'s most powerful model',
   },
   // OpenAI models (alternative)
   {
@@ -83,8 +72,8 @@ export const AVAILABLE_PROVIDERS: ProviderConfig[] = [
   {
     id: 'anthropic',
     name: 'Anthropic',
-    description: 'Claude Sonnet 4 (recommended) and Opus models',
-    defaultModel: 'anthropic/claude-sonnet-4',
+    description: 'Claude Sonnet 4 (recommended)',
+    defaultModel: 'anthropic/claude-sonnet-4-20250514',
   },
   {
     id: 'openai',

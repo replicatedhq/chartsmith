@@ -26,11 +26,10 @@ import {
   isValidProvider, 
   isValidModel,
   CHARTSMITH_SYSTEM_PROMPT,
-  MAX_STREAMING_DURATION,
 } from '@/lib/ai';
 
-// Set maximum streaming duration
-export const maxDuration = MAX_STREAMING_DURATION;
+// Set maximum streaming duration (must be a literal for Next.js config)
+export const maxDuration = 60;
 
 // Request body interface - using UIMessage from AI SDK v5
 interface ChatRequestBody {

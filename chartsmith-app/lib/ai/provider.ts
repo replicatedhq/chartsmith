@@ -5,10 +5,15 @@
  * It abstracts provider selection and returns configured model instances
  * that can be used with streamText and other AI SDK functions.
  * 
- * All models are accessed via OpenRouter for unified multi-provider support.
+ * Supports:
+ * - Direct OpenAI API (when OPENAI_API_KEY is set)
+ * - Direct Anthropic API (when ANTHROPIC_API_KEY is set)  
+ * - OpenRouter for unified multi-provider access (fallback)
  */
 
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
+import { openai } from '@ai-sdk/openai';
+import { anthropic } from '@ai-sdk/anthropic';
 import { 
   Provider, 
   AVAILABLE_PROVIDERS, 
@@ -43,10 +48,22 @@ export class InvalidModelError extends Error {
 }
 
 /**
- * Create an OpenRouter provider instance
- * 
- * This is a singleton-like factory that creates the OpenRouter client
- * configured with the API key from environment variables.
+ * Check if direct provider API keys are available
+ */
+function hasDirectOpenAI(): boolean {
+  return !!process.env.OPENAI_API_KEY;
+}
+
+function hasDirectAnthropic(): boolean {
+  return !!process.env.ANTHROPIC_API_KEY;
+}
+
+function hasOpenRouter(): boolean {
+  return !!process.env.OPENROUTER_API_KEY;
+}
+
+/**
+ * Create an OpenRouter provider instance (fallback)
  */
 function createOpenRouterProvider() {
   const apiKey = process.env.OPENROUTER_API_KEY;
@@ -62,6 +79,10 @@ function createOpenRouterProvider() {
 
 /**
  * Get a model instance for the specified provider and model
+ * 
+ * Priority for API access:
+ * 1. Direct provider API (OPENAI_API_KEY or ANTHROPIC_API_KEY)
+ * 2. OpenRouter (OPENROUTER_API_KEY)
  * 
  * @param provider - The provider ID (e.g., 'openai', 'anthropic')
  * @param modelId - Optional specific model ID (e.g., 'openai/gpt-4o')
@@ -83,9 +104,8 @@ function createOpenRouterProvider() {
  * ```
  */
 export function getModel(provider?: string, modelId?: string) {
-  const openrouter = createOpenRouterProvider();
-  
-  // Determine which model to use
+  // Determine the target provider
+  let targetProvider: Provider;
   let targetModelId: string;
   
   if (modelId) {
@@ -95,20 +115,48 @@ export function getModel(provider?: string, modelId?: string) {
       throw new InvalidModelError(modelId);
     }
     targetModelId = modelConfig.modelId;
+    targetProvider = modelConfig.provider;
   } else if (provider) {
     // If only provider is specified, use its default model
     const validProvider = AVAILABLE_PROVIDERS.find(p => p.id === provider);
     if (!validProvider) {
       throw new InvalidProviderError(provider);
     }
-    targetModelId = getDefaultModelForProvider(provider as Provider);
+    targetProvider = provider as Provider;
+    targetModelId = getDefaultModelForProvider(targetProvider);
   } else {
     // Use the global default
     targetModelId = DEFAULT_MODEL;
+    targetProvider = DEFAULT_PROVIDER as Provider;
   }
 
-  // Return the OpenRouter model instance
-  return openrouter(targetModelId);
+  // Try direct provider APIs first, then fall back to OpenRouter
+  if (targetProvider === 'openai' && hasDirectOpenAI()) {
+    // Use direct OpenAI API
+    const shortModelId = targetModelId.replace('openai/', '');
+    console.log(`[AI Provider] Using direct OpenAI API for model: ${shortModelId}`);
+    return openai(shortModelId);
+  }
+  
+  if (targetProvider === 'anthropic' && hasDirectAnthropic()) {
+    // Use direct Anthropic API
+    const shortModelId = targetModelId.replace('anthropic/', '');
+    console.log(`[AI Provider] Using direct Anthropic API for model: ${shortModelId}`);
+    return anthropic(shortModelId);
+  }
+
+  // Fall back to OpenRouter
+  if (hasOpenRouter()) {
+    console.log(`[AI Provider] Using OpenRouter for model: ${targetModelId}`);
+    const openrouter = createOpenRouterProvider();
+    return openrouter(targetModelId);
+  }
+
+  // No API keys available
+  throw new Error(
+    `No API key available for provider '${targetProvider}'. ` +
+    `Set OPENAI_API_KEY, ANTHROPIC_API_KEY, or OPENROUTER_API_KEY in your environment.`
+  );
 }
 
 /**

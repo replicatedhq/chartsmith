@@ -10,7 +10,7 @@
 export const DEFAULT_PROVIDER = process.env.DEFAULT_AI_PROVIDER || 'anthropic';
 
 // Default model to use when none is specified
-export const DEFAULT_MODEL = process.env.DEFAULT_AI_MODEL || 'anthropic/claude-sonnet-4';
+export const DEFAULT_MODEL = process.env.DEFAULT_AI_MODEL || 'anthropic/claude-sonnet-4-20250514';
 
 // Maximum streaming duration for API routes (in seconds)
 export const MAX_STREAMING_DURATION = 60;

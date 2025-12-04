@@ -22,7 +22,7 @@ describe('AI Configuration', () => {
 
   describe('DEFAULT_MODEL', () => {
     it('should default to claude-sonnet-4', () => {
-      expect(DEFAULT_MODEL).toBe('anthropic/claude-sonnet-4');
+      expect(DEFAULT_MODEL).toBe('anthropic/claude-sonnet-4-20250514');
     });
   });
 

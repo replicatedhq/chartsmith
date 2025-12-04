@@ -7,3 +7,5 @@ test-results/
 
 # Backend env file
 .env
+.env.local
+OpenAiKey

@@ -24,7 +24,7 @@ describe('Provider Factory', () => {
 
     it('should have anthropic with claude-sonnet-4 as default model', () => {
       const anthropic = AVAILABLE_PROVIDERS.find(p => p.id === 'anthropic');
-      expect(anthropic?.defaultModel).toBe('anthropic/claude-sonnet-4');
+      expect(anthropic?.defaultModel).toBe('anthropic/claude-sonnet-4-20250514');
     });
 
     it('should have openai as an alternative provider', () => {
@@ -46,17 +46,15 @@ describe('Provider Factory', () => {
   describe('AVAILABLE_MODELS', () => {
     it('should have claude-sonnet-4 as the first (recommended) model', () => {
       expect(AVAILABLE_MODELS[0].id).toBe('claude-sonnet-4');
-      expect(AVAILABLE_MODELS[0].modelId).toBe('anthropic/claude-sonnet-4');
+      expect(AVAILABLE_MODELS[0].modelId).toBe('anthropic/claude-sonnet-4-20250514');
     });
 
-    it('should include Claude 4 family models', () => {
+    it('should include Anthropic models', () => {
       const claudeModels = AVAILABLE_MODELS.filter(m => m.provider === 'anthropic');
-      expect(claudeModels.length).toBeGreaterThanOrEqual(3);
+      expect(claudeModels.length).toBeGreaterThanOrEqual(1);
       
       const modelIds = claudeModels.map(m => m.id);
       expect(modelIds).toContain('claude-sonnet-4');
-      expect(modelIds).toContain('claude-sonnet-4.5');
-      expect(modelIds).toContain('claude-opus-4.5');
     });
 
     it('should include OpenAI models', () => {
@@ -100,7 +98,7 @@ describe('Provider Factory', () => {
 
   describe('isValidModel', () => {
     it('should return true for valid model IDs', () => {
-      expect(isValidModel('anthropic/claude-sonnet-4')).toBe(true);
+      expect(isValidModel('anthropic/claude-sonnet-4-20250514')).toBe(true);
       expect(isValidModel('openai/gpt-4o')).toBe(true);
     });
 
@@ -134,7 +132,7 @@ describe('Provider Factory', () => {
     });
 
     it('should return a model instance for valid model ID', () => {
-      const model = getModel('anthropic', 'anthropic/claude-sonnet-4');
+      const model = getModel('anthropic', 'anthropic/claude-sonnet-4-20250514');
       expect(model).toBeDefined();
     });
 
