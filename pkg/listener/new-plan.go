@@ -18,6 +18,7 @@ import (
 type newPlanPayload struct {
 	PlanID          string                `json:"planId"`
 	AdditionalFiles []workspacetypes.File `json:"additionalFiles,omitempty"`
+	ModelID         string                `json:"modelId,omitempty"`
 }
 
 func handleNewPlanNotification(ctx context.Context, payload string) error {
@@ -60,12 +61,12 @@ func handleNewPlanNotification(ctx context.Context, payload string) error {
 	doneCh := make(chan error, 1)
 	go func() {
 		if w.CurrentRevision == 0 {
-			if err := createInitialPlan(ctx, streamCh, doneCh, w, plan, p.AdditionalFiles); err != nil {
+			if err := createInitialPlan(ctx, streamCh, doneCh, w, plan, p.AdditionalFiles, p.ModelID); err != nil {
 				fmt.Printf("Failed to create initial plan: %v\n", err)
 				doneCh <- fmt.Errorf("error creating initial plan: %w", err)
 			}
 		} else {
-			if err := createUpdatePlan(ctx, streamCh, doneCh, w, plan, p.AdditionalFiles); err != nil {
+			if err := createUpdatePlan(ctx, streamCh, doneCh, w, plan, p.AdditionalFiles, p.ModelID); err != nil {
 				fmt.Printf("Failed to create update plan: %v\n", err)
 				doneCh <- fmt.Errorf("error creating update plan: %w", err)
 			}
@@ -123,7 +124,7 @@ func handleNewPlanNotification(ctx context.Context, payload string) error {
 	return nil
 }
 
-func createInitialPlan(ctx context.Context, streamCh chan string, doneCh chan error, w *workspacetypes.Workspace, plan *workspacetypes.Plan, additionalFiles []workspacetypes.File) error {
+func createInitialPlan(ctx context.Context, streamCh chan string, doneCh chan error, w *workspacetypes.Workspace, plan *workspacetypes.Plan, additionalFiles []workspacetypes.File, modelID string) error {
 	chatMessages, err := workspace.ListChatMessagesForWorkspace(ctx, w.ID)
 	if err != nil {
 		return fmt.Errorf("error listing chat messages after plan: %w", err)
@@ -133,6 +134,7 @@ func createInitialPlan(ctx context.Context, streamCh chan string, doneCh chan er
 		ChatMessages:    chatMessages,
 		AdditionalFiles: additionalFiles,
 		WorkspaceID:     w.ID,
+		ModelID:         modelID,
 	}
 	if err := llm.CreateInitialPlan(ctx, streamCh, doneCh, opts); err != nil {
 		return fmt.Errorf("error creating initial plan: %w", err)
@@ -142,7 +144,7 @@ func createInitialPlan(ctx context.Context, streamCh chan string, doneCh chan er
 }
 
 // createUpdatePlan is our background processing task that creates a plan for any revision that's not the initial
-func createUpdatePlan(ctx context.Context, streamCh chan string, doneCh chan error, w *workspacetypes.Workspace, plan *workspacetypes.Plan, additionalFiles []workspacetypes.File) error {
+func createUpdatePlan(ctx context.Context, streamCh chan string, doneCh chan error, w *workspacetypes.Workspace, plan *workspacetypes.Plan, additionalFiles []workspacetypes.File, modelID string) error {
 	chatMessages := []workspacetypes.Chat{}
 	mostRecentPrompt := ""
 	for _, chatMessageID := range plan.ChatMessageIDs {
@@ -156,7 +158,7 @@ func createUpdatePlan(ctx context.Context, streamCh chan string, doneCh chan err
 		mostRecentPrompt = chatMessage.Prompt
 	}
 
-	expandedPrompt, err := llm.ExpandPrompt(ctx, mostRecentPrompt)
+	expandedPrompt, err := llm.ExpandPrompt(ctx, mostRecentPrompt, modelID)
 	if err != nil {
 		return fmt.Errorf("failed to expand prompt: %w", err)
 	}
@@ -199,6 +201,7 @@ func createUpdatePlan(ctx context.Context, streamCh chan string, doneCh chan err
 		RelevantFiles: finalRelevantFiles,
 		IsUpdate:      true,
 		WorkspaceID:   w.ID,
+		ModelID:       modelID,
 	}
 
 	if err := llm.CreatePlan(ctx, streamCh, doneCh, opts); err != nil {

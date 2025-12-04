@@ -404,7 +404,7 @@ func findBestMatchRegion(content, oldStr string, minMatchLen int) (int, int) {
 	return -1, -1
 }
 
-func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWithPath, plan *workspacetypes.Plan, currentContent string, interimContentCh chan string) (string, error) {
+func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWithPath, plan *workspacetypes.Plan, currentContent string, interimContentCh chan string, modelID string) (string, error) {
 	updatedContent := currentContent
 	lastActivity := time.Now()
 
@@ -469,6 +469,7 @@ Important workflow instructions:
 	for {
 		content, toolCalls, err := client.ExecuteAction(ctx, ExecuteActionRequest{
 			Messages: messages,
+			ModelID:  modelID,
 		})
 		if err != nil {
 			return "", err

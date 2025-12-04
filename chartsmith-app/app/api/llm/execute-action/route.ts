@@ -26,10 +26,19 @@ export async function POST(req: NextRequest) {
       messageCount: messages.length,
     });
     
-    const coreMessages = messages.map((msg: any) => ({
-      role: msg.role,
-      content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
-    }));
+    const coreMessages = messages.map((msg: any) => {
+      let content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
+      
+      // OpenAI requires non-empty content - provide placeholder if empty
+      if (!content || content === '' || content === '""' || content === 'null') {
+        content = msg.role === 'assistant' ? '(continuing)' : '(no content)';
+      }
+      
+      return {
+        role: msg.role,
+        content,
+      };
+    });
     
     const tools = {
       text_editor_20241022: {
@@ -48,9 +57,6 @@ export async function POST(req: NextRequest) {
           },
           { message: 'str_replace command requires non-empty old_str' }
         ),
-        execute: async ({ command, path }: any) => {
-          return { success: true, command, path };
-        },
       },
     };
     

@@ -1,5 +1,7 @@
 import { ImportChart } from "@/components/ImportChart";
 
+export const dynamic = 'force-dynamic';
+
 interface ArtifactHubImportPageProps {
   params: Promise<{
     org: string;

@@ -148,7 +148,12 @@ export function PlanChatMessage({
     const wsId = workspaceId || plan.workspaceId;
     if (!wsId) return;
 
-    const updatedWorkspace = await createRevisionAction(session, plan.id);
+    // Get the currently selected model from localStorage
+    const selectedModelId = typeof window !== 'undefined' 
+      ? localStorage.getItem('preferredModelId') || undefined 
+      : undefined;
+
+    const updatedWorkspace = await createRevisionAction(session, plan.id, selectedModelId);
     if (updatedWorkspace && setWorkspace) {
       setWorkspace(updatedWorkspace);
     }
@@ -165,7 +170,12 @@ export function PlanChatMessage({
       const wsId = workspaceId || workspaceToUse?.id;
       if (!session || !wsId) return;
 
-      const chatMessage = await createChatMessageAction(session, wsId, chatInput.trim(), "auto");
+      // Get the currently selected model from localStorage
+      const modelId = typeof window !== 'undefined' 
+        ? localStorage.getItem('preferredModelId') || undefined 
+        : undefined;
+
+      const chatMessage = await createChatMessageAction(session, wsId, chatInput.trim(), "auto", modelId);
 
       setMessages(prev => [...prev, chatMessage]);
       setChatInput("");

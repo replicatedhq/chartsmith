@@ -308,8 +308,6 @@ export function FileTree({ files = [], charts = [] }: FileTreeProps) {
   React.useEffect(() => {
     if (!selectedFile?.filePath) return;
     
-    console.log("Selected file path changed:", selectedFile.filePath);
-    
     // First ensure folders are expanded
     const chartId = charts.find(chart => 
       chart.files.some(file => file.filePath === selectedFile.filePath)
@@ -320,15 +318,11 @@ export function FileTree({ files = [], charts = [] }: FileTreeProps) {
     // Then scroll the element into view after DOM updates
     const scrollTimeout = setTimeout(() => {
       if (selectedNodeRef.current) {
-        console.log("Scrolling node into view:", selectedFile.filePath);
         // Use a more reliable scroll approach
         selectedNodeRef.current.scrollIntoView({
           behavior: 'smooth',
           block: 'center', // Center the element in the viewport
         });
-      } else {
-        console.log("Node reference not found for:", selectedFile.filePath);
-        console.log("Available nodes:", [...fileNodesMap.current.keys()]);
       }
     }, 500); // Longer timeout to ensure all DOM updates have completed
     
@@ -355,13 +349,9 @@ export function FileTree({ files = [], charts = [] }: FileTreeProps) {
   // When selectedFile changes, update the selectedNodeRef
   React.useEffect(() => {
     if (selectedFile?.filePath) {
-      console.log("Looking for node with path:", selectedFile.filePath);
       const selectedNode = fileNodesMap.current.get(selectedFile.filePath);
       if (selectedNode) {
-        console.log("Found node in map, updating ref");
         selectedNodeRef.current = selectedNode;
-      } else {
-        console.log("Node not found in map yet");
       }
     }
   }, [selectedFile?.filePath]);

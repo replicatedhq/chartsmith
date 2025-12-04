@@ -35,7 +35,12 @@ export function NewChartContent({ session, chatInput, setChatInput, handleSubmit
     const lastPlan = plans[plans.length - 1];
     if (!lastPlan) return;
 
-    const updatedWorkspace = await createRevisionAction(session, lastPlan.id);
+    // Get the currently selected model from localStorage
+    const selectedModelId = typeof window !== 'undefined' 
+      ? localStorage.getItem('preferredModelId') || undefined 
+      : undefined;
+
+    const updatedWorkspace = await createRevisionAction(session, lastPlan.id, selectedModelId);
     if (updatedWorkspace) {
       setWorkspace(updatedWorkspace);
     }

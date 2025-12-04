@@ -16,6 +16,7 @@ type CreatePlanOpts struct {
 	RelevantFiles []workspacetypes.File
 	IsUpdate      bool
 	WorkspaceID   string
+	ModelID       string
 }
 
 func CreatePlan(ctx context.Context, streamCh chan string, doneCh chan error, opts CreatePlanOpts) error {
@@ -68,6 +69,7 @@ func CreatePlan(ctx context.Context, streamCh chan string, doneCh chan error, op
 	textCh, errCh := client.StreamPlan(ctx, PlanRequest{
 		Messages:    messages,
 		WorkspaceID: opts.WorkspaceID,
+		ModelID:     opts.ModelID,
 	})
 
 	// Forward streamed text to the provided channel

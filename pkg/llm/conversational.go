@@ -8,7 +8,7 @@ import (
 	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 )
 
-func ConversationalChatMessage(ctx context.Context, streamCh chan string, doneCh chan error, w *workspacetypes.Workspace, chatMessage *workspacetypes.Chat) error {
+func ConversationalChatMessage(ctx context.Context, streamCh chan string, doneCh chan error, w *workspacetypes.Workspace, chatMessage *workspacetypes.Chat, modelID string) error {
 	messages := []MessageParam{
 		{Role: "assistant", Content: chatOnlySystemPrompt},
 		{Role: "assistant", Content: chatOnlyInstructions},
@@ -21,7 +21,7 @@ func ConversationalChatMessage(ctx context.Context, streamCh chan string, doneCh
 		return fmt.Errorf("failed to get chart structure: %w", err)
 	}
 
-	expandedPrompt, err := ExpandPrompt(ctx, chatMessage.Prompt)
+	expandedPrompt, err := ExpandPrompt(ctx, chatMessage.Prompt, modelID)
 	if err != nil {
 		return fmt.Errorf("failed to expand prompt: %w", err)
 	}
@@ -86,6 +86,7 @@ func ConversationalChatMessage(ctx context.Context, streamCh chan string, doneCh
 	textCh, errCh := client.StreamConversational(ctx, ConversationalRequest{
 		Messages:    messages,
 		WorkspaceID: w.ID,
+		ModelID:     modelID,
 	})
 
 	// Forward streamed text to the provided channel

@@ -3,6 +3,8 @@ import { validateSession } from "@/lib/auth/actions/validate-session";
 import { redirect } from "next/navigation";
 import { WorkspaceUIProvider } from "@/contexts/WorkspaceUIContext";
 
+export const dynamic = 'force-dynamic';
+
 export default async function WorkspacesLayout({
   children,
 }: {

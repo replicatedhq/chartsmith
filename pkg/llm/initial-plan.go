@@ -16,6 +16,7 @@ type CreateInitialPlanOpts struct {
 	PreviousPlans   []workspacetypes.Plan
 	AdditionalFiles []workspacetypes.File
 	WorkspaceID     string
+	ModelID         string
 }
 
 func CreateInitialPlan(ctx context.Context, streamCh chan string, doneCh chan error, opts CreateInitialPlanOpts) error {
@@ -57,6 +58,7 @@ func CreateInitialPlan(ctx context.Context, streamCh chan string, doneCh chan er
 	textCh, errCh := client.StreamPlan(ctx, PlanRequest{
 		Messages:    messages,
 		WorkspaceID: opts.WorkspaceID,
+		ModelID:     opts.ModelID,
 	})
 
 	// Forward streamed text to the provided channel

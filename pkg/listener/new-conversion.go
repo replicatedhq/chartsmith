@@ -18,6 +18,7 @@ import (
 
 type newConversionPayload struct {
 	ConversionID string `json:"conversionId"`
+	ModelID      string `json:"modelId,omitempty"`
 }
 
 func handleNewConversionNotification(ctx context.Context, payload string) error {
@@ -99,6 +100,7 @@ func handleNewConversionNotification(ctx context.Context, payload string) error 
 	if err := persistence.EnqueueWork(ctx, "conversion_next_file", map[string]interface{}{
 		"workspaceId":  c.WorkspaceID,
 		"conversionId": c.ID,
+		"modelId":      p.ModelID,
 	}); err != nil {
 		return fmt.Errorf("failed to enqueue file conversion: %w", err)
 	}

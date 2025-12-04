@@ -9,14 +9,15 @@ import (
 	"go.uber.org/zap"
 )
 
-func CleanUpConvertedValuesYAML(ctx context.Context, valuesYAML string) (string, error) {
-	logger.Info("Cleaning up converted values.yaml")
+func CleanUpConvertedValuesYAML(ctx context.Context, valuesYAML string, modelID string) (string, error) {
+	logger.Info("Cleaning up converted values.yaml", zap.String("model_id", modelID))
 
 	// Use Next.js client (which uses Vercel AI SDK)
 	client := NewNextJSClient()
 	
 	cleanedText, err := client.CleanupValues(ctx, CleanupValuesRequest{
 		ValuesYAML: valuesYAML,
+		ModelID:    modelID,
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to cleanup values via Next.js API: %w", err)
@@ -58,10 +59,8 @@ func CleanUpConvertedValuesYAML(ctx context.Context, valuesYAML string) (string,
 						return mergedValues, nil
 					}
 				} else {
-					return artifact.Content, nil
+					return newContent, nil
 				}
-
-				return newContent, nil
 			} else {
 				// It's not a patch, use the normal merging approach
 				mergedValues, err := mergeValuesYAML(valuesYAML, artifact.Content)

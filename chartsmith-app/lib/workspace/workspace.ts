@@ -5,6 +5,7 @@ import { Chart, WorkspaceFile, Workspace, Plan, ActionFile, ChatMessage, Followu
 import * as srs from "secure-random-string";
 import { logger } from "../utils/logger";
 import { enqueueWork } from "../utils/queue";
+import { AppError } from "../utils/error";
 
 /**
  * Creates a new workspace with initialized files, charts, and content
@@ -159,6 +160,7 @@ export interface CreateChatMessageParams {
   additionalFiles?: WorkspaceFile[];
   responseRollbackToRevisionNumber?: number;
   messageFromPersona?: ChatMessageFromPersona;
+  modelId?: string;
 }
 
 export async function createChatMessage(userId: string, workspaceId: string, params: CreateChatMessageParams): Promise<ChatMessage> {
@@ -230,6 +232,7 @@ export async function createChatMessage(userId: string, workspaceId: string, par
       await enqueueWork("new_intent", {
         chatMessageId,
         workspaceId,
+        modelId: params.modelId,
       });
     } else if (params.knownIntent === ChatMessageIntent.PLAN) {
       // we need to create the plan record and then notify the worker so that it can start processing the plan
@@ -237,6 +240,7 @@ export async function createChatMessage(userId: string, workspaceId: string, par
       await enqueueWork("new_plan", {
         planId: plan.id,
         additionalFiles: params.additionalFiles,
+        modelId: params.modelId,
       });
     } else if (params.knownIntent === ChatMessageIntent.NON_PLAN) {
       await client.query(`SELECT pg_notify('new_nonplan_chat_message', $1)`, [chatMessageId]);
@@ -247,6 +251,7 @@ export async function createChatMessage(userId: string, workspaceId: string, par
       const conversion = await createConversion(userId, workspaceId, chatMessageId, params.additionalFiles || []);
       await enqueueWork("new_conversion", {
         conversionId: conversion.id,
+        modelId: params.modelId,
       });
     }
 
@@ -674,6 +679,71 @@ export async function listWorkspaces(userId: string): Promise<Workspace[]> {
   }
 }
 
+export async function deleteWorkspace(workspaceId: string, requestingUserId: string, isAdmin: boolean): Promise<void> {
+  const db = getDB(await getParam("DB_URI"));
+  const client = await db.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    const workspaceOwnerResult = await client.query(
+      `SELECT created_by_user_id FROM workspace WHERE id = $1`,
+      [workspaceId],
+    );
+
+    if (workspaceOwnerResult.rowCount === 0) {
+      throw new AppError("Workspace not found", "NOT_FOUND");
+    }
+
+    const workspaceOwnerId = workspaceOwnerResult.rows[0].created_by_user_id as string;
+    if (!isAdmin && workspaceOwnerId !== requestingUserId) {
+      throw new AppError("Forbidden", "FORBIDDEN");
+    }
+
+    await client.query(
+      `DELETE FROM workspace_plan_action_file
+       WHERE plan_id IN (
+         SELECT id FROM workspace_plan WHERE workspace_id = $1
+       )`,
+      [workspaceId],
+    );
+
+    await client.query(
+      `DELETE FROM workspace_conversion_file
+       WHERE conversion_id IN (
+         SELECT id FROM workspace_conversion WHERE workspace_id = $1
+       )`,
+      [workspaceId],
+    );
+
+    await client.query(
+      `DELETE FROM workspace_rendered_chart
+       WHERE workspace_render_id IN (
+         SELECT id FROM workspace_rendered WHERE workspace_id = $1
+       )`,
+      [workspaceId],
+    );
+
+    await client.query(`DELETE FROM workspace_plan WHERE workspace_id = $1`, [workspaceId]);
+    await client.query(`DELETE FROM workspace_conversion WHERE workspace_id = $1`, [workspaceId]);
+    await client.query(`DELETE FROM workspace_rendered_file WHERE workspace_id = $1`, [workspaceId]);
+    await client.query(`DELETE FROM workspace_rendered WHERE workspace_id = $1`, [workspaceId]);
+    await client.query(`DELETE FROM workspace_publish WHERE workspace_id = $1`, [workspaceId]);
+    await client.query(`DELETE FROM workspace_chat WHERE workspace_id = $1`, [workspaceId]);
+    await client.query(`DELETE FROM workspace_file WHERE workspace_id = $1`, [workspaceId]);
+    await client.query(`DELETE FROM workspace_chart WHERE workspace_id = $1`, [workspaceId]);
+    await client.query(`DELETE FROM workspace_revision WHERE workspace_id = $1`, [workspaceId]);
+    await client.query(`DELETE FROM workspace WHERE id = $1`, [workspaceId]);
+
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export async function renderWorkspace(workspaceId: string, chatMessageId: string, revisionNumber?: number, chartId?: string) {
   try {
     const db = getDB(await getParam("DB_URI"));
@@ -943,8 +1013,8 @@ export async function rollbackToRevision(workspaceId: string, revisionNumber: nu
   }
 }
 
-export async function createRevision(plan: Plan, userID: string): Promise<number> {
-  logger.info("Creating revision", { planId: plan.id, userID });
+export async function createRevision(plan: Plan, userID: string, modelId?: string): Promise<number> {
+  logger.info("Creating revision", { planId: plan.id, userID, modelId });
   const db = getDB(await getParam("DB_URI"));
 
   try {
@@ -1055,7 +1125,7 @@ export async function createRevision(plan: Plan, userID: string): Promise<number
     // Commit transaction
     await db.query('COMMIT');
 
-    await enqueueWork("execute_plan", { planId: plan.id });
+    await enqueueWork("execute_plan", { planId: plan.id, modelId });
 
     return newRevisionNumber;
 

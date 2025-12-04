@@ -793,11 +793,13 @@ export const CodeEditor = React.memo(function CodeEditor({
   };
 
   // Create a stable key for editor rendering
+  // Only change the key when the file or mode actually changes - NOT on every render
   const editorKey = selectedFile?.id || 'none';
-  const hasContentPending = selectedFile?.contentPending;
+  const hasContentPending = !!selectedFile?.contentPending && selectedFile.contentPending.length > 0;
 
-  // Generate a unique key for the editor to force re-creation when needed
-  const editorStateKey = `${editorKey}-${(hasContentPending) ? 'diff' : 'normal'}-${Date.now()}`;
+  // Stable key: only changes when file changes or diff/normal mode changes
+  // DO NOT use Date.now() here - it causes constant remounts and Monaco disposal errors
+  const editorStateKey = `${editorKey}-${hasContentPending ? 'diff' : 'normal'}`;
 
   // Let's try a more conventional approach but with optimizations
   return (

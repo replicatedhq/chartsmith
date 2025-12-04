@@ -16,6 +16,7 @@ import (
 type conversionSimplifyPayload struct {
 	WorkspaceID  string `json:"workspaceId"`
 	ConversionID string `json:"conversionId"`
+	ModelID      string `json:"modelId,omitempty"`
 }
 
 func handleConversionSimplifyNotification(ctx context.Context, payload string) error {

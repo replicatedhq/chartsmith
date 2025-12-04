@@ -19,6 +19,7 @@ import (
 type newIntentPayload struct {
 	ChatMessageID string `json:"chatMessageId"`
 	WorkspaceID   string `json:"workspaceId"`
+	ModelID       string `json:"modelId,omitempty"`
 }
 
 func handleNewIntentNotification(ctx context.Context, payload string) error {
@@ -227,7 +228,7 @@ func handleNewIntentNotification(ctx context.Context, payload string) error {
 	// if the intent is proceed, we need to send a message to the planner
 	if intent.IsProceed && plan != nil {
 		// create a revision
-		rev, err := workspace.CreateRevision(ctx, w.ID, &plan.ID, userIDs[0])
+		rev, err := workspace.CreateRevision(ctx, w.ID, &plan.ID, userIDs[0], p.ModelID)
 		if err != nil {
 			return fmt.Errorf("failed to create revision: %w", err)
 		}
@@ -313,7 +314,7 @@ func handleNewIntentNotification(ctx context.Context, payload string) error {
 
 	// if the message suggests a plan, send a message to the planner
 	if intent.IsPlan && !intent.IsConversational {
-		_, err := workspace.CreatePlan(ctx, chatMessage.ID, w.ID, true)
+		_, err := workspace.CreatePlan(ctx, chatMessage.ID, w.ID, true, p.ModelID)
 		if err != nil {
 			return fmt.Errorf("failed to create plan: %w", err)
 		}
@@ -334,12 +335,14 @@ func handleNewIntentNotification(ctx context.Context, payload string) error {
 	} else if intent.IsConversational && !intent.IsOffTopic {
 		if err := persistence.EnqueueWork(ctx, "new_converational", map[string]interface{}{
 			"chatMessageId": chatMessage.ID,
+			"modelId":       p.ModelID,
 		}); err != nil {
 			return fmt.Errorf("failed to enqueue new conversational chat message: %w", err)
 		}
 	} else if intent.IsConversational {
 		if err := persistence.EnqueueWork(ctx, "new_converational", map[string]interface{}{
 			"chatMessageId": chatMessage.ID,
+			"modelId":       p.ModelID,
 		}); err != nil {
 			return fmt.Errorf("failed to enqueue new conversational chat message: %w", err)
 		}

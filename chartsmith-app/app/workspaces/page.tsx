@@ -3,6 +3,8 @@ import { validateSession } from "@/lib/auth/actions/validate-session";
 import { listWorkspacesAction } from "@/lib/workspace/actions/list-workspaces";
 import { WorkspacesList } from "./WorkspacesList";
 
+export const dynamic = 'force-dynamic';
+
 export default async function WorkspacesPage() {
   const cookieStore = await cookies();
   const sessionToken = cookieStore.get('session')?.value;

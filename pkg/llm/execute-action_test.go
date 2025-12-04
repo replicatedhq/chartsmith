@@ -1180,7 +1180,7 @@ unsupported:
 				}
 			}()
 			
-			got, err := ExecuteAction(ctx, tt.actionPlanWithPath, tt.plan, tt.currentContent, patchStreamCh)
+			got, err := ExecuteAction(ctx, tt.actionPlanWithPath, tt.plan, tt.currentContent, patchStreamCh, "")
 			close(patchStreamCh) // Signal goroutine to exit
 			
 			if (err != nil) != tt.wantErr {

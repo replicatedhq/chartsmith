@@ -604,7 +604,7 @@ export function useCentrifugo({
 
     setupCentrifuge();
     return () => cleanup?.();
-  }, [session?.user?.id, workspace?.id]); // Removed handleCentrifugoMessage from dependencies
+  }, [session?.user?.id, workspace?.id, publicEnv.NEXT_PUBLIC_CENTRIFUGO_ADDRESS]); // Re-run when config loads
 
   return {
     handleCentrifugoMessage,

@@ -7,7 +7,7 @@ import (
 
 // ExpandPrompt expands a user prompt with additional context and specificity
 // Now uses Vercel AI SDK via Next.js API instead of direct Anthropic SDK
-func ExpandPrompt(ctx context.Context, prompt string) (string, error) {
+func ExpandPrompt(ctx context.Context, prompt string, modelID string) (string, error) {
 	// Create Next.js client (replaces Anthropic SDK)
 	client := NewNextJSClient()
 
@@ -30,7 +30,8 @@ Here is the prompt:
 
 	// Call Next.js API (which uses Vercel AI SDK)
 	expandedPrompt, err := client.ExpandPrompt(ctx, ExpandRequest{
-		Prompt: userMessage,
+		Prompt:  userMessage,
+		ModelID: modelID,
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to expand prompt via Next.js API: %w", err)

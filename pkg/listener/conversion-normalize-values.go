@@ -18,6 +18,7 @@ import (
 type conversionNormalizeValuesPayload struct {
 	WorkspaceID  string `json:"workspaceId"`
 	ConversionID string `json:"conversionId"`
+	ModelID      string `json:"modelId,omitempty"`
 }
 
 func handleConversionNormalizeValuesNotification(ctx context.Context, payload string) error {
@@ -35,7 +36,7 @@ func handleConversionNormalizeValuesNotification(ctx context.Context, payload st
 		return fmt.Errorf("failed to get conversion: %w", err)
 	}
 
-	normalizedValuesYAML, err := llm.CleanUpConvertedValuesYAML(ctx, c.ValuesYAML)
+	normalizedValuesYAML, err := llm.CleanUpConvertedValuesYAML(ctx, c.ValuesYAML, p.ModelID)
 	if err != nil {
 		return fmt.Errorf("failed to clean up converted values.yaml: %w", err)
 	}
@@ -79,6 +80,7 @@ func handleConversionNormalizeValuesNotification(ctx context.Context, payload st
 	if err := persistence.EnqueueWork(ctx, "conversion_simplify", map[string]interface{}{
 		"workspaceId":  w.ID,
 		"conversionId": p.ConversionID,
+		"modelId":      p.ModelID,
 	}); err != nil {
 		return fmt.Errorf("failed to enqueue file conversion: %w", err)
 	}

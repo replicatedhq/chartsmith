@@ -18,6 +18,7 @@ import (
 type conversionNextFilePayload struct {
 	WorkspaceID  string `json:"workspaceId"`
 	ConversionID string `json:"conversionId"`
+	ModelID      string `json:"modelId,omitempty"`
 }
 
 func handleConversionNextFileNotification(ctx context.Context, payload string) error {
@@ -121,6 +122,7 @@ func handleConversionNextFileNotification(ctx context.Context, payload string) e
 		if err := persistence.EnqueueWork(ctx, "conversion_next_file", map[string]interface{}{
 			"workspaceId":  w.ID,
 			"conversionId": p.ConversionID,
+			"modelId":      p.ModelID,
 		}); err != nil {
 			return fmt.Errorf("failed to enqueue file conversion: %w", err)
 		}
@@ -147,6 +149,7 @@ func handleConversionNextFileNotification(ctx context.Context, payload string) e
 		if err := persistence.EnqueueWork(ctx, "conversion_normalize_values", map[string]interface{}{
 			"workspaceId":  w.ID,
 			"conversionId": p.ConversionID,
+			"modelId":      p.ModelID,
 		}); err != nil {
 			return fmt.Errorf("failed to enqueue file conversion: %w", err)
 		}

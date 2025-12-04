@@ -90,7 +90,7 @@ export function CreateChartOptions() {
     if (prompt.trim()) {
       try {
         setIsPromptLoading(true);
-        const w = await createWorkspaceFromPromptAction(session, prompt);
+        const w = await createWorkspaceFromPromptAction(session, prompt, selectedModelId || undefined);
         router.replace(`/workspace/${w.id}`);
       } catch (err) {
         logger.error("Failed to create workspace", { err });

@@ -60,6 +60,7 @@ NEXT_PUBLIC_REPLICATED_REDIRECT_URI=https://vendor-web-<youruser>.okteto.repldev
 # LLM Provider Keys - Add at least one
 # If OpenRouter is set: Uses it exclusively (ignores others)
 # Otherwise: Mix-and-match from available providers (Anthropic, OpenAI, Google)
+# If you have API keys set in your shell environment, Next.js will read them as well
 OPENROUTER_API_KEY=sk-or-v1-...           # Recommended: Access to all models
 ANTHROPIC_API_KEY=sk-ant-...              # Alternative: Direct Anthropic
 OPENAI_API_KEY=sk-proj-...                # Alternative: Direct OpenAI

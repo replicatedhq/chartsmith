@@ -1,6 +1,6 @@
-"use server"
-
 import { SideNavWrapper } from "@/components/SideNavWrapper";
+
+export const dynamic = 'force-dynamic';
 import { WorkspaceUIProvider } from "@/contexts/WorkspaceUIContext";
 import { getWorkspace } from "@/lib/workspace/workspace";
 import { validateSession } from "@/lib/auth/actions/validate-session";
@@ -33,7 +33,7 @@ export default async function WorkspaceLayout({
   params
 }: {
   children: React.ReactNode;
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
   const { workspace } = await getSessionAndWorkspace(id);

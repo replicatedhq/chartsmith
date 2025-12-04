@@ -123,7 +123,8 @@ export function ChatContainer({ session }: ChatContainerProps) {
           session,
           workspace.id,
           messageText,
-          selectedRole
+          selectedRole,
+          selectedModelId
         );
         
         // Add the new message to state (check for duplicates from Centrifugo)
@@ -162,7 +163,7 @@ export function ChatContainer({ session }: ChatContainerProps) {
       if (!chatInput.trim() || isRendering) return;
       if (!session || !workspace) return;
 
-      const chatMessage = await createChatMessageAction(session, workspace.id, chatInput.trim(), "auto");
+      const chatMessage = await createChatMessageAction(session, workspace.id, chatInput.trim(), "auto", selectedModelId);
       setMessages(prev => [...prev, chatMessage]);
       setChatInput("");
     };

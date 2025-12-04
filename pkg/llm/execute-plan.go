@@ -10,12 +10,13 @@ import (
 	"go.uber.org/zap"
 )
 
-func CreateExecutePlan(ctx context.Context, planActionCreatedCh chan types.ActionPlanWithPath, streamCh chan string, doneCh chan error, w *workspacetypes.Workspace, plan *workspacetypes.Plan, c *workspacetypes.Chart, relevantFiles []workspacetypes.File) error {
+func CreateExecutePlan(ctx context.Context, planActionCreatedCh chan types.ActionPlanWithPath, streamCh chan string, doneCh chan error, w *workspacetypes.Workspace, plan *workspacetypes.Plan, c *workspacetypes.Chart, relevantFiles []workspacetypes.File, modelID string) error {
 	logger.Debug("Creating execution plan",
 		zap.String("workspace_id", w.ID),
 		zap.String("chart_id", c.ID),
 		zap.Int("revision_number", w.CurrentRevision),
 		zap.Int("relevant_files_len", len(relevantFiles)),
+		zap.String("model_id", modelID),
 	)
 
 	// Build messages array for Vercel AI SDK
@@ -49,6 +50,7 @@ func CreateExecutePlan(ctx context.Context, planActionCreatedCh chan types.Actio
 	textCh, errCh := client.StreamPlan(ctx, PlanRequest{
 		Messages:    messages,
 		WorkspaceID: w.ID,
+		ModelID:     modelID,
 	})
 
 	fullResponseWithTags := ""
