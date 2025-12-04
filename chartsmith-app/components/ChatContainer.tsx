@@ -1,25 +1,20 @@
 "use client";
-import React, { useState, useRef, useEffect } from "react";
-import { Send, Loader2, Users, Code, User, Sparkles } from "lucide-react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
+import { Send, Loader2, Code, User, Sparkles } from "lucide-react";
 import { useTheme } from "../contexts/ThemeContext";
-
-type AIMessage = {
-  id: string;
-  role: string;
-  content: string;
-  createdAt?: Date;
-};
+import { useChat } from "@ai-sdk/react";
+import { TextStreamChatTransport, type UIMessage } from "ai";
 import { Session } from "@/lib/types/session";
 import { ChatMessage } from "./ChatMessage";
 import { messagesAtom, workspaceAtom, isRenderingAtom } from "@/atoms/workspace";
 import { useAtom } from "jotai";
 import { createChatMessageAction } from "@/lib/workspace/actions/create-chat-message";
 import { ScrollingContent } from "./ScrollingContent";
-import { NewChartChatMessage } from "./NewChartChatMessage";
 import { NewChartContent } from "./NewChartContent";
-import { routeChatMessage } from "@/lib/chat/router";
+import { routeChatMessage, ChatMessageIntent } from "@/lib/chat/router";
 import { ModelSelector } from "./ModelSelector";
 import { Message as ChartsmithMessage } from "./types";
+import { ConversationalMessage } from "./ConversationalMessage";
 
 interface ChatContainerProps {
   session: Session;
@@ -42,23 +37,22 @@ export function ChatContainer({ session }: ChatContainerProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const roleMenuRef = useRef<HTMLDivElement>(null);
   
-  const [aiMessages, setAIMessages] = useState<AIMessage[]>([]);
-  const [aiIsLoading, setAIIsLoading] = useState(false);
+  // Vercel AI SDK useChat hook for conversational messages
+  const { 
+    messages: aiMessages, 
+    sendMessage,
+    status: aiStatus,
+  } = useChat({
+    transport: new TextStreamChatTransport({
+      api: '/api/chat',
+      body: {
+        workspaceId: workspace?.id,
+        modelId: selectedModelId,
+      },
+    }),
+  });
   
-  const appendAIMessage = async (message: { role: string; content: string }) => {
-    setAIIsLoading(true);
-    try {
-      const userMsg: AIMessage = {
-        id: Date.now().toString(),
-        role: 'user',
-        content: message.content,
-      };
-      setAIMessages(prev => [...prev, userMsg]);
-    } catch (error) {
-    } finally {
-      setAIIsLoading(false);
-    }
-  };
+  const aiIsLoading = aiStatus === 'streaming' || aiStatus === 'submitted';
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -73,50 +67,29 @@ export function ChatContainer({ session }: ChatContainerProps) {
     };
   }, []);
 
-  const syncAIMessageToJotai = (aiMessage: AIMessage) => {
-    const chartsmithMessage: ChartsmithMessage = {
-      id: aiMessage.id,
-      prompt: aiMessage.role === 'user' ? aiMessage.content : '',
-      response: aiMessage.role === 'assistant' ? aiMessage.content : undefined,
-      isComplete: true,
-      createdAt: aiMessage.createdAt || new Date(),
-      workspaceId: workspace?.id,
-      userId: session?.user?.id,
-      isIntentComplete: true,
-    };
-    
-    setMessages(prev => {
-      const exists = prev.some(m => m.id === chartsmithMessage.id);
-      if (exists) return prev;
-      return [...prev, chartsmithMessage];
-    });
-  };
+  // Display messages type for rendering
+  type DisplayItem = 
+    | { type: 'chartsmith'; message: ChartsmithMessage }
+    | { type: 'ai'; message: UIMessage };
 
-  const mergeMessages = (): ChartsmithMessage[] => {
-    const merged = [...messages];
-    const jotaiIds = new Set(messages.map(m => m.id));
+  // Merge Chartsmith messages with AI SDK messages for display
+  // Chartsmith messages maintain their server order (already sorted by database), then AI messages
+  const displayMessages = useMemo((): DisplayItem[] => {
+    const items: DisplayItem[] = [];
     
-    for (const aiMsg of aiMessages) {
-      if (!jotaiIds.has(aiMsg.id)) {
-        merged.push({
-          id: aiMsg.id,
-          prompt: aiMsg.role === 'user' ? aiMsg.content : '',
-          response: aiMsg.role === 'assistant' ? aiMsg.content : undefined,
-          isComplete: true,
-          createdAt: aiMsg.createdAt || new Date(),
-          workspaceId: workspace?.id,
-          userId: session?.user?.id,
-          isIntentComplete: true,
-        });
-      }
+    // Add all Chartsmith messages in their original order (server returns them sorted)
+    // Don't re-sort - the database already returns them in creation order
+    for (const msg of messages) {
+      items.push({ type: 'chartsmith', message: msg });
     }
     
-    return merged.sort((a, b) => {
-      const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-      return aTime - bTime;
-    });
-  };
+    // Add AI messages (conversational) - these maintain their own order
+    for (const msg of aiMessages) {
+      items.push({ type: 'ai', message: msg });
+    }
+    
+    return items;
+  }, [messages, aiMessages]);
 
   if (!messages || !workspace) {
     return null;
@@ -128,28 +101,39 @@ export function ChatContainer({ session }: ChatContainerProps) {
 
     if (!session || !workspace) return;
 
+    const messageText = chatInput.trim();
+    setChatInput(""); // Clear input immediately for better UX
     setIsProcessing(true);
 
     try {
-      const route = await routeChatMessage(chatInput.trim());
+      const route = await routeChatMessage(messageText);
 
-      if (route.useAISDK) {
-        await appendAIMessage({
-          role: 'user',
-          content: chatInput.trim(),
+      if (route.useAISDK && route.intent === ChatMessageIntent.NON_PLAN) {
+        // Conversational message - use Vercel AI SDK
+        await sendMessage({
+          text: messageText,
         });
-        setChatInput("");
       } else {
+        // Plan-related message - use existing Chartsmith flow
         const chatMessage = await createChatMessageAction(
           session,
           workspace.id,
-          chatInput.trim(),
+          messageText,
           selectedRole
         );
-        setMessages(prev => [...prev, chatMessage]);
-        setChatInput("");
+        
+        // Add the new message to state (check for duplicates from Centrifugo)
+        setMessages(currentMessages => {
+          if (currentMessages.some(m => m.id === chatMessage.id)) {
+            return currentMessages;
+          }
+          return [...currentMessages, chatMessage];
+        });
       }
     } catch (error) {
+      // Restore input on error
+      setChatInput(messageText);
+      console.error('Error sending message:', error);
     } finally {
       setIsProcessing(false);
     }
@@ -187,21 +171,25 @@ export function ChatContainer({ session }: ChatContainerProps) {
     />
   }
 
-  const displayMessages = mergeMessages();
-
   return (
     <div className={`h-[calc(100vh-3.5rem)] border-r flex flex-col min-h-0 overflow-hidden transition-all duration-300 ease-in-out w-full relative ${theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"}`}>
       <div className="flex-1 h-full">
         <ScrollingContent forceScroll={true}>
           <div className={workspace?.currentRevisionNumber === 0 ? "" : "pb-32"}>
-            {displayMessages.map((item, index) => (
-              <div key={item.id}>
-                <ChatMessage
-                  key={item.id}
-                  messageId={item.id}
-                  session={session}
-                  onContentUpdate={() => {}}
-                />
+            {displayMessages.map((item) => (
+              <div key={`${item.type}-${item.message.id}`}>
+                {item.type === 'chartsmith' ? (
+                  <ChatMessage
+                    messageId={item.message.id}
+                    session={session}
+                    onContentUpdate={() => {}}
+                  />
+                ) : (
+                  <ConversationalMessage
+                    message={item.message}
+                    isLoading={aiIsLoading && item.message === aiMessages[aiMessages.length - 1]}
+                  />
+                )}
               </div>
             ))}
           </div>

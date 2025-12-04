@@ -24,7 +24,7 @@ export async function promptType(message: string): Promise<PromptType> {
 
     const result = await generateText({
       model,
-      maxTokens: 1024,
+      maxOutputTokens: 1024,
       system: `You are ChartSmith, an expert at creating Helm charts for Kuberentes.
 You are invited to participate in an existing conversation between a user and an expert.
 The expert just provided a recommendation on how to plan the Helm chart to the user.

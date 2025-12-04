@@ -230,10 +230,8 @@ export function PlanChatMessage({
                         p: ({node, ...props}) => <p className="mb-2" {...props} />,
                         ul: ({node, ...props}) => <ul className="list-disc list-inside my-2" {...props} />,
                         ol: ({node, ...props}) => <ol className="list-decimal my-2 pl-8" {...props} />,
-                        code: ({node, inline, ...props}) => 
-                          inline ? 
-                            <code className="font-mono text-[12px]" {...props} /> : 
-                            <code className="font-mono text-[12px]" {...props} />,
+                        code: ({node, ...props}) => 
+                          <code className="font-mono text-[12px]" {...props} />,
                       }}
                     >
                       {plan.description}
@@ -252,10 +250,8 @@ export function PlanChatMessage({
                     p: ({node, ...props}) => <p className="mb-2" {...props} />,
                     ul: ({node, ...props}) => <ul className="list-disc list-inside my-2" {...props} />,
                     ol: ({node, ...props}) => <ol className="list-decimal my-2 pl-8" {...props} />,
-                    code: ({node, inline, ...props}) => 
-                      inline ? 
-                        <code className="font-mono text-[12px]" {...props} /> : 
-                        <code className="font-mono text-[12px]" {...props} />,
+                    code: ({node, ...props}) => 
+                      <code className="font-mono text-[12px]" {...props} />,
                   }}
                 >
                   {plan.description}

@@ -58,7 +58,6 @@ export async function POST(req: NextRequest) {
       model,
       messages: coreMessages,
       tools,
-      maxSteps: 1,
       abortSignal: AbortSignal.timeout(120000),
     });
     

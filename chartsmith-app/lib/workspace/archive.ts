@@ -238,7 +238,7 @@ async function downloadChartArchiveFromURL(url: string): Promise<string> {
   }
 
   // Convert Web ReadableStream to Node.js Readable stream
-  const nodeStream = Readable.fromWeb(response.body);
+  const nodeStream = Readable.fromWeb(response.body as import('stream/web').ReadableStream);
 
   return new Promise((resolve, reject) => {
     nodeStream.pipe(gunzip())

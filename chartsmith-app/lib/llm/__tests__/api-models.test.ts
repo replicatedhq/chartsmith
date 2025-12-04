@@ -38,7 +38,7 @@ jest.mock('@/lib/llm/registry', () => ({
 global.fetch = jest.fn();
 
 describe('/api/models', () => {
-  const { getAvailableProviders } = require('@/lib/llm/registry');
+  const { getAvailableProviders } = jest.requireMock('@/lib/llm/registry');
   
   beforeEach(() => {
     jest.clearAllMocks();

@@ -41,9 +41,9 @@ jest.mock('ai', () => ({
 }));
 
 describe('LLM API Routes', () => {
-  const { getModel } = require('@/lib/llm/registry');
-  const { checkApiAuth } = require('@/lib/auth/api-guard');
-  const { getWorkspace } = require('@/lib/workspace/workspace');
+  const { getModel } = jest.requireMock('@/lib/llm/registry');
+  const { checkApiAuth } = jest.requireMock('@/lib/auth/api-guard');
+  const { getWorkspace } = jest.requireMock('@/lib/workspace/workspace');
 
   beforeEach(() => {
     jest.clearAllMocks();

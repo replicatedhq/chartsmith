@@ -218,7 +218,9 @@ export function ChatMessage({
     );
   };
 
-  if (!message || !workspace) return null;
+  if (!message || !workspace) {
+    return null;
+  }
 
   return (
     <div className="space-y-2" data-testid="chat-message">

@@ -35,7 +35,7 @@ body {
 }
 
 .markdown-content {
-  @apply text-sm;
+  @apply text-[11px];
 }
 
 .dark .markdown-content {
@@ -55,7 +55,7 @@ body {
 }
 
 .markdown-content code {
-  @apply font-mono text-[12px];
+  @apply font-mono text-[11px];
 }
 
 .markdown-content pre {

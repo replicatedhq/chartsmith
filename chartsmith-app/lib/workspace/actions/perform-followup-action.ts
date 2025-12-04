@@ -16,12 +16,21 @@ export async function performFollowupAction(session:Session, workspaceId:string,
   }
 
   if (action === "render") {
-    const chatMessage = await createChatMessage(session.user.id, workspaceId, {
+    const newChatMessage = await createChatMessage(session.user.id, workspaceId, {
       prompt: "Render the chart",
       knownIntent: ChatMessageIntent.RENDER,
       messageFromPersona: ChatMessageFromPersona.AUTO,
     });
 
-    return chatMessage;
+    return newChatMessage;
   }
+
+  // Handle all other followup actions as plan messages
+  // The action text is the prompt to send
+  const newChatMessage = await createChatMessage(session.user.id, workspaceId, {
+    prompt: action,
+    messageFromPersona: ChatMessageFromPersona.AUTO,
+  });
+
+  return newChatMessage;
 }
