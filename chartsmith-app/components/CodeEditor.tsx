@@ -801,11 +801,11 @@ export const CodeEditor = React.memo(function CodeEditor({
 
   // Let's try a more conventional approach but with optimizations
   return (
-    <div className="flex-1 h-full flex flex-col">
+    <div className="flex-1 h-full min-h-0 flex flex-col">
       {/* Always render header if it exists */}
       {headerElement}
 
-      <div className="flex-1 h-full">
+      <div className="flex-1 min-h-0">
         {/* Using a stable key pattern for the outer container */}
         <div key={editorStateKey} className="h-full">
           {selectedFile?.contentPending && selectedFile.contentPending.length > 0 ? (

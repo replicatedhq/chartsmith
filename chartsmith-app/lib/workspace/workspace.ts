@@ -138,6 +138,90 @@ export async function createWorkspace(createdType: string, userId: string, creat
   }
 }
 
+/**
+ * Creates a new workspace WITHOUT an initial chat message
+ * Used for AI SDK streaming flow where the client handles the initial message
+ */
+export async function createWorkspaceWithoutMessage(createdType: string, userId: string): Promise<Workspace> {
+  logger.info("Creating new workspace without message", { createdType, userId });
+  try {
+    const id = srs.default({ length: 12, alphanumeric: true });
+    const db = getDB(await getParam("DB_URI"));
+
+    const client = await db.connect();
+    try {
+      await client.query("BEGIN");
+
+      const boostrapWorkspaceRow = await client.query(`select id, name, current_revision from bootstrap_workspace where name = $1`, ['default-workspace']);
+      if (boostrapWorkspaceRow.rowCount === 0) {
+        throw new Error("No default-workspace found in bootstrap_workspace table");
+      }
+
+      // Start at revision 0 for new workspaces
+      const initialRevisionNumber = 0;
+
+      await client.query(
+        `INSERT INTO workspace (id, created_at, last_updated_at, name, created_by_user_id, created_type, current_revision_number)
+        VALUES ($1, now(), now(), $2, $3, $4, $5)`,
+        [id, boostrapWorkspaceRow.rows[0].name, userId, createdType, initialRevisionNumber],
+      );
+
+      await client.query(`INSERT INTO workspace_revision (workspace_id, revision_number, created_at, created_by_user_id, created_type, is_complete, is_rendered) VALUES ($1, $2, now(), $3, $4, true, false)`, [
+        id, initialRevisionNumber, userId, createdType]);
+
+      // Fallback to bootstrap charts for the workspace structure
+      const bootstrapCharts = await client.query(`SELECT id, name FROM bootstrap_chart`);
+      for (const chart of bootstrapCharts.rows) {
+        const chartId = srs.default({ length: 12, alphanumeric: true });
+        await client.query(
+          `INSERT INTO workspace_chart (id, workspace_id, name, revision_number)
+          VALUES ($1, $2, $3, $4)`,
+          [chartId, id, chart.name, initialRevisionNumber],
+        );
+
+        const boostrapChartFiles = await client.query(`SELECT file_path, content, embeddings FROM bootstrap_file WHERE chart_id = $1`, [chart.id]);
+        for (const file of boostrapChartFiles.rows) {
+          const fileId = srs.default({ length: 12, alphanumeric: true });
+          await client.query(
+            `INSERT INTO workspace_file (id, revision_number, chart_id, workspace_id, file_path, content, embeddings)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [fileId, initialRevisionNumber, chartId, id, file.file_path, file.content, file.embeddings],
+          );
+        }
+      }
+
+      await client.query("COMMIT");
+
+      // Enqueue embedding work for the files
+      const files = await listFilesForWorkspace(id, initialRevisionNumber);
+      for (const file of files) {
+        await enqueueWork("new_summarize", {
+          fileId: file.id,
+          revision: initialRevisionNumber,
+        });
+      }
+
+      // NOTE: No chat message created, no render enqueued
+      // The client will trigger the chat via AI SDK
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
+
+    const w = await getWorkspace(id);
+    if (!w) {
+      throw new Error("Failed to create workspace");
+    }
+
+    return w;
+  } catch (err) {
+    logger.error("Failed to create workspace without message", { err });
+    throw err;
+  }
+}
+
 export enum ChatMessageIntent {
   PLAN = "plan",
   NON_PLAN = "non-plan",
@@ -785,15 +869,13 @@ export async function getWorkspace(id: string): Promise<Workspace | undefined> {
       isCurrentVersionComplete: true,
     };
 
-    // get the charts and their files, only if revision number is > 0
-    if (result.rows[0].current_revision_number > 0) {
-      const charts = await listChartsForWorkspace(id, result.rows[0].current_revision_number);
-      w.charts = charts;
+    // get the charts and their files for current revision (including revision 0)
+    const charts = await listChartsForWorkspace(id, result.rows[0].current_revision_number);
+    w.charts = charts;
 
-      // Get non-chart files
-      const files = await listFilesWithoutChartsForWorkspace(id, result.rows[0].current_revision_number);
-      w.files = files;
-    }
+    // Get non-chart files
+    const files = await listFilesWithoutChartsForWorkspace(id, result.rows[0].current_revision_number);
+    w.files = files;
 
     // check if the current revision is complete
     const result3 = await db.query(

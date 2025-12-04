@@ -16,13 +16,14 @@ const publicPaths = [
   '/images',
 ];
 
-// API paths that can use token-based auth 
+// API paths that can use token-based auth
 // (these will be handled in their respective routes)
 const tokenAuthPaths = [
   '/api/auth/status',
   '/api/upload-chart',
   '/api/workspace',
-  '/api/push'
+  '/api/push',
+  '/api/chat'
 ];
 
 // This function can be marked `async` if using `await` inside

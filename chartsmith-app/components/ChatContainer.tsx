@@ -7,9 +7,15 @@ import { ChatMessage } from "./ChatMessage";
 import { messagesAtom, workspaceAtom, isRenderingAtom } from "@/atoms/workspace";
 import { useAtom } from "jotai";
 import { createChatMessageAction } from "@/lib/workspace/actions/create-chat-message";
+import { getWorkspaceAction } from "@/lib/workspace/actions/get-workspace";
 import { ScrollingContent } from "./ScrollingContent";
 import { NewChartChatMessage } from "./NewChartChatMessage";
 import { NewChartContent } from "./NewChartContent";
+import { useChartsmithChat, useVercelAiSdkEnabled } from "@/hooks/useChartsmithChat";
+import type { Message } from "./types";
+
+// Key for storing the initial prompt in localStorage (shared with PromptModal)
+const INITIAL_PROMPT_KEY = "chartsmith_initial_prompt";
 
 interface ChatContainerProps {
   session: Session;
@@ -17,15 +23,90 @@ interface ChatContainerProps {
 
 export function ChatContainer({ session }: ChatContainerProps) {
   const { theme } = useTheme();
-  const [workspace] = useAtom(workspaceAtom)
+  const [workspace, setWorkspace] = useAtom(workspaceAtom)
   const [messages, setMessages] = useAtom(messagesAtom)
   const [isRendering] = useAtom(isRenderingAtom)
   const [chatInput, setChatInput] = useState("");
   const [selectedRole, setSelectedRole] = useState<"auto" | "developer" | "operator">("auto");
   const [isRoleMenuOpen, setIsRoleMenuOpen] = useState(false);
   const roleMenuRef = useRef<HTMLDivElement>(null);
-  
+
+  // Check if Vercel AI SDK is enabled
+  const useVercelAiSdk = useVercelAiSdkEnabled();
+
+  // Use the Vercel AI SDK chat hook
+  const {
+    sendMessage: sendAiSdkMessage,
+    isLoading: aiSdkLoading,
+    streamingResponse,
+    stop: stopStreaming,
+  } = useChartsmithChat({
+    onError: (error) => {
+      console.error("Chat error:", error);
+    },
+    onFinish: async (response) => {
+      console.log("[ChatContainer] onFinish called, response length:", response?.length);
+
+      // Mark the message as complete (handles empty response case when AI only uses tools)
+      setMessages((prev) => {
+        if (prev.length === 0) return prev;
+        const lastMessage = prev[prev.length - 1];
+        if (lastMessage.id.startsWith("temp-")) {
+          const updated = [...prev];
+          updated[updated.length - 1] = {
+            ...lastMessage,
+            response: response || lastMessage.response || "Chart files created.",
+            isComplete: true,
+            isIntentComplete: true,
+          };
+          return updated;
+        }
+        return prev;
+      });
+
+      // Refresh workspace to get newly created files from AI tools
+      if (session && workspace?.id) {
+        console.log("[ChatContainer] Refreshing workspace:", workspace.id);
+        try {
+          const freshWorkspace = await getWorkspaceAction(session, workspace.id);
+          console.log("[ChatContainer] Got fresh workspace, files:", freshWorkspace?.files?.length, "charts:", freshWorkspace?.charts?.length, "chart files:", freshWorkspace?.charts?.[0]?.files?.length);
+          if (freshWorkspace) {
+            setWorkspace(freshWorkspace);
+          }
+        } catch (err) {
+          console.error("[ChatContainer] Failed to refresh workspace:", err);
+        }
+      } else {
+        console.log("[ChatContainer] Missing session or workspace.id", { session: !!session, workspaceId: workspace?.id });
+      }
+    },
+  });
+
   // No need for refs as ScrollingContent manages its own scrolling
+
+  // Update the last message with streaming response as it comes in
+  useEffect(() => {
+    if (!useVercelAiSdk || !streamingResponse) return;
+
+    setMessages((prev) => {
+      if (prev.length === 0) return prev;
+      const lastMessage = prev[prev.length - 1];
+      // Only update if this is a temp message (created for AI SDK streaming)
+      if (!lastMessage.id.startsWith("temp-")) return prev;
+      // Avoid unnecessary updates if response hasn't changed
+      if (lastMessage.response === streamingResponse && lastMessage.isComplete === !aiSdkLoading) {
+        return prev;
+      }
+      const updated = [...prev];
+      updated[updated.length - 1] = {
+        ...lastMessage,
+        response: streamingResponse,
+        isComplete: !aiSdkLoading,
+        isIntentComplete: !aiSdkLoading,
+      };
+      return updated;
+    });
+  }, [streamingResponse, aiSdkLoading, useVercelAiSdk, setMessages]);
 
   // Close the role menu when clicking outside
   useEffect(() => {
@@ -34,12 +115,53 @@ export function ChatContainer({ session }: ChatContainerProps) {
         setIsRoleMenuOpen(false);
       }
     };
-    
+
     document.addEventListener('mousedown', handleClickOutside);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
+
+  // Check for initial prompt from localStorage (set by PromptModal)
+  // This triggers the AI SDK chat for new workspaces
+  useEffect(() => {
+    if (!useVercelAiSdk || !workspace?.id || aiSdkLoading) {
+      return;
+    }
+
+    try {
+      const storedData = localStorage.getItem(INITIAL_PROMPT_KEY);
+      if (!storedData) {
+        return;
+      }
+
+      const { workspaceId, prompt } = JSON.parse(storedData);
+
+      // Only process if this is the matching workspace
+      if (workspaceId !== workspace.id) {
+        return;
+      }
+
+      // Clear the stored prompt immediately to prevent re-triggering
+      localStorage.removeItem(INITIAL_PROMPT_KEY);
+
+      // Create placeholder message for UI
+      const tempId = `temp-${Date.now()}`;
+      const userMessage: Message = {
+        id: tempId,
+        prompt: prompt,
+        createdAt: new Date(),
+        isComplete: false,
+        isIntentComplete: false,
+      };
+      setMessages([userMessage]);
+
+      // Send message via AI SDK
+      sendAiSdkMessage(prompt);
+    } catch (err) {
+      console.error("Error processing initial prompt:", err);
+    }
+  }, [useVercelAiSdk, workspace?.id, aiSdkLoading, sendAiSdkMessage, setMessages]);
 
   if (!messages || !workspace) {
     return null;
@@ -47,14 +169,33 @@ export function ChatContainer({ session }: ChatContainerProps) {
 
   const handleSubmitChat = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!chatInput.trim() || isRendering) return; // Don't submit if rendering is in progress
+    if (!chatInput.trim() || isRendering || aiSdkLoading) return; // Don't submit if rendering is in progress
 
     if (!session || !workspace) return;
 
-    const chatMessage = await createChatMessageAction(session, workspace.id, chatInput.trim(), selectedRole);
-    setMessages(prev => [...prev, chatMessage]);
-
+    const messageText = chatInput.trim();
     setChatInput("");
+
+    if (useVercelAiSdk) {
+      // Use Vercel AI SDK for streaming chat
+      // First, create a placeholder message for the UI
+      const tempId = `temp-${Date.now()}`;
+      const userMessage: Message = {
+        id: tempId,
+        prompt: messageText,
+        createdAt: new Date(),
+        isComplete: false,
+        isIntentComplete: false,
+      };
+      setMessages(prev => [...prev, userMessage]);
+
+      // Send message via AI SDK
+      await sendAiSdkMessage(messageText);
+    } else {
+      // Fall back to original server action + work queue pattern
+      const chatMessage = await createChatMessageAction(session, workspace.id, messageText, selectedRole);
+      setMessages(prev => [...prev, chatMessage]);
+    }
   };
   
   const getRoleLabel = (role: "auto" | "developer" | "operator"): string => {
@@ -72,7 +213,9 @@ export function ChatContainer({ session }: ChatContainerProps) {
 
   // ScrollingContent will now handle all the scrolling behavior
 
-  if (workspace?.currentRevisionNumber === 0) {
+  // Only use NewChartContent for revision 0 if NOT using Vercel AI SDK
+  // When AI SDK is enabled, we use the regular chat interface since it handles streaming directly
+  if (workspace?.currentRevisionNumber === 0 && !useVercelAiSdk) {
     // For NewChartContent, create a simpler version of handleSubmitChat that doesn't use role selector
     const handleNewChartSubmitChat = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -84,7 +227,7 @@ export function ChatContainer({ session }: ChatContainerProps) {
       setMessages(prev => [...prev, chatMessage]);
       setChatInput("");
     };
-    
+
     return <NewChartContent
       session={session}
       chatInput={chatInput}
@@ -107,6 +250,7 @@ export function ChatContainer({ session }: ChatContainerProps) {
                   onContentUpdate={() => {
                     // No need to update state - ScrollingContent will handle scrolling
                   }}
+                  onCancel={useVercelAiSdk ? stopStreaming : undefined}
                 />
               </div>
             ))}
@@ -203,16 +347,16 @@ export function ChatContainer({ session }: ChatContainerProps) {
             {/* Send button */}
             <button
               type="submit"
-              disabled={isRendering}
+              disabled={isRendering || aiSdkLoading}
               className={`p-1.5 rounded-full ${
-                isRendering
+                isRendering || aiSdkLoading
                   ? theme === "dark" ? "text-gray-600 cursor-not-allowed" : "text-gray-300 cursor-not-allowed"
                   : theme === "dark"
                     ? "text-gray-400 hover:text-gray-200 hover:bg-dark-border/40"
                     : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
               }`}
             >
-              {isRendering ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              {isRendering || aiSdkLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
             </button>
           </div>
         </form>

@@ -6,9 +6,12 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { PromptInput } from "./PromptInput";
 import { useSession } from "@/app/hooks/useSession";
 import { useRouter } from "next/navigation";
-import { createWorkspaceFromPromptAction } from "@/lib/workspace/actions/create-workspace-from-prompt";
+import { createWorkspaceFromPromptAction, createWorkspaceForAiSdkAction } from "@/lib/workspace/actions/create-workspace-from-prompt";
 import { getGoogleAuthUrl } from "@/lib/auth/google";
 import { logger } from "@/lib/utils/logger";
+
+// Key for storing the initial prompt in localStorage
+const INITIAL_PROMPT_KEY = "chartsmith_initial_prompt";
 
 interface PromptModalProps {
   isOpen: boolean;
@@ -75,15 +78,17 @@ export function PromptModal({ isOpen, onClose }: PromptModalProps) {
   }
 
   const createFromPrompt = async (prompt: string) => {
-    if (!publicEnv.NEXT_PUBLIC_GOOGLE_CLIENT_ID) {
-      return;
-    }
-
     try {
       setIsPageLoading(true);
       setError(null);
 
       if (!session) {
+        // Need Google OAuth to authenticate - check if it's configured
+        if (!publicEnv.NEXT_PUBLIC_GOOGLE_CLIENT_ID) {
+          setError("Authentication not configured. Please contact support.");
+          setIsPageLoading(false);
+          return;
+        }
         try {
           // Store the prompt before redirecting to auth
           localStorage.setItem('pendingPrompt', prompt);
@@ -98,10 +103,25 @@ export function PromptModal({ isOpen, onClose }: PromptModalProps) {
         return;
       }
 
-      const w = await createWorkspaceFromPromptAction(session, prompt);
+      // Check if AI SDK is enabled
+      const useAiSdk = publicEnv.NEXT_PUBLIC_USE_VERCEL_AI_SDK === "true";
 
-      // Don't reset loading state, let it persist through redirect
-      router.push(`/workspace/${w.id}`);
+      if (useAiSdk) {
+        // Create workspace without initial message - client will handle chat
+        const w = await createWorkspaceForAiSdkAction(session);
+
+        // Store prompt for the workspace page to pick up
+        localStorage.setItem(INITIAL_PROMPT_KEY, JSON.stringify({
+          workspaceId: w.id,
+          prompt: prompt,
+        }));
+
+        router.push(`/workspace/${w.id}`);
+      } else {
+        // Original flow: create workspace with message through work queue
+        const w = await createWorkspaceFromPromptAction(session, prompt);
+        router.push(`/workspace/${w.id}`);
+      }
     } catch (err) {
       logger.error("Failed to create workspace", { err });
       setError(err instanceof Error ? err.message : "Failed to create workspace");

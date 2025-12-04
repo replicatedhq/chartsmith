@@ -111,7 +111,7 @@ export function WorkspaceContainerClient({
                 Rendered
               </div>
             </div>
-            <div className="flex-1 h-full overflow-auto">
+            <div className="flex-1 min-h-0 overflow-hidden">
               {view === "rendered" ? (
                 selectedFile ? (
                   // Try to find a rendered version of the selected file

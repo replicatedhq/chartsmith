@@ -35,6 +35,8 @@ export interface ChatMessageProps {
   session: Session;
   showChatInput?: boolean;
   onContentUpdate?: () => void;
+  /** Called when user cancels a temp message (AI SDK streaming) */
+  onCancel?: () => void;
 }
 
 function LoadingSpinner({ message }: { message: string }) {
@@ -74,6 +76,7 @@ export function ChatMessage({
   session,
   showChatInput,
   onContentUpdate,
+  onCancel,
 }: ChatMessageProps) {
   const { theme } = useTheme();
   const [showReportModal, setShowReportModal] = useState(false);
@@ -244,6 +247,21 @@ export function ChatMessage({
                     onClick={async (e) => {
                       e.preventDefault();
                       e.stopPropagation();
+
+                      // For temp messages (AI SDK streaming), cancel client-side
+                      if (message.id.startsWith("temp-")) {
+                        onCancel?.();
+                        setMessages((messages: Message[]) =>
+                          messages.map((m: Message) =>
+                            m.id === message.id
+                              ? { ...m, isCanceled: true, isComplete: true, isIntentComplete: true }
+                              : m
+                          )
+                        );
+                        return;
+                      }
+
+                      // For persisted messages, cancel via server action
                       const chatMessage = await cancelMessageAction(session, message.id);
                       if (chatMessage && setMessages) {
                         setMessages((messages: Message[]) => messages.map((m: Message) => m.id === message.id ? (chatMessage as Message) : m));

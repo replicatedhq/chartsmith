@@ -97,7 +97,12 @@ export function WorkspaceContent({
     session,
   });
 
-  const showEditor = workspace?.currentRevisionNumber && workspace?.currentRevisionNumber > 0 || workspace?.incompleteRevisionNumber;
+  // Show editor when: revision > 0, OR incomplete revision exists, OR charts have files at revision 0
+  const hasFilesAtRevision0 = workspace?.currentRevisionNumber === 0
+    && workspace?.charts?.some(c => c.files && c.files.length > 0);
+  const showEditor = (workspace?.currentRevisionNumber && workspace?.currentRevisionNumber > 0)
+    || workspace?.incompleteRevisionNumber
+    || hasFilesAtRevision0;
 
   if (!session || !workspace) return null;
 
@@ -105,9 +110,9 @@ export function WorkspaceContent({
     <EditorLayout>
       <div className="flex w-full overflow-hidden relative">
         <div className={`chat-container-wrapper transition-all duration-300 ease-in-out absolute ${
-            (!workspace?.currentRevisionNumber && !workspace?.incompleteRevisionNumber) || (workspace.currentRevisionNumber === 0 && !workspace.incompleteRevisionNumber) ? 'inset-0 flex justify-center' : 'left-0 top-0 bottom-0'
+            !showEditor ? 'inset-0 flex justify-center' : 'left-0 top-0 bottom-0'
           }`}>
-          <div className={`${(!workspace?.currentRevisionNumber && !workspace?.incompleteRevisionNumber) || (workspace.currentRevisionNumber === 0 && !workspace.incompleteRevisionNumber) ? 'w-full max-w-3xl px-4' : 'w-[480px] h-full flex flex-col'}`}>
+          <div className={`${!showEditor ? 'w-full max-w-3xl px-4' : 'w-[480px] h-full flex flex-col'}`}>
             <div className="flex-1 overflow-y-auto">
               <ChatContainer
                 session={session}

@@ -6,12 +6,15 @@ import { useRouter } from "next/navigation";
 import { PromptModal } from "./PromptModal";
 import { createWorkspaceFromArchiveAction } from "@/lib/workspace/actions/create-workspace-from-archive";
 import { useSession } from "@/app/hooks/useSession";
-import { createWorkspaceFromPromptAction } from "@/lib/workspace/actions/create-workspace-from-prompt";
+import { createWorkspaceFromPromptAction, createWorkspaceForAiSdkAction } from "@/lib/workspace/actions/create-workspace-from-prompt";
 import { logger } from "@/lib/utils/logger";
 import { ArtifactHubSearchModal } from "./ArtifactHubSearchModal";
 
 const MAX_CHARS = 512;
 const WARNING_THRESHOLD = 500;
+
+// Key for storing the initial prompt in localStorage (shared with ChatContainer)
+const INITIAL_PROMPT_KEY = "chartsmith_initial_prompt";
 
 export function CreateChartOptions() {
   const [prompt, setPrompt] = useState('');
@@ -26,10 +29,27 @@ export function CreateChartOptions() {
   const [showArtifactHubSearch, setShowArtifactHubSearch] = useState(false);
   const [uploadType, setUploadType] = useState<'helm' | 'k8s' | null>(null);
   const [isApproachingLimit, setIsApproachingLimit] = useState(false);
+  const [publicEnv, setPublicEnv] = useState<Record<string, string>>({});
 
   useEffect(() => {
     // Focus the textarea on mount
     textareaRef.current?.focus();
+  }, []);
+
+  // Fetch public env config
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const res = await fetch("/api/config");
+        if (!res.ok) throw new Error("Failed to fetch config");
+        const data = await res.json();
+        setPublicEnv(data);
+      } catch (err) {
+        console.error("Failed to load public env config:", err);
+      }
+    };
+
+    fetchConfig();
   }, []);
   
   // Check if input is approaching character limit
@@ -47,8 +67,26 @@ export function CreateChartOptions() {
     if (prompt.trim()) {
       try {
         setIsPromptLoading(true);
-        const w = await createWorkspaceFromPromptAction(session, prompt);
-        router.replace(`/workspace/${w.id}`);
+
+        // Check if AI SDK is enabled
+        const useAiSdk = publicEnv.NEXT_PUBLIC_USE_VERCEL_AI_SDK === "true";
+
+        if (useAiSdk) {
+          // Create workspace without initial message - client will handle chat
+          const w = await createWorkspaceForAiSdkAction(session);
+
+          // Store prompt for the workspace page to pick up
+          localStorage.setItem(INITIAL_PROMPT_KEY, JSON.stringify({
+            workspaceId: w.id,
+            prompt: prompt.trim(),
+          }));
+
+          router.replace(`/workspace/${w.id}`);
+        } else {
+          // Original flow: create workspace with message through work queue
+          const w = await createWorkspaceFromPromptAction(session, prompt);
+          router.replace(`/workspace/${w.id}`);
+        }
       } catch (err) {
         logger.error("Failed to create workspace", { err });
         setIsPromptLoading(false);
