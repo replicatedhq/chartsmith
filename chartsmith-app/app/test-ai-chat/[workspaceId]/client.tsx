@@ -1,0 +1,537 @@
+"use client";
+
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useSetAtom } from "jotai";
+import { Loader2, Send } from "lucide-react";
+import { useChat } from "@ai-sdk/react";
+import { DefaultChatTransport } from "ai";
+
+// Atoms - NOTE: chartsAtom and looseFilesAtom are DERIVED atoms (read-only)
+// They automatically derive from workspaceAtom - only set workspaceAtom
+import { workspaceAtom } from "@/atoms/workspace";
+
+// Actions
+import { getWorkspaceAction } from "@/lib/workspace/actions/get-workspace";
+import { createAISDKChatMessageAction } from "@/lib/workspace/actions/create-ai-sdk-chat-message";
+import { updateChatMessageResponseAction } from "@/lib/workspace/actions/update-chat-message-response";
+
+// Components
+import { ScrollingContent } from "@/components/ScrollingContent";
+import { EditorLayout } from "@/components/layout/EditorLayout";
+import { FileBrowser } from "@/components/FileBrowser";
+import { useTheme } from "@/contexts/ThemeContext";
+import ReactMarkdown from "react-markdown";
+import Image from "next/image";
+
+// Types
+import { Workspace, ChatMessage } from "@/lib/types/workspace";
+import { Session } from "@/lib/types/session";
+import { Message } from "@/components/types";
+
+// Config
+import {
+  getDefaultProvider,
+  getDefaultModelForProvider,
+  STREAMING_THROTTLE_MS,
+} from "@/lib/ai";
+
+interface TestAIChatClientProps {
+  workspace: Workspace;
+  session: Session;
+  initialMessages?: Message[];
+}
+
+export function TestAIChatClient({ workspace, session, initialMessages = [] }: TestAIChatClientProps) {
+  const { theme } = useTheme();
+
+  // Atom setter for hydration - only set workspaceAtom
+  // chartsAtom and looseFilesAtom are derived and update automatically
+  const setWorkspace = useSetAtom(workspaceAtom);
+
+  // Hydrate workspace atom on mount
+  // Charts and files derive automatically from workspaceAtom
+  useEffect(() => {
+    setWorkspace(workspace);
+  }, [workspace, setWorkspace]);
+
+  const revisionNumber = workspace.currentRevisionNumber || 1;
+
+  const [chatInput, setChatInput] = useState("");
+  const [currentChatMessageId, setCurrentChatMessageId] = useState<string | null>(null);
+  const chatInputRef = useRef<HTMLTextAreaElement>(null);
+  const hasAutoSentRef = useRef(false); // Use ref to prevent re-renders triggering duplicate sends
+
+  const selectedProvider = getDefaultProvider();
+  const selectedModel = getDefaultModelForProvider(selectedProvider);
+
+  // Helper to get fresh body params for each request
+  // NOTE: body is NOT passed to useChat - it would be captured at initialization and become stale
+  // Instead, we pass body in each sendMessage() call to ensure fresh values
+  // See: https://ai-sdk.dev/docs/troubleshooting/use-chat-stale-body-data
+  const getChatBody = useCallback(() => ({
+    provider: selectedProvider,
+    model: selectedModel,
+    workspaceId: workspace.id,
+    revisionNumber,
+  }), [selectedProvider, selectedModel, workspace.id, revisionNumber]);
+
+  const {
+    messages,
+    sendMessage,
+    status,
+    error,
+  } = useChat({
+    transport: new DefaultChatTransport({ api: "/api/chat" }),
+    experimental_throttle: STREAMING_THROTTLE_MS,
+    onError: (err) => {
+      console.error('[useChat] Error:', err);
+    },
+    onFinish: () => {
+      console.log('[useChat] Finished');
+    },
+  });
+
+  // Debug: Log status and message changes
+  useEffect(() => {
+    console.log('[useChat] Status changed:', status);
+  }, [status]);
+
+  useEffect(() => {
+    console.log('[useChat] Messages updated:', messages.length, messages);
+  }, [messages]);
+
+  useEffect(() => {
+    if (error) {
+      console.error('[useChat] Error state:', error);
+    }
+  }, [error]);
+
+  const isLoading = status === "submitted" || status === "streaming";
+
+  // Focus chat input on mount
+  useEffect(() => {
+    chatInputRef.current?.focus();
+  }, []);
+
+  // Auto-send: If there's an initial message without a response, send it to the AI
+  // This handles the flow from landing page where createWorkspaceFromPromptAction
+  // persists the user message to DB, then we need to get the AI response
+  useEffect(() => {
+    // Use ref check FIRST to prevent any possibility of double-send
+    if (hasAutoSentRef.current) return;
+
+    // Find the last user message in initialMessages that has no response
+    const lastUserMessage = initialMessages.length > 0
+      ? initialMessages[initialMessages.length - 1]
+      : null;
+
+    // Only auto-send if there's a user message without a response
+    const needsResponse = lastUserMessage && !lastUserMessage.response && lastUserMessage.prompt;
+
+    if (needsResponse && messages.length === 0 && workspace?.id) {
+      // Mark as sent BEFORE calling sendMessage to prevent race conditions
+      hasAutoSentRef.current = true;
+      console.log('[useChat] Auto-sending initial message to AI:', lastUserMessage.prompt);
+      sendMessage(
+        { text: lastUserMessage.prompt },
+        { body: getChatBody() }
+      );
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run only once on mount - ref guards against duplicates
+
+  // Refetch workspace when AI tool calls complete to update file explorer
+  // This is a simple solution for PR1.6; PR1.7 will use Centrifugo for real-time
+  useEffect(() => {
+    const lastMessage = messages[messages.length - 1];
+    // AI SDK v5: tool parts have type like "tool-toolName" with state directly on part
+    const hasToolResult = lastMessage?.parts?.some(
+      (p: { type: string; state?: string }) =>
+        p.type.startsWith('tool-') && p.state === 'result'
+    );
+
+    if (hasToolResult && status === 'ready') {
+      // Refetch workspace to get updated files after tool execution
+      getWorkspaceAction(session, workspace.id).then((updated) => {
+        if (updated) setWorkspace(updated);
+      });
+    }
+  }, [messages, status, session, workspace.id, setWorkspace]);
+
+  // Persist AI response when complete
+  useEffect(() => {
+    if (status === "ready" && currentChatMessageId && messages.length > 0) {
+      const lastAssistant = messages.filter(m => m.role === "assistant").pop();
+      if (lastAssistant) {
+        // Extract text content from parts
+        const textContent = lastAssistant.parts
+          ?.filter((p: { type: string }) => p.type === "text")
+          .map((p: { type: string; text?: string }) => p.text)
+          .join("\n") || "";
+
+        updateChatMessageResponseAction(
+          session,
+          currentChatMessageId,
+          textContent,
+          true
+        ).then(() => {
+          setCurrentChatMessageId(null);
+        });
+      }
+    }
+  }, [status, currentChatMessageId, messages, session]);
+
+  const handleChatSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (chatInput.trim() && !isLoading) {
+      const messageText = chatInput.trim();
+      setChatInput("");
+
+      try {
+        // 1. Persist user message using AI SDK-specific action (skips Go intent processing)
+        const chatMessage = await createAISDKChatMessageAction(
+          session,
+          workspace.id,
+          messageText
+        );
+        setCurrentChatMessageId(chatMessage.id);
+
+        // 2. Send to AI SDK with fresh body params
+        await sendMessage(
+          { text: messageText },
+          { body: getChatBody() }  // Fresh values at request time
+        );
+      } catch (error) {
+        console.error("Failed to persist message:", error);
+        // Still send to AI SDK even if persistence fails
+        await sendMessage(
+          { text: messageText },
+          { body: getChatBody() }
+        );
+      }
+    }
+  };
+
+  const handleChatKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleChatSubmit(e);
+    }
+  };
+
+  const userImageUrl = session.user.imageUrl || "";
+  const userName = session.user.name || "User";
+
+  return (
+    <EditorLayout>
+      <div className="flex w-full h-[calc(100vh-3.5rem)]">
+        {/* File Explorer - Left Panel */}
+        <div className={`w-64 flex-shrink-0 border-r ${
+          theme === "dark" ? "border-dark-border" : "border-gray-200"
+        } overflow-hidden`}>
+          <FileBrowser />
+        </div>
+
+        {/* Chat Panel - Right */}
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+          <div className="flex-1 h-full">
+            <h1 className="text-2xl font-bold p-4">AI SDK Test Chat</h1>
+
+            <div className="px-4 pb-2 text-sm">
+              <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md ${
+                theme === "dark" ? "bg-green-900/30 text-green-400 border border-green-800" : "bg-green-50 text-green-700 border border-green-200"
+              }`}>
+                <span>📁</span>
+                <span>Workspace: <code className="font-mono">{workspace.id}</code></span>
+                <span className="opacity-60">|</span>
+                <span>Rev: {revisionNumber}</span>
+              </div>
+            </div>
+
+            <ScrollingContent forceScroll={true}>
+              <div className="pb-64">
+                {/* Previous conversation history from database */}
+                {/* Only show messages that have responses - pending messages are handled by AI SDK */}
+                {initialMessages.filter(msg => msg.response).length > 0 && (
+                  <div className={`mx-2 mb-4 pb-4 border-b ${
+                    theme === "dark" ? "border-dark-border" : "border-gray-200"
+                  }`}>
+                    <div className={`text-xs mb-2 px-2 ${
+                      theme === "dark" ? "text-gray-500" : "text-gray-400"
+                    }`}>
+                      Previous conversation
+                    </div>
+                    {initialMessages.filter(msg => msg.response).map((msg) => (
+                      <div key={msg.id} className="space-y-2">
+                        {/* User message */}
+                        <div className="px-2 py-1">
+                          <div className={`p-3 rounded-lg ${
+                            theme === "dark" ? "bg-primary/20" : "bg-primary/10"
+                          } rounded-tr-sm w-full`}>
+                            <div className="flex items-start gap-2">
+                              {userImageUrl ? (
+                                <Image
+                                  src={userImageUrl}
+                                  alt={userName}
+                                  width={24}
+                                  height={24}
+                                  className="w-6 h-6 rounded-full flex-shrink-0"
+                                />
+                              ) : (
+                                <div className={`w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-medium ${
+                                  theme === "dark" ? "bg-primary/40 text-white" : "bg-primary/30 text-gray-700"
+                                }`}>
+                                  {userName.charAt(0).toUpperCase()}
+                                </div>
+                              )}
+                              <div className="flex-1">
+                                <div className={`${
+                                  theme === "dark" ? "text-gray-200" : "text-gray-700"
+                                } text-[12px] pt-0.5`}>
+                                  {msg.prompt}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Assistant response */}
+                        {msg.response && (
+                          <div className="px-2 py-1">
+                            <div className={`p-3 rounded-lg ${
+                              theme === "dark" ? "bg-dark-border/40" : "bg-gray-100"
+                            } rounded-tl-sm w-full`}>
+                              <div className={`text-xs ${
+                                theme === "dark" ? "text-gray-400" : "text-gray-500"
+                              } mb-1`}>
+                                ChartSmith
+                              </div>
+                              <div className={`${
+                                theme === "dark" ? "text-gray-200" : "text-gray-700"
+                              } text-[12px]`}>
+                                <div className="max-w-none">
+                                  <ReactMarkdown
+                                    components={{
+                                      code: ({ className, children, ...props }) => (
+                                        <code
+                                          className={`${className || ''} ${
+                                            theme === "dark" ? "bg-gray-800 text-gray-200" : "bg-gray-100 text-gray-800"
+                                          } px-1 py-0.5 rounded text-sm`}
+                                          {...props}
+                                        >
+                                          {children}
+                                        </code>
+                                      ),
+                                      pre: ({ children }) => (
+                                        <pre className={`${
+                                          theme === "dark" ? "bg-gray-900" : "bg-gray-50"
+                                        } p-3 rounded-lg overflow-x-auto my-2`}>
+                                          {children}
+                                        </pre>
+                                      ),
+                                    }}
+                                  >
+                                    {msg.response || ""}
+                                  </ReactMarkdown>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Empty state - only show if no messages at all */}
+                {messages.length === 0 && initialMessages.length === 0 && (
+                  <div className={`px-4 py-8 text-center ${theme === "dark" ? "text-gray-500" : "text-gray-400"}`}>
+                    <p className="text-lg mb-2">Start a conversation</p>
+                    <p className="text-sm">Try asking about your chart files or requesting changes.</p>
+                    <div className="mt-4 space-y-1 text-xs opacity-70">
+                      <p>&quot;What files are in this chart?&quot;</p>
+                      <p>&quot;What&apos;s the latest PostgreSQL chart version?&quot;</p>
+                      <p>&quot;Create a new values.yaml file&quot;</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Current AI SDK messages */}
+                {messages.map((message) => (
+                  <div key={message.id} className="space-y-2" data-testid="chat-message">
+                    {message.role === "user" ? (
+                      <div className="px-2 py-1" data-testid="user-message">
+                        <div className={`p-3 rounded-lg ${
+                          theme === "dark" ? "bg-primary/20" : "bg-primary/10"
+                        } rounded-tr-sm w-full`}>
+                          <div className="flex items-start gap-2">
+                            {userImageUrl ? (
+                              <Image
+                                src={userImageUrl}
+                                alt={userName}
+                                width={24}
+                                height={24}
+                                className="w-6 h-6 rounded-full flex-shrink-0"
+                              />
+                            ) : (
+                              <div className={`w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-medium ${
+                                theme === "dark" ? "bg-primary/40 text-white" : "bg-primary/30 text-gray-700"
+                              }`}>
+                                {userName.charAt(0).toUpperCase()}
+                              </div>
+                            )}
+                            <div className="flex-1">
+                              <div className={`${
+                                theme === "dark" ? "text-gray-200" : "text-gray-700"
+                              } text-[12px] pt-0.5`}>
+                                {message.parts?.map((part, i) =>
+                                  part.type === 'text' ? <span key={i}>{part.text}</span> : null
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="px-2 py-1" data-testid="assistant-message">
+                        <div className={`p-3 rounded-lg ${
+                          theme === "dark" ? "bg-dark-border/40" : "bg-gray-100"
+                        } rounded-tl-sm w-full`}>
+                          <div className={`text-xs ${
+                            theme === "dark" ? "text-gray-400" : "text-gray-500"
+                          } mb-1 flex items-center justify-between`}>
+                            <div>ChartSmith</div>
+                            <div className="text-[10px] opacity-70">Rev #{revisionNumber}</div>
+                          </div>
+                          <div className={`${
+                            theme === "dark" ? "text-gray-200" : "text-gray-700"
+                          } text-[12px] markdown-content`}>
+                            {message.parts?.map((part, i) => {
+                              if (part.type === 'text') {
+                                return (
+                                  <div key={i} className="max-w-none">
+                                    <ReactMarkdown
+                                      components={{
+                                        code: ({ className, children, ...props }) => (
+                                          <code
+                                            className={`${className || ''} ${
+                                              theme === "dark" ? "bg-gray-800 text-gray-200" : "bg-gray-100 text-gray-800"
+                                            } px-1 py-0.5 rounded text-sm`}
+                                            {...props}
+                                          >
+                                            {children}
+                                          </code>
+                                        ),
+                                        pre: ({ children }) => (
+                                          <pre className={`${
+                                            theme === "dark" ? "bg-gray-900" : "bg-gray-50"
+                                          } p-3 rounded-lg overflow-x-auto my-2`}>
+                                            {children}
+                                          </pre>
+                                        ),
+                                      }}
+                                    >
+                                      {part.text || ""}
+                                    </ReactMarkdown>
+                                  </div>
+                                );
+                              }
+                              // AI SDK v5: tool parts have type like "tool-toolName" - hide from UI for cleaner UX
+                              // Tool execution happens in the background; users only see the final text response
+                              if (part.type.startsWith('tool-')) {
+                                return null; // Don't render tool invocations
+                              }
+                              return null;
+                            })}
+                            {(!message.parts || message.parts.length === 0) && (
+                              <div className="flex items-center gap-2">
+                                <div className="flex-shrink-0 animate-spin rounded-full h-3 w-3 border border-t-transparent border-primary"></div>
+                                <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
+                                  generating response...
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+
+                {/* Thinking indicator - shows when waiting for AI response */}
+                {status === "submitted" && (
+                  <div className="px-2 py-1">
+                    <div className={`p-3 rounded-lg ${
+                      theme === "dark" ? "bg-dark-border/40" : "bg-gray-100"
+                    } rounded-tl-sm w-full`}>
+                      <div className={`text-xs ${
+                        theme === "dark" ? "text-gray-400" : "text-gray-500"
+                      } mb-1`}>
+                        ChartSmith
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex-shrink-0 animate-spin rounded-full h-3 w-3 border border-t-transparent border-primary"></div>
+                        <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
+                          thinking...
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </ScrollingContent>
+
+            {/* Chat input area */}
+            <div className={`absolute bottom-0 left-0 right-0 ${
+              theme === "dark"
+                ? "bg-gray-900 border-t border-gray-800"
+                : "bg-gray-50 border-t border-gray-200"
+            }`}>
+              <div className={`w-full ${
+                theme === "dark"
+                  ? "bg-gray-900 border-x border-b border-gray-800"
+                  : "bg-gray-50 border-x border-b border-gray-200"
+              }`}>
+                <form onSubmit={handleChatSubmit} className="p-6 relative flex gap-3 items-start max-w-5xl mx-auto">
+                  <div className="flex-1 relative">
+                    <textarea
+                      ref={chatInputRef}
+                      value={chatInput}
+                      onChange={(e) => setChatInput(e.target.value)}
+                      onKeyDown={handleChatKeyDown}
+                      placeholder="Ask a question or request a change..."
+                      rows={3}
+                      disabled={isLoading}
+                      style={{ height: 'auto', minHeight: '72px', maxHeight: '150px' }}
+                      className={`w-full px-3 py-1.5 pr-10 text-sm rounded-md border resize-none overflow-hidden ${
+                        theme === "dark"
+                          ? "bg-dark border-dark-border/60 text-white placeholder-gray-500"
+                          : "bg-white border-gray-200 text-gray-900 placeholder-gray-400"
+                      } focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50 disabled:opacity-50`}
+                    />
+                    <div className="absolute right-2 top-[18px]">
+                      <button
+                        type="submit"
+                        disabled={isLoading}
+                        className={`p-1.5 rounded-full ${
+                          isLoading
+                            ? theme === "dark" ? "text-gray-600 cursor-not-allowed" : "text-gray-300 cursor-not-allowed"
+                            : theme === "dark"
+                              ? "text-gray-400 hover:text-gray-200 hover:bg-dark-border/40"
+                              : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                        }`}
+                      >
+                        {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </EditorLayout>
+  );
+}
+

@@ -44,6 +44,7 @@ Returns the version number (e.g., "15.2.0") or "?" if the chart is not found.`,
         .describe('Optional: specific repository to search (defaults to ArtifactHub search)'),
     }),
     execute: async (params: { chartName: string; repository?: string }) => {
+      console.log('[latestSubchartVersion] Tool called with params:', params);
       try {
         const response = await callGoEndpoint<SubchartVersionResponse>(
           '/api/tools/versions/subchart',
@@ -54,9 +55,10 @@ Returns the version number (e.g., "15.2.0") or "?" if the chart is not found.`,
           authHeader
         );
         
+        console.log('[latestSubchartVersion] Got response:', response);
         return response;
       } catch (error) {
-        console.error('latestSubchartVersion error:', error);
+        console.error('[latestSubchartVersion] Error:', error);
         return {
           success: false,
           version: '?',

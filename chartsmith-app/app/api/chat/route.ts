@@ -23,7 +23,7 @@
  * Response: AI SDK Text Stream (for use with useChat hook)
  */
 
-import { streamText, convertToModelMessages, type UIMessage } from 'ai';
+import { streamText, convertToModelMessages, stepCountIs, type UIMessage } from 'ai';
 import { 
   getModel, 
   isValidProvider, 
@@ -50,6 +50,15 @@ export async function POST(request: Request) {
     // Parse request body
     const body: ChatRequestBody = await request.json();
     const { messages, provider, model, workspaceId, revisionNumber } = body;
+    
+    // Debug logging for tool setup
+    console.log('[/api/chat] Request received:', { 
+      hasMessages: !!messages?.length, 
+      provider, 
+      model, 
+      workspaceId, 
+      revisionNumber 
+    });
     
     // Extract auth header for forwarding to Go backend (PR1.5)
     const authHeader = request.headers.get('Authorization') || undefined;
@@ -104,6 +113,11 @@ export async function POST(request: Request) {
     const tools = workspaceId 
       ? createTools(authHeader, workspaceId, revisionNumber || 1)
       : undefined;
+    
+    console.log('[/api/chat] Tools created:', { 
+      hasTools: !!tools, 
+      toolNames: tools ? Object.keys(tools) : [] 
+    });
 
     // Convert messages to core format and stream the response
     const result = streamText({
@@ -111,10 +125,12 @@ export async function POST(request: Request) {
       system: CHARTSMITH_TOOL_SYSTEM_PROMPT,
       messages: convertToModelMessages(messages),
       tools, // PR1.5: Tools for chart operations
+      stopWhen: stepCountIs(5), // Allow up to 5 tool calls per request (AI SDK v5 replacement for maxSteps)
     });
 
-    // Return the streaming response using Text Stream protocol (AI SDK v5)
-    return result.toTextStreamResponse();
+    // Return the streaming response using UI Message Stream protocol (AI SDK v5)
+    // This format properly handles tool calls and results
+    return result.toUIMessageStreamResponse();
 
   } catch (error) {
     console.error('Chat API error:', error);

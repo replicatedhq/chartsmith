@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { useChat } from "@ai-sdk/react";
-import { TextStreamChatTransport, type UIMessage } from "ai";
+import { type UIMessage, DefaultChatTransport } from "ai";
 import { Send, Loader2, Square, RefreshCw, Sparkles } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { ProviderSelector } from "./ProviderSelector";
@@ -60,18 +60,8 @@ export function AIChat({
   // Input state (managed separately in AI SDK v5)
   const [input, setInput] = useState("");
 
-  // Create transport with dynamic body containing provider/model
-  const transport = React.useMemo(() => {
-    return new TextStreamChatTransport({
-      api: "/api/chat",
-      body: {
-        provider: selectedProvider,
-        model: selectedModel,
-      },
-    });
-  }, [selectedProvider, selectedModel]);
-
   // useChat hook from AI SDK v5
+  // Using api prop directly for proper UI Message Stream handling
   const {
     messages,
     sendMessage,
@@ -82,7 +72,13 @@ export function AIChat({
     setMessages,
     clearError,
   } = useChat({
-    transport,
+    transport: new DefaultChatTransport({
+      api: "/api/chat",
+      body: {
+        provider: selectedProvider,
+        model: selectedModel,
+      },
+    }),
     messages: initialMessages,
     experimental_throttle: STREAMING_THROTTLE_MS,
     onFinish: () => {

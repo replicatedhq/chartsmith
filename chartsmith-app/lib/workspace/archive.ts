@@ -6,6 +6,7 @@ import * as path from "node:path";
 import * as os from "node:os";
 import * as tar from 'tar';
 import gunzip from 'gunzip-maybe';
+import { Readable } from "node:stream";
 // Note: Using native fetch (Node.js 18+) - no import needed
 import yaml from 'yaml';
 
@@ -234,7 +235,13 @@ async function downloadChartArchiveFromURL(url: string): Promise<string> {
   await fs.mkdir(extractPath);
 
   return new Promise((resolve, reject) => {
-    response.body.pipe(gunzip())
+    if (!response.body) {
+      reject(new Error('Response body is null'));
+      return;
+    }
+    // Convert web ReadableStream to Node.js Readable for piping
+    const nodeStream = Readable.fromWeb(response.body as import('stream/web').ReadableStream);
+    nodeStream.pipe(gunzip())
       .pipe(tar.extract({ cwd: extractPath }))
       .on('finish', () => resolve(extractPath))
       .on('error', reject);
