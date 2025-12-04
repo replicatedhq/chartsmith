@@ -67,8 +67,12 @@ export function middleware(request: NextRequest) {
   );
   
   // For internal API paths, check for internal API key header
+  // SECURITY NOTE: We only check for header presence here, NOT validity.
+  // Actual key validation happens in checkApiAuth() within each route handler.
+  // This middleware pattern allows the request to proceed to the route,
+  // where proper authentication occurs against process.env.INTERNAL_API_KEY.
+  // See: lib/auth/api-guard.ts for the actual validation logic.
   if (isInternalApiPath && request.headers.get('X-Internal-API-Key')) {
-    // Let the route handle the internal API key validation
     return NextResponse.next();
   }
   

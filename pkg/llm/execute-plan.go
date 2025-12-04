@@ -73,6 +73,9 @@ func CreateExecutePlan(ctx context.Context, planActionCreatedCh chan types.Actio
 					return
 				}
 				
+				// Emit decoded text to UI via websocket
+				streamCh <- text
+				
 				fullResponseWithTags += text
 
 				aps, err := parseActionsInResponse(fullResponseWithTags)

@@ -1,6 +1,7 @@
 package llm
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -8,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 )
 
 type NextJSClient struct {
@@ -17,15 +19,28 @@ type NextJSClient struct {
 }
 
 func NewNextJSClient() *NextJSClient {
-		baseURL := os.Getenv("NEXTJS_API_URL")
-		if baseURL == "" {
-			baseURL = "http://localhost:3000"
-		}
+	baseURL := os.Getenv("NEXTJS_API_URL")
+	if baseURL == "" {
+		baseURL = "http://localhost:3000"
+	}
 
-		internalKey := os.Getenv("INTERNAL_API_KEY")
-		if internalKey == "" {
-			internalKey = "dev-internal-key"
+	internalKey := os.Getenv("INTERNAL_API_KEY")
+	env := os.Getenv("GO_ENV")
+
+	// In production, INTERNAL_API_KEY is required - fail hard if not set
+	if internalKey == "" {
+		if env == "production" {
+			panic("INTERNAL_API_KEY environment variable is required in production")
 		}
+		// Only use default key in development
+		internalKey = "dev-internal-key"
+	}
+
+	// Warn if using default key with a non-localhost URL (possible misconfiguration)
+	if internalKey == "dev-internal-key" && baseURL != "http://localhost:3000" {
+		fmt.Fprintf(os.Stderr, "WARNING: Using default dev-internal-key with non-localhost URL (%s). "+
+			"This may indicate a misconfiguration. Set INTERNAL_API_KEY for production.\n", baseURL)
+	}
 
 	return &NextJSClient{
 		baseURL:     baseURL,
@@ -213,22 +228,88 @@ func (c *NextJSClient) postStream(ctx context.Context, path string, req any) (<-
 	return textCh, errCh
 }
 
+// parseStream parses the Vercel AI SDK text stream format.
+// The format uses line-based messages with type prefixes:
+//   - "0:" prefix for text deltas, followed by a JSON-encoded string
+//   - "e:" prefix for error/finish events
+//   - "d:" prefix for done events
+//
+// Example stream:
+//
+//	0:"Here is "
+//	0:"the plan"
+//	0:" for your chart"
+//	e:{"finishReason":"stop"}
+//	d:{"finishReason":"stop"}
 func (c *NextJSClient) parseStream(body io.Reader, textCh chan<- string, errCh chan<- error) {
-	buf := make([]byte, 64)
+	scanner := bufio.NewScanner(body)
+	// Increase buffer size for potentially long lines
+	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
 
-	for {
-		n, err := body.Read(buf)
-		if n > 0 {
-			textCh <- string(buf[:n])
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		// Skip empty lines (keep-alives)
+		if line == "" {
+			continue
 		}
 
-		if err == io.EOF {
-			return
+		// Parse Vercel AI SDK format: "0:\"text content\""
+		// The prefix "0:" indicates a text delta
+		if strings.HasPrefix(line, "0:") {
+			// Extract the JSON string after "0:"
+			jsonStr := line[2:]
+
+			// The content is a JSON-encoded string (e.g., "\"Hello\"")
+			var text string
+			if err := json.Unmarshal([]byte(jsonStr), &text); err != nil {
+				// If JSON parsing fails, try using the raw content
+				// This handles edge cases where the content might not be properly escaped
+				text = jsonStr
+			}
+
+			if text != "" {
+				textCh <- text
+			}
+			continue
 		}
 
-		if err != nil {
-			errCh <- fmt.Errorf("error reading stream: %w", err)
-			return
+		// Handle other prefixes (e:, d:, etc.) - these are control messages
+		// "e:" - finish event with metadata
+		// "d:" - done event
+		// We can safely ignore these for text extraction
+		if strings.HasPrefix(line, "e:") || strings.HasPrefix(line, "d:") {
+			// Control messages, skip
+			continue
 		}
+
+		// Handle SSE format (data: prefix) as fallback
+		if strings.HasPrefix(line, "data: ") {
+			data := strings.TrimPrefix(line, "data: ")
+
+			// Skip [DONE] marker
+			if data == "[DONE]" {
+				continue
+			}
+
+			// Try to parse as JSON with a "text" field
+			var event struct {
+				Text string `json:"text"`
+				Type string `json:"type"`
+			}
+			if err := json.Unmarshal([]byte(data), &event); err == nil {
+				if event.Text != "" {
+					textCh <- event.Text
+				}
+			}
+			continue
+		}
+
+		// For any unrecognized format, log but don't fail
+		// This makes the parser more resilient to format changes
+	}
+
+	if err := scanner.Err(); err != nil {
+		errCh <- fmt.Errorf("error reading stream: %w", err)
 	}
 }
