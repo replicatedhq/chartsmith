@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/replicatedhq/chartsmith/pkg/llm"
 	"github.com/replicatedhq/chartsmith/pkg/logger"
@@ -75,32 +76,44 @@ func handleNewPlanNotification(ctx context.Context, payload string) error {
 
 	var buffer strings.Builder
 	done := false
+	
+	// Debounce realtime updates to avoid sending too many events
+	// This batches updates every 150ms for smoother streaming display
+	ticker := time.NewTicker(150 * time.Millisecond)
+	defer ticker.Stop()
+	pendingUpdate := false
+	
 	for !done {
 		select {
 		case stream := <-streamCh:
 			// Trust the stream's spacing and just append
 			buffer.WriteString(stream)
+			pendingUpdate = true
 
-			// Send realtime update with current state
-			plan.Description = buffer.String()
-			e := realtimetypes.PlanUpdatedEvent{
-				WorkspaceID: w.ID,
-				Plan:        plan,
-			}
-
-			if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
-				return fmt.Errorf("failed to send plan update: %w", err)
-			}
-
-			// Write to database
+			// Write to database immediately (this is fine to do frequently)
 			if err := workspace.AppendPlanDescription(ctx, plan.ID, stream); err != nil {
 				return fmt.Errorf("error appending plan description: %w", err)
+			}
+		case <-ticker.C:
+			// Send batched realtime update if there's pending content
+			if pendingUpdate {
+				plan.Description = buffer.String()
+				e := realtimetypes.PlanUpdatedEvent{
+					WorkspaceID: w.ID,
+					Plan:        plan,
+				}
+				if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
+					return fmt.Errorf("failed to send plan update: %w", err)
+				}
+				pendingUpdate = false
 			}
 		case err := <-doneCh:
 			if err != nil {
 				return fmt.Errorf("error creating initial plan: %w", err)
 			}
 
+			// Send final update with review status (includes any pending content)
+			plan.Description = buffer.String()
 			plan.Status = workspacetypes.PlanStatusReview
 
 			e := realtimetypes.PlanUpdatedEvent{

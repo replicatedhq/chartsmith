@@ -230,88 +230,100 @@ func (c *NextJSClient) postStream(ctx context.Context, path string, req any) (<-
 
 // parseStream parses streaming responses from the Vercel AI SDK.
 // Supports multiple formats:
-//   - Plain text streaming (toTextStreamResponse) - raw text lines
+//   - Plain text streaming (toTextStreamResponse) - raw bytes, no delimiters
 //   - Data Stream Protocol (toDataStreamResponse) - "0:" prefix for text, "e:"/"d:" for events
 //   - SSE format (data: prefix) - legacy fallback
 //
-// Example plain text stream:
-//
-//	Here is the plan
-//	for your chart
-//
-// Example Data Stream Protocol:
-//
-//	0:"Here is "
-//	0:"the plan"
-//	e:{"finishReason":"stop"}
+// For plain text streaming, we read raw bytes to preserve all whitespace and newlines.
+// For protocol formats, we use line-based parsing.
 func (c *NextJSClient) parseStream(body io.Reader, textCh chan<- string, errCh chan<- error) {
+	// Peek at the first few bytes to detect the format
+	bufReader := bufio.NewReader(body)
+	peek, err := bufReader.Peek(2)
+	if err != nil && err != io.EOF {
+		errCh <- fmt.Errorf("error peeking stream: %w", err)
+		return
+	}
+
+	// Check if this looks like Data Stream Protocol (starts with "0:" or other prefixes)
+	isDataStreamProtocol := len(peek) >= 2 && (string(peek) == "0:" || string(peek) == "e:" || string(peek) == "d:")
+
+	if isDataStreamProtocol {
+		// Use line-based parsing for Data Stream Protocol
+		c.parseDataStreamProtocol(bufReader, textCh, errCh)
+	} else {
+		// Use raw byte reading for plain text streaming (toTextStreamResponse)
+		c.parsePlainTextStream(bufReader, textCh, errCh)
+	}
+}
+
+// parsePlainTextStream reads raw bytes from the stream, preserving all whitespace and newlines.
+// This is used for toTextStreamResponse() which sends raw text without protocol prefixes.
+func (c *NextJSClient) parsePlainTextStream(body io.Reader, textCh chan<- string, errCh chan<- error) {
+	buf := make([]byte, 4096)
+	for {
+		n, err := body.Read(buf)
+		if n > 0 {
+			textCh <- string(buf[:n])
+		}
+		if err != nil {
+			if err != io.EOF {
+				errCh <- fmt.Errorf("error reading stream: %w", err)
+			}
+			return
+		}
+	}
+}
+
+// parseDataStreamProtocol parses the Vercel AI SDK Data Stream Protocol format.
+// Lines are prefixed with type indicators:
+//   - "0:" - text content (JSON-encoded string)
+//   - "e:" - finish event
+//   - "d:" - done event
+func (c *NextJSClient) parseDataStreamProtocol(body io.Reader, textCh chan<- string, errCh chan<- error) {
 	scanner := bufio.NewScanner(body)
-	// Increase buffer size for potentially long lines
 	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
 
 	for scanner.Scan() {
 		line := scanner.Text()
 
-		// Skip empty lines (keep-alives)
 		if line == "" {
 			continue
 		}
 
-		// Parse Vercel AI SDK format: "0:\"text content\""
-		// The prefix "0:" indicates a text delta
+		// Parse "0:" prefix for text deltas
 		if strings.HasPrefix(line, "0:") {
-			// Extract the JSON string after "0:"
 			jsonStr := line[2:]
-
-			// The content is a JSON-encoded string (e.g., "\"Hello\"")
 			var text string
 			if err := json.Unmarshal([]byte(jsonStr), &text); err != nil {
-				// If JSON parsing fails, try using the raw content
-				// This handles edge cases where the content might not be properly escaped
 				text = jsonStr
 			}
-
 			if text != "" {
 				textCh <- text
 			}
 			continue
 		}
 
-		// Handle other prefixes (e:, d:, etc.) - these are control messages
-		// "e:" - finish event with metadata
-		// "d:" - done event
-		// We can safely ignore these for text extraction
+		// Skip control messages
 		if strings.HasPrefix(line, "e:") || strings.HasPrefix(line, "d:") {
-			// Control messages, skip
 			continue
 		}
 
-		// Handle SSE format (data: prefix) as fallback
+		// Handle SSE format as fallback
 		if strings.HasPrefix(line, "data: ") {
 			data := strings.TrimPrefix(line, "data: ")
-
-			// Skip [DONE] marker
 			if data == "[DONE]" {
 				continue
 			}
-
-			// Try to parse as JSON with a "text" field
 			var event struct {
 				Text string `json:"text"`
 				Type string `json:"type"`
 			}
-			if err := json.Unmarshal([]byte(data), &event); err == nil {
-				if event.Text != "" {
-					textCh <- event.Text
-				}
+			if err := json.Unmarshal([]byte(data), &event); err == nil && event.Text != "" {
+				textCh <- event.Text
 			}
 			continue
 		}
-
-		// Handle plain text streaming (toTextStreamResponse format)
-		// If the line doesn't match any known prefix format, treat it as plain text
-		// This handles the Vercel AI SDK's toTextStreamResponse() output
-		textCh <- line
 	}
 
 	if err := scanner.Err(); err != nil {
