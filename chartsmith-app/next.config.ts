@@ -18,7 +18,7 @@ const nextConfig: NextConfig = {
     ],
   },
   // Keep Node.js-only packages as external (not bundled)
-  // Required for pg (PostgreSQL) which uses 'dns' and other Node.js modules
+  // Required for packages that use Node.js-only modules
   serverExternalPackages: ['pg', 'pg-native'],
 };
 
