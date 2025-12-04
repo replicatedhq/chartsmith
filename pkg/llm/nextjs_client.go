@@ -228,19 +228,22 @@ func (c *NextJSClient) postStream(ctx context.Context, path string, req any) (<-
 	return textCh, errCh
 }
 
-// parseStream parses the Vercel AI SDK text stream format.
-// The format uses line-based messages with type prefixes:
-//   - "0:" prefix for text deltas, followed by a JSON-encoded string
-//   - "e:" prefix for error/finish events
-//   - "d:" prefix for done events
+// parseStream parses streaming responses from the Vercel AI SDK.
+// Supports multiple formats:
+//   - Plain text streaming (toTextStreamResponse) - raw text lines
+//   - Data Stream Protocol (toDataStreamResponse) - "0:" prefix for text, "e:"/"d:" for events
+//   - SSE format (data: prefix) - legacy fallback
 //
-// Example stream:
+// Example plain text stream:
+//
+//	Here is the plan
+//	for your chart
+//
+// Example Data Stream Protocol:
 //
 //	0:"Here is "
 //	0:"the plan"
-//	0:" for your chart"
 //	e:{"finishReason":"stop"}
-//	d:{"finishReason":"stop"}
 func (c *NextJSClient) parseStream(body io.Reader, textCh chan<- string, errCh chan<- error) {
 	scanner := bufio.NewScanner(body)
 	// Increase buffer size for potentially long lines
@@ -305,8 +308,10 @@ func (c *NextJSClient) parseStream(body io.Reader, textCh chan<- string, errCh c
 			continue
 		}
 
-		// For any unrecognized format, log but don't fail
-		// This makes the parser more resilient to format changes
+		// Handle plain text streaming (toTextStreamResponse format)
+		// If the line doesn't match any known prefix format, treat it as plain text
+		// This handles the Vercel AI SDK's toTextStreamResponse() output
+		textCh <- line
 	}
 
 	if err := scanner.Err(); err != nil {
