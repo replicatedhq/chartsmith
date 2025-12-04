@@ -37,19 +37,23 @@ export function ChatContainer({ session }: ChatContainerProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const roleMenuRef = useRef<HTMLDivElement>(null);
   
+  // Memoize the transport to prevent recreation on every render
+  const chatTransport = useMemo(() => new TextStreamChatTransport({
+    api: '/api/chat',
+    credentials: 'include', // Ensure cookies are sent with requests
+    body: {
+      workspaceId: workspace?.id,
+      modelId: selectedModelId,
+    },
+  }), [workspace?.id, selectedModelId]);
+  
   // Vercel AI SDK useChat hook for conversational messages
   const { 
     messages: aiMessages, 
     sendMessage,
     status: aiStatus,
   } = useChat({
-    transport: new TextStreamChatTransport({
-      api: '/api/chat',
-      body: {
-        workspaceId: workspace?.id,
-        modelId: selectedModelId,
-      },
-    }),
+    transport: chatTransport,
   });
   
   const aiIsLoading = aiStatus === 'streaming' || aiStatus === 'submitted';

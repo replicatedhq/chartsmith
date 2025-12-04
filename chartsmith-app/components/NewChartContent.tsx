@@ -46,7 +46,7 @@ export function NewChartContent({ session, chatInput, setChatInput, handleSubmit
       <div className="flex-1 h-full">
         <h1 className="text-2xl font-bold p-4">Create a new Helm chart</h1>
         <ScrollingContent forceScroll={true}>
-          <div className="pb-48">
+          <div className={showInput ? "pb-48" : "pb-4"}>
             {messages.map((item) => (
               <div key={item.id}>
                 <NewChartChatMessage

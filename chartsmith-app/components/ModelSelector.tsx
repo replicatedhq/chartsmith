@@ -105,7 +105,7 @@ export function ModelSelector({ selectedModelId, onModelChange, compact = false 
             ? "bg-transparent border-0 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300" 
             : "bg-transparent border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300"
         }`}
-        style={{ minWidth: '80px', width: 'auto' }}
+        style={{ minWidth: '140px', width: 'auto' }}
       >
         {displayModels.map((model) => (
           <option key={model.id} value={model.id} className="bg-white dark:bg-dark-surface">

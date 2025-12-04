@@ -103,14 +103,16 @@ export function TtlshModal({ isOpen, onClose }: TtlshModalProps) {
         setWorkspaceId(match[1]);
         checkExistingPublish(match[1]);
       }
-    } else {
-      // Clear polling interval when modal closes
-      if (statusPollingInterval) {
-        clearInterval(statusPollingInterval);
-        setStatusPollingInterval(null);
-      }
     }
-  }, [isOpen, checkExistingPublish, statusPollingInterval]);
+  }, [isOpen, checkExistingPublish]);
+  
+  // Separate effect to clean up polling interval when modal closes
+  useEffect(() => {
+    if (!isOpen && statusPollingInterval) {
+      clearInterval(statusPollingInterval);
+      setStatusPollingInterval(null);
+    }
+  }, [isOpen, statusPollingInterval]);
 
   // Cleanup interval on unmount
   useEffect(() => {
