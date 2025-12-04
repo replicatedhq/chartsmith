@@ -75,6 +75,7 @@ Chartsmith has **two parallel chat systems** that coexist:
 OPENROUTER_API_KEY=sk-or-v1-xxxxx  # Required for AI SDK chat
 DEFAULT_AI_PROVIDER=anthropic       # Default: anthropic
 DEFAULT_AI_MODEL=anthropic/claude-sonnet-4  # Default model
+GO_BACKEND_URL=http://localhost:8080  # Go HTTP server for tools (PR1.5)
 ```
 
 ### Testing
@@ -82,3 +83,103 @@ DEFAULT_AI_MODEL=anthropic/claude-sonnet-4  # Default model
 - Unit tests: `lib/ai/__tests__/`, `app/api/chat/__tests__/`
 - Mock utilities: `lib/__tests__/ai-mock-utils.ts`
 - No real API calls in tests - all mocked for speed and determinism
+
+## AI SDK Tool Integration (PR1.5)
+
+PR1.5 adds tool support to the AI SDK chat, enabling the AI to perform chart operations.
+
+### Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    NODE / AI SDK CORE                            │
+│                    (All LLM "thinking")                          │
+│                                                                  │
+│  lib/ai/llmClient.ts     - Shared LLM client, runChat wrapper   │
+│  lib/ai/prompts.ts       - System prompts with tool docs        │
+│  lib/ai/tools/*.ts       - Tool definitions (4 total)           │
+│  lib/ai/tools/utils.ts   - callGoEndpoint helper                │
+│                                                                  │
+│  Tools (4 total):                                                │
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │ TYPESCRIPT-ONLY TOOLS (no Go endpoint):                      ││
+│  │ - getChartContext         → Direct getWorkspace() call       ││
+│  │                                                              ││
+│  │ GO BACKEND TOOLS (need HTTP endpoints):                      ││
+│  │ - textEditor              → POST /api/tools/editor           ││
+│  │ - latestSubchartVersion   → POST /api/tools/versions/subchart││
+│  │ - latestKubernetesVersion → POST /api/tools/versions/k8s     ││
+│  └─────────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼ HTTP (JSON, non-streaming)
+┌─────────────────────────────────────────────────────────────────┐
+│                    GO BACKEND (port 8080)                        │
+│                    (Pure application logic)                      │
+│                                                                  │
+│  pkg/api/server.go            - HTTP server startup              │
+│  pkg/api/errors.go            - Standardized error responses     │
+│  pkg/api/handlers/editor.go   - File operations (textEditor)     │
+│  pkg/api/handlers/versions.go - Version lookups (both tools)     │
+│                                                                  │
+│  NO LLM CALLS - Go is pure application logic                     │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Tool Descriptions
+
+| Tool | Purpose | Implementation |
+|------|---------|----------------|
+| `getChartContext` | Load workspace files and metadata | TypeScript-only (calls `getWorkspace()`) |
+| `textEditor` | View, create, edit files | Go HTTP (`/api/tools/editor`) |
+| `latestSubchartVersion` | ArtifactHub subchart lookup | Go HTTP (`/api/tools/versions/subchart`) |
+| `latestKubernetesVersion` | K8s version info | Go HTTP (`/api/tools/versions/kubernetes`) |
+
+### Key Files (PR1.5)
+
+| File | Purpose |
+|------|---------|
+| `lib/ai/tools/index.ts` | Tool exports and `createTools()` factory |
+| `lib/ai/tools/utils.ts` | `callGoEndpoint()` for Go HTTP calls |
+| `lib/ai/tools/getChartContext.ts` | Workspace context tool (TypeScript-only) |
+| `lib/ai/tools/textEditor.ts` | File operations tool |
+| `lib/ai/tools/latestSubchartVersion.ts` | Subchart version lookup tool |
+| `lib/ai/tools/latestKubernetesVersion.ts` | K8s version info tool |
+| `lib/ai/llmClient.ts` | `runChat()` wrapper with tools support |
+| `lib/ai/prompts.ts` | System prompts with tool documentation |
+| `pkg/api/server.go` | Go HTTP server for tool endpoints |
+| `pkg/api/handlers/editor.go` | textEditor Go handler |
+| `pkg/api/handlers/versions.go` | Version lookup Go handlers |
+
+### Request Flow
+
+1. User sends message to `/api/chat` with `workspaceId` and `revisionNumber`
+2. Route handler extracts auth header and creates tools via `createTools()`
+3. `streamText()` is called with model, messages, system prompt, and tools
+4. AI decides to use a tool based on user's request
+5. Tool's `execute()` function runs:
+   - For `getChartContext`: Calls TypeScript `getWorkspace()` directly
+   - For Go-backed tools: Calls `callGoEndpoint()` → Go HTTP server
+6. Tool result is returned to the AI
+7. AI incorporates result into its response
+
+### Error Response Format
+
+All Go endpoints return standardized JSON errors:
+
+```json
+{
+  "success": false,
+  "message": "Human-readable error message",
+  "code": "ERROR_CODE"
+}
+```
+
+Error codes: `VALIDATION_ERROR`, `NOT_FOUND`, `INTERNAL_ERROR`, `EXTERNAL_API_ERROR`
+
+### Auth Pattern
+
+- Auth header is extracted from the incoming request in `route.ts`
+- Passed to tool factories via closure: `createTools(authHeader, workspaceId, revisionNumber)`
+- Tools forward auth header to Go endpoints via `callGoEndpoint()`
+- Go handlers validate tokens against `extension_token` table

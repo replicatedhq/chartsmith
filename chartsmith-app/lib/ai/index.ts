@@ -6,6 +6,7 @@
  * @example
  * ```typescript
  * import { getModel, AVAILABLE_PROVIDERS, CHARTSMITH_SYSTEM_PROMPT } from '@/lib/ai';
+ * import { createTools, runChat } from '@/lib/ai';
  * ```
  */
 
@@ -44,4 +45,24 @@ export {
   CHARTSMITH_SYSTEM_PROMPT,
   STREAMING_THROTTLE_MS,
 } from './config';
+
+// PR1.5: LLM Client and tools
+export { runChat, hasToolCalls } from './llmClient';
+export { 
+  createTools,
+  TOOL_NAMES,
+  createGetChartContextTool,
+  createTextEditorTool,
+  createLatestSubchartVersionTool,
+  createLatestKubernetesVersionTool,
+  callGoEndpoint,
+} from './tools';
+export type { ToolName } from './tools';
+
+// PR1.5: System prompts with tool documentation
+export {
+  CHARTSMITH_TOOL_SYSTEM_PROMPT,
+  CHARTSMITH_CHAT_PROMPT,
+  getSystemPromptWithContext,
+} from './prompts';
 

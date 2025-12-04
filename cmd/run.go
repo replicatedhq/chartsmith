@@ -3,18 +3,22 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os/signal"
 	"syscall"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/replicatedhq/chartsmith/pkg/api"
 	"github.com/replicatedhq/chartsmith/pkg/listener"
+	"github.com/replicatedhq/chartsmith/pkg/logger"
 	"github.com/replicatedhq/chartsmith/pkg/param"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 	"github.com/replicatedhq/chartsmith/pkg/realtime"
 	realtimetypes "github.com/replicatedhq/chartsmith/pkg/realtime/types"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"go.uber.org/zap"
 )
 
 func RunCmd() *cobra.Command {
@@ -70,6 +74,15 @@ func runWorker(ctx context.Context, pgURI string) error {
 	// Start the connection heartbeat before starting the listeners
 	// This ensures our connections stay alive even during idle periods
 	listener.StartHeartbeat(ctx)
+
+	// Start HTTP server for AI SDK tool execution in a goroutine
+	// This runs alongside the queue listener and handles tool calls from Next.js
+	go func() {
+		logger.Info("Starting HTTP server for AI SDK tools on port 8080")
+		if err := api.StartHTTPServer(ctx, "8080"); err != nil && err != http.ErrServerClosed {
+			logger.Error(fmt.Errorf("HTTP server error: %w", err), zap.String("port", "8080"))
+		}
+	}()
 	
 	if err := listener.StartListeners(ctx); err != nil {
 		return fmt.Errorf("failed to start listeners: %w", err)

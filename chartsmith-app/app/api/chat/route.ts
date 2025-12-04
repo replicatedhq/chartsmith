@@ -9,12 +9,15 @@
  * - Direct streaming responses via AI SDK Text Stream protocol
  * - Multi-provider support via OpenRouter
  * - Standard useChat hook compatibility
+ * - Tool support for chart operations (PR1.5)
  * 
  * Request body:
  * {
  *   messages: Array<{ role: 'user' | 'assistant', content: string }>,
  *   provider?: 'openai' | 'anthropic',
- *   model?: string (e.g., 'openai/gpt-4o')
+ *   model?: string (e.g., 'openai/gpt-4o'),
+ *   workspaceId?: string (required for tool operations),
+ *   revisionNumber?: number (required for tool operations)
  * }
  * 
  * Response: AI SDK Text Stream (for use with useChat hook)
@@ -25,24 +28,31 @@ import {
   getModel, 
   isValidProvider, 
   isValidModel,
-  CHARTSMITH_SYSTEM_PROMPT,
 } from '@/lib/ai';
+import { createTools } from '@/lib/ai/tools';
+import { CHARTSMITH_TOOL_SYSTEM_PROMPT } from '@/lib/ai/prompts';
 
 // Set maximum streaming duration (must be a literal for Next.js config)
 export const maxDuration = 60;
 
 // Request body interface - using UIMessage from AI SDK v5
+// PR1.5: Added workspaceId and revisionNumber for tool support
 interface ChatRequestBody {
   messages: UIMessage[];
   provider?: string;
   model?: string;
+  workspaceId?: string;      // Required for tool operations
+  revisionNumber?: number;   // Required for tool operations
 }
 
 export async function POST(request: Request) {
   try {
     // Parse request body
     const body: ChatRequestBody = await request.json();
-    const { messages, provider, model } = body;
+    const { messages, provider, model, workspaceId, revisionNumber } = body;
+    
+    // Extract auth header for forwarding to Go backend (PR1.5)
+    const authHeader = request.headers.get('Authorization') || undefined;
 
     // Validate messages array
     if (!messages || !Array.isArray(messages)) {
@@ -89,12 +99,18 @@ export async function POST(request: Request) {
     // Get the model instance
     const modelInstance = getModel(provider, model);
 
+    // Create tools if workspace context is provided (PR1.5)
+    // Tools require workspaceId to operate on files
+    const tools = workspaceId 
+      ? createTools(authHeader, workspaceId, revisionNumber || 1)
+      : undefined;
+
     // Convert messages to core format and stream the response
     const result = streamText({
       model: modelInstance,
-      system: CHARTSMITH_SYSTEM_PROMPT,
+      system: CHARTSMITH_TOOL_SYSTEM_PROMPT,
       messages: convertToModelMessages(messages),
-      // Note: Tools are NOT included in PR1 - they will be added in PR1.5
+      tools, // PR1.5: Tools for chart operations
     });
 
     // Return the streaming response using Text Stream protocol (AI SDK v5)
