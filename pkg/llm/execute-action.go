@@ -20,6 +20,7 @@ const (
 	TextEditor_Sonnet37 = "text_editor_20250124"
 	TextEditor_Sonnet35 = "text_editor_20241022"
 
+	Model_Sonnet4  = "claude-sonnet-4-20250514"
 	Model_Sonnet37 = "claude-3-7-sonnet-20250219"
 	Model_Sonnet35 = "claude-3-5-sonnet-20241022"
 
@@ -541,7 +542,7 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 
 	for {
 		stream := client.Messages.NewStreaming(ctx, anthropic.MessageNewParams{
-			Model:     anthropic.F(Model_Sonnet35),
+			Model:     anthropic.F(anthropic.Model(Model_Sonnet4)),
 			MaxTokens: anthropic.F(int64(8192)),
 			Messages:  anthropic.F(messages),
 			Tools:     anthropic.F(toolUnionParams),

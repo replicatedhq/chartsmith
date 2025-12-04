@@ -42,12 +42,13 @@ func (p *Parser) ParseArtifacts(chunk string) {
 		attributes := match[1]
 		content := strings.TrimSpace(match[2])
 
-		// Extract path from attributes - removed extra quote mark from regex
+		// Extract path from attributes, default to Chart.yaml if not specified
+		path := "Chart.yaml"
 		pathMatch := regexp.MustCompile(`path="([^"]*)"`).FindStringSubmatch(attributes)
 		if len(pathMatch) > 1 {
-			path := pathMatch[1]
-			p.addArtifact(content, path)
+			path = pathMatch[1]
 		}
+		p.addArtifact(content, path)
 
 		// Remove complete artifact from buffer
 		p.buffer = strings.Replace(p.buffer, match[0], "", 1)
@@ -58,18 +59,19 @@ func (p *Parser) ParseArtifacts(chunk string) {
 	if partialStart != -1 {
 		partialContent := p.buffer[partialStart:]
 
-		// Try to extract path from the opening tag - removed extra quote mark from regex
-		pathMatch := regexp.MustCompile(`<chartsmithArtifact[^>]*path="([^"]*)"`).FindStringSubmatch(partialContent)
-		if len(pathMatch) > 1 {
-			path := pathMatch[1]
+		// Only process content if we found the closing angle bracket
+		if strings.Contains(partialContent, ">") {
+			// Try to extract path from the opening tag, default to Chart.yaml
+			path := "Chart.yaml"
+			pathMatch := regexp.MustCompile(`<chartsmithArtifact[^>]*path="([^"]*)"`).FindStringSubmatch(partialContent)
+			if len(pathMatch) > 1 {
+				path = pathMatch[1]
+			}
 
-			// Only process content if we found the closing angle bracket
-			if strings.Contains(partialContent, ">") {
-				contentStart := strings.Index(partialContent, ">") + 1
-				content := strings.TrimSpace(partialContent[contentStart:])
-				if content != "" {
-					p.addArtifact(content, path)
-				}
+			contentStart := strings.Index(partialContent, ">") + 1
+			content := strings.TrimSpace(partialContent[contentStart:])
+			if content != "" {
+				p.addArtifact(content, path)
 			}
 		}
 	}

@@ -3,15 +3,31 @@ package llm
 import (
 	"context"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
 	llmtypes "github.com/replicatedhq/chartsmith/pkg/llm/types"
 	"github.com/replicatedhq/chartsmith/pkg/param"
+	"github.com/replicatedhq/chartsmith/pkg/persistence"
 	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 )
 
 func TestExecuteAction(t *testing.T) {
+	// This test requires both Anthropic API access and a Postgres database
+	// Skip if CHARTSMITH_PG_URI is not set or if running in short mode
+	if os.Getenv("CHARTSMITH_PG_URI") == "" {
+		t.Skip("Skipping TestExecuteAction: CHARTSMITH_PG_URI not set (integration test)")
+	}
+	if testing.Short() {
+		t.Skip("Skipping TestExecuteAction in short mode (integration test)")
+	}
+
+	// Initialize Postgres connection pool for logging
+	if err := persistence.InitPostgres(persistence.PostgresOpts{URI: os.Getenv("CHARTSMITH_PG_URI")}); err != nil {
+		t.Skipf("Skipping TestExecuteAction: failed to initialize Postgres pool: %v", err)
+	}
+
 	// Add a timeout of 5 minutes for this test
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()

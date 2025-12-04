@@ -127,19 +127,19 @@ func TestGetGVKPriority(t *testing.T) {
 			expected: 1,
 		},
 		{
-			name:     "service has priority 2",
+			name:     "service has priority 10",
 			gvk:      "v1/Service",
-			expected: 2,
+			expected: 10,
 		},
 		{
-			name:     "deployment has priority 2",
+			name:     "deployment has priority 8",
 			gvk:      "apps/v1/Deployment",
-			expected: 2,
+			expected: 8,
 		},
 		{
-			name:     "empty string has priority 2",
+			name:     "unknown GVK has default priority 11",
 			gvk:      "",
-			expected: 2,
+			expected: 11,
 		},
 	}
 
