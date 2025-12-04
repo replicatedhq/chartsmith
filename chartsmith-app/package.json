@@ -52,6 +52,9 @@
     "tar": "^7.4.3",
     "unified-diff": "^5.0.0"
   },
+  "overrides": {
+    "form-data": ">=4.0.5"
+  },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",
     "@playwright/test": "^1.51.1",
