@@ -77,8 +77,9 @@ type CleanupValuesResponse struct {
 }
 
 type ConversationalRequest struct {
-	Messages []MessageParam `json:"messages"`
-	ModelID  string         `json:"modelId,omitempty"`
+	Messages    []MessageParam `json:"messages"`
+	WorkspaceID string         `json:"workspaceId"`
+	ModelID     string         `json:"modelId,omitempty"`
 }
 
 type ExecuteActionRequest struct {
@@ -126,7 +127,7 @@ func (c *NextJSClient) CleanupValues(ctx context.Context, req CleanupValuesReque
 }
 
 func (c *NextJSClient) StreamConversational(ctx context.Context, req ConversationalRequest) (<-chan string, <-chan error) {
-	return c.postStream(ctx, "/api/llm/conversational", req)
+	return c.postStream(ctx, "/api/chat", req)
 }
 
 func (c *NextJSClient) ExecuteAction(ctx context.Context, req ExecuteActionRequest) (string, []ToolCall, error) {

@@ -34,7 +34,6 @@ const internalApiPaths = [
   '/api/llm/plan',
   '/api/llm/execute-action',
   '/api/llm/cleanup-values',
-  '/api/llm/conversational',
   '/api/chat'
 ];
 

@@ -1,6 +1,5 @@
 import { POST as planPOST } from '@/app/api/llm/plan/route';
 import { POST as executeActionPOST } from '@/app/api/llm/execute-action/route';
-import { POST as conversationalPOST } from '@/app/api/llm/conversational/route';
 import { NextRequest } from 'next/server';
 
 // Mock dependencies
@@ -263,57 +262,5 @@ describe('LLM API Routes', () => {
     });
   });
 
-  describe('/api/llm/conversational', () => {
-    it('should return streaming response', async () => {
-      const request = new NextRequest('http://localhost:3000/api/llm/conversational', {
-        method: 'POST',
-        body: JSON.stringify({
-          messages: [
-            { role: 'user', content: 'Hello' },
-          ],
-        }),
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Internal-API-Key': 'dev-internal-key',
-        },
-      });
-
-      const response = await conversationalPOST(request);
-      
-      expect(response).toBeDefined();
-      expect(mockStreamText).toHaveBeenCalled();
-    });
-
-    it('should return 400 when messages array is missing', async () => {
-      const request = new NextRequest('http://localhost:3000/api/llm/conversational', {
-        method: 'POST',
-        body: JSON.stringify({}),
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Internal-API-Key': 'dev-internal-key',
-        },
-      });
-
-      const response = await conversationalPOST(request);
-      expect(response.status).toBe(400);
-    });
-
-    it('should handle model override', async () => {
-      const request = new NextRequest('http://localhost:3000/api/llm/conversational', {
-        method: 'POST',
-        body: JSON.stringify({
-          messages: [{ role: 'user', content: 'Hello' }],
-          modelId: 'custom-model',
-        }),
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Internal-API-Key': 'dev-internal-key',
-        },
-      });
-
-      const response = await conversationalPOST(request);
-      expect(getModel).toHaveBeenCalledWith('custom-model');
-    });
-  });
 });
 

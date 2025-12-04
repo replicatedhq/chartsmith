@@ -84,7 +84,8 @@ func ConversationalChatMessage(ctx context.Context, streamCh chan string, doneCh
 
 	client := NewNextJSClient()
 	textCh, errCh := client.StreamConversational(ctx, ConversationalRequest{
-		Messages: messages,
+		Messages:    messages,
+		WorkspaceID: w.ID,
 	})
 
 	// Forward streamed text to the provided channel
