@@ -14,8 +14,9 @@ export async function POST(req: NextRequest) {
       return auth.errorResponse!;
     }
     
-    if (!valuesYAML) {
-      return new Response('valuesYAML required', { status: 400 });
+    if (!valuesYAML || valuesYAML.trim() === '') {
+      logger.info('Empty valuesYAML provided, returning empty result');
+      return Response.json({ cleanedYAML: '' });
     }
     
     const model = getModel(modelId);

@@ -80,7 +80,7 @@ func runHelmPublish(dir string, workspaceID string, chartName string, kubeconfig
 	// Update dependencies if Chart.yaml has dependencies
 	fmt.Printf("Updating chart dependencies...\n")
 	depUpdateCmd := exec.CommandContext(ctx, "helm", "dependency", "update", dir)
-	depUpdateCmd.Env = append(os.Environ(), "KUBECONFIG="+kubeconfig)
+	depUpdateCmd.Env = append(os.Environ(), "KUBECONFIG="+kubeconfig, "HELM_MAX_FILE_SIZE=52428800")
 	depUpdateOutput, depErr := depUpdateCmd.CombinedOutput()
 	fmt.Printf("Helm dependency update output:\n%s\n", string(depUpdateOutput))
 	
@@ -101,7 +101,7 @@ func runHelmPublish(dir string, workspaceID string, chartName string, kubeconfig
 	// SIMPLIFIED APPROACH: Package the chart first
 	fmt.Printf("Packaging chart...\n")
 	packageCmd := exec.CommandContext(ctx, "helm", "package", dir, "--destination", os.TempDir())
-	packageCmd.Env = append(os.Environ(), "KUBECONFIG="+kubeconfig)
+	packageCmd.Env = append(os.Environ(), "KUBECONFIG="+kubeconfig, "HELM_MAX_FILE_SIZE=52428800")
 	packageOutput, err := packageCmd.CombinedOutput()
 	fmt.Printf("Helm package output:\n%s\n", string(packageOutput))
 
@@ -140,7 +140,7 @@ func runHelmPublish(dir string, workspaceID string, chartName string, kubeconfig
 
 	// Try direct push to the root of ttl.sh
 	pushCmd := exec.CommandContext(ctx, "helm", "push", chartPackage, remote)
-	pushCmd.Env = append(os.Environ(), "KUBECONFIG="+kubeconfig)
+	pushCmd.Env = append(os.Environ(), "KUBECONFIG="+kubeconfig, "HELM_MAX_FILE_SIZE=52428800")
 	pushOutput, pushErr := pushCmd.CombinedOutput()
 	if pushErr != nil {
 		return fmt.Errorf("failed to push chart: %w\nOutput: %s", pushErr, string(pushOutput))

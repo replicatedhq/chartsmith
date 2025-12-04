@@ -19,7 +19,11 @@ export function FileList({ files, currentFileIndex, isTemplateStep = false }: Fi
   const activeFileRef = useRef<HTMLDivElement>(null);
   
   // Create a memoized status string to use in the dependency array
-  const fileStatusString = useMemo(() => files.map(f => f.status).join(','), [files]);
+  const fileStatusString = useMemo(() => files?.map(f => f.status).join(',') ?? '', [files]);
+
+  if (!files || files.length === 0) {
+    return null;
+  }
 
   useEffect(() => {
     if (activeFileRef.current) {

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useAtom } from "jotai";
 import { FileSearch, FileCheck, Loader2, ArrowRight } from 'lucide-react';
+import { useRouter } from "next/navigation";
 import { useTheme } from "../contexts/ThemeContext";
 import { conversionByIdAtom, conversionsAtom, handleConversionUpdatedAtom } from "@/atoms/workspace";
 import { FileList } from './FileList';
@@ -109,6 +110,7 @@ const ContinueButton = ({ onClick }: { onClick: () => void }) => (
 
 export function ConversionProgress({ conversionId }: { conversionId: string }) {
   const { session } = useSession();
+  const router = useRouter();
   const [conversionGetter] = useAtom(conversionByIdAtom);
   const [conversions] = useAtom(conversionsAtom);
   const [, handleConversionUpdated] = useAtom(handleConversionUpdatedAtom);
@@ -248,8 +250,10 @@ export function ConversionProgress({ conversionId }: { conversionId: string }) {
   }
 
   const handleContinue = () => {
-    console.log('Continue clicked - implement next action');
+    router.refresh();
   };
+
+  const isComplete = conversion.status === ConversionStatus.Complete;
 
   return (
     <div className="p-4">
@@ -284,6 +288,9 @@ export function ConversionProgress({ conversionId }: { conversionId: string }) {
           );
         })}
       </div>
+      {isComplete && (
+        <ContinueButton onClick={handleContinue} />
+      )}
     </div>
   );
 }

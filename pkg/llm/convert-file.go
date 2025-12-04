@@ -60,9 +60,14 @@ Convert the following Kubernetes manifest to a helm template:
 		},
 	}
 
+	// Note: We explicitly set ResponseFormat.Type to avoid Groq API errors
+	// The API requires the type field to be present if response_format is included
 	response, err := client.CreateChatCompletion(groq.CompletionCreateParams{
 		Model:    "llama-3.3-70b-versatile",
 		Messages: messages,
+		ResponseFormat: groq.ResponseFormat{
+			Type: "text",
+		},
 	})
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to get converted file content: %w", err)

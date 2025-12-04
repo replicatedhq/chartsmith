@@ -127,7 +127,10 @@ clusters:
 	// helm dependency update
 	depUpdateCmd := exec.Command(helmCmd, "dependency", "update", ".")
 	depUpdateCmd.Dir = workingDir
-	depUpdateCmd.Env = []string{"KUBECONFIG=" + fakeKubeconfigPath}
+	depUpdateCmd.Env = []string{
+		"KUBECONFIG=" + fakeKubeconfigPath,
+		"HELM_MAX_FILE_SIZE=52428800", // 50MB limit for large charts
+	}
 
 	depUpdateStdoutReader, depUpdateStdoutWriter := io.Pipe()
 	depUpdateStderrReader, depUpdateStderrWriter := io.Pipe()
@@ -201,7 +204,10 @@ clusters:
 
 	// helm template with values
 	templateCmd := exec.Command(helmCmd, "template", "chartsmith", ".", "--include-crds", "--values", "/dev/stdin")
-	templateCmd.Env = []string{"KUBECONFIG=" + fakeKubeconfigPath}
+	templateCmd.Env = []string{
+		"KUBECONFIG=" + fakeKubeconfigPath,
+		"HELM_MAX_FILE_SIZE=52428800", // 50MB limit for large charts
+	}
 	templateCmd.Dir = workingDir
 
 	if valuesYAML != "" {

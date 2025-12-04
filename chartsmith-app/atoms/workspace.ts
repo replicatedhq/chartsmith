@@ -169,11 +169,9 @@ export const handleConversionFileUpdatedAtom = atom(
   (get, set, conversionId: string, conversionFile: ConversionFile) => {
     const conversions = get(conversionsAtom)
     const conversion = conversions.find(c => c.id === conversionId)
-    if (!conversion) {
+    if (!conversion || !conversion.sourceFiles) {
       return;
     }
-
-    const existingFile = conversion.sourceFiles.find(f => f.id === conversionFile.id);
 
     const updatedConversion = {
       ...conversion,

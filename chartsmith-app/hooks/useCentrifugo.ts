@@ -438,7 +438,7 @@ export function useCentrifugo({
   const handleConversationUpdatedMessage = useCallback((data: CentrifugoMessageData) => {
     if (!data.conversion) return;
     handleConversionUpdated(data.conversion);
-  }, []);
+  }, [handleConversionUpdated]);
 
   const handleCentrifugoMessage = useCallback((message: { data: CentrifugoMessageData }) => {
     const eventType = message.data.eventType;

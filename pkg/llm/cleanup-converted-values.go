@@ -28,8 +28,11 @@ func CleanUpConvertedValuesYAML(ctx context.Context, valuesYAML string) (string,
 		return "", fmt.Errorf("failed to parse artifacts: %w", err)
 	}
 
+	// If no artifacts found, the LLM might have returned the cleaned YAML directly
+	// without wrapping it in artifact tags. Use the response as-is.
 	if len(artifacts) == 0 {
-		return "", fmt.Errorf("no artifacts found in response")
+		logger.Info("No artifacts found in cleanup response, using response directly")
+		return cleanedText, nil
 	}
 
 	for _, artifact := range artifacts {
@@ -71,5 +74,7 @@ func CleanUpConvertedValuesYAML(ctx context.Context, valuesYAML string) (string,
 		}
 	}
 
-	return "", fmt.Errorf("no values.yaml artifact found in response")
+	// If we found artifacts but none were values.yaml, use the cleaned text directly
+	logger.Warn("No values.yaml artifact found in response, using response directly")
+	return cleanedText, nil
 }
