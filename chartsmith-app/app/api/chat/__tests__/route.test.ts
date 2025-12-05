@@ -19,6 +19,7 @@ afterAll(() => {
 jest.mock('ai', () => ({
   streamText: jest.fn(),
   convertToModelMessages: jest.fn((messages) => messages),
+  stepCountIs: jest.fn((count) => ({ type: 'step-count', count })),
   UIMessage: {},
 }));
 
@@ -39,7 +40,11 @@ describe('POST /api/chat', () => {
     jest.clearAllMocks();
     
     // Mock streamText to return a mock response
+    // PR2.0: Route uses toUIMessageStreamResponse (AI SDK v5)
     (streamText as jest.Mock).mockReturnValue({
+      toUIMessageStreamResponse: () => new Response('streamed response', {
+        headers: { 'Content-Type': 'text/event-stream' },
+      }),
       toTextStreamResponse: () => new Response('streamed response', {
         headers: { 'Content-Type': 'text/event-stream' },
       }),

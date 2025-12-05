@@ -1,14 +1,11 @@
 import { Page, expect } from '@playwright/test';
 
 export async function loginTestUser(page: Page) {
-  // Navigate to login
-  await page.goto('/login?test-auth=true');
+  // Navigate to login with test auth
+  await page.goto('/login-with-test-auth');
   
-  // Wait for navigation after login (should redirect to homepage)
-  await Promise.all([
-    page.waitForNavigation({ timeout: 10000 }),
-    page.waitForTimeout(2000) // Giving some time for the auth to complete
-  ]);
+  // Wait for redirect to homepage
+  await page.waitForURL('/', { timeout: 10000 });
   
   // Verify successful login - should no longer be on login page
   expect(page.url()).not.toContain('/login');

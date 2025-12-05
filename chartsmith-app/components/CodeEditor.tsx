@@ -589,8 +589,8 @@ export const CodeEditor = React.memo(function CodeEditor({
   const renderDiffHeader = () => (
     <div className={`flex items-center justify-end gap-2 p-2 border-b min-h-[36px] pr-4 ${theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"} sticky top-0 z-20`}>
       <div className="flex items-center gap-4">
-        {/* Only show diff navigation when the plan is applied */}
-        {mostRecentPlan?.status === "applied" && (
+        {/* Show diff navigation when plan is applied OR no plan exists (AI SDK mode) */}
+        {(!mostRecentPlan || mostRecentPlan?.status === "applied") && allFilesWithContentPending.length > 0 && (
           <div className="flex items-center gap-2">
             <span className={`text-xs font-mono ${
               theme === "dark" ? "text-gray-400" : "text-gray-500"
@@ -624,7 +624,8 @@ export const CodeEditor = React.memo(function CodeEditor({
 
         {allFilesWithContentPending.length > 0 && selectedFile?.contentPending && selectedFile.contentPending.length > 0 && (
           <div className="flex items-center gap-2">
-            {mostRecentPlan?.status === "applied" && (
+            {/* PR2.0: Show Accept/Reject when plan is applied OR no plan exists (AI SDK mode) */}
+            {(!mostRecentPlan || mostRecentPlan?.status === "applied") && (
               <>
                 <div ref={acceptButtonRef} className="relative">
                   <div className="flex">
@@ -740,7 +741,8 @@ export const CodeEditor = React.memo(function CodeEditor({
               </>
             )}
 
-            {(mostRecentPlan && mostRecentPlan.status !== "applied") && (
+            {/* Only show waiting message when there's an active plan that's not yet applied */}
+            {mostRecentPlan && mostRecentPlan.status !== "applied" && mostRecentPlan.status !== "ignored" && (
               <div className="text-xs text-gray-500 italic">
                 Waiting for plan to complete before changes can be accepted
               </div>

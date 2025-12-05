@@ -53,7 +53,7 @@ test('upload helm chart', async ({ page }) => {
     await expect(page.locator('[data-testid="assistant-message"]')).toBeVisible();
 
     // Send a message to render the chart
-    await page.fill('textarea[placeholder="Type your message..."]', 'change the default replicaCount in the values.yaml to 3');
+    await page.fill('textarea[placeholder="Ask a question or ask for a change..."]', 'change the default replicaCount in the values.yaml to 3');
     await page.click('button[type="submit"]');
 
     // wait for a brief moment for the message to be sent
