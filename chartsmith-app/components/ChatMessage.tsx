@@ -37,6 +37,8 @@ export interface ChatMessageProps {
   onContentUpdate?: () => void;
   /** Called when user cancels a temp message (AI SDK streaming) */
   onCancel?: () => void;
+  /** Direct message data (for AI SDK where messages are managed by hook, not atom) */
+  message?: Message;
 }
 
 function LoadingSpinner({ message }: { message: string }) {
@@ -77,6 +79,7 @@ export function ChatMessage({
   showChatInput,
   onContentUpdate,
   onCancel,
+  message: messageProp,
 }: ChatMessageProps) {
   const { theme } = useTheme();
   const [showReportModal, setShowReportModal] = useState(false);
@@ -88,7 +91,8 @@ export function ChatMessage({
 
   const [messages, setMessages] = useAtom(messagesAtom);
   const [messageGetter] = useAtom(messageByIdAtom);
-  const message = messageGetter(messageId);
+  // Use provided message prop if available, otherwise look up from atom
+  const message = messageProp ?? messageGetter(messageId);
 
   const [workspace, setWorkspace] = useAtom(workspaceAtom);
   const [renderGetter] = useAtom(renderByIdAtom);

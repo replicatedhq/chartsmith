@@ -38,31 +38,14 @@ export function ChatContainer({ session }: ChatContainerProps) {
   const {
     sendMessage: sendAiSdkMessage,
     isLoading: aiSdkLoading,
-    streamingResponse,
+    messages: aiSdkMessages,
     stop: stopStreaming,
   } = useChartsmithChat({
     onError: (error) => {
       console.error("Chat error:", error);
     },
-    onFinish: async (response) => {
-      console.log("[ChatContainer] onFinish called, response length:", response?.length);
-
-      // Mark the message as complete (handles empty response case when AI only uses tools)
-      setMessages((prev) => {
-        if (prev.length === 0) return prev;
-        const lastMessage = prev[prev.length - 1];
-        if (lastMessage.id.startsWith("temp-")) {
-          const updated = [...prev];
-          updated[updated.length - 1] = {
-            ...lastMessage,
-            response: response || lastMessage.response || "Chart files created.",
-            isComplete: true,
-            isIntentComplete: true,
-          };
-          return updated;
-        }
-        return prev;
-      });
+    onFinish: async () => {
+      console.log("[ChatContainer] onFinish called");
 
       // Refresh workspace to get newly created files from AI tools
       if (session && workspace?.id) {
@@ -83,30 +66,6 @@ export function ChatContainer({ session }: ChatContainerProps) {
   });
 
   // No need for refs as ScrollingContent manages its own scrolling
-
-  // Update the last message with streaming response as it comes in
-  useEffect(() => {
-    if (!useVercelAiSdk || !streamingResponse) return;
-
-    setMessages((prev) => {
-      if (prev.length === 0) return prev;
-      const lastMessage = prev[prev.length - 1];
-      // Only update if this is a temp message (created for AI SDK streaming)
-      if (!lastMessage.id.startsWith("temp-")) return prev;
-      // Avoid unnecessary updates if response hasn't changed
-      if (lastMessage.response === streamingResponse && lastMessage.isComplete === !aiSdkLoading) {
-        return prev;
-      }
-      const updated = [...prev];
-      updated[updated.length - 1] = {
-        ...lastMessage,
-        response: streamingResponse,
-        isComplete: !aiSdkLoading,
-        isIntentComplete: !aiSdkLoading,
-      };
-      return updated;
-    });
-  }, [streamingResponse, aiSdkLoading, useVercelAiSdk, setMessages]);
 
   // Close the role menu when clicking outside
   useEffect(() => {
@@ -145,25 +104,17 @@ export function ChatContainer({ session }: ChatContainerProps) {
       // Clear the stored prompt immediately to prevent re-triggering
       localStorage.removeItem(INITIAL_PROMPT_KEY);
 
-      // Create placeholder message for UI
-      const tempId = `temp-${Date.now()}`;
-      const userMessage: Message = {
-        id: tempId,
-        prompt: prompt,
-        createdAt: new Date(),
-        isComplete: false,
-        isIntentComplete: false,
-      };
-      setMessages([userMessage]);
-
-      // Send message via AI SDK
+      // Send message via AI SDK - it manages its own message state
       sendAiSdkMessage(prompt);
     } catch (err) {
       console.error("Error processing initial prompt:", err);
     }
-  }, [useVercelAiSdk, workspace?.id, aiSdkLoading, sendAiSdkMessage, setMessages]);
+  }, [useVercelAiSdk, workspace?.id, aiSdkLoading, sendAiSdkMessage]);
 
-  if (!messages || !workspace) {
+  // Use AI SDK messages when enabled, otherwise use atom messages
+  const displayMessages = useVercelAiSdk ? aiSdkMessages : messages;
+
+  if (!displayMessages || !workspace) {
     return null;
   }
 
@@ -178,19 +129,8 @@ export function ChatContainer({ session }: ChatContainerProps) {
 
     if (useVercelAiSdk) {
       // Use Vercel AI SDK for streaming chat
-      // First, create a placeholder message for the UI
-      const tempId = `temp-${Date.now()}`;
-      const userMessage: Message = {
-        id: tempId,
-        prompt: messageText,
-        createdAt: new Date(),
-        isComplete: false,
-        isIntentComplete: false,
-      };
-      setMessages(prev => [...prev, userMessage]);
-
-      // Send message via AI SDK
-      await sendAiSdkMessage(messageText);
+      // AI SDK manages its own message state - just send the message
+      sendAiSdkMessage(messageText);
     } else {
       // Fall back to original server action + work queue pattern
       const chatMessage = await createChatMessageAction(session, workspace.id, messageText, selectedRole);
@@ -238,10 +178,10 @@ export function ChatContainer({ session }: ChatContainerProps) {
 
   return (
     <div className={`h-[calc(100vh-3.5rem)] border-r flex flex-col min-h-0 overflow-hidden transition-all duration-300 ease-in-out w-full relative ${theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"}`}>
-      <div className="flex-1 h-full">
+      <div className="flex-1 min-h-0 overflow-hidden">
         <ScrollingContent forceScroll={true}>
           <div className={workspace?.currentRevisionNumber === 0 ? "" : "pb-32"}>
-            {messages.map((item, index) => (
+            {displayMessages.map((item) => (
               <div key={item.id}>
                 <ChatMessage
                   key={item.id}
@@ -251,6 +191,8 @@ export function ChatContainer({ session }: ChatContainerProps) {
                     // No need to update state - ScrollingContent will handle scrolling
                   }}
                   onCancel={useVercelAiSdk ? stopStreaming : undefined}
+                  // Pass the message directly when using AI SDK (messages managed by hook, not atom)
+                  message={useVercelAiSdk ? item : undefined}
                 />
               </div>
             ))}

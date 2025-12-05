@@ -10,6 +10,15 @@
 
 import { NextRequest } from "next/server";
 
+// Sample UI message format for useChat
+const sampleMessages = [
+  {
+    id: "msg-1",
+    role: "user",
+    parts: [{ type: "text", text: "Hello" }],
+  },
+];
+
 describe("/api/chat route", () => {
   describe("authentication", () => {
     it("should return 401 for unauthenticated requests", async () => {
@@ -18,7 +27,7 @@ describe("/api/chat route", () => {
       const request = new NextRequest("http://localhost:3000/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workspaceId: "ws-123", message: "Hello" }),
+        body: JSON.stringify({ workspaceId: "ws-123", messages: sampleMessages }),
       });
 
       const response = await POST(request);
@@ -34,7 +43,7 @@ describe("/api/chat route", () => {
       const request = new NextRequest("http://localhost:3000/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: "Hello" }),
+        body: JSON.stringify({ messages: sampleMessages }),
       });
 
       const response = await POST(request);
@@ -50,9 +59,9 @@ describe("/api/chat route", () => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": "Bearer invalid-token",
+          Authorization: "Bearer invalid-token",
         },
-        body: JSON.stringify({ workspaceId: "ws-123", message: "Hello" }),
+        body: JSON.stringify({ workspaceId: "ws-123", messages: sampleMessages }),
       });
 
       const response = await POST(request);
@@ -70,7 +79,7 @@ describe("/api/chat route", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           workspaceId: "ws-123",
-          message: "Test message",
+          messages: sampleMessages,
         }),
       });
 
@@ -83,23 +92,30 @@ describe("/api/chat route", () => {
 
 describe("chatRequestSchema", () => {
   // Test the schema directly for edge cases
-  it("should validate correct input", async () => {
+  it("should validate correct input with messages array", async () => {
     const { z } = await import("zod");
 
     const chatRequestSchema = z.object({
+      messages: z.array(z.any()).min(1, "Messages array is required"),
       workspaceId: z.string().min(1, "Workspace ID is required"),
-      message: z.string().min(1, "Message is required"),
     });
 
     const result = chatRequestSchema.safeParse({
       workspaceId: "ws-123",
-      message: "Hello, how do I create a deployment?",
+      messages: [
+        {
+          id: "msg-1",
+          role: "user",
+          parts: [{ type: "text", text: "Hello, how do I create a deployment?" }],
+        },
+      ],
     });
 
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.workspaceId).toBe("ws-123");
-      expect(result.data.message).toBe("Hello, how do I create a deployment?");
+      expect(result.data.messages).toHaveLength(1);
+      expect(result.data.messages[0].role).toBe("user");
     }
   });
 
@@ -107,11 +123,27 @@ describe("chatRequestSchema", () => {
     const { z } = await import("zod");
 
     const chatRequestSchema = z.object({
+      messages: z.array(z.any()).min(1, "Messages array is required"),
       workspaceId: z.string().min(1, "Workspace ID is required"),
-      message: z.string().min(1, "Message is required"),
     });
 
     const result = chatRequestSchema.safeParse({});
+
+    expect(result.success).toBe(false);
+  });
+
+  it("should reject empty messages array", async () => {
+    const { z } = await import("zod");
+
+    const chatRequestSchema = z.object({
+      messages: z.array(z.any()).min(1, "Messages array is required"),
+      workspaceId: z.string().min(1, "Workspace ID is required"),
+    });
+
+    const result = chatRequestSchema.safeParse({
+      workspaceId: "ws-123",
+      messages: [],
+    });
 
     expect(result.success).toBe(false);
   });
@@ -120,13 +152,13 @@ describe("chatRequestSchema", () => {
     const { z } = await import("zod");
 
     const chatRequestSchema = z.object({
+      messages: z.array(z.any()).min(1),
       workspaceId: z.string().min(1),
-      message: z.string().min(1),
     });
 
     const result = chatRequestSchema.safeParse({
       workspaceId: "ws-123",
-      message: "Test",
+      messages: [{ id: "1", role: "user", parts: [] }],
       extraField: "ignored",
     });
 

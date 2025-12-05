@@ -10,16 +10,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import jwt from "jsonwebtoken";
-import { streamText } from "ai";
+import { streamText, convertToModelMessages, type UIMessage } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { userIdFromExtensionToken } from "@/lib/auth/extension-token";
 import { getWorkspace } from "@/lib/workspace/workspace";
-import { listMessagesForWorkspace } from "@/lib/workspace/chat";
-import { buildChatContext } from "@/lib/chat/context-builder";
-import type { WorkspaceData, RelevantFile, ChatMessageData } from "@/lib/chat/context-builder";
 import { logger } from "@/lib/utils/logger";
-import { buildMessages, getSystemPrompt } from "@/lib/chat/message-builder";
+import { getSystemPrompt } from "@/lib/chat/message-builder";
 import { createWriteFileTool, WriteFileContext } from "@/lib/chat/tools/write-file";
 import { getDB } from "@/lib/data/db";
 import { getParam } from "@/lib/data/param";
@@ -56,17 +53,19 @@ CRITICAL REQUIREMENTS:
 `;
 
 /**
- * Request body schema
+ * Request body schema - matches useChat format
+ * workspaceId is passed via body extra params
  */
 const chatRequestSchema = z.object({
+  messages: z.array(z.any()).min(1, "Messages array is required"),
   workspaceId: z.string().min(1, "Workspace ID is required"),
-  message: z.string().min(1, "Message is required"),
 });
 
 /**
  * POST /api/chat
  *
  * Stream a chat response using Vercel AI SDK.
+ * Accepts useChat format: { messages: UIMessage[], workspaceId: string }
  */
 export async function POST(req: NextRequest) {
   try {
@@ -87,7 +86,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { workspaceId, message } = parseResult.data;
+    const { messages: uiMessages, workspaceId } = parseResult.data;
 
     // Verify workspace exists and user has access
     const workspace = await getWorkspace(workspaceId);
@@ -111,14 +110,14 @@ export async function POST(req: NextRequest) {
       revisionNumber = result.revisionNumber;
     }
 
-    // Build context for chat
-    const context = await buildContextForWorkspace(workspace);
+    // Build context messages for chart files
+    const contextMessages = buildContextMessages(workspace);
 
-    // Build messages for the AI
-    const messages = buildMessages(context, {
-      userMessage: message,
-      includeSystemPrompt: true,
-    });
+    // Convert UI messages to model format
+    const modelMessages = convertToModelMessages(uiMessages as UIMessage[]);
+
+    // Combine context messages with user conversation
+    const messages = [...contextMessages, ...modelMessages];
 
     // Get system prompt - use the existing comprehensive prompt with tool instructions
     const system = getSystemPrompt() + TOOL_INSTRUCTIONS;
@@ -144,8 +143,8 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Return streaming response in AI SDK v5 format
-    return result.toTextStreamResponse();
+    // Return streaming response in useChat UI message format
+    return result.toUIMessageStreamResponse();
   } catch (error) {
     return handleError(error);
   }
@@ -252,9 +251,10 @@ async function authenticateRequest(req: NextRequest): Promise<string | null> {
 }
 
 /**
- * Build chat context from workspace data
+ * Build context messages from workspace chart files
+ * These provide the AI with knowledge about the current chart state
  */
-async function buildContextForWorkspace(
+function buildContextMessages(
   workspace: {
     id: string;
     charts: Array<{
@@ -264,45 +264,27 @@ async function buildContextForWorkspace(
     }>;
     currentRevisionNumber: number;
   }
-): Promise<ReturnType<typeof buildChatContext>> {
-  // Get previous messages
-  const messages = await listMessagesForWorkspace(workspace.id);
+): Array<{ role: "assistant"; content: string }> {
+  const messages: Array<{ role: "assistant"; content: string }> = [];
 
-  // Convert workspace to expected format
-  const workspaceData: WorkspaceData = {
-    id: workspace.id,
-    charts: workspace.charts.map((chart) => ({
-      id: chart.id,
-      files: chart.files.map((file) => ({
-        filePath: file.filePath,
-        content: file.content,
-      })),
-    })),
-  };
+  // Add chart structure context
+  if (workspace.charts.length > 0 && workspace.charts[0].files.length > 0) {
+    const fileList = workspace.charts[0].files.map((f) => f.filePath).join(", ");
+    messages.push({
+      role: "assistant",
+      content: `I am working on a Helm chart that has the following structure: ${fileList}`,
+    });
 
-  // Get relevant files (for now, use all files from first chart, limited)
-  const relevantFiles: RelevantFile[] = [];
-  if (workspace.charts.length > 0) {
+    // Add file contents (limited to first 10 files)
     for (const file of workspace.charts[0].files.slice(0, 10)) {
-      relevantFiles.push({
-        filePath: file.filePath,
-        content: file.content,
+      messages.push({
+        role: "assistant",
+        content: `File: ${file.filePath}\nContent:\n${file.content}`,
       });
     }
   }
 
-  // Convert messages to expected format
-  const previousMessages: ChatMessageData[] = messages.map((msg) => ({
-    id: msg.id,
-    prompt: msg.prompt,
-    response: msg.response ?? undefined,
-  }));
-
-  return buildChatContext({
-    workspace: workspaceData,
-    relevantFiles,
-    previousMessages,
-  });
+  return messages;
 }
 
 /**

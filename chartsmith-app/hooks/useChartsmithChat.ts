@@ -1,26 +1,23 @@
 /**
  * Chartsmith Chat Hook
  *
- * Custom hook for chat functionality that integrates with the /api/chat endpoint.
- * This is a simplified implementation that works with Vercel AI SDK v5.
+ * Wrapper around Vercel AI SDK's useChat hook with Chartsmith-specific configuration.
+ * Provides workspace integration and maps to the existing Message format.
  */
 
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useChat } from "@ai-sdk/react";
+import { DefaultChatTransport } from "ai";
 import { useAtom } from "jotai";
-import { workspaceAtom, messagesAtom } from "@/atoms/workspace";
+import { useMemo, useState } from "react";
+import { workspaceAtom } from "@/atoms/workspace";
 import type { Message } from "@/components/types";
 
 /**
  * Options for the Chartsmith chat hook
  */
 export interface UseChartsmithChatOptions {
-  /**
-   * Authentication token for API requests
-   */
-  authToken?: string;
-
   /**
    * Callback when an error occurs
    */
@@ -29,7 +26,7 @@ export interface UseChartsmithChatOptions {
   /**
    * Callback when streaming completes
    */
-  onFinish?: (response: string) => void;
+  onFinish?: () => void;
 }
 
 /**
@@ -39,10 +36,10 @@ export interface UseChartsmithChatReturn {
   /**
    * Send a message to the chat
    */
-  sendMessage: (content: string) => Promise<void>;
+  sendMessage: (content: string) => void;
 
   /**
-   * Current messages in the conversation
+   * Current messages in Chartsmith format
    */
   messages: Message[];
 
@@ -72,131 +69,171 @@ export interface UseChartsmithChatReturn {
   setInput: (value: string) => void;
 
   /**
-   * Current streaming response text
+   * Raw AI SDK messages (for advanced use cases)
    */
-  streamingResponse: string;
+  rawMessages: ReturnType<typeof useChat>["messages"];
+}
+
+/**
+ * Extract text content from AI SDK message parts
+ */
+function getTextFromParts(
+  parts: Array<{ type: string; text?: string }>
+): string {
+  return parts
+    .filter((part) => part.type === "text" && part.text)
+    .map((part) => part.text)
+    .join("");
+}
+
+/**
+ * Check if an assistant message has any content (text or tool calls)
+ */
+function hasAssistantContent(msg: { parts: Array<{ type: string }> }): boolean {
+  return msg.parts.some(
+    (part) => part.type === "text" || part.type === "tool-invocation"
+  );
+}
+
+/**
+ * Convert AI SDK messages to Chartsmith Message format
+ */
+function convertToChartsmithMessages(
+  aiMessages: ReturnType<typeof useChat>["messages"],
+  isStreamingComplete: boolean
+): Message[] {
+  const result: Message[] = [];
+
+  for (let i = 0; i < aiMessages.length; i++) {
+    const msg = aiMessages[i];
+
+    if (msg.role === "user") {
+      // Get user message text
+      const userText = getTextFromParts(msg.parts);
+
+      // Look for the next assistant message as the response
+      const nextMsg = aiMessages[i + 1];
+      const hasAssistantResponse = nextMsg?.role === "assistant";
+      const responseText = hasAssistantResponse
+        ? getTextFromParts(nextMsg.parts)
+        : undefined;
+
+      // Determine if this message exchange is complete:
+      // 1. If there's a following user message, this exchange is definitely complete
+      // 2. If this is the last exchange, check streaming status
+      const followingUserMsg = aiMessages.slice(i + 2).find((m) => m.role === "user");
+      const isLastExchange = !followingUserMsg;
+
+      const isComplete = hasAssistantResponse && (
+        // Has text content
+        (responseText !== undefined && responseText !== "") ||
+        // Has tool invocations (AI used tools)
+        hasAssistantContent(nextMsg) ||
+        // Is a past exchange (not the current streaming one)
+        !isLastExchange ||
+        // Is the last exchange and streaming is done
+        (isLastExchange && isStreamingComplete)
+      );
+
+      // Build response text - use actual text or fallback for tool-only responses
+      let response: string | undefined;
+      if (responseText && responseText !== "") {
+        response = responseText;
+      } else if (isComplete) {
+        response = "Chart files created.";
+      }
+
+      result.push({
+        id: msg.id,
+        prompt: userText,
+        response,
+        isComplete,
+        isIntentComplete: isComplete,
+        createdAt: new Date(),
+      });
+
+      // Skip the assistant message since we included it as response
+      if (hasAssistantResponse) {
+        i++;
+      }
+    }
+  }
+
+  return result;
 }
 
 /**
  * Custom hook for Chartsmith chat functionality
  *
- * This hook provides a simple interface to the /api/chat endpoint
- * with streaming support.
+ * Uses Vercel AI SDK's useChat hook internally with Chartsmith configuration.
  */
 export function useChartsmithChat(
   options: UseChartsmithChatOptions = {}
 ): UseChartsmithChatReturn {
-  const { authToken, onError, onFinish } = options;
+  const { onError, onFinish } = options;
   const [workspace] = useAtom(workspaceAtom);
-  const [existingMessages] = useAtom(messagesAtom);
 
+  // Manage input state locally since useChat doesn't provide it
   const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<Error | undefined>(undefined);
-  const [streamingResponse, setStreamingResponse] = useState("");
 
-  const abortControllerRef = useRef<AbortController | null>(null);
-
-  /**
-   * Stop the current streaming response
-   */
-  const stop = useCallback(() => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-    }
-    setIsLoading(false);
-  }, []);
-
-  /**
-   * Send a message to the chat
-   */
-  const sendMessage = useCallback(
-    async (content: string) => {
-      if (!workspace?.id) {
-        console.error("No workspace ID available");
-        return;
-      }
-
-      if (!content.trim()) {
-        return;
-      }
-
-      setIsLoading(true);
-      setError(undefined);
-      setStreamingResponse("");
-
-      // Create abort controller for this request
-      abortControllerRef.current = new AbortController();
-
-      try {
-        const headers: Record<string, string> = {
-          "Content-Type": "application/json",
-        };
-
-        if (authToken) {
-          headers["Authorization"] = `Bearer ${authToken}`;
-        }
-
-        const response = await fetch("/api/chat", {
-          method: "POST",
-          headers,
-          body: JSON.stringify({
-            workspaceId: workspace.id,
-            message: content.trim(),
-          }),
-          signal: abortControllerRef.current.signal,
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-
-        if (!response.body) {
-          throw new Error("No response body");
-        }
-
-        // Read the stream
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let fullResponse = "";
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          const chunk = decoder.decode(value, { stream: true });
-          fullResponse += chunk;
-          setStreamingResponse(fullResponse);
-        }
-
-        onFinish?.(fullResponse);
-      } catch (err) {
-        if (err instanceof Error && err.name === "AbortError") {
-          // Request was cancelled, don't set error
-          return;
-        }
-
-        const error = err instanceof Error ? err : new Error(String(err));
-        setError(error);
-        onError?.(error);
-      } finally {
-        setIsLoading(false);
-        abortControllerRef.current = null;
-      }
-    },
-    [workspace?.id, authToken, onError, onFinish]
+  // Create transport with workspace ID in body
+  // Memoize to avoid recreating on every render
+  const transport = useMemo(
+    () =>
+      new DefaultChatTransport({
+        api: "/api/chat",
+        body: {
+          workspaceId: workspace?.id,
+        },
+      }),
+    [workspace?.id]
   );
+
+  const {
+    messages: aiMessages,
+    status,
+    error,
+    stop,
+    sendMessage: aiSendMessage,
+  } = useChat({
+    transport,
+    onError: (err) => {
+      console.error("[useChartsmithChat] Error:", err);
+      onError?.(err);
+    },
+    onFinish: () => {
+      onFinish?.();
+    },
+  });
+
+  // Determine loading state from status
+  const isLoading = status === "submitted" || status === "streaming";
+  const isStreamingComplete = status === "ready" || status === "error";
+
+  // Convert AI SDK messages to Chartsmith format
+  const messages = convertToChartsmithMessages(aiMessages, isStreamingComplete);
+
+  // Wrapper for sendMessage that accepts just a string
+  const sendMessage = (content: string) => {
+    if (!workspace?.id) {
+      console.error("[useChartsmithChat] No workspace ID available");
+      return;
+    }
+    if (!content.trim()) {
+      return;
+    }
+    aiSendMessage({ text: content.trim() });
+  };
 
   return {
     sendMessage,
-    messages: existingMessages,
+    messages,
     isLoading,
     error,
     stop,
     input,
     setInput,
-    streamingResponse,
+    rawMessages: aiMessages,
   };
 }
 
