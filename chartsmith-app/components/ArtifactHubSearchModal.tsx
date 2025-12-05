@@ -11,9 +11,11 @@ import { createWorkspaceFromUrlAction } from "@/lib/workspace/actions/create-wor
 interface ArtifactHubSearchModalProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Target path prefix for navigation after import. Defaults to "/workspace" */
+  targetPath?: string;
 }
 
-export function ArtifactHubSearchModal({ isOpen, onClose }: ArtifactHubSearchModalProps) {
+export function ArtifactHubSearchModal({ isOpen, onClose, targetPath = "/workspace" }: ArtifactHubSearchModalProps) {
   const { session } = useSession();
   const router = useRouter();
   const [search, setSearch] = useState("");
@@ -78,7 +80,7 @@ export function ArtifactHubSearchModal({ isOpen, onClose }: ArtifactHubSearchMod
     try {
       setIsImporting(true);
       const workspace = await createWorkspaceFromUrlAction(session, url);
-      router.push(`/workspace/${workspace.id}`);
+      router.push(`${targetPath}/${workspace.id}`);
     } catch (error) {
       console.error('Failed to create workspace:', error);
       setIsImporting(false);

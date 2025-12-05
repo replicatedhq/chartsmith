@@ -1,14 +1,18 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { useSetAtom } from "jotai";
-import { Loader2, Send } from "lucide-react";
+import { useSetAtom, useAtom } from "jotai";
+import { Loader2, Send, Home, Code } from "lucide-react";
+import Link from "next/link";
+import { Tooltip } from "@/components/ui/Tooltip";
+import { UserMenu } from "@/components/UserMenu";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
+import Editor from "@monaco-editor/react";
 
 // Atoms - NOTE: chartsAtom and looseFilesAtom are DERIVED atoms (read-only)
 // They automatically derive from workspaceAtom - only set workspaceAtom
-import { workspaceAtom } from "@/atoms/workspace";
+import { workspaceAtom, selectedFileAtom, editorViewAtom, renderedFilesAtom } from "@/atoms/workspace";
 
 // Actions
 import { getWorkspaceAction } from "@/lib/workspace/actions/get-workspace";
@@ -48,6 +52,11 @@ export function TestAIChatClient({ workspace, session, initialMessages = [] }: T
   // chartsAtom and looseFilesAtom are derived and update automatically
   const setWorkspace = useSetAtom(workspaceAtom);
 
+  // Atoms for code editor panel
+  const [selectedFile] = useAtom(selectedFileAtom);
+  const [view, setView] = useAtom(editorViewAtom);
+  const [renderedFiles] = useAtom(renderedFilesAtom);
+
   // Hydrate workspace atom on mount
   // Charts and files derive automatically from workspaceAtom
   useEffect(() => {
@@ -80,6 +89,7 @@ export function TestAIChatClient({ workspace, session, initialMessages = [] }: T
     sendMessage,
     status,
     error,
+    stop,
   } = useChat({
     transport: new DefaultChatTransport({ api: "/api/chat" }),
     experimental_throttle: STREAMING_THROTTLE_MS,
@@ -222,32 +232,87 @@ export function TestAIChatClient({ workspace, session, initialMessages = [] }: T
   const userImageUrl = session.user.imageUrl || "";
   const userName = session.user.name || "User";
 
+  // Helper to get file language for Monaco editor
+  const getLanguageFromPath = (filePath: string): string => {
+    const ext = filePath.split('.').pop()?.toLowerCase() || '';
+    const langMap: Record<string, string> = {
+      'yaml': 'yaml',
+      'yml': 'yaml',
+      'json': 'json',
+      'js': 'javascript',
+      'ts': 'typescript',
+      'tsx': 'typescript',
+      'jsx': 'javascript',
+      'md': 'markdown',
+      'tpl': 'yaml', // Helm templates
+    };
+    return langMap[ext] || 'plaintext';
+  };
+
+  // Get rendered file for current selection
+  const getRenderedFile = () => {
+    if (!selectedFile) return null;
+
+    // Try exact match first
+    let renderedFile = renderedFiles.find(rf => rf.filePath === selectedFile.filePath);
+
+    // If no exact match, look for a rendered file with a matching name
+    if (!renderedFile) {
+      const selectedFileName = selectedFile.filePath.split('/').pop() || '';
+      renderedFile = renderedFiles.find(rf => {
+        const renderedFileName = rf.filePath.split('/').pop() || '';
+        return renderedFileName === selectedFileName;
+      });
+    }
+
+    // Special handling for templates
+    if (!renderedFile && selectedFile.filePath.includes('/templates/')) {
+      const baseFileName = selectedFile.filePath.split('/').pop()?.replace('.yaml.tpl', '.yaml').replace('.tpl', '') || '';
+      renderedFile = renderedFiles.find(rf => {
+        const renderedFileName = rf.filePath.split('/').pop() || '';
+        return renderedFileName === baseFileName;
+      });
+    }
+
+    return renderedFile;
+  };
+
   return (
     <EditorLayout>
       <div className="flex w-full h-[calc(100vh-3.5rem)]">
-        {/* File Explorer - Left Panel */}
-        <div className={`w-64 flex-shrink-0 border-r ${
-          theme === "dark" ? "border-dark-border" : "border-gray-200"
-        } overflow-hidden`}>
-          <FileBrowser />
-        </div>
+        {/* Left Sidebar - Icons for navigation */}
+        <nav className={`w-16 flex-shrink-0 ${theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-light-surface border-light-border"} border-r flex flex-col justify-between`}>
+          <div className="py-4 flex flex-col items-center">
+            <Tooltip content="Home">
+              <Link href="/test-ai-chat" className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors text-neutral hover:${theme === "dark" ? "bg-dark-border/40" : "bg-light-border/40"}`}>
+                <Home className="w-5 h-5" />
+              </Link>
+            </Tooltip>
 
-        {/* Chat Panel - Right */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
-          <div className="flex-1 h-full">
-            <h1 className="text-2xl font-bold p-4">AI SDK Test Chat</h1>
-
-            <div className="px-4 pb-2 text-sm">
-              <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md ${
-                theme === "dark" ? "bg-green-900/30 text-green-400 border border-green-800" : "bg-green-50 text-green-700 border border-green-200"
-              }`}>
-                <span>📁</span>
-                <span>Workspace: <code className="font-mono">{workspace.id}</code></span>
-                <span className="opacity-60">|</span>
-                <span>Rev: {revisionNumber}</span>
-              </div>
+            <div className="mt-8 w-full px-3">
+              <div className={`border-t ${theme === "dark" ? "border-dark-border" : "border-light-border"}`} />
             </div>
 
+            <div className="mt-4">
+              <Tooltip content="Workspace">
+                <Link
+                  href={`/test-ai-chat/${workspace.id}`}
+                  className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${theme === "dark" ? "bg-dark-border/60" : "bg-light-border/60"} text-primary`}
+                >
+                  <Code className="w-5 h-5" />
+                </Link>
+              </Tooltip>
+            </div>
+          </div>
+
+          <div className="py-4 flex justify-center">
+            <UserMenu />
+          </div>
+        </nav>
+
+        {/* Chat Panel - LEFT (480px fixed) */}
+        <div className="w-[480px] flex-shrink-0 flex flex-col min-w-0 overflow-hidden relative">
+          <div className="flex-1 h-full">
             <ScrollingContent forceScroll={true}>
               <div className="pb-64">
                 {/* Previous conversation history from database */}
@@ -308,15 +373,15 @@ export function TestAIChatClient({ workspace, session, initialMessages = [] }: T
                               </div>
                               <div className={`${
                                 theme === "dark" ? "text-gray-200" : "text-gray-700"
-                              } text-[12px]`}>
-                                <div className="max-w-none">
+                              } text-[12px] overflow-hidden`}>
+                                <div className="overflow-x-auto">
                                   <ReactMarkdown
                                     components={{
                                       code: ({ className, children, ...props }) => (
                                         <code
                                           className={`${className || ''} ${
                                             theme === "dark" ? "bg-gray-800 text-gray-200" : "bg-gray-100 text-gray-800"
-                                          } px-1 py-0.5 rounded text-sm`}
+                                          } px-1 py-0.5 rounded text-sm break-all`}
                                           {...props}
                                         >
                                           {children}
@@ -325,7 +390,7 @@ export function TestAIChatClient({ workspace, session, initialMessages = [] }: T
                                       pre: ({ children }) => (
                                         <pre className={`${
                                           theme === "dark" ? "bg-gray-900" : "bg-gray-50"
-                                        } p-3 rounded-lg overflow-x-auto my-2`}>
+                                        } p-3 rounded-lg overflow-x-auto my-2 max-w-full`}>
                                           {children}
                                         </pre>
                                       ),
@@ -405,18 +470,18 @@ export function TestAIChatClient({ workspace, session, initialMessages = [] }: T
                           </div>
                           <div className={`${
                             theme === "dark" ? "text-gray-200" : "text-gray-700"
-                          } text-[12px] markdown-content`}>
+                          } text-[12px] markdown-content overflow-hidden`}>
                             {message.parts?.map((part, i) => {
                               if (part.type === 'text') {
                                 return (
-                                  <div key={i} className="max-w-none">
+                                  <div key={i} className="overflow-x-auto">
                                     <ReactMarkdown
                                       components={{
                                         code: ({ className, children, ...props }) => (
                                           <code
                                             className={`${className || ''} ${
                                               theme === "dark" ? "bg-gray-800 text-gray-200" : "bg-gray-100 text-gray-800"
-                                            } px-1 py-0.5 rounded text-sm`}
+                                            } px-1 py-0.5 rounded text-sm break-all`}
                                             {...props}
                                           >
                                             {children}
@@ -425,7 +490,7 @@ export function TestAIChatClient({ workspace, session, initialMessages = [] }: T
                                         pre: ({ children }) => (
                                           <pre className={`${
                                             theme === "dark" ? "bg-gray-900" : "bg-gray-50"
-                                          } p-3 rounded-lg overflow-x-auto my-2`}>
+                                          } p-3 rounded-lg overflow-x-auto my-2 max-w-full`}>
                                             {children}
                                           </pre>
                                         ),
@@ -474,6 +539,20 @@ export function TestAIChatClient({ workspace, session, initialMessages = [] }: T
                         <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
                           thinking...
                         </div>
+                        <button
+                          className={`ml-auto text-xs px-1.5 py-0.5 rounded border ${
+                            theme === "dark"
+                              ? "border-dark-border text-gray-400 hover:text-gray-200"
+                              : "border-gray-300 text-gray-500 hover:text-gray-700"
+                          } hover:bg-dark-border/40`}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            stop();
+                          }}
+                        >
+                          cancel
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -487,47 +566,155 @@ export function TestAIChatClient({ workspace, session, initialMessages = [] }: T
                 ? "bg-gray-900 border-t border-gray-800"
                 : "bg-gray-50 border-t border-gray-200"
             }`}>
-              <div className={`w-full ${
-                theme === "dark"
-                  ? "bg-gray-900 border-x border-b border-gray-800"
-                  : "bg-gray-50 border-x border-b border-gray-200"
-              }`}>
-                <form onSubmit={handleChatSubmit} className="p-6 relative flex gap-3 items-start max-w-5xl mx-auto">
-                  <div className="flex-1 relative">
-                    <textarea
-                      ref={chatInputRef}
-                      value={chatInput}
-                      onChange={(e) => setChatInput(e.target.value)}
-                      onKeyDown={handleChatKeyDown}
-                      placeholder="Ask a question or request a change..."
-                      rows={3}
+              <form onSubmit={handleChatSubmit} className="p-4 relative flex gap-3 items-start">
+                <div className="flex-1 relative">
+                  <textarea
+                    ref={chatInputRef}
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyDown={handleChatKeyDown}
+                    placeholder="Ask a question or request a change..."
+                    rows={2}
+                    disabled={isLoading}
+                    style={{ height: 'auto', minHeight: '56px', maxHeight: '120px' }}
+                    className={`w-full px-3 py-1.5 pr-10 text-sm rounded-md border resize-none overflow-hidden ${
+                      theme === "dark"
+                        ? "bg-dark border-dark-border/60 text-white placeholder-gray-500"
+                        : "bg-white border-gray-200 text-gray-900 placeholder-gray-400"
+                    } focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50 disabled:opacity-50`}
+                  />
+                  <div className="absolute right-2 top-[14px]">
+                    <button
+                      type="submit"
                       disabled={isLoading}
-                      style={{ height: 'auto', minHeight: '72px', maxHeight: '150px' }}
-                      className={`w-full px-3 py-1.5 pr-10 text-sm rounded-md border resize-none overflow-hidden ${
-                        theme === "dark"
-                          ? "bg-dark border-dark-border/60 text-white placeholder-gray-500"
-                          : "bg-white border-gray-200 text-gray-900 placeholder-gray-400"
-                      } focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50 disabled:opacity-50`}
-                    />
-                    <div className="absolute right-2 top-[18px]">
-                      <button
-                        type="submit"
-                        disabled={isLoading}
-                        className={`p-1.5 rounded-full ${
-                          isLoading
-                            ? theme === "dark" ? "text-gray-600 cursor-not-allowed" : "text-gray-300 cursor-not-allowed"
-                            : theme === "dark"
-                              ? "text-gray-400 hover:text-gray-200 hover:bg-dark-border/40"
-                              : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
-                        }`}
-                      >
-                        {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                      </button>
-                    </div>
+                      className={`p-1.5 rounded-full ${
+                        isLoading
+                          ? theme === "dark" ? "text-gray-600 cursor-not-allowed" : "text-gray-300 cursor-not-allowed"
+                          : theme === "dark"
+                            ? "text-gray-400 hover:text-gray-200 hover:bg-dark-border/40"
+                            : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                      }`}
+                    >
+                      {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                    </button>
                   </div>
-                </form>
-              </div>
+                </div>
+              </form>
             </div>
+          </div>
+        </div>
+
+        {/* Divider */}
+        <div className={`w-px ${theme === "dark" ? "bg-dark-border" : "bg-gray-200"} flex-shrink-0`} />
+
+        {/* File Explorer - MIDDLE (260px fixed) */}
+        <div className={`w-[260px] flex-shrink-0 overflow-hidden`}>
+          <FileBrowser />
+        </div>
+
+        {/* Divider */}
+        <div className={`w-px ${theme === "dark" ? "bg-dark-border" : "bg-gray-200"} flex-shrink-0`} />
+
+        {/* Code Editor Panel - RIGHT (flex-1) */}
+        <div className="flex-1 min-w-0 flex flex-col">
+          {/* Source/Rendered tabs */}
+          <div className={`flex items-center px-2 border-b ${
+            theme === "dark" ? "border-dark-border/40 bg-dark-surface/40" : "border-gray-200 bg-white"
+          }`}>
+            <div
+              onClick={() => setView("source")}
+              className={`px-3 py-2.5 text-xs font-medium cursor-pointer transition-colors relative group ${
+                view === "source"
+                  ? theme === "dark" ? "text-primary" : "text-primary-foreground"
+                  : theme === "dark" ? "text-gray-500 hover:text-gray-300" : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              {view === "source" && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
+              )}
+              Source
+            </div>
+            <div
+              onClick={() => setView("rendered")}
+              className={`px-3 py-2.5 text-xs font-medium cursor-pointer transition-colors relative group ${
+                view === "rendered"
+                  ? theme === "dark" ? "text-primary" : "text-primary-foreground"
+                  : theme === "dark" ? "text-gray-500 hover:text-gray-300" : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              {view === "rendered" && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
+              )}
+              Rendered
+            </div>
+          </div>
+
+          {/* Editor content */}
+          <div className="flex-1 h-full overflow-auto">
+            {selectedFile ? (
+              view === "rendered" ? (
+                // Rendered view
+                (() => {
+                  const renderedFile = getRenderedFile();
+                  if (renderedFile) {
+                    return (
+                      <div key={`rendered-${renderedFile.id}`} className="h-full">
+                        <Editor
+                          height="100%"
+                          defaultLanguage="yaml"
+                          language="yaml"
+                          value={renderedFile.renderedContent || ""}
+                          loading={null}
+                          theme={theme === "dark" ? "vs-dark" : "vs"}
+                          options={{
+                            readOnly: true,
+                            minimap: { enabled: false },
+                            fontSize: 11,
+                            lineNumbers: 'on',
+                            scrollBeyondLastLine: false,
+                            automaticLayout: true,
+                            tabSize: 2
+                          }}
+                        />
+                      </div>
+                    );
+                  } else {
+                    return (
+                      <div className="flex flex-col items-center justify-center h-full text-sm text-gray-500 space-y-2">
+                        <div>This file was not included in the rendered output</div>
+                      </div>
+                    );
+                  }
+                })()
+              ) : (
+                // Source view
+                <div key={`source-${selectedFile.id}`} className="h-full">
+                  <Editor
+                    height="100%"
+                    language={getLanguageFromPath(selectedFile.filePath)}
+                    value={selectedFile.content || ""}
+                    loading={null}
+                    theme={theme === "dark" ? "vs-dark" : "vs"}
+                    options={{
+                      readOnly: true,
+                      minimap: { enabled: false },
+                      fontSize: 11,
+                      lineNumbers: 'on',
+                      scrollBeyondLastLine: false,
+                      automaticLayout: true,
+                      tabSize: 2
+                    }}
+                  />
+                </div>
+              )
+            ) : (
+              // No file selected
+              <div className={`flex flex-col items-center justify-center h-full text-sm ${
+                theme === "dark" ? "text-gray-500" : "text-gray-400"
+              }`}>
+                <div>Select a file to view its contents</div>
+              </div>
+            )}
           </div>
         </div>
       </div>
