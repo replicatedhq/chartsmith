@@ -8,6 +8,9 @@ import { useAtom } from "jotai";
 import { Session } from "@/lib/types/session";
 import { Message, CentrifugoMessageData } from "@/components/types";
 
+// PR2.0: Import streaming message ID atom for AI SDK coordination
+import { currentStreamingMessageIdAtom } from "./useAISDKChatAdapter";
+
 // actions
 import { getCentrifugoTokenAction } from "@/lib/centrifugo/actions/get-centrifugo-token-action";
 import { getWorkspaceAction } from "@/lib/workspace/actions/get-workspace";
@@ -56,6 +59,9 @@ export function useCentrifugo({
   const [, handlePlanUpdated] = useAtom(handlePlanUpdatedAtom);
   const [, setActiveRenderIds] = useAtom(activeRenderIdsAtom);
   const [publicEnv, setPublicEnv] = useState<Record<string, string>>({});
+  
+  // PR2.0: Track currently streaming AI SDK message to avoid conflicts
+  const [currentStreamingMessageId] = useAtom(currentStreamingMessageIdAtom);
 
   useEffect(() => {
     const fetchConfig = async () => {
@@ -90,6 +96,13 @@ export function useCentrifugo({
     if (!data.chatMessage) return;
 
     const chatMessage = data.chatMessage;
+    
+    // PR2.0: Skip Centrifugo updates for messages currently being streamed by AI SDK
+    // AI SDK owns the state for these messages; Centrifugo would cause conflicts
+    if (currentStreamingMessageId && chatMessage.id === currentStreamingMessageId) {
+      console.log('[Centrifugo] Skipping update for AI SDK streaming message:', chatMessage.id);
+      return;
+    }
 
     // If this message starts a render operation, track the render ID
     if (chatMessage.responseRenderId) {
@@ -138,7 +151,7 @@ export function useCentrifugo({
       }
       return newMessages;
     });
-  }, [setMessages, setActiveRenderIds]);
+  }, [setMessages, setActiveRenderIds, currentStreamingMessageId]);
 
   const handleWorkspaceUpdated = useCallback((workspace: any) => {
     // Implementation can be added based on requirements

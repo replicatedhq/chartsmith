@@ -92,10 +92,87 @@ Answer questions about Helm charts, Kubernetes manifests, and related topics.
 Be concise and precise. Provide code examples when helpful.
 Use only valid Markdown for responses.`;
 
+/**
+ * Developer persona prompt - focuses on chart development, templating, best practices
+ *
+ * This prompt is used when the user selects "Chart Developer" role.
+ * It emphasizes:
+ * - Chart structure and best practices
+ * - Helm templating syntax
+ * - CI/CD integration
+ * - Security scanning
+ * - Advanced configuration patterns
+ */
+export const CHARTSMITH_DEVELOPER_PROMPT = `${CHARTSMITH_TOOL_SYSTEM_PROMPT}
+
+## Developer Persona Context
+
+You are assisting a **Chart Developer** - someone who creates and maintains Helm charts professionally.
+
+When responding:
+- Provide detailed technical explanations
+- Discuss best practices and patterns
+- Explain the "why" behind recommendations
+- Consider CI/CD implications and testing strategies
+- Mention security considerations (image scanning, RBAC, network policies)
+- Suggest improvements for maintainability and reusability
+- Use proper Helm templating techniques with named templates and helpers
+- Consider subchart dependencies and version compatibility`;
+
+/**
+ * Operator persona prompt - focuses on deployment, values configuration, troubleshooting
+ *
+ * This prompt is used when the user selects "End User" (operator) role.
+ * It emphasizes:
+ * - Values.yaml configuration
+ * - Common deployment scenarios
+ * - Troubleshooting
+ * - Resource requirements
+ * - Upgrade paths
+ */
+export const CHARTSMITH_OPERATOR_PROMPT = `${CHARTSMITH_TOOL_SYSTEM_PROMPT}
+
+## Operator Persona Context
+
+You are assisting an **Operator/End User** - someone who deploys and configures charts in their clusters.
+
+When responding:
+- Focus on practical usage and configuration
+- Explain values.yaml options clearly
+- Provide examples for common deployment scenarios
+- Help troubleshoot deployment issues
+- Consider resource requirements and scaling
+- Explain upgrade paths and breaking changes
+- Keep explanations concise and actionable
+- Avoid deep internal chart implementation details unless asked`;
+
+/**
+ * Get the appropriate system prompt based on persona
+ *
+ * @param persona - The selected persona ('auto' | 'developer' | 'operator')
+ * @returns The system prompt for the specified persona
+ */
+export function getSystemPromptForPersona(
+  persona?: "auto" | "developer" | "operator"
+): string {
+  switch (persona) {
+    case "developer":
+      return CHARTSMITH_DEVELOPER_PROMPT;
+    case "operator":
+      return CHARTSMITH_OPERATOR_PROMPT;
+    case "auto":
+    default:
+      return CHARTSMITH_TOOL_SYSTEM_PROMPT;
+  }
+}
+
 const prompts = {
   CHARTSMITH_TOOL_SYSTEM_PROMPT,
   CHARTSMITH_CHAT_PROMPT,
+  CHARTSMITH_DEVELOPER_PROMPT,
+  CHARTSMITH_OPERATOR_PROMPT,
   getSystemPromptWithContext,
+  getSystemPromptForPersona,
 };
 
 export default prompts;

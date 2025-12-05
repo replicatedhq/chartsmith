@@ -30,34 +30,41 @@ import {
   isValidModel,
 } from '@/lib/ai';
 import { createTools } from '@/lib/ai/tools';
-import { CHARTSMITH_TOOL_SYSTEM_PROMPT } from '@/lib/ai/prompts';
+import { getSystemPromptForPersona } from '@/lib/ai/prompts';
 
 // Set maximum streaming duration (must be a literal for Next.js config)
 export const maxDuration = 60;
 
+// Persona types matching ChatMessageFromPersona enum
+type ChatPersona = 'auto' | 'developer' | 'operator';
+
 // Request body interface - using UIMessage from AI SDK v5
 // PR1.5: Added workspaceId and revisionNumber for tool support
+// PR2.0: Added persona for prompt selection
 interface ChatRequestBody {
   messages: UIMessage[];
   provider?: string;
   model?: string;
   workspaceId?: string;      // Required for tool operations
   revisionNumber?: number;   // Required for tool operations
+  persona?: ChatPersona;     // PR2.0: Persona for prompt selection
 }
 
 export async function POST(request: Request) {
   try {
     // Parse request body
     const body: ChatRequestBody = await request.json();
-    const { messages, provider, model, workspaceId, revisionNumber } = body;
+    const { messages, provider, model, workspaceId, revisionNumber, persona } = body;
     
     // Debug logging for tool setup
+    // PR2.0: Added persona to logging
     console.log('[/api/chat] Request received:', { 
       hasMessages: !!messages?.length, 
       provider, 
       model, 
       workspaceId, 
-      revisionNumber 
+      revisionNumber,
+      persona: persona ?? 'auto',
     });
     
     // Extract auth header for forwarding to Go backend (PR1.5)
@@ -119,10 +126,18 @@ export async function POST(request: Request) {
       toolNames: tools ? Object.keys(tools) : [] 
     });
 
+    // PR2.0: Select system prompt based on persona
+    // - 'developer': Technical deep-dive, best practices, CI/CD considerations
+    // - 'operator': Practical usage, values configuration, troubleshooting
+    // - 'auto' (default): General Chartsmith assistant
+    const systemPrompt = getSystemPromptForPersona(persona);
+    
+    console.log('[/api/chat] Using persona:', persona ?? 'auto');
+
     // Convert messages to core format and stream the response
     const result = streamText({
       model: modelInstance,
-      system: CHARTSMITH_TOOL_SYSTEM_PROMPT,
+      system: systemPrompt,
       messages: convertToModelMessages(messages),
       tools, // PR1.5: Tools for chart operations
       stopWhen: stepCountIs(5), // Allow up to 5 tool calls per request (AI SDK v5 replacement for maxSteps)

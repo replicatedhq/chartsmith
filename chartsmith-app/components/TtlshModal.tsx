@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
-import { X, Copy, ExternalLink, AlertCircle, CheckCircle2 } from "lucide-react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { X, Copy, AlertCircle, CheckCircle2 } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useSession } from "@/app/hooks/useSession";
 import { publishToTtlshAction } from "@/lib/workspace/actions/publish-to-ttlsh";
@@ -18,43 +18,46 @@ export function TtlshModal({ isOpen, onClose }: TtlshModalProps) {
   const [isPublishing, setIsPublishing] = useState(false);
   const [isPublished, setIsPublished] = useState(false);
   const [publishStatus, setPublishStatus] = useState<PublishStatus | null>(null);
-  const [repoUrl, setRepoUrl] = useState("");
   const [error, setError] = useState("");
   const [workspaceId, setWorkspaceId] = useState("");
-  const [statusPollingInterval, setStatusPollingInterval] = useState<NodeJS.Timeout | null>(null);
+  
+  // Use ref for polling interval to avoid dependency issues
+  const statusPollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Reset state when modal is opened/closed
-  useEffect(() => {
-    if (isOpen) {
-      setIsPublishing(false);
-      setIsPublished(false);
-      setRepoUrl("");
-      setError("");
-
-      // Get current workspace ID from URL
-      const path = window.location.pathname;
-      const match = path.match(/\/workspace\/([a-zA-Z0-9-]+)/);
-      if (match && match[1]) {
-        setWorkspaceId(match[1]);
-        checkExistingPublish(match[1]);
-      }
-    } else {
-      // Clear polling interval when modal closes
-      if (statusPollingInterval) {
-        clearInterval(statusPollingInterval);
-        setStatusPollingInterval(null);
-      }
+  // Poll for status updates - using ref to avoid circular dependencies
+  const startStatusPolling = useCallback((wsId: string) => {
+    if (statusPollingIntervalRef.current) {
+      clearInterval(statusPollingIntervalRef.current);
     }
-  }, [isOpen]);
 
-  // Cleanup interval on unmount
-  useEffect(() => {
-    return () => {
-      if (statusPollingInterval) {
-        clearInterval(statusPollingInterval);
+    const interval = setInterval(async () => {
+      if (!session) return;
+
+      try {
+        const status = await getPublishStatusAction(session, wsId);
+
+        if (status) {
+          setPublishStatus(status);
+
+          if (status.status === "completed") {
+            setIsPublished(true);
+            setIsPublishing(false);
+            clearInterval(interval);
+            statusPollingIntervalRef.current = null;
+          } else if (status.status === "failed") {
+            setIsPublishing(false);
+            setError(status.error || "Publishing failed");
+            clearInterval(interval);
+            statusPollingIntervalRef.current = null;
+          }
+        }
+      } catch (err) {
+        console.error("Error polling publish status:", err);
       }
-    };
-  }, [statusPollingInterval]);
+    }, 2000); // Poll every 2 seconds
+
+    statusPollingIntervalRef.current = interval;
+  }, [session]);
 
   // Check if there's an existing publish for this workspace
   const checkExistingPublish = useCallback(async (wsId: string) => {
@@ -65,8 +68,6 @@ export function TtlshModal({ isOpen, onClose }: TtlshModalProps) {
 
       if (status) {
         setPublishStatus(status);
-
-        // No need to update repoUrl anymore as we're using a fixed ttl.sh URL
 
         if (status.status === "completed") {
           setIsPublished(true);
@@ -80,44 +81,39 @@ export function TtlshModal({ isOpen, onClose }: TtlshModalProps) {
     } catch (err) {
       console.error("Error checking publish status:", err);
     }
-  }, [session]);
+  }, [session, startStatusPolling]);
 
-  // Poll for status updates
-  const startStatusPolling = (wsId: string) => {
-    if (statusPollingInterval) {
-      clearInterval(statusPollingInterval);
-    }
+  // Reset state when modal is opened/closed
+  useEffect(() => {
+    if (isOpen) {
+      setIsPublishing(false);
+      setIsPublished(false);
+      setError("");
 
-    const interval = setInterval(async () => {
-      if (!session) return;
-
-      try {
-        const status = await getPublishStatusAction(session, wsId);
-
-        if (status) {
-          setPublishStatus(status);
-
-          // No need to update repoUrl anymore as we're using a fixed ttl.sh URL
-
-          if (status.status === "completed") {
-            setIsPublished(true);
-            setIsPublishing(false);
-            clearInterval(interval);
-            setStatusPollingInterval(null);
-          } else if (status.status === "failed") {
-            setIsPublishing(false);
-            setError(status.error || "Publishing failed");
-            clearInterval(interval);
-            setStatusPollingInterval(null);
-          }
-        }
-      } catch (err) {
-        console.error("Error polling publish status:", err);
+      // Get current workspace ID from URL
+      const path = window.location.pathname;
+      const match = path.match(/\/workspace\/([a-zA-Z0-9-]+)/);
+      if (match && match[1]) {
+        setWorkspaceId(match[1]);
+        checkExistingPublish(match[1]);
       }
-    }, 2000); // Poll every 2 seconds
+    } else {
+      // Clear polling interval when modal closes
+      if (statusPollingIntervalRef.current) {
+        clearInterval(statusPollingIntervalRef.current);
+        statusPollingIntervalRef.current = null;
+      }
+    }
+  }, [isOpen, checkExistingPublish]);
 
-    setStatusPollingInterval(interval);
-  };
+  // Cleanup interval on unmount
+  useEffect(() => {
+    return () => {
+      if (statusPollingIntervalRef.current) {
+        clearInterval(statusPollingIntervalRef.current);
+      }
+    };
+  }, []);
 
   if (!isOpen) return null;
 

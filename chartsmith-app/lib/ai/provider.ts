@@ -5,10 +5,16 @@
  * It abstracts provider selection and returns configured model instances
  * that can be used with streamText and other AI SDK functions.
  * 
- * Supports:
- * - Direct OpenAI API (when OPENAI_API_KEY is set)
- * - Direct Anthropic API (when ANTHROPIC_API_KEY is set)  
- * - OpenRouter for unified multi-provider access (fallback)
+ * Provider Priority (configurable via USE_OPENROUTER_PRIMARY env var):
+ * 
+ * When USE_OPENROUTER_PRIMARY=true (default):
+ *   1. OpenRouter (OPENROUTER_API_KEY) - unified multi-provider access
+ *   2. Direct Anthropic API (ANTHROPIC_API_KEY) - backup
+ *   3. Direct OpenAI API (OPENAI_API_KEY) - backup
+ * 
+ * When USE_OPENROUTER_PRIMARY=false:
+ *   1. Direct provider API (OPENAI_API_KEY or ANTHROPIC_API_KEY)
+ *   2. OpenRouter (OPENROUTER_API_KEY) - fallback
  */
 
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
@@ -60,6 +66,17 @@ function hasDirectAnthropic(): boolean {
 
 function hasOpenRouter(): boolean {
   return !!process.env.OPENROUTER_API_KEY;
+}
+
+/**
+ * Check if OpenRouter should be used as the primary provider
+ * Default: true (OpenRouter first, direct APIs as backup)
+ * Set USE_OPENROUTER_PRIMARY=false to use direct APIs first
+ */
+function shouldUseOpenRouterPrimary(): boolean {
+  const envValue = process.env.USE_OPENROUTER_PRIMARY;
+  // Default to true if not set or set to 'true'
+  return envValue !== 'false';
 }
 
 /**
@@ -130,32 +147,60 @@ export function getModel(provider?: string, modelId?: string) {
     targetProvider = DEFAULT_PROVIDER as Provider;
   }
 
-  // Try direct provider APIs first, then fall back to OpenRouter
-  if (targetProvider === 'openai' && hasDirectOpenAI()) {
-    // Use direct OpenAI API
-    const shortModelId = targetModelId.replace('openai/', '');
-    console.log(`[AI Provider] Using direct OpenAI API for model: ${shortModelId}`);
-    return openai(shortModelId);
-  }
+  // Determine provider priority based on USE_OPENROUTER_PRIMARY setting
+  const openRouterFirst = shouldUseOpenRouterPrimary();
   
-  if (targetProvider === 'anthropic' && hasDirectAnthropic()) {
-    // Use direct Anthropic API
-    const shortModelId = targetModelId.replace('anthropic/', '');
-    console.log(`[AI Provider] Using direct Anthropic API for model: ${shortModelId}`);
-    return anthropic(shortModelId);
-  }
+  if (openRouterFirst) {
+    // Priority: OpenRouter → Direct Anthropic → Direct OpenAI
+    
+    // 1. Try OpenRouter first (primary)
+    if (hasOpenRouter()) {
+      console.log(`[AI Provider] Using OpenRouter (primary) for model: ${targetModelId}`);
+      const openrouter = createOpenRouterProvider();
+      return openrouter(targetModelId);
+    }
+    
+    // 2. Fall back to direct Anthropic API
+    if (targetProvider === 'anthropic' && hasDirectAnthropic()) {
+      const shortModelId = targetModelId.replace('anthropic/', '');
+      console.log(`[AI Provider] Using direct Anthropic API (backup) for model: ${shortModelId}`);
+      return anthropic(shortModelId);
+    }
+    
+    // 3. Fall back to direct OpenAI API
+    if (targetProvider === 'openai' && hasDirectOpenAI()) {
+      const shortModelId = targetModelId.replace('openai/', '');
+      console.log(`[AI Provider] Using direct OpenAI API (backup) for model: ${shortModelId}`);
+      return openai(shortModelId);
+    }
+  } else {
+    // Priority: Direct APIs → OpenRouter (original behavior)
+    
+    // 1. Try direct provider APIs first
+    if (targetProvider === 'openai' && hasDirectOpenAI()) {
+      const shortModelId = targetModelId.replace('openai/', '');
+      console.log(`[AI Provider] Using direct OpenAI API for model: ${shortModelId}`);
+      return openai(shortModelId);
+    }
+    
+    if (targetProvider === 'anthropic' && hasDirectAnthropic()) {
+      const shortModelId = targetModelId.replace('anthropic/', '');
+      console.log(`[AI Provider] Using direct Anthropic API for model: ${shortModelId}`);
+      return anthropic(shortModelId);
+    }
 
-  // Fall back to OpenRouter
-  if (hasOpenRouter()) {
-    console.log(`[AI Provider] Using OpenRouter for model: ${targetModelId}`);
-    const openrouter = createOpenRouterProvider();
-    return openrouter(targetModelId);
+    // 2. Fall back to OpenRouter
+    if (hasOpenRouter()) {
+      console.log(`[AI Provider] Using OpenRouter (fallback) for model: ${targetModelId}`);
+      const openrouter = createOpenRouterProvider();
+      return openrouter(targetModelId);
+    }
   }
 
   // No API keys available
   throw new Error(
     `No API key available for provider '${targetProvider}'. ` +
-    `Set OPENAI_API_KEY, ANTHROPIC_API_KEY, or OPENROUTER_API_KEY in your environment.`
+    `Set OPENROUTER_API_KEY (recommended), or ANTHROPIC_API_KEY/OPENAI_API_KEY in your environment.`
   );
 }
 

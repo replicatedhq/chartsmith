@@ -183,3 +183,83 @@ Error codes: `VALIDATION_ERROR`, `NOT_FOUND`, `INTERNAL_ERROR`, `EXTERNAL_API_ER
 - Passed to tool factories via closure: `createTools(authHeader, workspaceId, revisionNumber)`
 - Tools forward auth header to Go endpoints via `callGoEndpoint()`
 - Go handlers validate tokens against `extension_token` table
+
+## AI SDK Chat Reintegration (PR2.0)
+
+PR2.0 integrates the AI SDK chat transport into the main workspace path (`/workspace/[id]`),
+replacing the Go worker chat flow with AI SDK streaming while preserving all existing UI.
+
+### Feature Flag
+
+```env
+# Enable AI SDK chat transport in main workspace path
+# Set to 'true' to use AI SDK, 'false' (or unset) to use legacy Go worker path
+NEXT_PUBLIC_USE_AI_SDK_CHAT=false
+```
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    ChatContainer (Feature Flag)                  │
+│                                                                  │
+│  NEXT_PUBLIC_USE_AI_SDK_CHAT=false (Legacy):                    │
+│  ├── useLegacyChat → createChatMessageAction                    │
+│  │                 → PostgreSQL queue → Go worker               │
+│  │                 → Centrifugo updates messagesAtom            │
+│  │                                                               │
+│  NEXT_PUBLIC_USE_AI_SDK_CHAT=true (AI SDK):                     │
+│  ├── useAISDKChatAdapter → /api/chat (streaming)                │
+│  │                      → AI SDK tools → Go HTTP endpoints      │
+│  │                      → Centrifugo updates files (artifacts)  │
+│  │                      → Adapter merges with messagesAtom      │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Key Files (PR2.0)
+
+| File | Purpose |
+|------|---------|
+| `hooks/useAISDKChatAdapter.ts` | Adapter bridging AI SDK to existing Message format |
+| `hooks/useLegacyChat.ts` | Legacy Go worker path wrapper |
+| `lib/chat/messageMapper.ts` | UIMessage ↔ Message format conversion |
+| `lib/ai/prompts.ts` | Persona-specific prompts (developer/operator) |
+
+### Message Format Mapping
+
+AI SDK UIMessage parts are converted to existing Message format:
+
+| UIMessage Field | Message Field | Notes |
+|-----------------|---------------|-------|
+| `parts[].text` (user) | `prompt` | User message content |
+| `parts[].text` (assistant) | `response` | AI response content |
+| `status === 'streaming'` | `isComplete: false` | Streaming state |
+| `status === 'ready'` | `isComplete: true` | Complete state |
+
+### Persona Support
+
+Personas affect the system prompt sent to the LLM:
+
+| Persona | Prompt | Focus |
+|---------|--------|-------|
+| `auto` | `CHARTSMITH_TOOL_SYSTEM_PROMPT` | General assistant |
+| `developer` | `CHARTSMITH_DEVELOPER_PROMPT` | Technical deep-dive, best practices |
+| `operator` | `CHARTSMITH_OPERATOR_PROMPT` | Practical usage, troubleshooting |
+
+### Plan Workflow Difference
+
+- **Legacy path**: Creates `workspace_plan` records, shows `PlanChatMessage` UI
+- **AI SDK path**: Writes to `content_pending`, uses Commit/Discard buttons
+
+### Centrifugo Integration
+
+- AI SDK path receives `artifact-updated` events for file changes
+- `currentStreamingMessageIdAtom` prevents conflicts during streaming
+- `chatmessage-updated` events are skipped for actively streaming messages
+
+### Rollback Procedure
+
+If issues occur with AI SDK path:
+1. Set `NEXT_PUBLIC_USE_AI_SDK_CHAT=false`
+2. Redeploy - changes take effect immediately
+3. Users fall back to Go worker path

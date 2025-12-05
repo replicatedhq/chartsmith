@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useRef, useEffect } from "react";
-import { Send, Loader2, Users, Code, User, Sparkles } from "lucide-react";
+import { Send, Loader2, Users, Code, User, Sparkles, Square } from "lucide-react";
 import { useTheme } from "../contexts/ThemeContext";
 import { Session } from "@/lib/types/session";
 import { ChatMessage } from "./ChatMessage";
@@ -11,9 +11,17 @@ import { ScrollingContent } from "./ScrollingContent";
 import { NewChartChatMessage } from "./NewChartChatMessage";
 import { NewChartContent } from "./NewChartContent";
 
+// PR2.0: Import adapter hooks for AI SDK integration
+import { useAISDKChatAdapter, type ChatPersona } from "@/hooks/useAISDKChatAdapter";
+import { useLegacyChat } from "@/hooks/useLegacyChat";
+
 interface ChatContainerProps {
   session: Session;
 }
+
+// PR2.0: Feature flag for AI SDK chat
+// Set NEXT_PUBLIC_USE_AI_SDK_CHAT=true to enable AI SDK transport
+const USE_AI_SDK_CHAT = process.env.NEXT_PUBLIC_USE_AI_SDK_CHAT === 'true';
 
 export function ChatContainer({ session }: ChatContainerProps) {
   const { theme } = useTheme();
@@ -21,11 +29,26 @@ export function ChatContainer({ session }: ChatContainerProps) {
   const [messages, setMessages] = useAtom(messagesAtom)
   const [isRendering] = useAtom(isRenderingAtom)
   const [chatInput, setChatInput] = useState("");
-  const [selectedRole, setSelectedRole] = useState<"auto" | "developer" | "operator">("auto");
+  const [selectedRole, setSelectedRole] = useState<ChatPersona>("auto");
   const [isRoleMenuOpen, setIsRoleMenuOpen] = useState(false);
   const roleMenuRef = useRef<HTMLDivElement>(null);
   
-  // No need for refs as ScrollingContent manages its own scrolling
+  // PR2.0: Conditional chat transport based on feature flag
+  // Legacy path: Go worker processes via PostgreSQL queue + Centrifugo
+  // AI SDK path: Direct streaming via /api/chat endpoint
+  const legacyChat = useLegacyChat(session);
+  const aiSDKChat = useAISDKChatAdapter(
+    workspace?.id ?? '',
+    workspace?.currentRevisionNumber ?? 0,
+    session,
+    messages // Pass current messages as initial for merging
+  );
+  
+  // Select chat transport based on feature flag
+  const chatState = USE_AI_SDK_CHAT ? aiSDKChat : legacyChat;
+  
+  // Determine if chat is busy (for UI disabling)
+  const isBusy = chatState.isStreaming || chatState.isThinking;
 
   // Close the role menu when clicking outside
   useEffect(() => {
@@ -45,15 +68,15 @@ export function ChatContainer({ session }: ChatContainerProps) {
     return null;
   }
 
+  // PR2.0: Unified submit handler using adapter
   const handleSubmitChat = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!chatInput.trim() || isRendering) return; // Don't submit if rendering is in progress
-
+    if (!chatInput.trim() || isBusy) return; // Don't submit if busy
     if (!session || !workspace) return;
 
-    const chatMessage = await createChatMessageAction(session, workspace.id, chatInput.trim(), selectedRole);
-    setMessages(prev => [...prev, chatMessage]);
-
+    // Use adapter's sendMessage which handles both legacy and AI SDK paths
+    // Persona is passed for prompt selection in AI SDK mode
+    await chatState.sendMessage(chatInput.trim(), selectedRole);
     setChatInput("");
   };
   
@@ -74,14 +97,14 @@ export function ChatContainer({ session }: ChatContainerProps) {
 
   if (workspace?.currentRevisionNumber === 0) {
     // For NewChartContent, create a simpler version of handleSubmitChat that doesn't use role selector
+    // PR2.0: Uses adapter pattern for both legacy and AI SDK paths
     const handleNewChartSubmitChat = async (e: React.FormEvent) => {
       e.preventDefault();
-      if (!chatInput.trim() || isRendering) return;
+      if (!chatInput.trim() || isBusy) return;
       if (!session || !workspace) return;
 
       // Always use AUTO for new chart creation
-      const chatMessage = await createChatMessageAction(session, workspace.id, chatInput.trim(), "auto");
-      setMessages(prev => [...prev, chatMessage]);
+      await chatState.sendMessage(chatInput.trim(), "auto");
       setChatInput("");
     };
     
@@ -93,12 +116,16 @@ export function ChatContainer({ session }: ChatContainerProps) {
     />
   }
 
+  // PR2.0: Use chatState.messages for AI SDK mode, messages atom for legacy
+  // This ensures we display the right messages based on transport
+  const displayMessages = USE_AI_SDK_CHAT ? chatState.messages : messages;
+
   return (
     <div className={`h-[calc(100vh-3.5rem)] border-r flex flex-col min-h-0 overflow-hidden transition-all duration-300 ease-in-out w-full relative ${theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"}`}>
       <div className="flex-1 h-full">
         <ScrollingContent forceScroll={true}>
           <div className={workspace?.currentRevisionNumber === 0 ? "" : "pb-32"}>
-            {messages.map((item, index) => (
+            {displayMessages.map((item, index) => (
               <div key={item.id}>
                 <ChatMessage
                   key={item.id}
@@ -110,6 +137,48 @@ export function ChatContainer({ session }: ChatContainerProps) {
                 />
               </div>
             ))}
+            
+            {/* PR2.0: Thinking indicator for AI SDK mode */}
+            {USE_AI_SDK_CHAT && chatState.isThinking && (
+              <div className={`px-4 py-3 ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
+                <div className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span className="text-sm">Thinking...</span>
+                  <button
+                    type="button"
+                    onClick={() => chatState.cancel()}
+                    className={`ml-auto text-xs px-2 py-1 rounded border ${
+                      theme === "dark"
+                        ? "border-dark-border text-gray-400 hover:text-gray-200 hover:bg-dark-border/40"
+                        : "border-gray-300 text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                    }`}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+            
+            {/* PR2.0: Streaming indicator for AI SDK mode */}
+            {USE_AI_SDK_CHAT && chatState.isStreaming && !chatState.isThinking && (
+              <div className={`px-4 py-2 ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs">Generating response...</span>
+                  <button
+                    type="button"
+                    onClick={() => chatState.cancel()}
+                    className={`ml-auto text-xs px-2 py-1 rounded border flex items-center gap-1 ${
+                      theme === "dark"
+                        ? "border-dark-border text-gray-400 hover:text-gray-200 hover:bg-dark-border/40"
+                        : "border-gray-300 text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                    }`}
+                  >
+                    <Square className="w-3 h-3" />
+                    Stop
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </ScrollingContent>
       </div>
@@ -121,7 +190,7 @@ export function ChatContainer({ session }: ChatContainerProps) {
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                if (!isRendering) {
+                if (!isBusy) {
                   handleSubmitChat(e);
                 }
               }
@@ -203,16 +272,16 @@ export function ChatContainer({ session }: ChatContainerProps) {
             {/* Send button */}
             <button
               type="submit"
-              disabled={isRendering}
+              disabled={isBusy}
               className={`p-1.5 rounded-full ${
-                isRendering
+                isBusy
                   ? theme === "dark" ? "text-gray-600 cursor-not-allowed" : "text-gray-300 cursor-not-allowed"
                   : theme === "dark"
                     ? "text-gray-400 hover:text-gray-200 hover:bg-dark-border/40"
                     : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
               }`}
             >
-              {isRendering ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              {isBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
             </button>
           </div>
         </form>
