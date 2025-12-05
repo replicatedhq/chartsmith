@@ -32,6 +32,7 @@ export interface ChatMessageProps {
   session: Session;
   showChatInput?: boolean;
   onContentUpdate?: () => void;
+  message?: Message; // PR2.0: Optional message prop for AI SDK mode
 }
 
 function LoadingSpinner({ message }: { message: string }) {
@@ -71,6 +72,7 @@ export function NewChartChatMessage({
   session,
   showChatInput,
   onContentUpdate,
+  message: messageProp,
 }: ChatMessageProps) {
   const { theme } = useTheme();
   const [showReportModal, setShowReportModal] = useState(false);
@@ -82,7 +84,8 @@ export function NewChartChatMessage({
 
   const [messages, setMessages] = useAtom(messagesAtom);
   const [messageGetter] = useAtom(messageByIdAtom);
-  const message = messageGetter(messageId);
+  // PR2.0: Use message prop if provided (AI SDK mode), otherwise look up from atom (legacy)
+  const message = messageProp || messageGetter(messageId);
 
   const [workspace, setWorkspace] = useAtom(workspaceAtom);
   const [renderGetter] = useAtom(renderByIdAtom);

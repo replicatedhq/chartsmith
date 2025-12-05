@@ -19,9 +19,9 @@ interface ChatContainerProps {
   session: Session;
 }
 
-// PR2.0: Feature flag for AI SDK chat
-// Set NEXT_PUBLIC_USE_AI_SDK_CHAT=true to enable AI SDK transport
-const USE_AI_SDK_CHAT = process.env.NEXT_PUBLIC_USE_AI_SDK_CHAT === 'true';
+// PR2.0: AI SDK is now the default chat transport
+// Set NEXT_PUBLIC_USE_AI_SDK_CHAT=false to fall back to legacy Go worker path
+const USE_AI_SDK_CHAT = process.env.NEXT_PUBLIC_USE_AI_SDK_CHAT !== 'false';
 
 export function ChatContainer({ session }: ChatContainerProps) {
   const { theme } = useTheme();
@@ -95,9 +95,11 @@ export function ChatContainer({ session }: ChatContainerProps) {
 
   // ScrollingContent will now handle all the scrolling behavior
 
-  if (workspace?.currentRevisionNumber === 0) {
+  // PR2.0: Only show NewChartContent for legacy mode at revision 0
+  // AI SDK mode shows the full workspace view with sidebar, so skip NewChartContent
+  if (!USE_AI_SDK_CHAT && workspace?.currentRevisionNumber === 0) {
     // For NewChartContent, create a simpler version of handleSubmitChat that doesn't use role selector
-    // PR2.0: Uses adapter pattern for both legacy and AI SDK paths
+    // Legacy mode uses adapter pattern
     const handleNewChartSubmitChat = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!chatInput.trim() || isBusy) return;
@@ -113,6 +115,9 @@ export function ChatContainer({ session }: ChatContainerProps) {
       chatInput={chatInput}
       setChatInput={setChatInput}
       handleSubmitChat={handleNewChartSubmitChat}
+      messages={messages}
+      isStreaming={chatState.isStreaming}
+      isThinking={chatState.isThinking}
     />
   }
 

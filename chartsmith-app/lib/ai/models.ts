@@ -37,12 +37,12 @@ export interface ProviderConfig {
  * Primary model: Claude Sonnet 4 - latest and recommended for Chartsmith
  */
 export const AVAILABLE_MODELS: ModelConfig[] = [
-  // Anthropic Claude 4 (preferred)
+  // Anthropic Claude Sonnet 4 (preferred)
   {
     id: 'claude-sonnet-4',
     name: 'Claude Sonnet 4',
     provider: 'anthropic',
-    modelId: 'anthropic/claude-sonnet-4-20250514',
+    modelId: 'anthropic/claude-sonnet-4',
     description: 'Anthropic\'s latest balanced model - recommended for Chartsmith',
   },
   // OpenAI models (alternative)
@@ -73,7 +73,7 @@ export const AVAILABLE_PROVIDERS: ProviderConfig[] = [
     id: 'anthropic',
     name: 'Anthropic',
     description: 'Claude Sonnet 4 (recommended)',
-    defaultModel: 'anthropic/claude-sonnet-4-20250514',
+    defaultModel: 'anthropic/claude-sonnet-4',
   },
   {
     id: 'openai',

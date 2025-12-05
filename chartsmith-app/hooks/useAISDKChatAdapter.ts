@@ -96,6 +96,9 @@ export function useAISDKChatAdapter(
     string | null
   >(null);
   const hasPersistedRef = useRef<Set<string>>(new Set());
+  
+  // Track if we've auto-sent the initial message (prevents duplicates)
+  const hasAutoSentRef = useRef(false);
 
   // Track cancel state (AI SDK doesn't expose this)
   const [isCanceled, setIsCanceled] = useState(false);
@@ -139,6 +142,38 @@ export function useAISDKChatAdapter(
     }),
     [workspaceId, revisionNumber]
   );
+
+  // Auto-send: If there's an initial message without a response, send it to AI SDK
+  // This handles the flow from landing page where createWorkspaceFromPromptAction
+  // persists the user message to DB, then we need to get the AI response
+  useEffect(() => {
+    // Use ref check FIRST to prevent any possibility of double-send
+    if (hasAutoSentRef.current) return;
+
+    // Find the last user message that has no response
+    const lastMessage = jotaiMessages.length > 0
+      ? jotaiMessages[jotaiMessages.length - 1]
+      : null;
+
+    // Only auto-send if there's a user message without a response
+    const needsResponse = lastMessage && !lastMessage.response && lastMessage.prompt;
+
+    if (needsResponse && aiMessages.length === 0 && workspaceId) {
+      // Mark as sent BEFORE calling sendMessage to prevent race conditions
+      hasAutoSentRef.current = true;
+      console.log('[useAISDKChatAdapter] Auto-sending initial message to AI:', lastMessage.prompt);
+      
+      // Set the current message ID for persistence tracking
+      setCurrentChatMessageId(lastMessage.id);
+      
+      // Send to AI SDK
+      aiSendMessage(
+        { text: lastMessage.prompt },
+        { body: getChatBody() }
+      );
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jotaiMessages, aiMessages.length, workspaceId]); // Run when jotai messages update
 
   // Convert AI SDK messages to existing format
   const streamingMessages = useMemo(() => {

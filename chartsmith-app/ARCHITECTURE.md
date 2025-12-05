@@ -192,9 +192,9 @@ replacing the Go worker chat flow with AI SDK streaming while preserving all exi
 ### Feature Flag
 
 ```env
-# Enable AI SDK chat transport in main workspace path
-# Set to 'true' to use AI SDK, 'false' (or unset) to use legacy Go worker path
-NEXT_PUBLIC_USE_AI_SDK_CHAT=false
+# AI SDK is now the DEFAULT chat transport
+# Set to 'false' to fall back to legacy Go worker path (for rollback only)
+NEXT_PUBLIC_USE_AI_SDK_CHAT=true
 ```
 
 ### Architecture
@@ -203,16 +203,16 @@ NEXT_PUBLIC_USE_AI_SDK_CHAT=false
 ┌─────────────────────────────────────────────────────────────────┐
 │                    ChatContainer (Feature Flag)                  │
 │                                                                  │
-│  NEXT_PUBLIC_USE_AI_SDK_CHAT=false (Legacy):                    │
-│  ├── useLegacyChat → createChatMessageAction                    │
-│  │                 → PostgreSQL queue → Go worker               │
-│  │                 → Centrifugo updates messagesAtom            │
-│  │                                                               │
-│  NEXT_PUBLIC_USE_AI_SDK_CHAT=true (AI SDK):                     │
+│  NEXT_PUBLIC_USE_AI_SDK_CHAT=true (Default - AI SDK):           │
 │  ├── useAISDKChatAdapter → /api/chat (streaming)                │
 │  │                      → AI SDK tools → Go HTTP endpoints      │
 │  │                      → Centrifugo updates files (artifacts)  │
 │  │                      → Adapter merges with messagesAtom      │
+│  │                                                               │
+│  NEXT_PUBLIC_USE_AI_SDK_CHAT=false (Legacy fallback):           │
+│  ├── useLegacyChat → createChatMessageAction                    │
+│  │                 → PostgreSQL queue → Go worker               │
+│  │                 → Centrifugo updates messagesAtom            │
 └─────────────────────────────────────────────────────────────────┘
 ```
 

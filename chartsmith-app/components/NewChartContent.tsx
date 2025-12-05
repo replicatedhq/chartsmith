@@ -1,33 +1,41 @@
 import { useTheme } from "../contexts/ThemeContext";
 import { Session } from "@/lib/types/session";
 import { Send, Loader2 } from "lucide-react";
-import { messagesAtom, workspaceAtom, isRenderingAtom, plansAtom } from "@/atoms/workspace";
+import { workspaceAtom, isRenderingAtom, plansAtom } from "@/atoms/workspace";
 import { useAtom } from "jotai";
 import { ScrollingContent } from "./ScrollingContent";
 import { NewChartChatMessage } from "./NewChartChatMessage";
 import { createRevisionAction } from "@/lib/workspace/actions/create-revision";
 import { useEffect, useState } from "react";
+import { Message } from "@/components/types";
 
 interface NewChartContentProps {
   session: Session;
   chatInput: string;
   setChatInput: (value: string) => void;
   handleSubmitChat: (e: React.FormEvent) => void;
+  messages: Message[];
+  isStreaming?: boolean;
+  isThinking?: boolean;
 }
 
-export function NewChartContent({ session, chatInput, setChatInput, handleSubmitChat }: NewChartContentProps) {
+export function NewChartContent({ session, chatInput, setChatInput, handleSubmitChat, messages, isStreaming = false, isThinking = false }: NewChartContentProps) {
   const { theme } = useTheme();
-  const [messages] = useAtom(messagesAtom);
   const [isRendering] = useAtom(isRenderingAtom);
   const [, setWorkspace] = useAtom(workspaceAtom);
   const [plans] = useAtom(plansAtom);
+  
+  // Show input when there are plans in review status OR when AI is done streaming
   const [showInput, setShowInput] = useState(() =>
-    plans.length > 0 && plans[0].status === "review"
+    (plans.length > 0 && plans[0].status === "review") || (!isStreaming && !isThinking && messages.length > 0)
   );
 
   useEffect(() => {
-    setShowInput(plans.length > 0 && plans[0].status === "review");
-  }, [plans]);
+    // Show input when plan is in review OR when AI SDK response is complete
+    const hasReviewPlan = plans.length > 0 && plans[0].status === "review";
+    const aiSdkComplete = !isStreaming && !isThinking && messages.length > 0 && messages[messages.length - 1]?.response;
+    setShowInput(hasReviewPlan || aiSdkComplete);
+  }, [plans, isStreaming, isThinking, messages]);
 
   const handleCreateChart = async () => {
     if (!session || !messages.length || !plans.length) return;
@@ -53,9 +61,30 @@ export function NewChartContent({ session, chatInput, setChatInput, handleSubmit
                   key={item.id}
                   messageId={item.id}
                   session={session}
+                  message={item}
                 />
               </div>
             ))}
+            {/* Streaming/Thinking indicator - only show if last message has no response yet */}
+            {(isStreaming || isThinking) && messages.length > 0 && !messages[messages.length - 1]?.response && (
+              <div className="px-4 py-2">
+                <div className={`p-3 rounded-lg ${
+                  theme === "dark" ? "bg-dark-border/40" : "bg-gray-100"
+                } rounded-tl-sm max-w-[80%]`}>
+                  <div className={`text-xs ${
+                    theme === "dark" ? "text-gray-400" : "text-gray-500"
+                  } mb-1`}>
+                    ChartSmith
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-shrink-0 animate-spin rounded-full h-3 w-3 border border-t-transparent border-primary"></div>
+                    <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
+                      {isThinking ? "thinking..." : "generating response..."}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </ScrollingContent>
         {showInput && (

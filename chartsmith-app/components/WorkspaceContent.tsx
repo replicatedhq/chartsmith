@@ -97,17 +97,33 @@ export function WorkspaceContent({
     session,
   });
 
-  const showEditor = workspace?.currentRevisionNumber && workspace?.currentRevisionNumber > 0 || workspace?.incompleteRevisionNumber;
+  // PR2.0: For AI SDK mode, show editor at revision 0 since files are created directly
+  // Check if AI SDK mode is enabled
+  const USE_AI_SDK_CHAT = process.env.NEXT_PUBLIC_USE_AI_SDK_CHAT !== 'false';
+  
+  // Show editor when:
+  // 1. currentRevisionNumber > 0 (has committed changes)
+  // 2. incompleteRevisionNumber exists (plan being applied)
+  // 3. AI SDK mode at revision 0 (files created directly)
+  const showEditor = (workspace?.currentRevisionNumber && workspace?.currentRevisionNumber > 0) 
+    || workspace?.incompleteRevisionNumber
+    || (USE_AI_SDK_CHAT && workspace?.currentRevisionNumber === 0);
 
   if (!session || !workspace) return null;
+
+  // PR2.0: Determine if we should show centered chat (legacy mode at revision 0) or sidebar chat
+  const showCenteredChat = !USE_AI_SDK_CHAT && (
+    (!workspace?.currentRevisionNumber && !workspace?.incompleteRevisionNumber) || 
+    (workspace.currentRevisionNumber === 0 && !workspace.incompleteRevisionNumber)
+  );
 
   return (
     <EditorLayout>
       <div className="flex w-full overflow-hidden relative">
         <div className={`chat-container-wrapper transition-all duration-300 ease-in-out absolute ${
-            (!workspace?.currentRevisionNumber && !workspace?.incompleteRevisionNumber) || (workspace.currentRevisionNumber === 0 && !workspace.incompleteRevisionNumber) ? 'inset-0 flex justify-center' : 'left-0 top-0 bottom-0'
+            showCenteredChat ? 'inset-0 flex justify-center' : 'left-0 top-0 bottom-0'
           }`}>
-          <div className={`${(!workspace?.currentRevisionNumber && !workspace?.incompleteRevisionNumber) || (workspace.currentRevisionNumber === 0 && !workspace.incompleteRevisionNumber) ? 'w-full max-w-3xl px-4' : 'w-[480px] h-full flex flex-col'}`}>
+          <div className={`${showCenteredChat ? 'w-full max-w-3xl px-4' : 'w-[480px] h-full flex flex-col'}`}>
             <div className="flex-1 overflow-y-auto">
               <ChatContainer
                 session={session}

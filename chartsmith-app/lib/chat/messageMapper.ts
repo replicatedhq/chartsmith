@@ -245,24 +245,65 @@ export function mapUIMessagesToMessages(
 /**
  * Merges streaming messages with historical messages from database
  * Historical messages take precedence for shared IDs (database is authoritative)
+ * 
+ * PR2.0 Enhancement: Also matches by prompt content since AI SDK generates
+ * different IDs than the database. When a streaming message's prompt matches
+ * a historical message, we merge the streaming response INTO the historical message.
  *
  * @param historicalMessages - Messages from database (via Jotai/Centrifugo)
  * @param streamingMessages - Messages from current AI SDK session
- * @returns Merged array with no duplicates
+ * @returns Merged array with no duplicates, streaming responses attached to historical messages
  */
 export function mergeMessages(
   historicalMessages: Message[],
   streamingMessages: Message[]
 ): Message[] {
   const historicalIds = new Set(historicalMessages.map((m) => m.id));
+  
+  // Create a map of prompt content -> historical message for matching
+  const historicalByPrompt = new Map<string, Message>();
+  for (const msg of historicalMessages) {
+    if (msg.prompt) {
+      historicalByPrompt.set(msg.prompt.trim(), msg);
+    }
+  }
 
-  // Filter out streaming messages that already exist in history
-  // Historical data is authoritative
-  const newStreamingMessages = streamingMessages.filter(
-    (m) => !historicalIds.has(m.id)
-  );
+  // Merge streaming responses into historical messages where prompts match
+  const mergedHistorical = historicalMessages.map((histMsg) => {
+    if (!histMsg.prompt || histMsg.response) {
+      // Already has response or no prompt to match, keep as-is
+      return histMsg;
+    }
+    
+    // Find streaming message with matching prompt
+    const matchingStreaming = streamingMessages.find(
+      (sm) => sm.prompt?.trim() === histMsg.prompt?.trim()
+    );
+    
+    if (matchingStreaming && matchingStreaming.response) {
+      // Merge streaming response into historical message
+      return {
+        ...histMsg,
+        response: matchingStreaming.response,
+        isComplete: matchingStreaming.isComplete,
+        isIntentComplete: matchingStreaming.isIntentComplete,
+        isCanceled: matchingStreaming.isCanceled,
+      };
+    }
+    
+    return histMsg;
+  });
 
-  return [...historicalMessages, ...newStreamingMessages];
+  // Filter out streaming messages that:
+  // 1. Already exist in history by ID
+  // 2. Have matching prompts in history (already merged above)
+  const newStreamingMessages = streamingMessages.filter((m) => {
+    if (historicalIds.has(m.id)) return false;
+    if (m.prompt && historicalByPrompt.has(m.prompt.trim())) return false;
+    return true;
+  });
+
+  return [...mergedHistorical, ...newStreamingMessages];
 }
 
 /**
