@@ -152,6 +152,8 @@ func sendMessage(channelName string, data map[string]interface{}) error {
 	url := centrifugoConfig.Address
 	apiKey := centrifugoConfig.APIKey
 
+	logger.Debugf("Sending Centrifugo message to channel=%s url=%s", channelName, url)
+
 	requestBody := map[string]interface{}{
 		"method": "publish",
 		"params": map[string]interface{}{
@@ -182,6 +184,8 @@ func sendMessage(channelName string, data map[string]interface{}) error {
 	if resp.StatusCode != http.StatusOK {
 		log.Fatalf("Failed to send message, status code: %d", resp.StatusCode)
 	}
+
+	logger.Debugf("Successfully sent Centrifugo message to channel=%s", channelName)
 
 	return nil
 }

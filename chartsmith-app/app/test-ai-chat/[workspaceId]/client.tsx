@@ -12,12 +12,16 @@ import Editor from "@monaco-editor/react";
 
 // Atoms - NOTE: chartsAtom and looseFilesAtom are DERIVED atoms (read-only)
 // They automatically derive from workspaceAtom - only set workspaceAtom
-import { workspaceAtom, selectedFileAtom, editorViewAtom, renderedFilesAtom } from "@/atoms/workspace";
+import { workspaceAtom, selectedFileAtom, editorViewAtom, renderedFilesAtom, allFilesWithContentPendingAtom } from "@/atoms/workspace";
+
+// Hooks
+import { useCentrifugo } from "@/hooks/useCentrifugo";
 
 // Actions
-import { getWorkspaceAction } from "@/lib/workspace/actions/get-workspace";
 import { createAISDKChatMessageAction } from "@/lib/workspace/actions/create-ai-sdk-chat-message";
 import { updateChatMessageResponseAction } from "@/lib/workspace/actions/update-chat-message-response";
+import { commitPendingChangesAction } from "@/lib/workspace/actions/commit-pending-changes";
+import { discardPendingChangesAction } from "@/lib/workspace/actions/discard-pending-changes";
 
 // Components
 import { ScrollingContent } from "@/components/ScrollingContent";
@@ -57,6 +61,14 @@ export function TestAIChatClient({ workspace, session, initialMessages = [] }: T
   const [view, setView] = useAtom(editorViewAtom);
   const [renderedFiles] = useAtom(renderedFilesAtom);
 
+  // Atom for pending changes
+  const [filesWithPending] = useAtom(allFilesWithContentPendingAtom);
+  const hasPendingChanges = filesWithPending.length > 0;
+
+  // Add Centrifugo for real-time file updates
+  // This replaces the previous refetch-after-tool-completion workaround
+  useCentrifugo({ session });
+
   // Hydrate workspace atom on mount
   // Charts and files derive automatically from workspaceAtom
   useEffect(() => {
@@ -69,6 +81,8 @@ export function TestAIChatClient({ workspace, session, initialMessages = [] }: T
   const [currentChatMessageId, setCurrentChatMessageId] = useState<string | null>(null);
   const chatInputRef = useRef<HTMLTextAreaElement>(null);
   const hasAutoSentRef = useRef(false); // Use ref to prevent re-renders triggering duplicate sends
+  const [isCommitting, setIsCommitting] = useState(false);
+  const [isDiscarding, setIsDiscarding] = useState(false);
 
   const selectedProvider = getDefaultProvider();
   const selectedModel = getDefaultModelForProvider(selectedProvider);
@@ -150,23 +164,8 @@ export function TestAIChatClient({ workspace, session, initialMessages = [] }: T
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Run only once on mount - ref guards against duplicates
 
-  // Refetch workspace when AI tool calls complete to update file explorer
-  // This is a simple solution for PR1.6; PR1.7 will use Centrifugo for real-time
-  useEffect(() => {
-    const lastMessage = messages[messages.length - 1];
-    // AI SDK v5: tool parts have type like "tool-toolName" with state directly on part
-    const hasToolResult = lastMessage?.parts?.some(
-      (p: { type: string; state?: string }) =>
-        p.type.startsWith('tool-') && p.state === 'result'
-    );
-
-    if (hasToolResult && status === 'ready') {
-      // Refetch workspace to get updated files after tool execution
-      getWorkspaceAction(session, workspace.id).then((updated) => {
-        if (updated) setWorkspace(updated);
-      });
-    }
-  }, [messages, status, session, workspace.id, setWorkspace]);
+  // Note: PR1.7 replaced the refetch-after-tool-completion workaround with Centrifugo real-time updates
+  // File explorer now updates automatically via useCentrifugo hook receiving artifact-updated events
 
   // Persist AI response when complete
   useEffect(() => {
@@ -226,6 +225,33 @@ export function TestAIChatClient({ workspace, session, initialMessages = [] }: T
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleChatSubmit(e);
+    }
+  };
+
+  const handleCommit = async () => {
+    if (isCommitting || !hasPendingChanges) return;
+    setIsCommitting(true);
+    try {
+      const updated = await commitPendingChangesAction(session, workspace.id);
+      setWorkspace(updated);
+    } catch (err) {
+      console.error("Failed to commit changes:", err);
+    } finally {
+      setIsCommitting(false);
+    }
+  };
+
+  const handleDiscard = async () => {
+    if (isDiscarding || !hasPendingChanges) return;
+    if (!confirm("Discard all pending changes? This cannot be undone.")) return;
+    setIsDiscarding(true);
+    try {
+      const updated = await discardPendingChangesAction(session, workspace.id);
+      setWorkspace(updated);
+    } catch (err) {
+      console.error("Failed to discard changes:", err);
+    } finally {
+      setIsDiscarding(false);
     }
   };
 
@@ -303,6 +329,7 @@ export function TestAIChatClient({ workspace, session, initialMessages = [] }: T
                 </Link>
               </Tooltip>
             </div>
+
           </div>
 
           <div className="py-4 flex justify-center">
@@ -647,6 +674,42 @@ export function TestAIChatClient({ workspace, session, initialMessages = [] }: T
               )}
               Rendered
             </div>
+
+            {/* Spacer to push pending changes to the right */}
+            <div className="flex-1" />
+
+            {/* Pending changes controls */}
+            {hasPendingChanges && (
+              <div className="flex items-center gap-2 px-2">
+                <span className={`text-xs ${
+                  theme === "dark" ? "text-yellow-400" : "text-yellow-600"
+                }`}>
+                  {filesWithPending.length} pending
+                </span>
+                <button
+                  onClick={handleCommit}
+                  disabled={isCommitting}
+                  className={`px-2 py-1 text-xs rounded ${
+                    theme === "dark"
+                      ? "bg-green-900/50 text-green-400 hover:bg-green-900/70"
+                      : "bg-green-100 text-green-700 hover:bg-green-200"
+                  } disabled:opacity-50`}
+                >
+                  {isCommitting ? "..." : "Commit"}
+                </button>
+                <button
+                  onClick={handleDiscard}
+                  disabled={isDiscarding}
+                  className={`px-2 py-1 text-xs rounded ${
+                    theme === "dark"
+                      ? "bg-red-900/50 text-red-400 hover:bg-red-900/70"
+                      : "bg-red-100 text-red-700 hover:bg-red-200"
+                  } disabled:opacity-50`}
+                >
+                  {isDiscarding ? "..." : "Discard"}
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Editor content */}
@@ -687,12 +750,12 @@ export function TestAIChatClient({ workspace, session, initialMessages = [] }: T
                   }
                 })()
               ) : (
-                // Source view
+                // Source view - show contentPending if available (for pending changes), otherwise content
                 <div key={`source-${selectedFile.id}`} className="h-full">
                   <Editor
                     height="100%"
                     language={getLanguageFromPath(selectedFile.filePath)}
-                    value={selectedFile.content || ""}
+                    value={selectedFile.contentPending || selectedFile.content || ""}
                     loading={null}
                     theme={theme === "dark" ? "vs-dark" : "vs"}
                     options={{

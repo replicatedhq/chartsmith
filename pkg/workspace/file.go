@@ -104,6 +104,22 @@ func min(a, b int) int {
 	return b
 }
 
+// GetFileIDByPath retrieves a file's ID by its path, workspace, and revision
+func GetFileIDByPath(ctx context.Context, workspaceID string, revisionNumber int, filePath string) (string, error) {
+	conn := persistence.MustGetPooledPostgresSession()
+	defer conn.Release()
+
+	var fileID string
+	err := conn.QueryRow(ctx,
+		`SELECT id FROM workspace_file WHERE workspace_id = $1 AND revision_number = $2 AND file_path = $3`,
+		workspaceID, revisionNumber, filePath,
+	).Scan(&fileID)
+	if err != nil {
+		return "", fmt.Errorf("failed to get file ID: %w", err)
+	}
+	return fileID, nil
+}
+
 func SetFileContentPending(ctx context.Context, path string, revisionNumber int, chartID string, workspaceID string, contentPending string) error {
 	// Create dedicated database context with timeout
 	dbCtx, cancel := context.WithTimeout(ctx, 10*time.Second)

@@ -6,12 +6,12 @@ import (
 
 type File struct {
 	ID             string  `json:"id"`
-	RevisionNumber int     `json:"revision_number"`
-	ChartID        string  `json:"chart_id,omitempty"`
-	WorkspaceID    string  `json:"workspace_id"`
+	RevisionNumber int     `json:"revisionNumber"`
+	ChartID        string  `json:"chartId,omitempty"`
+	WorkspaceID    string  `json:"workspaceId"`
 	FilePath       string  `json:"filePath"`
 	Content        string  `json:"content"`
-	ContentPending *string `json:"content_pending,omitempty"`
+	ContentPending *string `json:"contentPending,omitempty"`
 }
 
 type Chart struct {

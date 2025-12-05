@@ -10,9 +10,48 @@ import (
 
 	"github.com/replicatedhq/chartsmith/pkg/llm"
 	"github.com/replicatedhq/chartsmith/pkg/logger"
+	"github.com/replicatedhq/chartsmith/pkg/realtime"
+	realtimetypes "github.com/replicatedhq/chartsmith/pkg/realtime/types"
 	"github.com/replicatedhq/chartsmith/pkg/workspace"
+	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 	"go.uber.org/zap"
 )
+
+// publishArtifactUpdate sends a Centrifugo event to update file explorer in real-time
+func publishArtifactUpdate(ctx context.Context, workspaceID string, revisionNumber int, chartID, fileID, filePath, content string, contentPending *string) {
+	logger.Debug("Publishing artifact update",
+		zap.String("workspaceID", workspaceID),
+		zap.String("fileID", fileID),
+		zap.String("filePath", filePath))
+
+	userIDs, err := workspace.ListUserIDsForWorkspace(ctx, workspaceID)
+	if err != nil {
+		logger.Errorf("Failed to get user IDs for realtime workspaceID=%s: %v", workspaceID, err)
+		return
+	}
+
+	logger.Debug("Got user IDs for realtime", zap.Strings("userIDs", userIDs))
+
+	recipient := realtimetypes.Recipient{UserIDs: userIDs}
+	event := &realtimetypes.ArtifactUpdatedEvent{
+		WorkspaceID: workspaceID,
+		WorkspaceFile: &workspacetypes.File{
+			ID:             fileID,
+			RevisionNumber: revisionNumber,
+			ChartID:        chartID,
+			WorkspaceID:    workspaceID,
+			FilePath:       filePath,
+			Content:        content,
+			ContentPending: contentPending,
+		},
+	}
+
+	if err := realtime.SendEvent(ctx, recipient, event); err != nil {
+		logger.Errorf("Failed to send artifact update workspaceID=%s: %v", workspaceID, err)
+	} else {
+		logger.Debug("Successfully published artifact update", zap.String("filePath", filePath))
+	}
+}
 
 // TextEditorRequest represents a request to the text editor endpoint
 type TextEditorRequest struct {
@@ -153,12 +192,15 @@ func handleCreate(ctx context.Context, w http.ResponseWriter, req TextEditorRequ
 	}
 
 	// Create the file with content in content_pending column for AI SDK path
-	err = workspace.AddFileToChartPending(ctx, chartID, req.WorkspaceID, req.RevisionNumber, req.Path, req.Content)
+	fileID, err := workspace.AddFileToChartPending(ctx, chartID, req.WorkspaceID, req.RevisionNumber, req.Path, req.Content)
 	if err != nil {
 		logger.Debug("Failed to create file", zap.Error(err))
 		writeInternalError(w, "Failed to create file")
 		return
 	}
+
+	// Publish realtime update for file explorer
+	publishArtifactUpdate(ctx, req.WorkspaceID, req.RevisionNumber, chartID, fileID, req.Path, "", &req.Content)
 
 	writeJSON(w, http.StatusOK, TextEditorResponse{
 		Success: true,
@@ -247,6 +289,14 @@ func handleStrReplace(ctx context.Context, w http.ResponseWriter, req TextEditor
 		logger.Debug("Failed to update file", zap.Error(err))
 		writeInternalError(w, "Failed to update file")
 		return
+	}
+
+	// Publish realtime update for file explorer
+	fileID, err := workspace.GetFileIDByPath(ctx, req.WorkspaceID, req.RevisionNumber, req.Path)
+	if err != nil {
+		logger.Errorf("Failed to get file ID for realtime: %v", err)
+	} else {
+		publishArtifactUpdate(ctx, req.WorkspaceID, req.RevisionNumber, foundFile.chartID, fileID, req.Path, foundFile.content, &newContent)
 	}
 
 	writeJSON(w, http.StatusOK, TextEditorResponse{

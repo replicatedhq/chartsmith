@@ -417,6 +417,10 @@ export function FileTree({ files = [], charts = [] }: FileTreeProps) {
         )}
         <div className="flex-1 flex items-center min-w-0">
           <span className="text-xs truncate">{node.name}</span>
+          {/* Pending changes indicator */}
+          {node.contentPending && (
+            <span className="ml-1 text-yellow-500 text-xs">●</span>
+          )}
           {/* For new files (empty content with pending changes) */}
           {patchStats && (patchStats.additions > 0 || patchStats.deletions > 0) ? (
             <span className="ml-2 text-[10px] font-mono whitespace-nowrap">

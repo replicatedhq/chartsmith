@@ -61,10 +61,10 @@ export interface RawFollowupAction {
 export interface RawFile {
   id: string;
   filePath: string;
-  chart_id?: string;
+  chartId?: string;
   content: string;
-  content_pending?: string;
-  revision_number: number;
+  contentPending?: string;
+  revisionNumber: number;
 }
 
 export interface RawWorkspace {
