@@ -110,8 +110,8 @@ export async function POST(request: Request) {
 
     // Create tools if workspace context is provided (PR1.5)
     // Tools require workspaceId to operate on files
-    const tools = workspaceId 
-      ? createTools(authHeader, workspaceId, revisionNumber || 1)
+    const tools = workspaceId
+      ? createTools(authHeader, workspaceId, revisionNumber ?? 0)
       : undefined;
     
     console.log('[/api/chat] Tools created:', { 

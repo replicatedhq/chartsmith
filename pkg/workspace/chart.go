@@ -53,6 +53,26 @@ func AddFileToChart(ctx context.Context, chartID string, workspaceID string, rev
 	return nil
 }
 
+// AddFileToChartPending creates a new file with content in content_pending column.
+// Use this for AI SDK paths where content should be staged for review before committing.
+func AddFileToChartPending(ctx context.Context, chartID string, workspaceID string, revisionNumber int, path string, contentPending string) error {
+	conn := persistence.MustGetPooledPostgresSession()
+	defer conn.Release()
+
+	fileID, err := securerandom.Hex(12)
+	if err != nil {
+		return fmt.Errorf("failed to generate random ID: %w", err)
+	}
+
+	query := `INSERT INTO workspace_file (id, revision_number, chart_id, workspace_id, file_path, content, content_pending) VALUES ($1, $2, $3, $4, $5, '', $6)`
+	_, err = conn.Exec(ctx, query, fileID, revisionNumber, chartID, workspaceID, path, contentPending)
+	if err != nil {
+		return fmt.Errorf("failed to insert file: %w", err)
+	}
+
+	return nil
+}
+
 func ListCharts(ctx context.Context, workspaceID string, revisionNumber int) ([]*types.Chart, error) {
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()

@@ -152,8 +152,8 @@ func handleCreate(ctx context.Context, w http.ResponseWriter, req TextEditorRequ
 		return
 	}
 
-	// Create the file
-	err = workspace.AddFileToChart(ctx, chartID, req.WorkspaceID, req.RevisionNumber, req.Path, req.Content)
+	// Create the file with content in content_pending column for AI SDK path
+	err = workspace.AddFileToChartPending(ctx, chartID, req.WorkspaceID, req.RevisionNumber, req.Path, req.Content)
 	if err != nil {
 		logger.Debug("Failed to create file", zap.Error(err))
 		writeInternalError(w, "Failed to create file")

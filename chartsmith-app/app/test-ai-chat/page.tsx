@@ -127,13 +127,8 @@ export default function TestAIChatLandingPage() {
       <div className="relative flex-1 flex flex-col">
         <HomeNav />
         <main className="container mx-auto px-6 pt-12 sm:pt-20 lg:pt-32">
-          {/* Header - same as main page but with AI SDK badge */}
+          {/* Header - same as main page */}
           <div className="max-w-3xl mx-auto text-center mb-8 sm:mb-10 lg:mb-16">
-            <div className="flex items-center justify-center gap-2 mb-2">
-              <span className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">
-                AI SDK v5 Test
-              </span>
-            </div>
             <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-4 sm:mb-6 bg-gradient-to-r from-blue-400 to-purple-400 text-transparent bg-clip-text">
               Welcome to ChartSmith
             </h1>

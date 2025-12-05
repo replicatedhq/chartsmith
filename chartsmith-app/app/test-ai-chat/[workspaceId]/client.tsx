@@ -63,7 +63,7 @@ export function TestAIChatClient({ workspace, session, initialMessages = [] }: T
     setWorkspace(workspace);
   }, [workspace, setWorkspace]);
 
-  const revisionNumber = workspace.currentRevisionNumber || 1;
+  const revisionNumber = workspace.currentRevisionNumber ?? 0;
 
   const [chatInput, setChatInput] = useState("");
   const [currentChatMessageId, setCurrentChatMessageId] = useState<string | null>(null);
