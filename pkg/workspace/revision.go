@@ -44,10 +44,11 @@ func GetRevision(ctx context.Context, workspaceID string, revisionNumber int) (*
 	return &revision, nil
 }
 
-func CreateRevision(ctx context.Context, workspaceID string, planID *string, userID string) (types.Revision, error) {
+func CreateRevision(ctx context.Context, workspaceID string, planID *string, userID string, modelID string) (types.Revision, error) {
 	logger.Info("Creating revision",
 		zap.String("workspace_id", workspaceID),
-		zap.String("user_id", userID))
+		zap.String("user_id", userID),
+		zap.String("model_id", modelID))
 
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
@@ -140,7 +141,8 @@ func CreateRevision(ctx context.Context, workspaceID string, planID *string, use
 	}
 
 	if err := persistence.EnqueueWork(ctx, "execute_plan", map[string]interface{}{
-		"planId": planID,
+		"planId":  planID,
+		"modelId": modelID,
 	}); err != nil {
 		logger.Warn("failed to enqueue execute_plan notification", zap.Error(err))
 		// but do not exit

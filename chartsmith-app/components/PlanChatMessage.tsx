@@ -148,7 +148,12 @@ export function PlanChatMessage({
     const wsId = workspaceId || plan.workspaceId;
     if (!wsId) return;
 
-    const updatedWorkspace = await createRevisionAction(session, plan.id);
+    // Get the currently selected model from localStorage
+    const selectedModelId = typeof window !== 'undefined' 
+      ? localStorage.getItem('preferredModelId') || undefined 
+      : undefined;
+
+    const updatedWorkspace = await createRevisionAction(session, plan.id, selectedModelId);
     if (updatedWorkspace && setWorkspace) {
       setWorkspace(updatedWorkspace);
     }
@@ -165,7 +170,12 @@ export function PlanChatMessage({
       const wsId = workspaceId || workspaceToUse?.id;
       if (!session || !wsId) return;
 
-      const chatMessage = await createChatMessageAction(session, wsId, chatInput.trim(), "auto");
+      // Get the currently selected model from localStorage
+      const modelId = typeof window !== 'undefined' 
+        ? localStorage.getItem('preferredModelId') || undefined 
+        : undefined;
+
+      const chatMessage = await createChatMessageAction(session, wsId, chatInput.trim(), "auto", modelId);
 
       setMessages(prev => [...prev, chatMessage]);
       setChatInput("");
@@ -204,7 +214,7 @@ export function PlanChatMessage({
             plan.status === 'ignored'
               ? `${theme === "dark" ? "text-gray-400" : "text-gray-500"}`
               : `${theme === "dark" ? "text-gray-200" : "text-gray-700"}`
-          } text-[11px] ${plan.status === 'ignored' ? 'opacity-75' : ''}`}>
+          } text-sm ${plan.status === 'ignored' ? 'opacity-75' : ''}`}>
             {plan.status === 'getting ready' ? (
               <div className="flex items-center justify-center py-4">
                 <div className="flex items-center gap-2">
@@ -221,13 +231,41 @@ export function PlanChatMessage({
                     ))}
                   </div>
                   <div className="markdown-content">
-                    <ReactMarkdown>{plan.description}</ReactMarkdown>
+                    <ReactMarkdown
+                      components={{
+                        h1: ({node, ...props}) => <h1 className="text-xl font-semibold mt-4 mb-2" {...props} />,
+                        h2: ({node, ...props}) => <h2 className="text-lg font-semibold mt-4 mb-2" {...props} />,
+                        h3: ({node, ...props}) => <h3 className="text-base font-semibold mt-4 mb-2" {...props} />,
+                        h4: ({node, ...props}) => <h4 className="text-sm font-semibold mt-4 mb-2" {...props} />,
+                        p: ({node, ...props}) => <p className="mb-2" {...props} />,
+                        ul: ({node, ...props}) => <ul className="list-disc list-inside my-2" {...props} />,
+                        ol: ({node, ...props}) => <ol className="list-decimal my-2 pl-8" {...props} />,
+                        code: ({node, ...props}) => 
+                          <code className="font-mono text-[12px]" {...props} />,
+                      }}
+                    >
+                      {plan.description}
+                    </ReactMarkdown>
                   </div>
                 </div>
               </div>
             ) : (
               <div className="markdown-content">
-                <ReactMarkdown>{plan.description}</ReactMarkdown>
+                <ReactMarkdown
+                  components={{
+                    h1: ({node, ...props}) => <h1 className="text-xl font-semibold mt-4 mb-2" {...props} />,
+                    h2: ({node, ...props}) => <h2 className="text-lg font-semibold mt-4 mb-2" {...props} />,
+                    h3: ({node, ...props}) => <h3 className="text-base font-semibold mt-4 mb-2" {...props} />,
+                    h4: ({node, ...props}) => <h4 className="text-sm font-semibold mt-4 mb-2" {...props} />,
+                    p: ({node, ...props}) => <p className="mb-2" {...props} />,
+                    ul: ({node, ...props}) => <ul className="list-disc list-inside my-2" {...props} />,
+                    ol: ({node, ...props}) => <ol className="list-decimal my-2 pl-8" {...props} />,
+                    code: ({node, ...props}) => 
+                      <code className="font-mono text-[12px]" {...props} />,
+                  }}
+                >
+                  {plan.description}
+                </ReactMarkdown>
               </div>
             )}
             {(plan.status === 'applying' || plan.status === 'applied') && (

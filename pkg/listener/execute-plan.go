@@ -18,7 +18,8 @@ import (
 )
 
 type executePlanPayload struct {
-	PlanID string `json:"planId"`
+	PlanID  string `json:"planId"`
+	ModelID string `json:"modelId,omitempty"`
 }
 
 func handleExecutePlanNotification(ctx context.Context, payload string) error {
@@ -69,7 +70,7 @@ func handleExecutePlanNotification(ctx context.Context, payload string) error {
 	detailedPlanActionCreatedCh := make(chan llmtypes.ActionPlanWithPath, 1)
 	detailedPlanDoneCh := make(chan error, 1)
 	go func() {
-		expandedPrompt, err := llm.ExpandPrompt(ctx, plan.Description)
+		expandedPrompt, err := llm.ExpandPrompt(ctx, plan.Description, p.ModelID)
 		if err != nil {
 			detailedPlanDoneCh <- fmt.Errorf("failed to expand prompt: %w", err)
 			return
@@ -102,7 +103,7 @@ func handleExecutePlanNotification(ctx context.Context, payload string) error {
 				finalRelevantFiles = append(finalRelevantFiles, file.File)
 			}
 		}
-		llm.CreateExecutePlan(ctx, detailedPlanActionCreatedCh, detailedPlanStreamCh, detailedPlanDoneCh, w, plan, &w.Charts[0], finalRelevantFiles)
+		llm.CreateExecutePlan(ctx, detailedPlanActionCreatedCh, detailedPlanStreamCh, detailedPlanDoneCh, w, plan, &w.Charts[0], finalRelevantFiles, p.ModelID)
 	}()
 
 	var buffer strings.Builder
@@ -163,7 +164,8 @@ func handleExecutePlanNotification(ctx context.Context, payload string) error {
 			// Enqueue a single apply_plan job after all action files are collected
 			// This is what starts the actual processing
 			if err := persistence.EnqueueWork(ctx, "apply_plan", map[string]interface{}{
-				"planId": plan.ID,
+				"planId":  plan.ID,
+				"modelId": p.ModelID,
 			}); err != nil {
 				return fmt.Errorf("failed to enqueue apply plan: %w", err)
 			}

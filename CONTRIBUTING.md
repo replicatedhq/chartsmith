@@ -12,13 +12,17 @@ This doc is a development guide for how engineers can contribute to this project
 - Node.js 18 and nvm 
 - npm
 - [Schemahero](https://schemahero.io/docs/installation/) (must rename the binary to `schemahero` and put on path)
-- A SQL DB editor available. Confider Beekeeper Studio if you don't already have one available
+- A SQL DB editor available. Consider Beekeeper Studio if you don't already have one available
 
 ### Required Secrets
 
-Before starting, ensure you have the following secrets configured locally on your computer:
+You'll need to configure secrets in two places:
 
-- `ANTHROPIC_API_KEY`: Get your own key (Create a new API key in Anthropic Console)
+#### 1. Environment Variables (for Go Worker)
+
+Export these in your shell before running `make run-worker`:
+
+```bash
 - `GROQ_API_KEY`: Get your own key (Get a new API key from groq.com)
 - `VOYAGE_API_KEY`: Get your own key (Generate new key)
 - `CHARTSMITH_PG_URI=postgresql://postgres:password@localhost:5432/chartsmith?sslmode=disable`
@@ -28,22 +32,49 @@ Before starting, ensure you have the following secrets configured locally on you
 - `CHARTSMITH_SLACK_TOKEN=` (Can ignore)
 - `CHARTSMITH_SLACK_CHANNEL=` (Can ignore)
 
-You should also create a .env.local file in the `chartsmith-app` directory with some of the same content. You will update this with your Anthropic API key, and your Google Client secret information.
-
+# Optional (has defaults)
+INTERNAL_API_KEY=dev-internal-key           # For worker→Next.js auth (default: dev-internal-key)
 ```
+
+#### 2. Next.js Environment File (`.env.local`)
+
+Create `chartsmith-app/.env.local` with the following content:
+
+```bash
+# Google Auth
 NEXT_PUBLIC_GOOGLE_CLIENT_ID=730758876435-8v7frmnqtt7k7v65edpc6u3hso9olqbe.apps.googleusercontent.com
 NEXT_PUBLIC_GOOGLE_REDIRECT_URI=http://localhost:3000/auth/google
 GOOGLE_CLIENT_SECRET=<get from 1password>
+
+# Security
 HMAC_SECRET=not-secure
+TOKEN_ENCRYPTION=H5984PaaBSbFZTMKjHiqshqRCG4dg49JAs0dDdLbvEs=
+
+# Centrifugo
 CENTRIFUGO_TOKEN_HMAC_SECRET=change.me
 NEXT_PUBLIC_CENTRIFUGO_ADDRESS=ws://localhost:8000/connection/websocket
-TOKEN_ENCRYPTION=H5984PaaBSbFZTMKjHiqshqRCG4dg49JAs0dDdLbvEs=
+
+# Replicated
 NEXT_PUBLIC_REPLICATED_REDIRECT_URI=https://vendor-web-<youruser>.okteto.repldev.com/chartsmith-login?redirect_uri=https://chartsmith-app-<youruser>.okteto.repldev.com/auth/replicated
-ANTHROPIC_API_KEY=
+
+# LLM Provider Keys - Add at least one
+# If OpenRouter is set: Uses it exclusively (ignores others)
+# Otherwise: Mix-and-match from available providers (Anthropic, OpenAI, Google)
+# If you have API keys set in your shell environment, Next.js will read them as well
+OPENROUTER_API_KEY=sk-or-v1-...           # Recommended: Access to all models
+ANTHROPIC_API_KEY=sk-ant-...              # Alternative: Direct Anthropic
+OPENAI_API_KEY=sk-proj-...                # Alternative: Direct OpenAI
+GOOGLE_GENERATIVE_AI_API_KEY=...          # Alternative: Direct Google
+
+# Worker Communication (optional - defaults to dev-internal-key if not set)
+INTERNAL_API_KEY=dev-internal-key         # Must match worker's INTERNAL_API_KEY
+
+# Test Auth
 NEXT_PUBLIC_ENABLE_TEST_AUTH=true
 ENABLE_TEST_AUTH=true
-NEXT_PUBLIC_API_ENDPOINT=http://localhost:3000/api
 
+# API
+NEXT_PUBLIC_API_ENDPOINT=http://localhost:3000/api
 ```
 
 ### Setup Steps
@@ -134,6 +165,7 @@ If you encounter any issues:
 - The frontend runs on the default Next.js port
 - The worker runs on a separate process
 
+
 ## VS Code Extension Development
 
 For detailed instructions on developing the VS Code extension, see [chartsmith-extension/DEVELOPMENT.md](chartsmith-extension/DEVELOPMENT.md). 
@@ -145,15 +177,41 @@ This guide covers:
 - Debugging with the developer console
 - Testing extension features with built-in commands
 
+## LLM Integration
+
+Chartsmith uses Vercel AI SDK for LLM operations to support multiple providers.
+
+### Provider Configuration
+
+**All LLM API keys are configured in Next.js only** (see the `.env.local` setup in the "Required Secrets" section above).
+
+The Go worker communicates with Next.js for all LLM operations and requires:
+
+```bash
+export INTERNAL_API_KEY=dev-internal-key  # Development (default)
+# In production, use: export INTERNAL_API_KEY=$(openssl rand -hex 32)
+```
+
+This `INTERNAL_API_KEY` is used to authenticate the worker when calling Next.js LLM API endpoints. The Next.js app must have the same key in its `.env.local` file.
+
+### Adding or Changing Models
+
+All recommended models are stored in `chartsmith-app/lib/llm/registry.ts`. There are two arrays to manage:
+
+1. **`VERIFIED_MODELS`** - Direct provider models (Anthropic, OpenAI, Google)
+   - Use direct API model IDs (e.g., `claude-3-5-sonnet-20241022`, `gpt-4o`, `gemini-1.5-pro`)
+   - These models are shown when using direct provider API keys (not OpenRouter)
+
+2. **`OPENROUTER_MODELS`** - OpenRouter models
+   - Use OpenRouter's format: `provider/model-id` (e.g., `anthropic/claude-3.5-sonnet`, `openai/gpt-4o`)
+   - These models are shown when OpenRouter API key is configured
+
 ## Release
 
-All releases are automated using various Dagger functions.
+All releases are automated using Dagger functions. The validate function runs all tests and linting checks.
 
-
-The validate function will run all the tests and linting checks.
-
-```
+```bash
 make release version=[patch|minor|major]
 ```
 
-The release function will create a new release tag and push all container images to the appropriate registries and the K8s manifests to gitops repo.
+This creates a new release tag and pushes container images to registries and K8s manifests to the gitops repo.

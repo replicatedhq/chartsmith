@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	anthropic "github.com/anthropics/anthropic-sdk-go"
 	"github.com/jackc/pgx/v5"
 	"github.com/jpoz/groq"
 	"github.com/ollama/ollama/api"
@@ -97,31 +96,30 @@ func SummarizeContent(ctx context.Context, content string) (string, error) {
 	return summary, nil
 }
 
+// summarizeContentWithClaude now uses Vercel AI SDK via Next.js API
+// This replaces direct Anthropic SDK usage
 func summarizeContentWithClaude(ctx context.Context, content string) (string, error) {
-	client, err := newAnthropicClient(ctx)
-	if err != nil {
-		return "", fmt.Errorf("failed to create anthropic client: %w", err)
-	}
+	// Create Next.js client (replaces Anthropic SDK)
+	client := NewNextJSClient()
 
 	userMessage := "My helm chart includes the following file. Summarize it, including all names, variables, etc that it uses: " + content
 
-	logger.Debug("Sending request to Claude API")
+	logger.Debug("Sending request to Next.js API (Vercel AI SDK)")
 	startTime := time.Now()
 
-	resp, err := client.Messages.New(ctx, anthropic.MessageNewParams{
-		Model:     anthropic.F(anthropic.ModelClaude3_7Sonnet20250219),
-		MaxTokens: anthropic.F(int64(8192)),
-		Messages:  anthropic.F([]anthropic.MessageParam{anthropic.NewUserMessage(anthropic.NewTextBlock(userMessage))}),
+	// Call Next.js API (which uses Vercel AI SDK with any provider)
+	summary, err := client.Summarize(ctx, SummarizeRequest{
+		Content: userMessage,
 	})
 
 	if err != nil {
-		return "", fmt.Errorf("failed to summarize content: %w", err)
+		return "", fmt.Errorf("failed to summarize content via Next.js API: %w", err)
 	}
 
-	logger.Debug("Received response from Claude API",
+	logger.Debug("Received response from Next.js API",
 		zap.Duration("duration", time.Since(startTime)))
 
-	return resp.Content[0].Text, nil
+	return summary, nil
 }
 
 func summarizeContentWithGroq(ctx context.Context, content string) (string, error) {

@@ -17,6 +17,7 @@ import (
 
 type newConverationalPayload struct {
 	ChatMessageID string `json:"chatMessageId"`
+	ModelID       string `json:"modelId,omitempty"`
 }
 
 func handleConverationalNotification(ctx context.Context, payload string) error {
@@ -53,7 +54,7 @@ func handleConverationalNotification(ctx context.Context, payload string) error 
 	streamCh := make(chan string, 1)
 	doneCh := make(chan error, 1)
 	go func() {
-		if err := llm.ConversationalChatMessage(ctx, streamCh, doneCh, w, chatMessage); err != nil {
+		if err := llm.ConversationalChatMessage(ctx, streamCh, doneCh, w, chatMessage, p.ModelID); err != nil {
 			fmt.Printf("Failed to create conversational chat message: %v\n", err)
 			doneCh <- fmt.Errorf("error creating conversational chat message: %w", err)
 		}

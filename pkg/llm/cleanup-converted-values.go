@@ -5,46 +5,35 @@ import (
 	"fmt"
 	"strings"
 
-	anthropic "github.com/anthropics/anthropic-sdk-go"
 	"github.com/replicatedhq/chartsmith/pkg/logger"
 	"go.uber.org/zap"
 )
 
-func CleanUpConvertedValuesYAML(ctx context.Context, valuesYAML string) (string, error) {
-	logger.Info("Cleaning up converted values.yaml")
+func CleanUpConvertedValuesYAML(ctx context.Context, valuesYAML string, modelID string) (string, error) {
+	logger.Info("Cleaning up converted values.yaml", zap.String("model_id", modelID))
 
-	client, err := newAnthropicClient(ctx)
-	if err != nil {
-		return "", fmt.Errorf("failed to get anthropic client: %w", err)
-	}
-
-	messages := []anthropic.MessageParam{
-		anthropic.NewAssistantMessage(anthropic.NewTextBlock(cleanupConvertedValuesSystemPrompt)),
-		anthropic.NewUserMessage(anthropic.NewTextBlock(fmt.Sprintf(`
-Here is the converted values.yaml file:
----
-%s
----
-			`, valuesYAML)),
-		),
-	}
-
-	response, err := client.Messages.New(context.TODO(), anthropic.MessageNewParams{
-		Model:     anthropic.F(anthropic.ModelClaude3_7Sonnet20250219),
-		MaxTokens: anthropic.F(int64(8192)),
-		Messages:  anthropic.F(messages),
+	// Use Next.js client (which uses Vercel AI SDK)
+	client := NewNextJSClient()
+	
+	cleanedText, err := client.CleanupValues(ctx, CleanupValuesRequest{
+		ValuesYAML: valuesYAML,
+		ModelID:    modelID,
 	})
 	if err != nil {
-		return "", fmt.Errorf("failed to create message: %w", err)
+		return "", fmt.Errorf("failed to cleanup values via Next.js API: %w", err)
 	}
 
-	artifacts, err := parseArtifactsInResponse(response.Content[0].Text)
+	// Parse artifacts from the response
+	artifacts, err := parseArtifactsInResponse(cleanedText)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse artifacts: %w", err)
 	}
 
+	// If no artifacts found, the LLM might have returned the cleaned YAML directly
+	// without wrapping it in artifact tags. Use the response as-is.
 	if len(artifacts) == 0 {
-		return "", fmt.Errorf("no artifacts found in response")
+		logger.Info("No artifacts found in cleanup response, using response directly")
+		return cleanedText, nil
 	}
 
 	for _, artifact := range artifacts {
@@ -70,10 +59,8 @@ Here is the converted values.yaml file:
 						return mergedValues, nil
 					}
 				} else {
-					return artifact.Content, nil
+					return newContent, nil
 				}
-
-				return newContent, nil
 			} else {
 				// It's not a patch, use the normal merging approach
 				mergedValues, err := mergeValuesYAML(valuesYAML, artifact.Content)
@@ -86,5 +73,7 @@ Here is the converted values.yaml file:
 		}
 	}
 
-	return "", fmt.Errorf("no values.yaml artifact found in response")
+	// If we found artifacts but none were values.yaml, use the cleaned text directly
+	logger.Warn("No values.yaml artifact found in response, using response directly")
+	return cleanedText, nil
 }

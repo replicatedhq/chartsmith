@@ -4,73 +4,84 @@ import (
 	"context"
 	"fmt"
 
-	anthropic "github.com/anthropics/anthropic-sdk-go"
 	types "github.com/replicatedhq/chartsmith/pkg/llm/types"
 	"github.com/replicatedhq/chartsmith/pkg/logger"
 	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 	"go.uber.org/zap"
 )
 
-func CreateExecutePlan(ctx context.Context, planActionCreatedCh chan types.ActionPlanWithPath, streamCh chan string, doneCh chan error, w *workspacetypes.Workspace, plan *workspacetypes.Plan, c *workspacetypes.Chart, relevantFiles []workspacetypes.File) error {
+func CreateExecutePlan(ctx context.Context, planActionCreatedCh chan types.ActionPlanWithPath, streamCh chan string, doneCh chan error, w *workspacetypes.Workspace, plan *workspacetypes.Plan, c *workspacetypes.Chart, relevantFiles []workspacetypes.File, modelID string) error {
 	logger.Debug("Creating execution plan",
 		zap.String("workspace_id", w.ID),
 		zap.String("chart_id", c.ID),
 		zap.Int("revision_number", w.CurrentRevision),
 		zap.Int("relevant_files_len", len(relevantFiles)),
+		zap.String("model_id", modelID),
 	)
 
-	client, err := newAnthropicClient(ctx)
-	if err != nil {
-		return err
-	}
-
-	messages := []anthropic.MessageParam{
-		anthropic.NewAssistantMessage(anthropic.NewTextBlock(detailedPlanSystemPrompt)),
-		anthropic.NewUserMessage(anthropic.NewTextBlock(detailedPlanInstructions)),
+	// Build messages array for Vercel AI SDK
+	messages := []MessageParam{
+		{Role: "assistant", Content: detailedPlanSystemPrompt},
+		{Role: "user", Content: detailedPlanInstructions},
 	}
 
 	if w.CurrentRevision == 0 {
-		bootsrapChartUserMessage, err := summarizeBootstrapChart(ctx)
+		bootstrapChartUserMessage, err := summarizeBootstrapChart(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to summarize bootstrap chart: %w", err)
 		}
-		messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(bootsrapChartUserMessage)))
+		messages = append(messages, MessageParam{Role: "user", Content: bootstrapChartUserMessage})
 	} else {
 		chartStructure, err := getChartStructure(ctx, c)
 		if err != nil {
 			return fmt.Errorf("failed to get chart structure: %w", err)
 		}
-		messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(fmt.Sprintf(`I am working on a Helm chart that has the following structure: %s`, chartStructure))))
+		messages = append(messages, MessageParam{Role: "user", Content: fmt.Sprintf(`I am working on a Helm chart that has the following structure: %s`, chartStructure)})
 
 		for _, file := range relevantFiles {
-			messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(fmt.Sprintf(`File: %s, Content: %s`, file.FilePath, file.Content))))
+			messages = append(messages, MessageParam{Role: "user", Content: fmt.Sprintf(`File: %s, Content: %s`, file.FilePath, file.Content)})
 		}
 	}
 
-	messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(plan.Description)))
+	messages = append(messages, MessageParam{Role: "user", Content: plan.Description})
 
-	stream := client.Messages.NewStreaming(context.TODO(), anthropic.MessageNewParams{
-		Model:     anthropic.F(anthropic.ModelClaude3_7Sonnet20250219),
-		MaxTokens: anthropic.F(int64(8192)),
-		Messages:  anthropic.F(messages),
+	// Use Next.js client (which uses Vercel AI SDK)
+	client := NewNextJSClient()
+	textCh, errCh := client.StreamPlan(ctx, PlanRequest{
+		Messages:    messages,
+		WorkspaceID: w.ID,
+		ModelID:     modelID,
 	})
 
 	fullResponseWithTags := ""
 	actionPlans := make(map[string]types.ActionPlan)
 
-	message := anthropic.Message{}
-	for stream.Next() {
-		event := stream.Current()
-		message.Accumulate(event)
-
-		switch delta := event.Delta.(type) {
-		case anthropic.ContentBlockDeltaEventDelta:
-			if delta.Text != "" {
-				fullResponseWithTags += delta.Text
+	// Handle streaming response
+	go func() {
+		for {
+			select {
+			case text, ok := <-textCh:
+				if !ok {
+					// Channel closed, check for error or signal success
+					select {
+					case err := <-errCh:
+						doneCh <- err
+					default:
+						// No error, stream completed successfully
+						doneCh <- nil
+					}
+					return
+				}
+				
+				// Emit decoded text to UI via websocket
+				streamCh <- text
+				
+				fullResponseWithTags += text
 
 				aps, err := parseActionsInResponse(fullResponseWithTags)
 				if err != nil {
-					return fmt.Errorf("error parsing artifacts in response: %w", err)
+					doneCh <- fmt.Errorf("error parsing artifacts in response: %w", err)
+					return
 				}
 
 				for path, action := range aps {
@@ -89,17 +100,16 @@ func CreateExecutePlan(ctx context.Context, planActionCreatedCh chan types.Actio
 						actionPlans[path] = action
 					}
 				}
+				
+			case err := <-errCh:
+				doneCh <- err
+				return
+			case <-ctx.Done():
+				doneCh <- ctx.Err()
+				return
 			}
 		}
-	}
-
-	if stream.Err() != nil {
-		doneCh <- stream.Err()
-	}
-
-	doneCh <- nil
-
-	// The plan will be set to "applied" status when all actions are complete
+	}()
 
 	return nil
 }

@@ -1,5 +1,6 @@
-"use server"
 import { WorkspaceContent } from "@/components/WorkspaceContent";
+
+export const dynamic = 'force-dynamic';
 import { getWorkspaceAction } from "@/lib/workspace/actions/get-workspace";
 import { validateSession } from "@/lib/auth/actions/validate-session";
 import { cookies } from "next/headers";

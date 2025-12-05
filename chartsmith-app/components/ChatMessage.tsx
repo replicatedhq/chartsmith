@@ -113,7 +113,12 @@ export function ChatMessage({
     if (chatInput.trim()) {
       if (!session || !workspace) return;
 
-      const chatMessage = await createChatMessageAction(session, workspace.id, chatInput.trim(), "auto");
+      // Get the currently selected model from localStorage
+      const modelId = typeof window !== 'undefined' 
+        ? localStorage.getItem('preferredModelId') || undefined 
+        : undefined;
+
+      const chatMessage = await createChatMessageAction(session, workspace.id, chatInput.trim(), "auto", modelId);
 
       setMessages(prev => [...prev, chatMessage]);
 
@@ -203,11 +208,7 @@ export function ChatMessage({
                 <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">Conversion Progress:</div>
               </div>
             )}
-            {conversion ? (
-              <ConversionProgress conversionId={message.responseConversionId} />
-            ) : (
-              <LoadingSpinner message="Loading conversion status..." />
-            )}
+            <ConversionProgress conversionId={message.responseConversionId} />
           </div>
         )}
 
@@ -218,7 +219,9 @@ export function ChatMessage({
     );
   };
 
-  if (!message || !workspace) return null;
+  if (!message || !workspace) {
+    return null;
+  }
 
   return (
     <div className="space-y-2" data-testid="chat-message">

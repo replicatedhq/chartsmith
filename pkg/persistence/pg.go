@@ -76,6 +76,10 @@ func MustGeUnpooledPostgresSession() *pgx.Conn {
 	return conn
 }
 
+func IsPoolInitialized() bool {
+	return pool != nil
+}
+
 func MustGetPooledPostgresSession() *pgxpool.Conn {
 	if pool == nil {
 		logger.Error(fmt.Errorf("Postgres pool is not initialized"))

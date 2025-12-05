@@ -21,12 +21,15 @@ export function NewChartContent({ session, chatInput, setChatInput, handleSubmit
   const [isRendering] = useAtom(isRenderingAtom);
   const [, setWorkspace] = useAtom(workspaceAtom);
   const [plans] = useAtom(plansAtom);
-  const [showInput, setShowInput] = useState(() =>
-    plans.length > 0 && plans[0].status === "review"
-  );
+  const [showInput, setShowInput] = useState(() => {
+    // Check the LAST plan (most recent) since new plans are added to the end of the array
+    const lastPlan = plans[plans.length - 1];
+    return lastPlan?.status === "review";
+  });
 
   useEffect(() => {
-    setShowInput(plans.length > 0 && plans[0].status === "review");
+    const lastPlan = plans[plans.length - 1];
+    setShowInput(lastPlan?.status === "review");
   }, [plans]);
 
   const handleCreateChart = async () => {
@@ -35,7 +38,12 @@ export function NewChartContent({ session, chatInput, setChatInput, handleSubmit
     const lastPlan = plans[plans.length - 1];
     if (!lastPlan) return;
 
-    const updatedWorkspace = await createRevisionAction(session, lastPlan.id);
+    // Get the currently selected model from localStorage
+    const selectedModelId = typeof window !== 'undefined' 
+      ? localStorage.getItem('preferredModelId') || undefined 
+      : undefined;
+
+    const updatedWorkspace = await createRevisionAction(session, lastPlan.id, selectedModelId);
     if (updatedWorkspace) {
       setWorkspace(updatedWorkspace);
     }
@@ -46,7 +54,7 @@ export function NewChartContent({ session, chatInput, setChatInput, handleSubmit
       <div className="flex-1 h-full">
         <h1 className="text-2xl font-bold p-4">Create a new Helm chart</h1>
         <ScrollingContent forceScroll={true}>
-          <div className="pb-48">
+          <div className={showInput ? "pb-48" : "pb-4"}>
             {messages.map((item) => (
               <div key={item.id}>
                 <NewChartChatMessage

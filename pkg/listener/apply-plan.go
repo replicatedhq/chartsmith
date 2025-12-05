@@ -18,7 +18,8 @@ import (
 )
 
 type applyPlanPayload struct {
-	PlanID string `json:"planId"`
+	PlanID  string `json:"planId"`
+	ModelID string `json:"modelId,omitempty"`
 }
 
 // applyPlanLockKeyExtractor extracts the workspace ID from the apply plan payload
@@ -128,7 +129,7 @@ func handleApplyPlanNotification(ctx context.Context, payload string) error {
 		}
 
 		// Process the file
-		if err := processActionFile(ctx, w, updatedPlan, actionFile, realtimeRecipient); err != nil {
+		if err := processActionFile(ctx, w, updatedPlan, actionFile, realtimeRecipient, p.ModelID); err != nil {
 			return fmt.Errorf("failed to process action file: %w", err)
 		}
 	}
@@ -207,7 +208,7 @@ func updateActionFileStatus(ctx context.Context, planID, path, status string) er
 }
 
 // processActionFile processes a single action file for a plan
-func processActionFile(ctx context.Context, w *workspacetypes.Workspace, plan *workspacetypes.Plan, actionFile workspacetypes.ActionFile, realtimeRecipient realtimetypes.Recipient) error {
+func processActionFile(ctx context.Context, w *workspacetypes.Workspace, plan *workspacetypes.Plan, actionFile workspacetypes.ActionFile, realtimeRecipient realtimetypes.Recipient, modelID string) error {
 	// Get chart and current content
 	currentContent := ""
 	var chartID string
@@ -242,7 +243,7 @@ func processActionFile(ctx context.Context, w *workspacetypes.Workspace, plan *w
 			Path: actionFile.Path,
 		}
 
-		finalContent, err := llm.ExecuteAction(ctx, apwp, plan, currentContent, interimContentCh)
+		finalContent, err := llm.ExecuteAction(ctx, apwp, plan, currentContent, interimContentCh, modelID)
 		if err != nil {
 			errCh <- fmt.Errorf("failed to execute action: %w", err)
 			return

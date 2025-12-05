@@ -274,8 +274,8 @@ func UpdatePlanActionFiles(ctx context.Context, tx pgx.Tx, planID string, action
 
 // SetPlanIsComplete - Deprecated - Use UpdatePlanStatus with PlanStatusApplied instead
 
-func CreatePlan(ctx context.Context, chatMessageID string, workspaceID string, enqueue bool) (*types.Plan, error) {
-	logger.Info("creating plan", zap.String("chat_message_id", chatMessageID), zap.String("workspace_id", workspaceID))
+func CreatePlan(ctx context.Context, chatMessageID string, workspaceID string, enqueue bool, modelID string) (*types.Plan, error) {
+	logger.Info("creating plan", zap.String("chat_message_id", chatMessageID), zap.String("workspace_id", workspaceID), zap.String("model_id", modelID))
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
 
@@ -312,7 +312,8 @@ VALUES
 
 	if enqueue {
 		if err := persistence.EnqueueWork(ctx, "new_plan", map[string]interface{}{
-			"planId": id,
+			"planId":  id,
+			"modelId": modelID,
 		}); err != nil {
 			return nil, fmt.Errorf("error enqueuing new plan: %w", err)
 		}

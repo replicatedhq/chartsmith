@@ -1261,7 +1261,7 @@ func (c *DebugConsole) createPlan(args []string) error {
 		}
 	}
 
-	p, err := workspace.CreatePlan(c.ctx, chat.ID, c.activeWorkspace.ID, false)
+	p, err := workspace.CreatePlan(c.ctx, chat.ID, c.activeWorkspace.ID, false, "")
 	if err != nil {
 		return errors.Wrap(err, "failed to create plan")
 	}
@@ -1363,7 +1363,7 @@ func (c *DebugConsole) executePlan(args []string) error {
 	doneCh := make(chan error)
 
 	go func() {
-		_, err := llm.ExecuteAction(c.ctx, actionPlanWithPath, plan, currentContent, interimContentCh)
+		_, err := llm.ExecuteAction(c.ctx, actionPlanWithPath, plan, currentContent, interimContentCh, "")
 		if err != nil {
 			fmt.Println(dimText(fmt.Sprintf("Error: %v", err)))
 		}

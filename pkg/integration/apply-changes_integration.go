@@ -115,7 +115,7 @@ func parseGVK(content string) (string, error) {
 
 func chooseRelevantFilesForIngressQuery(ctx context.Context, w *workspacetypes.Workspace) ([]string, error) {
 	prompt := `Will this chart work with an ingress controller?`
-	expandedPrompt, err := llm.ExpandPrompt(context.Background(), prompt)
+	expandedPrompt, err := llm.ExpandPrompt(context.Background(), prompt, "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to expand prompt: %w", err)
 	}

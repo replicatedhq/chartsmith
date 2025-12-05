@@ -6,13 +6,17 @@ import (
 	"fmt"
 
 	"github.com/replicatedhq/chartsmith/pkg/logger"
+	"github.com/replicatedhq/chartsmith/pkg/realtime"
+	realtimetypes "github.com/replicatedhq/chartsmith/pkg/realtime/types"
 	"github.com/replicatedhq/chartsmith/pkg/workspace"
+	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 	"go.uber.org/zap"
 )
 
 type conversionSimplifyPayload struct {
 	WorkspaceID  string `json:"workspaceId"`
 	ConversionID string `json:"conversionId"`
+	ModelID      string `json:"modelId,omitempty"`
 }
 
 func handleConversionSimplifyNotification(ctx context.Context, payload string) error {
@@ -29,10 +33,14 @@ func handleConversionSimplifyNotification(ctx context.Context, payload string) e
 		return fmt.Errorf("failed to get workspace: %w", err)
 	}
 
-	// userIDs, err := workspace.ListUserIDsForWorkspace(ctx, p.WorkspaceID)
-	// if err != nil {
-	// 	return fmt.Errorf("failed to list user IDs for workspace: %w", err)
-	// }
+	userIDs, err := workspace.ListUserIDsForWorkspace(ctx, p.WorkspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to list user IDs for workspace: %w", err)
+	}
+
+	realtimeRecipient := realtimetypes.Recipient{
+		UserIDs: userIDs,
+	}
 
 	c, err := workspace.GetConversion(ctx, p.ConversionID)
 	if err != nil {
@@ -72,6 +80,25 @@ func handleConversionSimplifyNotification(ctx context.Context, payload string) e
 	_, err = workspace.SetCurrentRevision(ctx, nil, w, 1)
 	if err != nil {
 		return fmt.Errorf("failed to set revision complete: %w", err)
+	}
+
+	// Mark conversion as complete and send final status event
+	if err := workspace.SetConversionStatus(ctx, p.ConversionID, workspacetypes.ConversionStatusComplete); err != nil {
+		return fmt.Errorf("failed to set conversion status to complete: %w", err)
+	}
+
+	c, err = workspace.GetConversion(ctx, p.ConversionID)
+	if err != nil {
+		return fmt.Errorf("failed to get conversion after completion: %w", err)
+	}
+
+	e := realtimetypes.ConversionStatusEvent{
+		WorkspaceID: w.ID,
+		Conversion:  *c,
+	}
+
+	if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
+		return fmt.Errorf("failed to send conversion complete event: %w", err)
 	}
 
 	return nil
