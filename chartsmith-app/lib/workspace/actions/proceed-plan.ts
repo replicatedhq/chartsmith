@@ -54,9 +54,9 @@ export async function proceedPlanAction(
   try {
     await client.query("BEGIN");
 
-    // 1. Get the plan with its buffered tool calls
+    // 1. Get the plan with its buffered tool calls and status
     const planResult = await client.query(
-      `SELECT buffered_tool_calls FROM workspace_plan WHERE id = $1`,
+      `SELECT status, buffered_tool_calls FROM workspace_plan WHERE id = $1`,
       [planId]
     );
 
@@ -64,8 +64,14 @@ export async function proceedPlanAction(
       throw new Error("Plan not found");
     }
 
+    const planStatus = planResult.rows[0].status;
     const bufferedToolCalls: BufferedToolCall[] = 
       planResult.rows[0].buffered_tool_calls || [];
+
+    // Validate plan is in correct status
+    if (planStatus !== 'review') {
+      throw new Error(`Plan is not in review status (current: ${planStatus})`);
+    }
 
     if (bufferedToolCalls.length === 0) {
       throw new Error("No buffered tool calls to execute");
@@ -82,6 +88,8 @@ export async function proceedPlanAction(
     // 3. Execute each buffered tool call
     // Note: We execute outside the transaction to avoid long-running transactions
     const authHeader = session.user.authHeader;
+    let successCount = 0;
+    let failureCount = 0;
     
     for (const toolCall of bufferedToolCalls) {
       if (toolCall.toolName === "textEditor") {
@@ -107,28 +115,47 @@ export async function proceedPlanAction(
             },
             authHeader
           );
+          successCount++;
         } catch (error) {
           console.error(
             `[proceedPlanAction] Failed to execute tool call ${toolCall.id}:`,
             error
           );
+          failureCount++;
           // Continue executing other tool calls even if one fails
           // The user can see the partial result
         }
       }
     }
 
-    // 4. Update plan status to "applied"
+    // 4. Update plan status based on results
     const client2 = await db.connect();
     try {
-      await client2.query(
-        `UPDATE workspace_plan 
-         SET status = 'applied', 
-             updated_at = NOW(),
-             proceed_at = NOW()
-         WHERE id = $1`,
-        [planId]
-      );
+      if (successCount === 0 && failureCount > 0) {
+        // All tool calls failed - reset to review so user can retry
+        console.error('[proceedPlanAction] All tool calls failed, resetting to review');
+        await client2.query(
+          `UPDATE workspace_plan 
+           SET status = 'review', 
+               updated_at = NOW()
+           WHERE id = $1`,
+          [planId]
+        );
+        throw new Error(`All ${failureCount} tool calls failed. Plan reset to review.`);
+      } else {
+        // At least some succeeded - mark as applied
+        await client2.query(
+          `UPDATE workspace_plan 
+           SET status = 'applied', 
+               updated_at = NOW(),
+               proceed_at = NOW()
+           WHERE id = $1`,
+          [planId]
+        );
+        if (failureCount > 0) {
+          console.warn(`[proceedPlanAction] Partial success: ${successCount}/${successCount + failureCount} tool calls succeeded`);
+        }
+      }
     } finally {
       client2.release();
     }
