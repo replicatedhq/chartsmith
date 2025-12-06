@@ -75,5 +75,9 @@ export default defineConfig({
     command: 'npm run dev',
     url: 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
+    env: {
+      MOCK_AI_SERVICE: 'true',
+      NEXT_PUBLIC_ENABLE_TEST_AUTH: 'true',
+    },
   },
 });

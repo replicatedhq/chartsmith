@@ -46,3 +46,14 @@ node_modules/
 /playwright-report/
 /blob-report/
 /playwright/.cache/
+
+# Markdown files (except main README)
+*.md
+!README.md
+!CONTRIBUTING.md
+!ARCHITECTURE.md
+
+# Log files
+*.log
+logs/
+*.log.*

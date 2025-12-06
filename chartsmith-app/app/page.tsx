@@ -24,7 +24,7 @@ export default function HomePage() {
   useEffect(() => {
     // Check if this was a direct page load rather than navigation from waitlist page
     const isDirectPageLoad = !document.referrer.includes('/waitlist');
-    
+
     if (!isAuthLoading && isWaitlisted && isDirectPageLoad) {
       router.replace('/waitlist');
     }
@@ -57,7 +57,7 @@ export default function HomePage() {
 
       <div className="relative flex-1 flex flex-col">
         <HomeNav />
-        <main className="container mx-auto px-6 pt-12 sm:pt-20 lg:pt-32 flex-1">
+        <main className="container mx-auto px-6 pt-12 sm:pt-20 lg:pt-32 pb-32 flex-1">
           <HomeHeader />
           <CreateChartOptions />
         </main>

@@ -31,7 +31,7 @@ export function CreateChartOptions() {
     // Focus the textarea on mount
     textareaRef.current?.focus();
   }, []);
-  
+
   // Check if input is approaching character limit
   useEffect(() => {
     setIsApproachingLimit(prompt.length >= WARNING_THRESHOLD);
@@ -108,9 +108,9 @@ export function CreateChartOptions() {
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto px-4">
+    <div className="w-full max-w-4xl mx-auto px-4 mb-24">
       <div className="bg-gray-900/80 backdrop-blur-sm rounded-lg border border-gray-800">
-        <div className="p-4 sm:p-6 relative">
+        <div className="p-3 sm:p-4 relative">
           <textarea
             ref={textareaRef}
             placeholder="Tell me about the application you want to create a Helm chart for"
@@ -123,17 +123,17 @@ export function CreateChartOptions() {
             }}
             onKeyDown={handleKeyDown}
             disabled={isPromptLoading}
-            className="w-full min-h-[80px] sm:min-h-[120px] bg-transparent text-white placeholder-gray-500 text-base sm:text-lg resize-none focus:outline-none disabled:opacity-50"
+            className="w-full min-h-[60px] sm:min-h-[80px] bg-transparent text-white placeholder-gray-500 text-base sm:text-lg resize-none focus:outline-none disabled:opacity-50"
             maxLength={MAX_CHARS}
           />
-          
+
           {isApproachingLimit && (
             <div className="flex items-center mt-2 text-xs text-amber-500/90">
               <AlertCircle className="w-3.5 h-3.5 mr-1.5 flex-shrink-0" />
               <span>ChartSmith works best with clear, concise prompts. Start simple and refine through conversation.</span>
             </div>
           )}
-          
+
           {prompt.trim() && (
             <button
               onClick={handlePromptSubmit}
@@ -170,33 +170,34 @@ export function CreateChartOptions() {
           </button>
         </div>
         */}
-      </div>
 
-      <div className="mt-3 sm:mt-4 flex flex-wrap gap-1.5 sm:gap-2 justify-center">
-        <button
-          onClick={() => triggerFileUpload('helm')}
-          disabled={isUploading || isPromptLoading}
-          className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm rounded-full bg-gray-800/60 backdrop-blur-sm border border-gray-700 hover:bg-gray-700/60 transition-colors text-gray-300 hover:text-white disabled:opacity-50 disabled:hover:bg-gray-800/60 disabled:cursor-not-allowed"
-        >
-          <Upload className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-          Upload a Helm chart
-        </button>
-        <button
-          onClick={() => triggerFileUpload('k8s')}
-          disabled={isUploading || isPromptLoading}
-          className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm rounded-full bg-gray-800/60 backdrop-blur-sm border border-gray-700 hover:bg-gray-700/60 transition-colors text-gray-300 hover:text-white disabled:opacity-50 disabled:hover:bg-gray-800/60 disabled:cursor-not-allowed"
-        >
-          <Upload className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-          Upload Kubernetes manifests
-        </button>
-        <button
-          onClick={() => setShowArtifactHubSearch(true)}
-          disabled={isUploading || isPromptLoading}
-          className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm rounded-full bg-gray-800/60 backdrop-blur-sm border border-gray-700 hover:bg-gray-700/60 transition-colors text-gray-300 hover:text-white disabled:opacity-50 disabled:hover:bg-gray-800/60 disabled:cursor-not-allowed"
-        >
-          <Search className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-          Start from a chart in Artifact Hub
-        </button>
+        {/* Action buttons */}
+        <div className="border-t border-gray-800 p-2 sm:p-3 flex flex-wrap gap-1.5 sm:gap-2 justify-center">
+          <button
+            onClick={() => triggerFileUpload('helm')}
+            disabled={isUploading || isPromptLoading}
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm rounded-full bg-gray-800/60 backdrop-blur-sm border border-gray-700 hover:bg-gray-700/60 transition-colors text-gray-300 hover:text-white disabled:opacity-50 disabled:hover:bg-gray-800/60 disabled:cursor-not-allowed"
+          >
+            <Upload className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+            Upload a Helm chart
+          </button>
+          <button
+            onClick={() => triggerFileUpload('k8s')}
+            disabled={isUploading || isPromptLoading}
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm rounded-full bg-gray-800/60 backdrop-blur-sm border border-gray-700 hover:bg-gray-700/60 transition-colors text-gray-300 hover:text-white disabled:opacity-50 disabled:hover:bg-gray-800/60 disabled:cursor-not-allowed"
+          >
+            <Upload className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+            Upload Kubernetes manifests
+          </button>
+          <button
+            onClick={() => setShowArtifactHubSearch(true)}
+            disabled={isUploading || isPromptLoading}
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm rounded-full bg-gray-800/60 backdrop-blur-sm border border-gray-700 hover:bg-gray-700/60 transition-colors text-gray-300 hover:text-white disabled:opacity-50 disabled:hover:bg-gray-800/60 disabled:cursor-not-allowed"
+          >
+            <Search className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+            Start from a chart in Artifact Hub
+          </button>
+        </div>
       </div>
 
       <input ref={fileInputRef} type="file" accept=".tgz,.tar.gz,.tar" className="hidden" onChange={handleFileUpload} />

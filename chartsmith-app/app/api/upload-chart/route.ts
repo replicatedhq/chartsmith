@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     if (authHeader) {
       userId = await userIdFromExtensionToken(authHeader.split(' ')[1])
     } else {
-      const session = await findSession(req.cookies.get('token')?.value || '');
+      const session = await findSession(req.cookies.get('session')?.value || '');
       if (!session) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
       }

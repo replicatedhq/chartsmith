@@ -53,7 +53,7 @@ test('import chart from artifacthub', async ({ page }) => {
     await expect(page.locator('[data-testid="assistant-message"]')).toBeVisible();
 
     // Send a message to render the chart
-    await page.fill('textarea[placeholder="Type your message..."]', 'render this chart using the default values.yaml');
+    await page.fill('textarea[placeholder="Ask a question or ask for a change..."]', 'render this chart using the default values.yaml');
     await page.click('button[type="submit"]');
 
     // Wait 3 seconds for the response

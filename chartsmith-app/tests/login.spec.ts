@@ -13,25 +13,18 @@ test('login flow', async ({ page }) => {
     await page.goto('/login?test-auth=true');
     await page.screenshot({ path: './test-results/1-initial-load.png' });
 
-    // Wait a bit and capture another screenshot
-    await page.waitForTimeout(2000);
-    await page.screenshot({ path: './test-results/2-after-wait.png' });
+    // Wait for redirect to home page
+    await page.waitForURL('http://localhost:3000/', { timeout: 10000 });
 
     // Log current URL
     console.log('Current URL:', page.url());
-    
-    // Wait for navigation to complete (should redirect to home page)
-    await page.waitForNavigation({ timeout: 10000 });
-    
-    // Log final URL
-    console.log('Final URL after login:', page.url());
-    
+
     // Take screenshot of final state
     await page.screenshot({ path: './test-results/3-after-login.png' });
-    
+
     // Verify we are NOT on waitlist page
     expect(page.url()).not.toContain('/waitlist');
-    
+
     // Verify we are on home page
     expect(page.url()).toBe(new URL('/', page.url()).toString());
 

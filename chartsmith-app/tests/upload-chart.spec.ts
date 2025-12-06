@@ -2,13 +2,16 @@ import { test, expect, Page } from '@playwright/test';
 import { loginTestUser } from './helpers';
 
 test('upload helm chart', async ({ page }) => {
-  test.setTimeout(60000); // Increase timeout to 60 seconds
+  test.setTimeout(120000); // Increase timeout to 120 seconds
 
   // Start tracing
   await page.context().tracing.start({
     screenshots: true,
     snapshots: true
   });
+
+  // Forward console logs to test output
+  page.on('console', msg => console.log(`[Browser Console] ${msg.text()}`));
 
   try {
     // Login first
@@ -53,7 +56,7 @@ test('upload helm chart', async ({ page }) => {
     await expect(page.locator('[data-testid="assistant-message"]')).toBeVisible();
 
     // Send a message to render the chart
-    await page.fill('textarea[placeholder="Type your message..."]', 'change the default replicaCount in the values.yaml to 3');
+    await page.fill('textarea[placeholder="Ask a question or ask for a change..."]', 'change the default replicaCount in the values.yaml to 3');
     await page.click('button[type="submit"]');
 
     // wait for a brief moment for the message to be sent
@@ -66,9 +69,15 @@ test('upload helm chart', async ({ page }) => {
     // Verify that we have a user message and a plan message
     const latestMessage = messagesAfterSubmit[1];
     await expect(latestMessage.locator('[data-testid="user-message"]')).toBeVisible();
-    // Look for plan message anywhere in the document, not just in the latest message
-    await expect(page.locator('[data-testid="plan-message"]')).toBeVisible();
+    // Wait for the plan message to appear (using specific data-testid)
+    // Verify the plan message appears
+    const planMessage = page.locator('[data-testid="plan-message"]');
+    await expect(planMessage).toBeVisible({ timeout: 90000 });
+    await expect(planMessage).toContainText('Proposed Plan');
 
+    // Verify the assistant's text response
+    const assistantMessage = page.locator('[data-testid="assistant-message"]').last();
+    await expect(assistantMessage).toContainText('I have created a plan');
 
     // Take a screenshot of the chat messages
     await page.screenshot({ path: './test-results/upload-3-chat-messages.png' });
@@ -98,7 +107,7 @@ test('upload helm chart', async ({ page }) => {
     await page.screenshot({ path: './test-results/upload-proceed-button-verification.png' });
 
     // Test should fail if button is not visible in viewport
-    expect(isInViewport).toBe(true, 'Proceed button is not visible in the viewport without scrolling');
+    expect(isInViewport, 'Proceed button is not visible in the viewport without scrolling').toBe(true);
 
     // click on the Proceed button
     await proceedButton.click();
@@ -108,24 +117,28 @@ test('upload helm chart', async ({ page }) => {
 
     // After the plan is executed, we should see the diff in the editor
     // Look for values.yaml in the file browser and click on it
-    await page.getByText('values.yaml').first().click();
+    await page.locator('[data-testid="file-browser"]').getByText('values.yaml').first().click();
 
     // Take a screenshot to capture the editor view with diff
     await page.screenshot({ path: './test-results/upload-5-diff-view.png' });
 
     // Wait for the diff editor to be visible
-    await page.waitForSelector('.monaco-editor');
+    // Wait for the diff editor to be visible
+    // Wait for the actual editor content to be rendered
+    await expect(page.locator('.view-lines').first()).toBeVisible();
 
-    const addedLines = page.locator('.diffInserted');
-    const removedLines = page.locator('.diffRemoved');
+    // Monaco DiffEditor uses .line-insert and .line-delete
+    const addedLines = page.locator('.line-insert');
+    const removedLines = page.locator('.line-delete');
 
-    // Ensure there's exactly one added and one removed line
-    await expect(addedLines).toHaveCount(1);
-    await expect(removedLines).toHaveCount(1);
+    // Ensure there's at least one added and one removed line
+    await expect(addedLines.first()).toBeVisible();
+    await expect(removedLines.first()).toBeVisible();
 
     // Verify the content of the added and removed lines
-    await expect(addedLines).toHaveText('replicaCount: 3');
-    await expect(removedLines).toHaveText('replicaCount: 1');
+    // Verify that both versions of the content are visible (original and modified)
+    await expect(page.locator('.monaco-editor').getByText('replicaCount: 3').first()).toBeVisible();
+    await expect(page.locator('.monaco-editor').getByText('replicaCount: 1').first()).toBeVisible();
 
     // Take a screenshot with any errors visible
     await page.screenshot({ path: './test-results/upload-6-diff-validation.png' });

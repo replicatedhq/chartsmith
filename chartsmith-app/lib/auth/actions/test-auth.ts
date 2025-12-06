@@ -25,25 +25,34 @@ export async function validateTestAuth(): Promise<string> {
     id: '123',
     verified_email: true,
   }
-  
+
   try {
     const dbUri = await getParam("DB_URI");
     const db = getDB(dbUri);
 
     // First check if the test user already exists in waitlist
-    const waitlistResult = await db.query(
-      `SELECT id FROM waitlist WHERE email = $1`,
-      [profile.email]
-    );
-    
+    let waitlistResult = { rows: [] as any[] };
+    try {
+      waitlistResult = await db.query(
+        `SELECT id FROM waitlist WHERE email = $1`,
+        [profile.email]
+      );
+    } catch (err: any) {
+      if (err.code === '42P01') { // undefined_table
+        logger.warn("Waitlist table not found, skipping waitlist check");
+      } else {
+        throw err;
+      }
+    }
+
     // If in waitlist, move them to regular user
     if (waitlistResult.rows.length > 0) {
       const waitlistId = waitlistResult.rows[0].id;
       logger.info("Moving test user from waitlist to regular user", { email: profile.email });
-      
+
       // Begin transaction
       await db.query("BEGIN");
-      
+
       try {
         // Move from waitlist to main users table
         await db.query(
@@ -67,13 +76,13 @@ export async function validateTestAuth(): Promise<string> {
           ON CONFLICT (email) DO NOTHING`,
           [waitlistId]
         );
-        
+
         // Delete from waitlist
         await db.query(
           `DELETE FROM waitlist WHERE id = $1`,
           [waitlistId]
         );
-        
+
         await db.query("COMMIT");
       } catch (error) {
         await db.query("ROLLBACK");
@@ -84,7 +93,7 @@ export async function validateTestAuth(): Promise<string> {
 
     // Now create or get the user normally
     const user = await upsertUser(profile.email, profile.name, profile.picture);
-    
+
     // If the user still has isWaitlisted = true, force set it to false for test users
     if (user.isWaitlisted) {
       user.isWaitlisted = false;

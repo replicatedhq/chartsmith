@@ -143,16 +143,29 @@ export function PlanChatMessage({
   };
 
   const handleProceed = async () => {
-    if (!session || !plan) return;
+    console.log("PlanChatMessage: handleProceed called");
+    if (!session || !plan) {
+      console.log("PlanChatMessage: Missing session or plan", { hasSession: !!session, hasPlan: !!plan });
+      return;
+    }
 
     const wsId = workspaceId || plan.workspaceId;
-    if (!wsId) return;
-
-    const updatedWorkspace = await createRevisionAction(session, plan.id);
-    if (updatedWorkspace && setWorkspace) {
-      setWorkspace(updatedWorkspace);
+    if (!wsId) {
+      console.log("PlanChatMessage: Missing workspaceId");
+      return;
     }
-    onProceed?.();
+
+    console.log("PlanChatMessage: Calling createRevisionAction", { planId: plan.id });
+    try {
+      const updatedWorkspace = await createRevisionAction(session, plan.id);
+      console.log("PlanChatMessage: createRevisionAction returned", { hasWorkspace: !!updatedWorkspace });
+      if (updatedWorkspace && setWorkspace) {
+        setWorkspace(updatedWorkspace);
+      }
+      onProceed?.();
+    } catch (e) {
+      console.error("PlanChatMessage: createRevisionAction failed", e);
+    }
   };
 
   const handleSubmitChat = async (e: React.FormEvent) => {
@@ -180,31 +193,28 @@ export function PlanChatMessage({
     <div className="space-y-2" data-testid="plan-message">
       <div className="px-2 py-1">
         <div className={`p-3 rounded-2xl ${theme === "dark" ? "bg-dark-border/40" : "bg-gray-100"} rounded-tl-sm w-full`}>
-          <div className={`text-xs ${
-            plan.status === 'ignored'
+          <div className={`text-xs ${plan.status === 'ignored'
               ? `${theme === "dark" ? "text-gray-500" : "text-gray-400"}`
               : `${theme === "dark" ? "text-primary/70" : "text-primary/70"}`
-          } font-medium mb-1 flex items-center gap-2`} data-testid="plan-message-top">
+            } font-medium mb-1 flex items-center gap-2`} data-testid="plan-message-top">
             <span>
               {plan.status === 'ignored' ? 'Superseded Plan' : 'Proposed Plan'}
             </span>
-            <span className={`text-xs ${
-              plan.status === 'planning'
+            <span className={`text-xs ${plan.status === 'planning'
                 ? `${theme === "dark" ? "text-yellow-500/70" : "text-yellow-600/70"}`
                 : plan.status === 'pending'
                   ? `${theme === "dark" ? "text-blue-500/70" : "text-blue-600/70"}`
                   : plan.status === 'review'
                     ? `${theme === "dark" ? "text-green-500/70" : "text-green-600/70"}`
                     : `${theme === "dark" ? "text-gray-500" : "text-gray-400"}`
-            }`}>
+              }`}>
               ({plan.status})
             </span>
           </div>
-          <div className={`${
-            plan.status === 'ignored'
+          <div className={`${plan.status === 'ignored'
               ? `${theme === "dark" ? "text-gray-400" : "text-gray-500"}`
               : `${theme === "dark" ? "text-gray-200" : "text-gray-700"}`
-          } text-[11px] ${plan.status === 'ignored' ? 'opacity-75' : ''}`}>
+            } text-[11px] ${plan.status === 'ignored' ? 'opacity-75' : ''}`}>
             {plan.status === 'getting ready' ? (
               <div className="flex items-center justify-center py-4">
                 <div className="flex items-center gap-2">
@@ -252,9 +262,8 @@ export function PlanChatMessage({
                 </div>
                 {(plan.actionFiles?.length || 0) > 0 && (
                   <div
-                    className={`flex flex-col items-center gap-2 overflow-hidden transition-all duration-300 ${
-                      actionFilesExpanded ? 'max-h-none' : 'max-h-0'
-                    }`}
+                    className={`flex flex-col items-center gap-2 overflow-hidden transition-all duration-300 ${actionFilesExpanded ? 'max-h-none' : 'max-h-0'
+                      }`}
                   >
                     {plan.actionFiles?.map((action, index) => (
                       <div key={index} className="w-full flex items-center">
@@ -294,87 +303,84 @@ export function PlanChatMessage({
             )}
           </div>
           {showActions && plan.status === 'review' && (
-              <div className="mt-6 border-t border-dark-border/20">
-                <div className="flex items-center justify-between pt-4 pb-3">
-                  <div className="flex gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setShowFeedback(true)}
-                      className={`p-2 ${theme === "dark" ? "hover:bg-dark-border/40 text-gray-400 hover:text-gray-200" : "hover:bg-gray-100 text-gray-500 hover:text-gray-700"}`}
-                    >
-                      <ThumbsUp className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleIgnore}
-                      className={`p-2 ${theme === "dark" ? "hover:bg-dark-border/40 text-gray-400 hover:text-gray-200" : "hover:bg-gray-100 text-gray-500 hover:text-gray-700"}`}
-                    >
-                      <ThumbsDown className="h-4 w-4" />
-                    </Button>
-                  </div>
+            <div className="mt-6 border-t border-dark-border/20">
+              <div className="flex items-center justify-between pt-4 pb-3">
+                <div className="flex gap-2">
                   <Button
-                    ref={proceedButtonRef}
-                    variant="default"
+                    variant="ghost"
                     size="sm"
-                    onClick={handleProceed}
-                    data-testid="plan-message-proceed-button"
-                    className="min-w-[100px] bg-primary hover:bg-primary/80 text-white"
+                    onClick={() => setShowFeedback(true)}
+                    className={`p-2 ${theme === "dark" ? "hover:bg-dark-border/40 text-gray-400 hover:text-gray-200" : "hover:bg-gray-100 text-gray-500 hover:text-gray-700"}`}
                   >
-                    Proceed
+                    <ThumbsUp className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleIgnore}
+                    className={`p-2 ${theme === "dark" ? "hover:bg-dark-border/40 text-gray-400 hover:text-gray-200" : "hover:bg-gray-100 text-gray-500 hover:text-gray-700"}`}
+                  >
+                    <ThumbsDown className="h-4 w-4" />
                   </Button>
                 </div>
-                {showChatInput && plan.status === 'review' && !workspaceToUse?.currentRevisionNumber && (
-                  <div className="pt-2 border-t border-dark-border/10">
-                    <form onSubmit={handleSubmitChat} className="relative">
-                      <textarea
-                        ref={textareaRef}
-                        value={chatInput}
-                        onChange={(e) => {
-                          setChatInput(e.target.value);
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault();
-                            handleSubmitChat(e);
-                          }
-                        }}
-                        placeholder={isSubmitting ? "Submitting..." : "Ask a question or suggest changes..."}
-                        disabled={isSubmitting}
-                        rows={1}
-                        style={{ height: 'auto', minHeight: '34px', maxHeight: '150px' }}
-                        className={`w-full px-3 py-1.5 pr-10 text-sm rounded-md border resize-none overflow-hidden ${
-                          theme === "dark"
-                            ? "bg-dark border-dark-border/60 text-white placeholder-gray-500"
-                            : "bg-white border-gray-200 text-gray-900 placeholder-gray-400"
-                        } focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50`}
-                      />
-                      <button
-                        type="submit"
-                        disabled={isSubmitting}
-                        className={`absolute right-2 top-[5px] p-1.5 rounded-full ${
-                          !isSubmitting ? 'hover:bg-gray-100 dark:hover:bg-dark-border/40' : ''
-                        } ${
-                          theme === "dark" ? "text-gray-400 hover:text-gray-200" : "text-gray-500 hover:text-gray-700"
-                        }`}
-                      >
-                        {isSubmitting ? (
-                          <div
-                            className="rounded-full h-4 w-4 border border-current border-t-transparent"
-                            style={{
-                              animation: 'spin 1s linear infinite'
-                            }}
-                          />
-                        ) : (
-                          <Send className="w-4 h-4" />
-                        )}
-                      </button>
-                    </form>
-                  </div>
-                )}
+                <Button
+                  ref={proceedButtonRef}
+                  variant="default"
+                  size="sm"
+                  onClick={handleProceed}
+                  data-testid="plan-message-proceed-button"
+                  className="min-w-[100px] bg-primary hover:bg-primary/80 text-white"
+                >
+                  Proceed
+                </Button>
               </div>
-            )
+              {showChatInput && plan.status === 'review' && !workspaceToUse?.currentRevisionNumber && (
+                <div className="pt-2 border-t border-dark-border/10">
+                  <form onSubmit={handleSubmitChat} className="relative">
+                    <textarea
+                      ref={textareaRef}
+                      value={chatInput}
+                      onChange={(e) => {
+                        setChatInput(e.target.value);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSubmitChat(e);
+                        }
+                      }}
+                      placeholder={isSubmitting ? "Submitting..." : "Ask a question or suggest changes..."}
+                      disabled={isSubmitting}
+                      rows={1}
+                      style={{ height: 'auto', minHeight: '34px', maxHeight: '150px' }}
+                      className={`w-full px-3 py-1.5 pr-10 text-sm rounded-md border resize-none overflow-hidden ${theme === "dark"
+                          ? "bg-dark border-dark-border/60 text-white placeholder-gray-500"
+                          : "bg-white border-gray-200 text-gray-900 placeholder-gray-400"
+                        } focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50`}
+                    />
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className={`absolute right-2 top-[5px] p-1.5 rounded-full ${!isSubmitting ? 'hover:bg-gray-100 dark:hover:bg-dark-border/40' : ''
+                        } ${theme === "dark" ? "text-gray-400 hover:text-gray-200" : "text-gray-500 hover:text-gray-700"
+                        }`}
+                    >
+                      {isSubmitting ? (
+                        <div
+                          className="rounded-full h-4 w-4 border border-current border-t-transparent"
+                          style={{
+                            animation: 'spin 1s linear infinite'
+                          }}
+                        />
+                      ) : (
+                        <Send className="w-4 h-4" />
+                      )}
+                    </button>
+                  </form>
+                </div>
+              )}
+            </div>
+          )
           }
         </div>
       </div>

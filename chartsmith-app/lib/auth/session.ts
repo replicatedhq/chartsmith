@@ -4,6 +4,7 @@ import { User } from "@/lib/types/user";
 import { Session } from "../types/session";
 import * as srs from "secure-random-string";
 import jwt from "jsonwebtoken";
+console.log("JWT Import:", jwt);
 import { getDB } from "../data/db";
 import { getParam } from "../data/param";
 import parse from "parse-duration";

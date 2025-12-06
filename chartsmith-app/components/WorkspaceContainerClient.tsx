@@ -66,8 +66,11 @@ export function WorkspaceContainerClient({
 
 
   if (!workspace) {
+    console.log("WorkspaceContainerClient: No workspace");
     return null;
   }
+
+  console.log("WorkspaceContainerClient: Render", { view, selectedFileId: selectedFile?.id, contentPending: !!selectedFile?.contentPending });
 
   return (
     <>
@@ -81,16 +84,14 @@ export function WorkspaceContainerClient({
           </div>
           <div className={`w-px ${resolvedTheme === "dark" ? "bg-dark-border" : "bg-gray-200"} flex-shrink-0`} />
           <div className={`flex-1 min-w-0 flex flex-col ${isDebugVisible ? 'pr-[25%]' : ''}`}>
-            <div className={`flex items-center px-2 border-b ${
-              resolvedTheme === "dark" ? "border-dark-border/40 bg-dark-surface/40" : "border-gray-200 bg-white"
-            }`}>
+            <div className={`flex items-center px-2 border-b ${resolvedTheme === "dark" ? "border-dark-border/40 bg-dark-surface/40" : "border-gray-200 bg-white"
+              }`}>
               <div
                 onClick={() => setView("source")}
-                className={`px-3 py-2.5 text-xs font-medium cursor-pointer transition-colors relative group ${
-                  view === "source"
+                className={`px-3 py-2.5 text-xs font-medium cursor-pointer transition-colors relative group ${view === "source"
                     ? resolvedTheme === "dark" ? "text-primary" : "text-primary-foreground"
                     : resolvedTheme === "dark" ? "text-gray-500 hover:text-gray-300" : "text-gray-600 hover:text-gray-900"
-                }`}
+                  }`}
               >
                 {view === "source" && (
                   <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
@@ -99,11 +100,10 @@ export function WorkspaceContainerClient({
               </div>
               <div
                 onClick={() => setView("rendered")}
-                className={`px-3 py-2.5 text-xs font-medium cursor-pointer transition-colors relative group ${
-                  view === "rendered"
+                className={`px-3 py-2.5 text-xs font-medium cursor-pointer transition-colors relative group ${view === "rendered"
                     ? resolvedTheme === "dark" ? "text-primary" : "text-primary-foreground"
                     : resolvedTheme === "dark" ? "text-gray-500 hover:text-gray-300" : "text-gray-600 hover:text-gray-900"
-                }`}
+                  }`}
               >
                 {view === "rendered" && (
                   <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />

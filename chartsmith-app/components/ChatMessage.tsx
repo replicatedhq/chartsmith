@@ -66,7 +66,7 @@ function isFirstMessageForRevision(message: Message, messageId: string, allMessa
 
   // Check if this message is the first one with this revision
   return messagesWithRevision.length > 0 &&
-         messagesWithRevision[0].id === messageId;
+    messagesWithRevision[0].id === messageId;
 }
 
 export function ChatMessage({
@@ -85,9 +85,9 @@ export function ChatMessage({
 
   const [messages, setMessages] = useAtom(messagesAtom);
   const [messageGetter] = useAtom(messageByIdAtom);
-  const message = messageGetter(messageId);
-
   const [workspace, setWorkspace] = useAtom(workspaceAtom);
+  const message = messageGetter(messageId); // Assuming message is declared here or similar
+
   const [renderGetter] = useAtom(renderByIdAtom);
   // Only call the getter if responseRenderId exists
   const render = message?.responseRenderId ? renderGetter(message.responseRenderId) : undefined;
@@ -290,32 +290,31 @@ export function ChatMessage({
                  2. It's not the current revision
                  3. It's the first message for that revision */}
               {message.responseRollbackToRevisionNumber !== undefined &&
-               workspace.currentRevisionNumber !== message.responseRollbackToRevisionNumber &&
-               isFirstForRevision && (
-                <div className="mt-2 text-[9px] border-t border-gray-200 dark:border-dark-border/30 pt-1 flex justify-end">
-                  <button
-                    className={`${theme === "dark" ? "text-gray-500 hover:text-gray-300" : "text-gray-400 hover:text-gray-600"} hover:underline flex items-center`}
-                    onClick={() => setShowRollbackModal(true)}
-                  >
-                    <svg className="w-2 h-2 mr-1" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12Z" stroke="currentColor" strokeWidth="2"/>
-                      <path d="M12 8L12 13M12 13L15 10M12 13L9 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                    rollback to this revision
-                  </button>
-                </div>
-              )}
+                workspace.currentRevisionNumber !== message.responseRollbackToRevisionNumber &&
+                isFirstForRevision && (
+                  <div className="mt-2 text-[9px] border-t border-gray-200 dark:border-dark-border/30 pt-1 flex justify-end">
+                    <button
+                      className={`${theme === "dark" ? "text-gray-500 hover:text-gray-300" : "text-gray-400 hover:text-gray-600"} hover:underline flex items-center`}
+                      onClick={() => setShowRollbackModal(true)}
+                    >
+                      <svg className="w-2 h-2 mr-1" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12Z" stroke="currentColor" strokeWidth="2" />
+                        <path d="M12 8L12 13M12 13L15 10M12 13L9 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      rollback to this revision
+                    </button>
+                  </div>
+                )}
             </div>
             {message.followupActions && message.followupActions.length > 0 && (
               <div className="mt-4 flex gap-2 justify-end">
                 {message.followupActions.map((action, index) => (
                   <button
                     key={index}
-                    className={`text-xs px-2 py-1 rounded ${
-                      theme === "dark"
-                        ? "bg-dark border-dark-border/60 text-gray-300 hover:text-white hover:bg-dark-border/40"
-                        : "bg-white border border-gray-300 text-gray-600 hover:text-gray-800 hover:bg-gray-50"
-                    }`}
+                    className={`text-xs px-2 py-1 rounded ${theme === "dark"
+                      ? "bg-dark border-dark-border/60 text-gray-300 hover:text-white hover:bg-dark-border/40"
+                      : "bg-white border border-gray-300 text-gray-600 hover:text-gray-800 hover:bg-gray-50"
+                      }`}
                     onClick={async () => {
                       const chatMessage = await performFollowupAction(session, workspace.id, message.id, action.action);
                       if (chatMessage && setMessages) {
@@ -349,17 +348,15 @@ export function ChatMessage({
                       placeholder="Ask a question or suggest changes..."
                       rows={1}
                       style={{ height: 'auto', minHeight: '34px', maxHeight: '150px' }}
-                      className={`w-full px-3 py-1.5 pr-10 text-sm rounded-md border resize-none overflow-hidden ${
-                        theme === "dark"
-                          ? "bg-dark border-dark-border/60 text-white placeholder-gray-500"
-                          : "bg-white border-gray-200 text-gray-900 placeholder-gray-400"
-                      } focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50`}
+                      className={`w-full px-3 py-1.5 pr-10 text-sm rounded-md border resize-none overflow-hidden ${theme === "dark"
+                        ? "bg-dark border-dark-border/60 text-white placeholder-gray-500"
+                        : "bg-white border-gray-200 text-gray-900 placeholder-gray-400"
+                        } focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50`}
                     />
                     <button
                       type="submit"
-                      className={`absolute right-2 top-[5px] p-1.5 rounded-full ${
-                        theme === "dark" ? "text-gray-400 hover:text-gray-200" : "text-gray-500 hover:text-gray-700"
-                      } hover:bg-gray-100 dark:hover:bg-dark-border/40`}
+                      className={`absolute right-2 top-[5px] p-1.5 rounded-full ${theme === "dark" ? "text-gray-400 hover:text-gray-200" : "text-gray-500 hover:text-gray-700"
+                        } hover:bg-gray-100 dark:hover:bg-dark-border/40`}
                     >
                       <Send className="w-4 h-4" />
                     </button>
