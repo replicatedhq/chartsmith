@@ -37,3 +37,8 @@ schema:
       type: text[]
     - name: proceed_at
       type: timestamp
+    # PR3.0: Stores AI SDK tool calls that are buffered during streaming
+    # and executed on Proceed. Format: [{id, toolName, args, timestamp}]
+    - name: buffered_tool_calls
+      type: jsonb
+      default: "'[]'::jsonb"

@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { useAtom } from 'jotai'
 
 // hooks
 import { useSession } from "@/app/hooks/useSession";
 import { useCentrifugo } from "@/hooks/useCentrifugo";
+import { currentStreamingMessageIdAtom } from "@/hooks/useAISDKChatAdapter";
 
 // contexts
 import { useCommandMenu } from '@/contexts/CommandMenuContext';
@@ -22,7 +23,7 @@ import { Conversion, Plan, RenderedWorkspace, Workspace } from "@/lib/types/work
 // atoms
 import { chartsBeforeApplyingContentPendingAtom, editorViewAtom, looseFilesBeforeApplyingContentPendingAtom, selectedFileAtom, workspaceAtom } from "@/atoms/workspace";
 import { editorContentAtom } from "@/atoms/workspace";
-import { messagesAtom, plansAtom, rendersAtom, conversionsAtom } from "@/atoms/workspace";
+import { messagesAtom, plansAtom, rendersAtom, conversionsAtom, allFilesWithContentPendingAtom, isRenderingAtom } from "@/atoms/workspace";
 import { Message } from "./types";
 
 interface WorkspaceContentProps {
@@ -86,6 +87,46 @@ export function WorkspaceContent({
     setEditorView,
     setSelectedFile
   ]);
+
+  // PR3.0: Page reload guard - warn before leaving with uncommitted changes or during streaming
+  const [filesWithPending] = useAtom(allFilesWithContentPendingAtom);
+  const [isRendering] = useAtom(isRenderingAtom);
+  const [currentStreamingMessageId] = useAtom(currentStreamingMessageIdAtom);
+  
+  // Keep refs in sync for use in beforeunload handler
+  const filesWithPendingRef = useRef(filesWithPending);
+  const isRenderingRef = useRef(isRendering);
+  const isStreamingRef = useRef(!!currentStreamingMessageId);
+  
+  useEffect(() => {
+    filesWithPendingRef.current = filesWithPending;
+  }, [filesWithPending]);
+  
+  useEffect(() => {
+    isRenderingRef.current = isRendering;
+  }, [isRendering]);
+  
+  useEffect(() => {
+    isStreamingRef.current = !!currentStreamingMessageId;
+  }, [currentStreamingMessageId]);
+  
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      const hasPending = filesWithPendingRef.current.length > 0;
+      const isActiveRendering = isRenderingRef.current;
+      const isStreaming = isStreamingRef.current;
+      
+      if (hasPending || isActiveRendering || isStreaming) {
+        e.preventDefault();
+        // Modern browsers ignore custom messages, but we still need to set returnValue
+        e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+        return e.returnValue;
+      }
+    };
+    
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
 
   const { session } = useSession();
 

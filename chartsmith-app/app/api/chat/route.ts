@@ -30,7 +30,11 @@ import {
   isValidModel,
 } from '@/lib/ai';
 import { createTools } from '@/lib/ai/tools';
+import { createBufferedTools } from '@/lib/ai/tools/bufferedTools';
+import { BufferedToolCall } from '@/lib/ai/tools/toolInterceptor';
+import { createPlanFromToolCalls } from '@/lib/ai/plan';
 import { getSystemPromptForPersona } from '@/lib/ai/prompts';
+import { classifyIntent, routeFromIntent } from '@/lib/ai/intent';
 
 // Set maximum streaming duration (must be a literal for Next.js config)
 export const maxDuration = 60;
@@ -41,6 +45,7 @@ type ChatPersona = 'auto' | 'developer' | 'operator';
 // Request body interface - using UIMessage from AI SDK v5
 // PR1.5: Added workspaceId and revisionNumber for tool support
 // PR2.0: Added persona for prompt selection
+// PR3.0: Added chatMessageId for plan creation association
 interface ChatRequestBody {
   messages: UIMessage[];
   provider?: string;
@@ -48,16 +53,18 @@ interface ChatRequestBody {
   workspaceId?: string;      // Required for tool operations
   revisionNumber?: number;   // Required for tool operations
   persona?: ChatPersona;     // PR2.0: Persona for prompt selection
+  chatMessageId?: string;    // PR3.0: For plan creation association
 }
 
 export async function POST(request: Request) {
   try {
     // Parse request body
     const body: ChatRequestBody = await request.json();
-    const { messages, provider, model, workspaceId, revisionNumber, persona } = body;
+    const { messages, provider, model, workspaceId, revisionNumber, persona, chatMessageId } = body;
     
     // Debug logging for tool setup
     // PR2.0: Added persona to logging
+    // PR3.0: Added chatMessageId to logging
     console.log('[/api/chat] Request received:', { 
       hasMessages: !!messages?.length, 
       provider, 
@@ -65,6 +72,7 @@ export async function POST(request: Request) {
       workspaceId, 
       revisionNumber,
       persona: persona ?? 'auto',
+      chatMessageId,
     });
     
     // Extract auth header for forwarding to Go backend (PR1.5)
@@ -115,15 +123,24 @@ export async function POST(request: Request) {
     // Get the model instance
     const modelInstance = getModel(provider, model);
 
+    // PR3.0: Buffer for collecting tool calls during streaming
+    const bufferedToolCalls: BufferedToolCall[] = [];
+    
     // Create tools if workspace context is provided (PR1.5)
-    // Tools require workspaceId to operate on files
+    // PR3.0: Use buffered tools when chatMessageId is provided (plan workflow)
+    // Otherwise use regular tools (legacy behavior for non-plan messages)
     const tools = workspaceId
-      ? createTools(authHeader, workspaceId, revisionNumber ?? 0)
+      ? (chatMessageId
+          ? createBufferedTools(authHeader, workspaceId, revisionNumber ?? 0, (toolCall) => {
+              bufferedToolCalls.push(toolCall);
+            }, chatMessageId)
+          : createTools(authHeader, workspaceId, revisionNumber ?? 0, chatMessageId))
       : undefined;
     
     console.log('[/api/chat] Tools created:', { 
       hasTools: !!tools, 
-      toolNames: tools ? Object.keys(tools) : [] 
+      toolNames: tools ? Object.keys(tools) : [],
+      useBufferedTools: !!chatMessageId,
     });
 
     // PR2.0: Select system prompt based on persona
@@ -134,6 +151,59 @@ export async function POST(request: Request) {
     
     console.log('[/api/chat] Using persona:', persona ?? 'auto');
 
+    // PR3.0: Intent classification before AI SDK processing
+    // Only classify if we have a workspace context (non-initial messages)
+    const lastUserMessage = messages.filter(m => m.role === 'user').pop();
+    if (lastUserMessage && workspaceId) {
+      const userPrompt = typeof lastUserMessage.content === 'string' 
+        ? lastUserMessage.content 
+        : (lastUserMessage.parts?.find(p => p.type === 'text') as { type: 'text'; text: string } | undefined)?.text ?? '';
+      const isInitialPrompt = revisionNumber === 0 && messages.filter(m => m.role === 'user').length === 1;
+
+      try {
+        const intent = await classifyIntent(
+          authHeader,
+          userPrompt,
+          isInitialPrompt,
+          persona ?? 'auto'
+        );
+
+        const route = routeFromIntent(intent, isInitialPrompt, revisionNumber ?? 0);
+        console.log('[/api/chat] Intent classification result:', { intent, route });
+
+        switch (route.type) {
+          case "off-topic":
+            // Return polite decline without calling AI SDK
+            console.log('[/api/chat] Declining off-topic message');
+            return new Response(
+              JSON.stringify({
+                message: "I'm designed to help with Helm charts. Could you rephrase your question to be about Helm chart development or operations?"
+              }),
+              { status: 200, headers: { 'Content-Type': 'application/json' } }
+            );
+
+          case "proceed":
+            // Note: Full proceed handling will be implemented in Phase 3 with plan workflow
+            // For now, let AI SDK handle it (user saying "proceed" without a plan)
+            console.log('[/api/chat] Proceed intent detected, passing to AI SDK');
+            break;
+
+          case "render":
+            // Note: Render handling would typically trigger render pipeline
+            // For now, let AI SDK acknowledge the render request
+            console.log('[/api/chat] Render intent detected, passing to AI SDK');
+            break;
+
+          case "ai-sdk":
+            // Continue to AI SDK processing below
+            break;
+        }
+      } catch (err) {
+        // Fail-open: If intent classification fails, continue to AI SDK
+        console.error('[/api/chat] Intent classification failed, proceeding with AI SDK:', err);
+      }
+    }
+
     // Convert messages to core format and stream the response
     const result = streamText({
       model: modelInstance,
@@ -141,6 +211,33 @@ export async function POST(request: Request) {
       messages: convertToModelMessages(messages),
       tools, // PR1.5: Tools for chart operations
       stopWhen: stepCountIs(5), // Allow up to 5 tool calls per request (AI SDK v5 replacement for maxSteps)
+      // PR3.0: Create plan from buffered tool calls after streaming completes
+      onFinish: async ({ finishReason, usage }) => {
+        console.log('[/api/chat] Stream finished:', {
+          finishReason,
+          usage,
+          chatMessageId,
+          workspaceId,
+          bufferedToolCallCount: bufferedToolCalls.length,
+        });
+
+        // If we have buffered tool calls, create a plan
+        if (bufferedToolCalls.length > 0 && workspaceId && chatMessageId) {
+          try {
+            const planId = await createPlanFromToolCalls(
+              authHeader,
+              workspaceId,
+              chatMessageId,
+              bufferedToolCalls
+            );
+            console.log('[/api/chat] Created plan:', planId);
+          } catch (err) {
+            console.error('[/api/chat] Failed to create plan:', err);
+            // Plan creation failure is logged but doesn't fail the response
+            // User can retry or the plan can be created manually
+          }
+        }
+      },
     });
 
     // Return the streaming response using UI Message Stream protocol (AI SDK v5)

@@ -28,6 +28,8 @@ import { messagesAtom } from "@/atoms/workspace";
 import {
   mapUIMessagesToMessages,
   mergeMessages,
+  hasFileModifyingToolCalls,
+  generateFollowupActions,
 } from "@/lib/chat/messageMapper";
 import { createAISDKChatMessageAction } from "@/lib/workspace/actions/create-ai-sdk-chat-message";
 import { updateChatMessageResponseAction } from "@/lib/workspace/actions/update-chat-message-response";
@@ -132,13 +134,15 @@ export function useAISDKChatAdapter(
   // Helper to get fresh body params WITH PERSONA (avoid stale closures)
   // NOTE: body is NOT passed to useChat - it would be captured at initialization
   // Instead, pass body in each sendMessage() call for fresh values
+  // PR3.0: Include chatMessageId for plan creation
   const getChatBody = useCallback(
-    () => ({
+    (messageId?: string) => ({
       provider: DEFAULT_PROVIDER,
       model: DEFAULT_MODEL,
       workspaceId,
       revisionNumber,
       persona: currentPersonaRef.current, // CRITICAL: Include persona
+      chatMessageId: messageId, // PR3.0: For plan creation
     }),
     [workspaceId, revisionNumber]
   );
@@ -166,10 +170,10 @@ export function useAISDKChatAdapter(
       // Set the current message ID for persistence tracking
       setCurrentChatMessageId(lastMessage.id);
       
-      // Send to AI SDK
+      // Send to AI SDK with chatMessageId for plan creation
       aiSendMessage(
         { text: lastMessage.prompt },
-        { body: getChatBody() }
+        { body: getChatBody(lastMessage.id) }
       );
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -218,13 +222,18 @@ export function useAISDKChatAdapter(
             .map((p) => p.text)
             .join("\n") || "";
 
+        // PR3.0: Generate rule-based followup actions
+        const hasFileChanges = hasFileModifyingToolCalls(lastAssistant);
+        const followupActions = generateFollowupActions(lastAssistant, hasFileChanges);
+
         hasPersistedRef.current.add(currentChatMessageId);
 
         updateChatMessageResponseAction(
           session,
           currentChatMessageId,
           textContent,
-          true // isIntentComplete
+          true, // isIntentComplete
+          followupActions // PR3.0: Pass followup actions
         )
           .then(() => {
             setCurrentChatMessageId(null);
@@ -260,10 +269,10 @@ export function useAISDKChatAdapter(
         );
         setCurrentChatMessageId(chatMessage.id);
 
-        // 2. Send to AI SDK with fresh body params INCLUDING PERSONA
+        // 2. Send to AI SDK with fresh body params INCLUDING PERSONA and chatMessageId
         await aiSendMessage(
           { text: content.trim() },
-          { body: getChatBody() } // getChatBody now includes persona
+          { body: getChatBody(chatMessage.id) } // PR3.0: Include chatMessageId for plan creation
         );
       } catch (err) {
         console.error("[useAISDKChatAdapter] Send failed:", err);

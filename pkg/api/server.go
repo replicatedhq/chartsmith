@@ -22,6 +22,15 @@ func StartHTTPServer(ctx context.Context, port string) error {
 	mux.HandleFunc("POST /api/tools/versions/kubernetes", handlers.GetKubernetesVersion)
 	mux.HandleFunc("POST /api/tools/context", handlers.GetChartContext)
 	
+	// PR3.0: Intent classification endpoint
+	mux.HandleFunc("POST /api/intent/classify", handlers.ClassifyIntent)
+	
+	// PR3.0: Plan creation from buffered tool calls
+	mux.HandleFunc("POST /api/plan/create-from-tools", handlers.CreatePlanFromToolCalls)
+	
+	// PR3.0: K8s to Helm conversion bridge
+	mux.HandleFunc("POST /api/conversion/start", handlers.StartConversion)
+	
 	// Health check endpoint
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		WriteJSON(w, http.StatusOK, map[string]interface{}{

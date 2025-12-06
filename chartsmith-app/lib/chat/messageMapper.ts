@@ -8,10 +8,11 @@
  * - UIMessage.parts → Message.prompt / Message.response
  * - useChat status → isThinking / isStreaming / isIntentComplete flags
  * - Tool results → responsePlanId extraction
+ * - PR3.0: Tool calls → followupActions generation
  */
 
 import { type UIMessage } from "ai";
-import { type Message } from "@/components/types";
+import { type Message, type RawFollowupAction } from "@/components/types";
 
 /**
  * Extracts text content from UIMessage parts, filtering out tool invocations
@@ -320,5 +321,104 @@ export function isMessageCurrentlyStreaming(
 ): boolean {
   if (!currentStreamingMessageId) return false;
   return messageId === currentStreamingMessageId;
+}
+
+/**
+ * PR3.0: Detects if a UIMessage contains file-modifying tool calls
+ * Only textEditor with create or str_replace commands are considered file-modifying
+ *
+ * @param message - UIMessage to check for file-modifying tool calls
+ * @returns true if the message contains file-modifying tool calls
+ */
+export function hasFileModifyingToolCalls(message: UIMessage): boolean {
+  if (!message.parts) return false;
+
+  for (const part of message.parts) {
+    // Check for tool-invocation parts
+    if (part.type === "tool-invocation") {
+      const toolPart = part as unknown as {
+        toolName?: string;
+        args?: { command?: string };
+      };
+      if (toolPart.toolName === "textEditor") {
+        const command = toolPart.args?.command;
+        if (command === "create" || command === "str_replace") {
+          return true;
+        }
+      }
+    }
+    // Also check for tool-result parts that indicate file changes
+    if (part.type === "tool-result") {
+      const toolPart = part as unknown as {
+        toolName?: string;
+        result?: { success?: boolean; message?: string };
+      };
+      if (toolPart.toolName === "textEditor") {
+        const message = toolPart.result?.message;
+        if (
+          message &&
+          toolPart.result?.success &&
+          (message.includes("created successfully") ||
+            message.includes("replaced successfully"))
+        ) {
+          return true;
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
+ * PR3.0: Generates rule-based followup actions based on message content and tool results
+ *
+ * Rules:
+ * - If message contains successful file modifications → Add "Render the chart" followup
+ *
+ * @param message - UIMessage to analyze
+ * @param hasFileChanges - Whether the message resulted in file changes (from hasFileModifyingToolCalls)
+ * @returns Array of followup actions to display to the user
+ */
+export function generateFollowupActions(
+  message: UIMessage,
+  hasFileChanges: boolean
+): RawFollowupAction[] {
+  const actions: RawFollowupAction[] = [];
+
+  // If message resulted in file changes, suggest rendering
+  if (hasFileChanges) {
+    actions.push({
+      action: "render",
+      label: "Render the chart",
+    });
+  }
+
+  // Check for tool results that indicate successful file operations
+  const toolResults = message.parts?.filter(
+    (p): p is { type: "tool-result"; toolName: string; result: unknown } =>
+      p.type === "tool-result"
+  );
+
+  if (toolResults) {
+    for (const result of toolResults) {
+      const toolResult = result as unknown as {
+        toolName?: string;
+        result?: { success?: boolean; message?: string };
+      };
+      if (toolResult.toolName === "textEditor" && toolResult.result?.success) {
+        // Add render action if not already present
+        if (!actions.some((a) => a.action === "render")) {
+          actions.push({
+            action: "render",
+            label: "Render the chart",
+          });
+        }
+        break;
+      }
+    }
+  }
+
+  return actions;
 }
 

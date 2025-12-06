@@ -71,6 +71,30 @@ export async function commitPendingChangesAction(
       [newRevNum, workspaceId]
     );
 
+    // PR3.0: Set rollback field on the first message that created this revision
+    // This enables the rollback link in ChatMessage.tsx
+    const firstMessageResult = await client.query(
+      `SELECT id FROM workspace_chat
+       WHERE workspace_id = $1
+       AND revision_number = $2
+       ORDER BY created_at ASC
+       LIMIT 1`,
+      [workspaceId, prevRevNum]
+    );
+
+    if (firstMessageResult.rows.length > 0) {
+      const firstMessageId = firstMessageResult.rows[0].id;
+      
+      // Set the rollback revision number (previous revision)
+      // This allows user to rollback to the state before this revision
+      await client.query(
+        `UPDATE workspace_chat
+         SET response_rollback_to_revision_number = $1
+         WHERE id = $2`,
+        [prevRevNum, firstMessageId]
+      );
+    }
+
     await client.query("COMMIT");
 
     // Return updated workspace
