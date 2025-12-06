@@ -31,6 +31,9 @@ func StartHTTPServer(ctx context.Context, port string) error {
 	// PR3.0: Plan update event publisher (called from TypeScript after status changes)
 	mux.HandleFunc("POST /api/plan/publish-update", handlers.PublishPlanUpdate)
 
+	// PR3.2: Action file status update (for file-by-file progress during plan execution)
+	mux.HandleFunc("POST /api/plan/update-action-file-status", handlers.UpdateActionFileStatus)
+
 	// PR3.0: K8s to Helm conversion bridge
 	mux.HandleFunc("POST /api/conversion/start", handlers.StartConversion)
 	

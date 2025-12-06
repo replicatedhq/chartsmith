@@ -231,6 +231,91 @@ func publishPlanUpdate(ctx context.Context, workspaceID, planID string) {
 	}
 }
 
+// UpdateActionFileStatusRequest represents a request to update a single action file's status
+type UpdateActionFileStatusRequest struct {
+	WorkspaceID string `json:"workspaceId"`
+	PlanID      string `json:"planId"`
+	Path        string `json:"path"`
+	Status      string `json:"status"` // "pending", "creating", "created"
+}
+
+// UpdateActionFileStatus updates a single action file's status and publishes the plan update
+// POST /api/plan/update-action-file-status
+func UpdateActionFileStatus(w http.ResponseWriter, r *http.Request) {
+	var req UpdateActionFileStatusRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeBadRequest(w, "Invalid request body")
+		return
+	}
+
+	// Validate required fields
+	if req.WorkspaceID == "" || req.PlanID == "" || req.Path == "" || req.Status == "" {
+		writeBadRequest(w, "workspaceId, planId, path, and status are required")
+		return
+	}
+
+	// Validate status value
+	validStatuses := map[string]bool{"pending": true, "creating": true, "created": true}
+	if !validStatuses[req.Status] {
+		writeBadRequest(w, "status must be one of: pending, creating, created")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	// Update the action file status in DB
+	conn := persistence.MustGetPooledPostgresSession()
+	defer conn.Release()
+
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		writeInternalError(w, "Failed to begin transaction")
+		return
+	}
+	defer tx.Rollback(ctx)
+
+	// Get current plan
+	plan, err := workspace.GetPlan(ctx, tx, req.PlanID)
+	if err != nil {
+		writeInternalError(w, "Failed to get plan: "+err.Error())
+		return
+	}
+
+	// Update the specific action file's status
+	found := false
+	for i, af := range plan.ActionFiles {
+		if af.Path == req.Path {
+			plan.ActionFiles[i].Status = req.Status
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		writeBadRequest(w, "Action file not found: "+req.Path)
+		return
+	}
+
+	// Save updated action files
+	if err := workspace.UpdatePlanActionFiles(ctx, tx, plan.ID, plan.ActionFiles); err != nil {
+		writeInternalError(w, "Failed to update action files: "+err.Error())
+		return
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		writeInternalError(w, "Failed to commit transaction: "+err.Error())
+		return
+	}
+
+	// Publish plan update event
+	publishPlanUpdate(ctx, req.WorkspaceID, req.PlanID)
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+	})
+}
+
 // publishChatMessageUpdate sends chat message update events via Centrifugo
 // This is used to notify the frontend when a message's responsePlanId is set
 func publishChatMessageUpdate(ctx context.Context, workspaceID, chatMessageID string) {

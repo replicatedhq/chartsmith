@@ -45,6 +45,32 @@ async function publishPlanUpdate(
 }
 
 /**
+ * Updates the status of a single action file and publishes the plan update.
+ * This enables file-by-file progress updates in the UI during plan execution.
+ */
+async function updateActionFileStatus(
+  workspaceId: string,
+  planId: string,
+  path: string,
+  status: "pending" | "creating" | "created",
+  authHeader?: string
+): Promise<void> {
+  try {
+    await callGoEndpoint<{ success: boolean }>(
+      "/api/plan/update-action-file-status",
+      { workspaceId, planId, path, status },
+      authHeader
+    );
+  } catch (error) {
+    console.error(
+      `[proceedPlanAction] Failed to update action file status for ${path}:`,
+      error
+    );
+    // Don't throw - this is a best-effort notification
+  }
+}
+
+/**
  * Executes buffered tool calls for a plan when user clicks Proceed
  *
  * This action:
@@ -124,6 +150,15 @@ export async function proceedPlanAction(
           newStr?: string;
         };
 
+        // PR3.2: Mark file as 'creating' before execution (shows spinner in UI)
+        await updateActionFileStatus(
+          workspaceId,
+          planId,
+          args.path,
+          "creating",
+          authHeader
+        );
+
         try {
           await callGoEndpoint<TextEditorResponse>(
             "/api/tools/editor",
@@ -138,6 +173,15 @@ export async function proceedPlanAction(
             },
             authHeader
           );
+
+          // PR3.2: Mark file as 'created' after success (shows checkmark in UI)
+          await updateActionFileStatus(
+            workspaceId,
+            planId,
+            args.path,
+            "created",
+            authHeader
+          );
           successCount++;
         } catch (error) {
           console.error(
@@ -147,6 +191,7 @@ export async function proceedPlanAction(
           failureCount++;
           // Continue executing other tool calls even if one fails
           // The user can see the partial result
+          // Note: On failure, file remains in 'creating' status
         }
       }
     }

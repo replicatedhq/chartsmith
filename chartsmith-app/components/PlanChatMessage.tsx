@@ -278,8 +278,8 @@ export function PlanChatMessage({
                 </div>
                 {(plan.actionFiles?.length || 0) > 0 && (
                   <div
-                    className={`flex flex-col items-center gap-2 overflow-hidden transition-all duration-300 ${
-                      actionFilesExpanded ? 'max-h-none' : 'max-h-0'
+                    className={`flex flex-col items-start gap-2 transition-all duration-300 ${
+                      actionFilesExpanded ? '' : 'max-h-0 overflow-hidden'
                     }`}
                   >
                     {plan.actionFiles?.map((action, index) => (
