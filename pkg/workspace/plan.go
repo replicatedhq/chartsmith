@@ -150,7 +150,8 @@ func GetPlan(ctx context.Context, tx pgx.Tx, planID string) (*types.Plan, error)
 		version,
 		status,
 		description,
-		proceed_at
+		proceed_at,
+		buffered_tool_calls
 	FROM workspace_plan WHERE id = $1`
 
 	row := tx.QueryRow(ctx, query, planID)
@@ -158,6 +159,7 @@ func GetPlan(ctx context.Context, tx pgx.Tx, planID string) (*types.Plan, error)
 	var plan types.Plan
 	var description sql.NullString
 	var proceedAt sql.NullTime
+	var bufferedToolCalls []byte
 	err := row.Scan(
 		&plan.ID,
 		&plan.WorkspaceID,
@@ -168,6 +170,7 @@ func GetPlan(ctx context.Context, tx pgx.Tx, planID string) (*types.Plan, error)
 		&plan.Status,
 		&description,
 		&proceedAt,
+		&bufferedToolCalls,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("error scanning plan: %w", err)
@@ -176,6 +179,7 @@ func GetPlan(ctx context.Context, tx pgx.Tx, planID string) (*types.Plan, error)
 	if proceedAt.Valid {
 		plan.ProceedAt = &proceedAt.Time
 	}
+	plan.BufferedToolCalls = bufferedToolCalls
 
 	afs, err := listActionFiles(ctx, tx, planID)
 	if err != nil {

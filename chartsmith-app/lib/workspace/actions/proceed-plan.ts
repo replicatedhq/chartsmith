@@ -25,6 +25,26 @@ interface TextEditorResponse {
 }
 
 /**
+ * Publishes a plan update event via Go backend to notify frontend of status changes
+ */
+async function publishPlanUpdate(
+  workspaceId: string,
+  planId: string,
+  authHeader?: string
+): Promise<void> {
+  try {
+    await callGoEndpoint<{ success: boolean }>(
+      "/api/plan/publish-update",
+      { workspaceId, planId },
+      authHeader
+    );
+  } catch (error) {
+    console.error("[proceedPlanAction] Failed to publish plan update:", error);
+    // Don't throw - this is a best-effort notification
+  }
+}
+
+/**
  * Executes buffered tool calls for a plan when user clicks Proceed
  *
  * This action:
@@ -85,9 +105,12 @@ export async function proceedPlanAction(
 
     await client.query("COMMIT");
 
+    // Notify frontend of status change to 'applying'
+    const authHeader = session.user.authHeader;
+    await publishPlanUpdate(workspaceId, planId, authHeader);
+
     // 3. Execute each buffered tool call
     // Note: We execute outside the transaction to avoid long-running transactions
-    const authHeader = session.user.authHeader;
     let successCount = 0;
     let failureCount = 0;
     
@@ -135,23 +158,27 @@ export async function proceedPlanAction(
         // All tool calls failed - reset to review so user can retry
         console.error('[proceedPlanAction] All tool calls failed, resetting to review');
         await client2.query(
-          `UPDATE workspace_plan 
-           SET status = 'review', 
+          `UPDATE workspace_plan
+           SET status = 'review',
                updated_at = NOW()
            WHERE id = $1`,
           [planId]
         );
+        // Notify frontend of status change back to 'review'
+        await publishPlanUpdate(workspaceId, planId, authHeader);
         throw new Error(`All ${failureCount} tool calls failed. Plan reset to review.`);
       } else {
         // At least some succeeded - mark as applied
         await client2.query(
-          `UPDATE workspace_plan 
-           SET status = 'applied', 
+          `UPDATE workspace_plan
+           SET status = 'applied',
                updated_at = NOW(),
                proceed_at = NOW()
            WHERE id = $1`,
           [planId]
         );
+        // Notify frontend of status change to 'applied'
+        await publishPlanUpdate(workspaceId, planId, authHeader);
         if (failureCount > 0) {
           console.warn(`[proceedPlanAction] Partial success: ${successCount}/${successCount + failureCount} tool calls succeeded`);
         }

@@ -139,6 +139,7 @@ export function ChatContainer({ session }: ChatContainerProps) {
                   onContentUpdate={() => {
                     // No need to update state - ScrollingContent will handle scrolling
                   }}
+                  messageOverride={USE_AI_SDK_CHAT ? item : undefined}
                 />
               </div>
             ))}

@@ -35,6 +35,8 @@ export interface ChatMessageProps {
   session: Session;
   showChatInput?: boolean;
   onContentUpdate?: () => void;
+  /** Optional message object - if provided, uses this instead of looking up from atom */
+  messageOverride?: Message;
 }
 
 function LoadingSpinner({ message }: { message: string }) {
@@ -74,6 +76,7 @@ export function ChatMessage({
   session,
   showChatInput,
   onContentUpdate,
+  messageOverride,
 }: ChatMessageProps) {
   const { theme } = useTheme();
   const [showReportModal, setShowReportModal] = useState(false);
@@ -85,7 +88,9 @@ export function ChatMessage({
 
   const [messages, setMessages] = useAtom(messagesAtom);
   const [messageGetter] = useAtom(messageByIdAtom);
-  const message = messageGetter(messageId);
+  const atomMessage = messageGetter(messageId);
+  // Use messageOverride if provided (for streaming), otherwise fall back to atom
+  const message = messageOverride ?? atomMessage;
 
   const [workspace, setWorkspace] = useAtom(workspaceAtom);
   const [renderGetter] = useAtom(renderByIdAtom);
@@ -175,7 +180,7 @@ export function ChatMessage({
           </div>
         )}
 
-        {message?.responseRenderId && !render?.isAutorender && (
+        {message?.responseRenderId && !render?.isAutorender && !message?.responsePlanId && message?.isComplete && (
           <div className="space-y-4 mt-4">
             {render?.charts ? (
               render.charts.map((chart, index) => (
@@ -235,7 +240,7 @@ export function ChatMessage({
             />
             <div className="flex-1">
               <div className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} text-[12px] pt-0.5 ${message.isCanceled ? "opacity-50" : ""}`}>{message.prompt}</div>
-              {!message.isIntentComplete && !message.isCanceled && (
+              {!message.isIntentComplete && !message.isCanceled && !message.response && (
                 <div className="flex items-center gap-2 mt-2 border-t border-primary/20 pt-2">
                   <div className="flex-shrink-0 animate-spin rounded-full h-3 w-3 border border-t-transparent border-primary"></div>
                   <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>thinking...</div>

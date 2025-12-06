@@ -1,6 +1,7 @@
 package types
 
 import (
+	"encoding/json"
 	"time"
 )
 
@@ -66,16 +67,17 @@ const (
 )
 
 type Plan struct {
-	ID             string       `json:"id"`
-	WorkspaceID    string       `json:"workspaceId"`
-	ChatMessageIDs []string     `json:"chatMessageIds"`
-	Description    string       `json:"description"`
-	CreatedAt      time.Time    `json:"createdAt"`
-	UpdatedAt      time.Time    `json:"-"`
-	Version        int          `json:"version"`
-	Status         PlanStatus   `json:"status"`
-	ActionFiles    []ActionFile `json:"actionFiles"`
-	ProceedAt      *time.Time   `json:"proceedAt"`
+	ID                string          `json:"id"`
+	WorkspaceID       string          `json:"workspaceId"`
+	ChatMessageIDs    []string        `json:"chatMessageIds"`
+	Description       string          `json:"description"`
+	CreatedAt         time.Time       `json:"createdAt"`
+	UpdatedAt         time.Time       `json:"-"`
+	Version           int             `json:"version"`
+	Status            PlanStatus      `json:"status"`
+	ActionFiles       []ActionFile    `json:"actionFiles"`
+	BufferedToolCalls json.RawMessage `json:"bufferedToolCalls,omitempty"`
+	ProceedAt         *time.Time      `json:"proceedAt"`
 }
 
 type ActionFile struct {

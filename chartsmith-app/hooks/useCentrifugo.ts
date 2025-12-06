@@ -131,7 +131,7 @@ export function useCentrifugo({
       const message: Message = {
         id: chatMessage.id,
         prompt: chatMessage.prompt,
-        response: chatMessage.responseRenderId ? "doing the render now..." : chatMessage.response,
+        response: chatMessage.response,
         isComplete: chatMessage.isComplete || false,  // Provide default value
         isApplied: chatMessage.isApplied,
         isApplying: chatMessage.isApplying,

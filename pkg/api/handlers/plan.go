@@ -97,6 +97,10 @@ func CreatePlanFromToolCalls(w http.ResponseWriter, r *http.Request) {
 	// Publish plan update event via Centrifugo
 	publishPlanUpdate(ctx, req.WorkspaceID, planID)
 
+	// PR3.0: Publish chatmessage-updated event so frontend receives responsePlanId
+	// This allows the chat message to display the plan immediately without page reload
+	publishChatMessageUpdate(ctx, req.WorkspaceID, req.ChatMessageID)
+
 	writeJSON(w, http.StatusOK, CreatePlanFromToolCallsResponse{
 		PlanID: planID,
 	})
@@ -225,5 +229,62 @@ func publishPlanUpdate(ctx context.Context, workspaceID, planID string) {
 	if err := realtime.SendEvent(ctx, recipient, event); err != nil {
 		logger.Errorf("Failed to send plan update event: %v", err)
 	}
+}
+
+// publishChatMessageUpdate sends chat message update events via Centrifugo
+// This is used to notify the frontend when a message's responsePlanId is set
+func publishChatMessageUpdate(ctx context.Context, workspaceID, chatMessageID string) {
+	chatMessage, err := workspace.GetChatMessage(ctx, chatMessageID)
+	if err != nil {
+		logger.Errorf("Failed to get chat message for update event: %v", err)
+		return
+	}
+
+	userIDs, err := workspace.ListUserIDsForWorkspace(ctx, workspaceID)
+	if err != nil {
+		logger.Errorf("Failed to get user IDs for chat message update: %v", err)
+		return
+	}
+
+	recipient := realtimetypes.Recipient{UserIDs: userIDs}
+	event := &realtimetypes.ChatMessageUpdatedEvent{
+		WorkspaceID: workspaceID,
+		ChatMessage: chatMessage,
+	}
+
+	if err := realtime.SendEvent(ctx, recipient, event); err != nil {
+		logger.Errorf("Failed to send chat message update event: %v", err)
+	}
+}
+
+// PublishPlanUpdateRequest represents the request to publish a plan update event
+type PublishPlanUpdateRequest struct {
+	WorkspaceID string `json:"workspaceId"`
+	PlanID      string `json:"planId"`
+}
+
+// PublishPlanUpdate is an HTTP endpoint that publishes a plan update event via Centrifugo.
+// Called from TypeScript after plan status changes (e.g., after proceedPlanAction).
+// POST /api/plan/publish-update
+func PublishPlanUpdate(w http.ResponseWriter, r *http.Request) {
+	var req PublishPlanUpdateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeBadRequest(w, "Invalid request body")
+		return
+	}
+
+	if req.WorkspaceID == "" || req.PlanID == "" {
+		writeBadRequest(w, "workspaceId and planId are required")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	publishPlanUpdate(ctx, req.WorkspaceID, req.PlanID)
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+	})
 }
 

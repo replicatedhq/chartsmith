@@ -214,7 +214,7 @@ export function NewChartChatMessage({
             />
             <div className="flex-1">
               <div className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} text-[12px] pt-0.5 ${message.isCanceled ? "opacity-50" : ""}`}>{message.prompt}</div>
-              {!message.isIntentComplete && !message.isCanceled && (
+              {!message.isIntentComplete && !message.isCanceled && !message.response && (
                 <div className="flex items-center gap-2 mt-2 border-t border-primary/20 pt-2">
                   <div className="flex-shrink-0 animate-spin rounded-full h-3 w-3 border border-t-transparent border-primary"></div>
                   <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>thinking...</div>

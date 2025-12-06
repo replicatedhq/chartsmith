@@ -37,7 +37,8 @@ export async function createWorkspace(createdType: string, userId: string, creat
         id, initialRevisionNumber, userId, createdType]);
 
       // We'll enqueue rendering after the commit completes
-      const shouldEnqueueRender = true;
+      // Skip auto-render for AI SDK path (NON_PLAN intent) - the plan flow handles file creation
+      const shouldEnqueueRender = createChartMessageParams?.knownIntent !== ChatMessageIntent.NON_PLAN;
 
       if (baseChart) {
         // Use the provided baseChart

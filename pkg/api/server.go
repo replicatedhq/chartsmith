@@ -27,7 +27,10 @@ func StartHTTPServer(ctx context.Context, port string) error {
 	
 	// PR3.0: Plan creation from buffered tool calls
 	mux.HandleFunc("POST /api/plan/create-from-tools", handlers.CreatePlanFromToolCalls)
-	
+
+	// PR3.0: Plan update event publisher (called from TypeScript after status changes)
+	mux.HandleFunc("POST /api/plan/publish-update", handlers.PublishPlanUpdate)
+
 	// PR3.0: K8s to Helm conversion bridge
 	mux.HandleFunc("POST /api/conversion/start", handlers.StartConversion)
 	
