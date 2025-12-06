@@ -99,7 +99,11 @@ export function useCentrifugo({
     
     // PR2.0: Skip Centrifugo updates for messages currently being streamed by AI SDK
     // AI SDK owns the state for these messages; Centrifugo would cause conflicts
-    if (currentStreamingMessageId && chatMessage.id === currentStreamingMessageId) {
+    // PR3.0: BUT allow metadata updates (responsePlanId, responseConversionId) even for streaming messages
+    // These are set by Go after streaming completes and must update immediately
+    const isMetadataOnlyUpdate = chatMessage.responsePlanId || chatMessage.responseConversionId;
+    
+    if (currentStreamingMessageId && chatMessage.id === currentStreamingMessageId && !isMetadataOnlyUpdate) {
       console.log('[Centrifugo] Skipping update for AI SDK streaming message:', chatMessage.id);
       return;
     }
