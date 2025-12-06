@@ -107,6 +107,16 @@ export interface Plan {
   createdAt: Date;
   proceedAt?: Date;
   actionFiles: ActionFile[];
+  // PR3.0: Buffered tool calls for AI SDK plans
+  bufferedToolCalls?: BufferedToolCall[];
+}
+
+// PR3.0: Buffered tool call structure for AI SDK plans
+export interface BufferedToolCall {
+  id: string;
+  toolName: string;
+  args: Record<string, unknown>;
+  timestamp: number;
 }
 
 export interface ActionFile {

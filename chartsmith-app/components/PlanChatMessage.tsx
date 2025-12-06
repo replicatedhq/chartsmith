@@ -15,6 +15,7 @@ import { FeedbackModal } from "@/components/FeedbackModal";
 import { ignorePlanAction } from "@/lib/workspace/actions/ignore-plan";
 import { ThumbsUp, ThumbsDown, Send, ChevronDown, ChevronUp, Plus, Pencil, Trash2 } from "lucide-react";
 import { createRevisionAction } from "@/lib/workspace/actions/create-revision";
+import { proceedPlanAction, ignorePlanAction as ignoreAISDKPlanAction } from "@/lib/workspace/actions/proceed-plan";
 import { messagesAtom, workspaceAtom, handlePlanUpdatedAtom, planByIdAtom } from "@/atoms/workspace";
 import { createChatMessageAction } from "@/lib/workspace/actions/create-chat-message";
 
@@ -70,6 +71,7 @@ export function PlanChatMessage({
 
   const [chatInput, setChatInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isProceeding, setIsProceeding] = useState(false);
   const actionsRef = useRef<HTMLDivElement>(null);
   const proceedButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -136,7 +138,14 @@ export function PlanChatMessage({
     if (session && plan) {
       const wsId = workspaceId || plan.workspaceId;
       if (wsId) {
-        await ignorePlanAction(session, wsId, "");
+        // Check if this is an AI SDK plan (has buffered_tool_calls)
+        if (plan.bufferedToolCalls && plan.bufferedToolCalls.length > 0) {
+          // PR3.0: Use new ignoreAISDKPlanAction for AI SDK plans
+          await ignoreAISDKPlanAction(session, plan.id);
+        } else {
+          // Legacy path
+          await ignorePlanAction(session, wsId, "");
+        }
         onIgnore?.();
       }
     }
@@ -148,11 +157,28 @@ export function PlanChatMessage({
     const wsId = workspaceId || plan.workspaceId;
     if (!wsId) return;
 
-    const updatedWorkspace = await createRevisionAction(session, plan.id);
-    if (updatedWorkspace && setWorkspace) {
-      setWorkspace(updatedWorkspace);
+    setIsProceeding(true);
+    try {
+      // Check if this is an AI SDK plan (has buffered_tool_calls)
+      // AI SDK plans have bufferedToolCalls populated, legacy plans don't
+      if (plan.bufferedToolCalls && plan.bufferedToolCalls.length > 0) {
+        // PR3.0: Use new proceedPlanAction for AI SDK plans
+        // This executes buffered tool calls directly without regenerating content
+        const revisionNumber = workspaceToUse?.currentRevisionNumber ?? 0;
+        await proceedPlanAction(session, plan.id, wsId, revisionNumber);
+      } else {
+        // Legacy path: Use createRevisionAction for Go worker-based plans
+        const updatedWorkspace = await createRevisionAction(session, plan.id);
+        if (updatedWorkspace && setWorkspace) {
+          setWorkspace(updatedWorkspace);
+        }
+      }
+      onProceed?.();
+    } catch (error) {
+      console.error('[PlanChatMessage] Proceed failed:', error);
+    } finally {
+      setIsProceeding(false);
     }
-    onProceed?.();
   };
 
   const handleSubmitChat = async (e: React.FormEvent) => {
@@ -319,10 +345,21 @@ export function PlanChatMessage({
                     variant="default"
                     size="sm"
                     onClick={handleProceed}
+                    disabled={isProceeding}
                     data-testid="plan-message-proceed-button"
-                    className="min-w-[100px] bg-primary hover:bg-primary/80 text-white"
+                    className="min-w-[100px] bg-primary hover:bg-primary/80 text-white disabled:opacity-50"
                   >
-                    Proceed
+                    {isProceeding ? (
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="rounded-full h-3 w-3 border-2 border-white border-t-transparent"
+                          style={{ animation: 'spin 1s linear infinite' }}
+                        />
+                        <span>Applying...</span>
+                      </div>
+                    ) : (
+                      'Proceed'
+                    )}
                   </Button>
                 </div>
                 {showChatInput && plan.status === 'review' && !workspaceToUse?.currentRevisionNumber && (

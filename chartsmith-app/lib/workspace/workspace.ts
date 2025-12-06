@@ -518,7 +518,7 @@ export async function getChatMessage(chatMessageId: string): Promise<ChatMessage
 export async function getPlan(planId: string): Promise<Plan> {
   try {
     const db = getDB(await getParam("DB_URI"));
-    const result = await db.query(`SELECT id, description, status, workspace_id, chat_message_ids, created_at, proceed_at FROM workspace_plan WHERE id = $1`, [planId]);
+    const result = await db.query(`SELECT id, description, status, workspace_id, chat_message_ids, created_at, proceed_at, buffered_tool_calls FROM workspace_plan WHERE id = $1`, [planId]);
 
     const plan: Plan = {
       id: result.rows[0].id,
@@ -529,6 +529,8 @@ export async function getPlan(planId: string): Promise<Plan> {
       createdAt: result.rows[0].created_at,
       actionFiles: [],
       proceedAt: result.rows[0].proceed_at,
+      // PR3.0: Include buffered tool calls for AI SDK plans
+      bufferedToolCalls: result.rows[0].buffered_tool_calls || [],
     };
 
     const actionFiles = await listActionFiles(planId);
