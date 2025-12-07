@@ -130,6 +130,10 @@ export async function POST(request: Request) {
     // PR3.0: Buffer for collecting tool calls during streaming
     const bufferedToolCalls: BufferedToolCall[] = [];
     
+    // PR3.4: Track if original intent was a plan request (even if routed to ai-sdk)
+    // This allows creating text-only plans when model doesn't emit tool calls
+    let wasIntentPlan = false;
+    
     // Create tools if workspace context is provided (PR1.5)
     // PR3.0: Use buffered tools when chatMessageId is provided (plan workflow)
     // Otherwise use regular tools (legacy behavior for non-plan messages)
@@ -174,6 +178,9 @@ export async function POST(request: Request) {
 
         const route = routeFromIntent(intent, isInitialPrompt, revisionNumber ?? 0);
         console.log('[/api/chat] Intent classification result:', { intent, route });
+        
+        // PR3.4: Track if this was a plan intent for fallback text-only plan creation
+        wasIntentPlan = intent.isPlan;
 
         switch (route.type) {
           case "off-topic":
@@ -276,29 +283,48 @@ export async function POST(request: Request) {
       tools, // PR1.5: Tools for chart operations
       stopWhen: stepCountIs(5), // Allow up to 5 tool calls per request (AI SDK v5 replacement for maxSteps)
       // PR3.0: Create plan from buffered tool calls after streaming completes
-      onFinish: async ({ finishReason, usage }) => {
+      // PR3.4: Also create text-only plan when intent was plan but no tool calls emitted
+      onFinish: async ({ finishReason, usage, text }) => {
         console.log('[/api/chat] Stream finished:', {
           finishReason,
           usage,
           chatMessageId,
           workspaceId,
           bufferedToolCallCount: bufferedToolCalls.length,
+          wasIntentPlan,
         });
 
-        // If we have buffered tool calls, create a plan
-        if (bufferedToolCalls.length > 0 && workspaceId && chatMessageId) {
-          try {
-            const planId = await createPlanFromToolCalls(
-              authHeader,
-              workspaceId,
-              chatMessageId,
-              bufferedToolCalls
-            );
-            console.log('[/api/chat] Created plan:', planId);
-          } catch (err) {
-            console.error('[/api/chat] Failed to create plan:', err);
-            // Plan creation failure is logged but doesn't fail the response
-            // User can retry or the plan can be created manually
+        // Create a plan if we have tool calls OR if intent was plan (text-only fallback)
+        if (workspaceId && chatMessageId) {
+          if (bufferedToolCalls.length > 0) {
+            // Create plan with buffered tool calls
+            try {
+              const planId = await createPlanFromToolCalls(
+                authHeader,
+                workspaceId,
+                chatMessageId,
+                bufferedToolCalls
+              );
+              console.log('[/api/chat] Created plan with tool calls:', planId);
+            } catch (err) {
+              console.error('[/api/chat] Failed to create plan:', err);
+            }
+          } else if (wasIntentPlan) {
+            // PR3.4: Create text-only plan when intent was plan but no tool calls
+            // This handles cases where intent classification routes to ai-sdk
+            // (e.g., isPlan=true but isConversational=true) and model gives text response
+            try {
+              const planId = await createPlanFromToolCalls(
+                authHeader,
+                workspaceId,
+                chatMessageId,
+                [], // Empty tool calls
+                text // Pass the response text as plan description
+              );
+              console.log('[/api/chat] Created text-only plan (fallback):', planId);
+            } catch (err) {
+              console.error('[/api/chat] Failed to create text-only plan:', err);
+            }
           }
         }
       },
