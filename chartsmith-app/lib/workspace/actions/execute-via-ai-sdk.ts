@@ -1,6 +1,6 @@
 "use server";
 
-import { streamText, stepCountIs } from 'ai';
+import { streamText, stepCountIs, generateText } from 'ai';
 import { Session } from "@/lib/types/session";
 import { getDB } from "@/lib/data/db";
 import { getParam } from "@/lib/data/param";
@@ -22,11 +22,84 @@ interface ExecuteViaAISDKParams {
 }
 
 /**
- * Extract expected file paths from plan description.
- * This parses the plan text to find file paths that will likely be created/modified.
- * Allows us to show the file list upfront with "pending" status before execution.
+ * Use LLM to extract expected file paths from plan description.
+ * This is more reliable than regex because the AI can understand context.
+ * Returns file paths that will be created/modified during execution.
  */
-function extractExpectedFilesFromPlan(planDescription: string): string[] {
+async function extractExpectedFilesViaLLM(
+  planDescription: string,
+  provider?: string
+): Promise<string[]> {
+  const model = getModel(provider);
+
+  const extractionPrompt = `You are a Helm chart file path extractor. Given a plan description, identify ALL file paths that will be created or modified.
+
+Standard Helm chart files to look for:
+- Chart.yaml (chart metadata)
+- values.yaml (default configuration values)
+- .helmignore (files to exclude from packaging)
+- templates/_helpers.tpl (template helpers)
+- templates/NOTES.txt (post-install notes)
+- templates/deployment.yaml (Kubernetes Deployment)
+- templates/service.yaml (Kubernetes Service)
+- templates/serviceaccount.yaml (ServiceAccount)
+- templates/configmap.yaml (ConfigMap)
+- templates/secret.yaml (Secret)
+- templates/ingress.yaml (Ingress)
+- templates/hpa.yaml (HorizontalPodAutoscaler)
+- templates/pdb.yaml (PodDisruptionBudget)
+- templates/tests/test-connection.yaml (helm test)
+
+INSTRUCTIONS:
+1. Read the plan description carefully
+2. Identify ALL files that will be created or modified
+3. If the plan mentions creating a complete Helm chart, include standard files like Chart.yaml, values.yaml, templates/_helpers.tpl, etc.
+4. Output ONLY a valid JSON array of file paths, nothing else
+
+Example output:
+["Chart.yaml", "values.yaml", "templates/_helpers.tpl", "templates/deployment.yaml", "templates/service.yaml"]
+
+Plan description:
+${planDescription}`;
+
+  try {
+    console.log('[extractExpectedFilesViaLLM] Extracting files from plan...');
+    const result = await generateText({
+      model,
+      messages: [{ role: 'user', content: extractionPrompt }],
+    });
+
+    const text = result.text.trim();
+    console.log('[extractExpectedFilesViaLLM] Raw response:', text);
+
+    // Try to extract JSON array from the response (handle potential markdown code blocks)
+    let jsonText = text;
+    const jsonMatch = text.match(/\[[\s\S]*\]/);
+    if (jsonMatch) {
+      jsonText = jsonMatch[0];
+    }
+
+    // Parse the JSON array
+    const parsed = JSON.parse(jsonText);
+    if (Array.isArray(parsed)) {
+      const files = parsed.filter((f: unknown) => typeof f === 'string' && f.length > 0);
+      console.log('[extractExpectedFilesViaLLM] Extracted files:', files);
+      return files;
+    }
+    return [];
+  } catch (error) {
+    console.error('[extractExpectedFilesViaLLM] Failed to extract files:', error);
+    // Fallback to regex-based extraction
+    const fallbackFiles = extractExpectedFilesFromPlanRegex(planDescription);
+    console.log('[extractExpectedFilesViaLLM] Fallback regex extracted:', fallbackFiles);
+    return fallbackFiles;
+  }
+}
+
+/**
+ * Fallback regex-based extraction for file paths.
+ */
+function extractExpectedFilesFromPlanRegex(planDescription: string): string[] {
   const files: Set<string> = new Set();
 
   // Common Helm chart file patterns to look for
@@ -145,24 +218,30 @@ export async function executeViaAISDK({
 
   const db = getDB(await getParam("DB_URI"));
 
-  // 1. Update plan status to 'applying'
+  // 1. Update plan status to 'applying' (this triggers "Creating chart..." UI state)
   await db.query(
     `UPDATE workspace_plan SET status = 'applying', updated_at = NOW() WHERE id = $1`,
     [planId]
   );
   await publishPlanUpdate(workspaceId, planId);
 
-  // 2. Extract expected files from plan description and add them as "pending"
+  // 2. Extract expected files from plan description using LLM
   // This shows the full file list to the user BEFORE execution starts
-  const expectedFiles = extractExpectedFilesFromPlan(planDescription);
+  console.log('[executeViaAISDK] Starting file extraction from plan...');
+
+  // Use LLM to intelligently extract file paths from the plan description
+  const expectedFiles = await extractExpectedFilesViaLLM(planDescription, provider);
   console.log('[executeViaAISDK] Expected files from plan:', expectedFiles);
 
-  // Add all expected files as "pending" upfront
-  for (const filePath of expectedFiles) {
-    await addOrUpdateActionFile(workspaceId, planId, filePath, 'create', 'pending');
-  }
+  // Add all expected files as "pending" upfront - this shows them immediately in the UI
   if (expectedFiles.length > 0) {
+    for (const filePath of expectedFiles) {
+      await addOrUpdateActionFile(workspaceId, planId, filePath, 'create', 'pending');
+    }
     await publishPlanUpdate(workspaceId, planId);
+    console.log('[executeViaAISDK] Published pending file list to UI');
+  } else {
+    console.log('[executeViaAISDK] No files extracted from plan, will discover during execution');
   }
 
   // 3. Prepare execution context
@@ -181,6 +260,7 @@ export async function executeViaAISDK({
     // 4. Execute via AI SDK with tools
     // Using stepCountIs(50) to allow many tool calls for multi-file operations
     // Reference: chartsmith-app/app/api/chat/route.ts lines 272-277
+    console.log('[executeViaAISDK] Starting execution with AI SDK...');
     const result = await streamText({
       model,
       system: CHARTSMITH_EXECUTION_SYSTEM_PROMPT,
@@ -189,10 +269,12 @@ export async function executeViaAISDK({
       stopWhen: stepCountIs(50), // Allow many tool calls for multi-file operations (AI SDK v5 pattern)
       onStepFinish: async ({ toolCalls }) => {
         // Update action file statuses as tools are called
+        console.log('[executeViaAISDK] Step finished with toolCalls:', toolCalls?.length || 0);
         for (const toolCall of toolCalls ?? []) {
           if (toolCall.toolName === 'textEditor' && 'input' in toolCall) {
             // AI SDK v5 uses 'input' for tool arguments
             const input = toolCall.input as { path?: string; command?: string };
+            console.log('[executeViaAISDK] textEditor call:', input.command, input.path);
             if (input.path) {
               const action = input.command === 'create' ? 'create' : 'update';
 
@@ -201,12 +283,14 @@ export async function executeViaAISDK({
                 if (!filesInProgress.has(input.path)) {
                   await addOrUpdateActionFile(workspaceId, planId, input.path, action, 'creating');
                   filesInProgress.add(input.path);
+                  await publishPlanUpdate(workspaceId, planId);
                 }
               } else if (input.command === 'create' || input.command === 'str_replace') {
                 // File created/updated - mark as "created" (done)
                 await addOrUpdateActionFile(workspaceId, planId, input.path, action, 'created');
                 processedFiles.add(input.path);
                 filesInProgress.delete(input.path);
+                await publishPlanUpdate(workspaceId, planId);
               }
             }
           }

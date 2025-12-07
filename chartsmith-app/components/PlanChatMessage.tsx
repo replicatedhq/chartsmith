@@ -307,7 +307,9 @@ export function PlanChatMessage({
                   >
                     {plan.actionFiles?.map((action, index) => (
                       <div key={index} className="w-full flex items-center">
-                        <div className="flex items-center gap-1.5 px-2 py-1 rounded-full text-xs bg-primary/5 w-fit">
+                        <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs w-fit ${
+                          action.status === 'pending' ? 'bg-primary/3 border border-dashed border-primary/20' : 'bg-primary/5'
+                        }`}>
                           <div className="flex-shrink-0">
                             {action.status === 'created' ? (
                               <div className="text-green-500">
@@ -323,6 +325,9 @@ export function PlanChatMessage({
                                   animationDelay: '0s'
                                 }}
                               />
+                            ) : action.status === 'pending' ? (
+                              /* Pending status - file queued but not started yet */
+                              <div className="rounded-full h-3 w-3 border border-primary/30 border-dashed" />
                             ) : (
                               <>
                                 {action.action === 'create' && <Plus className="h-3 w-3 text-primary/70" />}
@@ -331,7 +336,11 @@ export function PlanChatMessage({
                               </>
                             )}
                           </div>
-                          <span className={`${theme === "dark" ? "text-gray-300" : "text-gray-600"} truncate font-mono text-[10px]`}>
+                          <span className={`${
+                            action.status === 'pending'
+                              ? (theme === "dark" ? "text-gray-500" : "text-gray-400")
+                              : (theme === "dark" ? "text-gray-300" : "text-gray-600")
+                          } truncate font-mono text-[10px]`}>
                             {action.path}
                           </span>
                         </div>
