@@ -56,18 +56,21 @@ test('upload helm chart', async ({ page }) => {
     await page.fill('textarea[placeholder="Ask a question or ask for a change..."]', 'change the default replicaCount in the values.yaml to 3');
     await page.click('button[type="submit"]');
 
-    // wait for a brief moment for the message to be sent
-    await page.waitForTimeout(2000);
+    // AI SDK path: Wait for streaming to complete and plan to be created
+    // Plan creation happens in onFinish callback after streaming completes (can take 30+ seconds)
+    await page.waitForTimeout(5000); // Initial wait for message to appear
 
     // Verify we have 2 messages
     const messagesAfterSubmit = await page.locator('[data-testid="chat-message"]').all();
     expect(messagesAfterSubmit.length).toBe(2);
 
-    // Verify that we have a user message and a plan message
+    // Verify that we have a user message
     const latestMessage = messagesAfterSubmit[1];
     await expect(latestMessage.locator('[data-testid="user-message"]')).toBeVisible();
-    // Look for plan message anywhere in the document, not just in the latest message
-    await expect(page.locator('[data-testid="plan-message"]')).toBeVisible();
+    
+    // AI SDK path: Wait for plan message to appear (created after streaming completes)
+    // This can take 30-60 seconds as the AI streams its response first
+    await expect(page.locator('[data-testid="plan-message"]')).toBeVisible({ timeout: 60000 });
 
 
     // Take a screenshot of the chat messages
