@@ -16,6 +16,7 @@ import { ignorePlanAction } from "@/lib/workspace/actions/ignore-plan";
 import { ThumbsUp, ThumbsDown, Send, ChevronDown, ChevronUp, Plus, Pencil, Trash2 } from "lucide-react";
 import { createRevisionAction } from "@/lib/workspace/actions/create-revision";
 import { proceedPlanAction, ignorePlanAction as ignoreAISDKPlanAction } from "@/lib/workspace/actions/proceed-plan";
+import { executeViaAISDK } from "@/lib/workspace/actions/execute-via-ai-sdk";
 import { messagesAtom, workspaceAtom, handlePlanUpdatedAtom, planByIdAtom } from "@/atoms/workspace";
 import { createChatMessageAction } from "@/lib/workspace/actions/create-chat-message";
 
@@ -159,15 +160,27 @@ export function PlanChatMessage({
 
     setIsProceeding(true);
     try {
-      // Check if this is an AI SDK plan (has buffered_tool_calls)
-      // AI SDK plans have bufferedToolCalls populated, legacy plans don't
+      const revisionNumber = workspaceToUse?.currentRevisionNumber ?? 0;
+
       if (plan.bufferedToolCalls && plan.bufferedToolCalls.length > 0) {
-        // PR3.0: Use new proceedPlanAction for AI SDK plans
-        // This executes buffered tool calls directly without regenerating content
-        const revisionNumber = workspaceToUse?.currentRevisionNumber ?? 0;
+        // Path A: AI SDK plans with buffered tool calls
+        // Execute stored tool calls directly via proceedPlanAction
         await proceedPlanAction(session, plan.id, wsId, revisionNumber);
+      } else if (plan.description) {
+        // Path B: Text-only plans (NEW - AI SDK Migration)
+        // Execute via AI SDK with tools enabled.
+        // File list will be built dynamically during execution (like Go does).
+        // This replaces the legacy Go worker path for text-only plans.
+        await executeViaAISDK({
+          session,
+          planId: plan.id,
+          workspaceId: wsId,
+          revisionNumber,
+          planDescription: plan.description,
+        });
       } else {
-        // Legacy path: Use createRevisionAction for Go worker-based plans
+        // Path C: Legacy fallback (should rarely be hit)
+        // Use createRevisionAction for Go worker-based plans without description
         const updatedWorkspace = await createRevisionAction(session, plan.id);
         if (updatedWorkspace && setWorkspace) {
           setWorkspace(updatedWorkspace);
@@ -246,16 +259,26 @@ export function PlanChatMessage({
                       />
                     ))}
                   </div>
-                  <div className="markdown-content">
-                    <ReactMarkdown>{plan.description}</ReactMarkdown>
-                  </div>
+                  <span className={`text-sm ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
+                    Preparing plan...
+                  </span>
                 </div>
               </div>
-            ) : (
-              <div className="markdown-content">
-                <ReactMarkdown>{plan.description}</ReactMarkdown>
+            ) : plan.status === 'review' && (!plan.actionFiles || plan.actionFiles.length === 0) ? (
+              /* Phase 1: Show placeholder for review status instead of duplicating plan description.
+                 The plan text already appears in the chat stream - no need to show it again here. */
+              <div className={`text-sm italic ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
+                Click Create Chart to generate file changes based on the plan above.
               </div>
-            )}
+            ) : (plan.status !== 'applying' && plan.status !== 'applied') ? (
+              /* For non-applying/applied states with action files, show file count summary */
+              <div className={`text-sm ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
+                {plan.actionFiles && plan.actionFiles.length > 0
+                  ? `${plan.actionFiles.length} file ${plan.actionFiles.length === 1 ? 'change' : 'changes'} ready`
+                  : null
+                }
+              </div>
+            ) : null}
             {(plan.status === 'applying' || plan.status === 'applied') && (
               <div className="mt-4 light:border light:border-gray-200 pt-4 px-3 pb-2 rounded-lg bg-primary/5 dark:bg-dark-surface">
                 <div className="flex items-center justify-between mb-2" ref={actionsRef}>
@@ -279,7 +302,7 @@ export function PlanChatMessage({
                 {(plan.actionFiles?.length || 0) > 0 && (
                   <div
                     className={`flex flex-col items-start gap-2 transition-all duration-300 ${
-                      actionFilesExpanded ? '' : 'max-h-0 overflow-hidden'
+                      actionFilesExpanded ? 'max-h-96 overflow-y-auto' : 'max-h-0 overflow-hidden'
                     }`}
                   >
                     {plan.actionFiles?.map((action, index) => (
@@ -355,10 +378,10 @@ export function PlanChatMessage({
                           className="rounded-full h-3 w-3 border-2 border-white border-t-transparent"
                           style={{ animation: 'spin 1s linear infinite' }}
                         />
-                        <span>Applying...</span>
+                        <span>Creating...</span>
                       </div>
                     ) : (
-                      'Proceed'
+                      'Create Chart'
                     )}
                   </Button>
                 </div>

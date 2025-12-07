@@ -435,6 +435,10 @@ func findBestMatchRegion(content, oldStr string, minMatchLen int) (int, int) {
 	return -1, -1
 }
 
+// Deprecated: ExecuteAction is part of the legacy Go-based execution path.
+// New plans should use the AI SDK execution path via TypeScript (executeViaAISDK).
+// This function will be removed once AI SDK execution is stable.
+// See: chartsmith-app/lib/workspace/actions/execute-via-ai-sdk.ts
 func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWithPath, plan *workspacetypes.Plan, currentContent string, interimContentCh chan string) (string, error) {
 	updatedContent := currentContent
 	lastActivity := time.Now()

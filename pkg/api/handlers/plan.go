@@ -245,12 +245,13 @@ func publishPlanUpdate(ctx context.Context, workspaceID, planID string) {
 	}
 }
 
-// UpdateActionFileStatusRequest represents a request to update a single action file's status
+// UpdateActionFileStatusRequest represents a request to update or add an action file's status
 type UpdateActionFileStatusRequest struct {
 	WorkspaceID string `json:"workspaceId"`
 	PlanID      string `json:"planId"`
 	Path        string `json:"path"`
-	Status      string `json:"status"` // "pending", "creating", "created"
+	Action      string `json:"action,omitempty"` // "create" or "update" - required when adding new file
+	Status      string `json:"status"`           // "pending", "creating", "created"
 }
 
 // UpdateActionFileStatus updates a single action file's status and publishes the plan update
@@ -296,7 +297,7 @@ func UpdateActionFileStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update the specific action file's status
+	// Update the specific action file's status, or add it if not found
 	found := false
 	for i, af := range plan.ActionFiles {
 		if af.Path == req.Path {
@@ -307,8 +308,18 @@ func UpdateActionFileStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !found {
-		writeBadRequest(w, "Action file not found: "+req.Path)
-		return
+		// AI SDK Migration: Add new action file instead of returning error
+		// This supports dynamic file list building during AI SDK execution,
+		// mimicking Go's behavior in pkg/listener/execute-plan.go:116-153
+		action := req.Action
+		if action == "" {
+			action = "create" // Default to create for backward compatibility
+		}
+		plan.ActionFiles = append(plan.ActionFiles, workspacetypes.ActionFile{
+			Path:   req.Path,
+			Action: action,
+			Status: req.Status,
+		})
 	}
 
 	// Save updated action files

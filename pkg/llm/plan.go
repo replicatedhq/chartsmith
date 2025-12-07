@@ -18,6 +18,10 @@ type CreatePlanOpts struct {
 	IsUpdate      bool
 }
 
+// Deprecated: CreatePlan is part of the legacy Go-based plan generation path.
+// New plans should use the AI SDK plan generation path via TypeScript (/api/chat route).
+// This function will be removed once AI SDK plan generation is stable.
+// See: chartsmith-app/app/api/chat/route.ts (plan generation case)
 func CreatePlan(ctx context.Context, streamCh chan string, doneCh chan error, opts CreatePlanOpts) error {
 	fileNameArgs := []string{}
 	for _, file := range opts.RelevantFiles {

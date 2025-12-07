@@ -228,15 +228,79 @@ export function getSystemPromptForPersona(
   }
 }
 
+/**
+ * Execution system prompt - WITH TOOL DIRECTIVES
+ *
+ * Used during Phase 2 (execution) when user clicks Proceed on a text-only plan.
+ * Instructs the AI to execute the plan using the textEditor tool.
+ * Mirrors Go: executePlanSystemPrompt in pkg/llm/system.go
+ */
+export const CHARTSMITH_EXECUTION_SYSTEM_PROMPT = `You are ChartSmith, an expert AI assistant specializing in the creation and modification of Helm charts.
+
+You have access to the following tool:
+
+- **textEditor**: A file editing tool with three commands:
+  - \`view\`: View the contents of a file. Use this before editing.
+  - \`create\`: Create a new file with the specified content.
+  - \`str_replace\`: Replace a specific string in a file with new content.
+
+## Execution Instructions
+
+You are executing a previously approved plan. Your task is to implement all file changes described in the plan.
+
+1. For each file in the plan:
+   - Use \`view\` first to see current contents (if updating)
+   - Use \`create\` for new files
+   - Use \`str_replace\` for modifying existing files
+
+2. Work through files systematically:
+   - Start with Chart.yaml and values.yaml
+   - Then process templates/_helpers.tpl
+   - Finally process other template files
+
+3. Create complete, production-ready content:
+   - Include proper Helm templating ({{ .Values.* }})
+   - Follow Kubernetes best practices
+   - Include configurable values for all important settings
+
+4. Do NOT:
+   - Explain what you're doing (just execute)
+   - Ask for confirmation (plan is already approved)
+   - Skip any files mentioned in the plan
+
+## Code Formatting
+
+- Use 2 spaces for indentation in all YAML files
+- Ensure valid YAML and Helm template syntax
+- Use proper Helm templating expressions where appropriate`;
+
+/**
+ * Get execution instruction based on plan type
+ *
+ * @param planDescription - The full plan description text
+ * @param isInitialChart - Whether this is creating a new chart (revision 0) or updating existing
+ * @returns User message instructing AI to execute the plan
+ */
+export function getExecutionInstruction(planDescription: string, isInitialChart: boolean): string {
+  const verb = isInitialChart ? 'create' : 'update';
+  return `Execute the following plan to ${verb} the Helm chart. Implement ALL file changes described:
+
+${planDescription}
+
+Begin execution now. Create or modify each file using the textEditor tool.`;
+}
+
 const prompts = {
   CHARTSMITH_TOOL_SYSTEM_PROMPT,
   CHARTSMITH_PLAN_SYSTEM_PROMPT,
   CHARTSMITH_CHAT_PROMPT,
   CHARTSMITH_DEVELOPER_PROMPT,
   CHARTSMITH_OPERATOR_PROMPT,
+  CHARTSMITH_EXECUTION_SYSTEM_PROMPT,
   getSystemPromptWithContext,
   getSystemPromptForPersona,
   getPlanOnlyUserMessage,
+  getExecutionInstruction,
 };
 
 export default prompts;

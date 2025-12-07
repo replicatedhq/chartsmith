@@ -11,6 +11,10 @@ import (
 	"go.uber.org/zap"
 )
 
+// Deprecated: CreateExecutePlan is part of the legacy Go-based execution path.
+// New plans should use the AI SDK execution path via TypeScript (executeViaAISDK).
+// This function will be removed once AI SDK execution is stable.
+// See: chartsmith-app/lib/workspace/actions/execute-via-ai-sdk.ts
 func CreateExecutePlan(ctx context.Context, planActionCreatedCh chan types.ActionPlanWithPath, streamCh chan string, doneCh chan error, w *workspacetypes.Workspace, plan *workspacetypes.Plan, c *workspacetypes.Chart, relevantFiles []workspacetypes.File) error {
 	logger.Debug("Creating execution plan",
 		zap.String("workspace_id", w.ID),

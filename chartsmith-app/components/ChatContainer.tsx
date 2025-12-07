@@ -129,7 +129,8 @@ export function ChatContainer({ session }: ChatContainerProps) {
     <div className={`h-[calc(100vh-3.5rem)] border-r flex flex-col min-h-0 overflow-hidden transition-all duration-300 ease-in-out w-full relative ${theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"}`}>
       <div className="flex-1 h-full">
         <ScrollingContent forceScroll={true}>
-          <div className={workspace?.currentRevisionNumber === 0 ? "" : "pb-32"}>
+          {/* Always add bottom padding to prevent content being hidden by the fixed input area */}
+          <div className="pb-32">
             {displayMessages.map((item, index) => (
               <div key={item.id}>
                 <ChatMessage

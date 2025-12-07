@@ -18,6 +18,10 @@ type CreateInitialPlanOpts struct {
 	AdditionalFiles []workspacetypes.File
 }
 
+// Deprecated: CreateInitialPlan is part of the legacy Go-based initial plan generation path.
+// New plans should use the AI SDK plan generation path via TypeScript (/api/chat route).
+// This function will be removed once AI SDK plan generation is stable.
+// See: chartsmith-app/app/api/chat/route.ts (plan generation case)
 func CreateInitialPlan(ctx context.Context, streamCh chan string, doneCh chan error, opts CreateInitialPlanOpts) error {
 	chatMessageFields := []zap.Field{}
 	for _, chatMessage := range opts.ChatMessages {
