@@ -34,29 +34,30 @@ async function extractExpectedFilesViaLLM(
 
   const extractionPrompt = `You are a Helm chart file path extractor. Given a plan description, identify ALL file paths that will be created or modified.
 
-Standard Helm chart files to look for:
-- Chart.yaml (chart metadata)
-- values.yaml (default configuration values)
-- .helmignore (files to exclude from packaging)
-- templates/_helpers.tpl (template helpers)
-- templates/NOTES.txt (post-install notes)
-- templates/deployment.yaml (Kubernetes Deployment)
-- templates/service.yaml (Kubernetes Service)
-- templates/serviceaccount.yaml (ServiceAccount)
-- templates/configmap.yaml (ConfigMap)
-- templates/secret.yaml (Secret)
-- templates/ingress.yaml (Ingress)
-- templates/hpa.yaml (HorizontalPodAutoscaler)
-- templates/pdb.yaml (PodDisruptionBudget)
-- templates/tests/test-connection.yaml (helm test)
+Standard Helm chart files (in typical creation order):
+1. Chart.yaml (chart metadata - always first)
+2. values.yaml (default configuration values)
+3. .helmignore (files to exclude from packaging)
+4. templates/_helpers.tpl (template helpers - before other templates)
+5. templates/serviceaccount.yaml (ServiceAccount)
+6. templates/configmap.yaml (ConfigMap)
+7. templates/secret.yaml (Secret)
+8. templates/deployment.yaml (Kubernetes Deployment)
+9. templates/service.yaml (Kubernetes Service)
+10. templates/ingress.yaml (Ingress)
+11. templates/hpa.yaml (HorizontalPodAutoscaler)
+12. templates/pdb.yaml (PodDisruptionBudget)
+13. templates/NOTES.txt (post-install notes)
+14. templates/tests/test-connection.yaml (helm test - last)
 
 INSTRUCTIONS:
 1. Read the plan description carefully
 2. Identify ALL files that will be created or modified
-3. If the plan mentions creating a complete Helm chart, include standard files like Chart.yaml, values.yaml, templates/_helpers.tpl, etc.
-4. Output ONLY a valid JSON array of file paths, nothing else
+3. If the plan mentions creating a complete Helm chart, include standard files
+4. **IMPORTANT: Return files in the ORDER they should be created** (Chart.yaml first, then values.yaml, then helpers, then templates)
+5. Output ONLY a valid JSON array of file paths, nothing else
 
-Example output:
+Example output (note the order - metadata first, then helpers, then templates):
 ["Chart.yaml", "values.yaml", "templates/_helpers.tpl", "templates/deployment.yaml", "templates/service.yaml"]
 
 Plan description:
@@ -251,10 +252,10 @@ export async function executeViaAISDK({
   const model = getModel(provider);
   const tools = createTools(undefined, workspaceId, revisionNumber);
 
-  // Track files being processed - start with expected files
-  const processedFiles = new Set<string>();
-  // Track files currently being worked on
-  const filesInProgress = new Set<string>();
+  // Track files that have been completed
+  const completedFiles = new Set<string>();
+  // Track the single file currently being worked on (only one at a time)
+  let currentActiveFile: string | null = null;
 
   try {
     // 4. Execute via AI SDK with tools
@@ -276,21 +277,34 @@ export async function executeViaAISDK({
             const input = toolCall.input as { path?: string; command?: string };
             console.log('[executeViaAISDK] textEditor call:', input.command, input.path);
             if (input.path) {
-              const action = input.command === 'create' ? 'create' : 'update';
+              const fileAction = input.command === 'create' ? 'create' : 'update';
 
-              if (input.command === 'view') {
-                // File is being viewed - mark as "creating" (in progress)
-                if (!filesInProgress.has(input.path)) {
-                  await addOrUpdateActionFile(workspaceId, planId, input.path, action, 'creating');
-                  filesInProgress.add(input.path);
+              if (input.command === 'create' || input.command === 'str_replace') {
+                // File is being created/modified - this is the active file
+                // First, mark any previous active file as still pending (if not completed)
+                // Then mark this file as "creating" (active with spinner)
+                if (currentActiveFile && currentActiveFile !== input.path && !completedFiles.has(currentActiveFile)) {
+                  // Previous file wasn't completed - keep it pending
+                  await addOrUpdateActionFile(workspaceId, planId, currentActiveFile, 'create', 'pending');
+                }
+
+                // Mark current file as active (creating = spinner)
+                currentActiveFile = input.path;
+                await addOrUpdateActionFile(workspaceId, planId, input.path, fileAction, 'creating');
+                await publishPlanUpdate(workspaceId, planId);
+
+                // File is now done - mark as "created" (checkmark)
+                await addOrUpdateActionFile(workspaceId, planId, input.path, fileAction, 'created');
+                completedFiles.add(input.path);
+                currentActiveFile = null;
+                await publishPlanUpdate(workspaceId, planId);
+              } else if (input.command === 'view') {
+                // Viewing a file - mark it as "creating" to show it's being worked on
+                if (!completedFiles.has(input.path)) {
+                  currentActiveFile = input.path;
+                  await addOrUpdateActionFile(workspaceId, planId, input.path, fileAction, 'creating');
                   await publishPlanUpdate(workspaceId, planId);
                 }
-              } else if (input.command === 'create' || input.command === 'str_replace') {
-                // File created/updated - mark as "created" (done)
-                await addOrUpdateActionFile(workspaceId, planId, input.path, action, 'created');
-                processedFiles.add(input.path);
-                filesInProgress.delete(input.path);
-                await publishPlanUpdate(workspaceId, planId);
               }
             }
           }
