@@ -43,7 +43,7 @@ export function WorkspaceContent({
   // Instead of useHydrateAtoms, use useAtom and useEffect
   const [workspace, setWorkspace] = useAtom(workspaceAtom);
   const [, setMessages] = useAtom(messagesAtom);
-  const [, setPlans] = useAtom(plansAtom);
+  const [plans, setPlans] = useAtom(plansAtom);
   const [, setRenders] = useAtom(rendersAtom);
   const [, setConversions] = useAtom(conversionsAtom);
   const [, setChartsBeforeApplyingContentPending] = useAtom(chartsBeforeApplyingContentPendingAtom);
@@ -99,22 +99,30 @@ export function WorkspaceContent({
   // PR2.0: For AI SDK mode, show editor at revision 0 since files are created directly
   // Check if AI SDK mode is enabled
   const USE_AI_SDK_CHAT = process.env.NEXT_PUBLIC_USE_AI_SDK_CHAT !== 'false';
-  
+
+  // PR3.2: Check if any plan is being applied or has been applied
+  // This determines when to switch from centered chat to 3-pane layout
+  const hasPlanInProgress = plans.some(p =>
+    p.status === 'applying' || p.status === 'applied'
+  );
+
   // Show editor when:
   // 1. currentRevisionNumber > 0 (has committed changes)
   // 2. incompleteRevisionNumber exists (plan being applied)
-  // 3. AI SDK mode at revision 0 (files created directly)
-  const showEditor = (workspace?.currentRevisionNumber && workspace?.currentRevisionNumber > 0) 
+  // 3. AI SDK mode AND a plan is being executed (switch to 3-pane on Proceed click)
+  const showEditor = (workspace?.currentRevisionNumber && workspace?.currentRevisionNumber > 0)
     || workspace?.incompleteRevisionNumber
-    || (USE_AI_SDK_CHAT && workspace?.currentRevisionNumber === 0);
+    || (USE_AI_SDK_CHAT && hasPlanInProgress);
 
   if (!session || !workspace) return null;
 
-  // PR2.0: Determine if we should show centered chat (legacy mode at revision 0) or sidebar chat
-  const showCenteredChat = !USE_AI_SDK_CHAT && (
-    (!workspace?.currentRevisionNumber && !workspace?.incompleteRevisionNumber) || 
-    (workspace.currentRevisionNumber === 0 && !workspace.incompleteRevisionNumber)
-  );
+  // PR3.2: Show centered chat at revision 0 UNTIL plan execution starts
+  // This applies to both legacy mode and AI SDK mode
+  // - Legacy mode: centered until revision > 0
+  // - AI SDK mode: centered until plan.status becomes 'applying' or 'applied'
+  const showCenteredChat = workspace.currentRevisionNumber === 0 &&
+    !workspace.incompleteRevisionNumber &&
+    !hasPlanInProgress;
 
   return (
     <EditorLayout>
