@@ -13,6 +13,7 @@ import { FeedbackModal } from "@/components/FeedbackModal";
 import { ConversionProgress } from "@/components/ConversionProgress";
 import { RollbackModal } from "@/components/RollbackModal";
 import { PlanChatMessage } from "@/components/PlanChatMessage";
+import { ValidationResults } from "@/components/chat/ValidationResults";
 
 // Types
 import { Message } from "@/components/types";
@@ -23,6 +24,7 @@ import { useTheme } from "../contexts/ThemeContext";
 
 // atoms
 import { conversionByIdAtom, messageByIdAtom, messagesAtom, renderByIdAtom, workspaceAtom } from "@/atoms/workspace";
+import { validationByIdAtom } from "@/atoms/validationAtoms";
 
 // actions
 import { cancelMessageAction } from "@/lib/workspace/actions/cancel-message";
@@ -99,6 +101,9 @@ export function ChatMessage({
   const [conversionGetter] = useAtom(conversionByIdAtom);
   // Only call the getter if responseConversionId exists
   const conversion = message?.responseConversionId ? conversionGetter(message.responseConversionId) : undefined;
+  // PR4: Validation result getter
+  const [validationGetter] = useAtom(validationByIdAtom);
+  const validation = message?.responseValidationId ? validationGetter(message.responseValidationId) : undefined;
 
   // Check if this is the first message for its revision
   const isFirstForRevision = React.useMemo(() => {
@@ -216,7 +221,19 @@ export function ChatMessage({
           </div>
         )}
 
-        {message && !message.response && !message.responsePlanId && !message.responseRenderId && !message.responseConversionId && (
+        {/* PR4: Validation Results */}
+        {message?.responseValidationId && (
+          <div className="mt-4">
+            {(message.response || message.responsePlanId || message.responseRenderId || message.responseConversionId) && (
+              <div className="border-t border-gray-200 dark:border-dark-border/30 pt-4 mb-2">
+                <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">Validation:</div>
+              </div>
+            )}
+            <ValidationResults validationId={message.responseValidationId} />
+          </div>
+        )}
+
+        {message && !message.response && !message.responsePlanId && !message.responseRenderId && !message.responseConversionId && !message.responseValidationId && (
           <LoadingSpinner message="generating response..." />
         )}
       </>
@@ -270,7 +287,7 @@ export function ChatMessage({
       </div>
 
       {/* Assistant Message */}
-      {(message.response || message.responsePlanId || message.responseRenderId || message.responseConversionId || (message.isIntentComplete && !message.responsePlanId)) && (
+      {(message.response || message.responsePlanId || message.responseRenderId || message.responseConversionId || message.responseValidationId || (message.isIntentComplete && !message.responsePlanId)) && (
         <div className="px-2 py-1" data-testid="assistant-message">
           <div className={`p-3 rounded-lg ${theme === "dark" ? "bg-dark-border/40" : "bg-gray-100"} rounded-tl-sm w-full`}>
             <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"} mb-1 flex items-center justify-between`}>

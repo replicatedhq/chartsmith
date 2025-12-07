@@ -10,6 +10,7 @@ import { createChatMessageAction } from "@/lib/workspace/actions/create-chat-mes
 import { ScrollingContent } from "./ScrollingContent";
 import { NewChartChatMessage } from "./NewChartChatMessage";
 import { NewChartContent } from "./NewChartContent";
+import { LiveProviderSwitcher } from "./chat/LiveProviderSwitcher";
 
 // PR2.0: Import adapter hooks for AI SDK integration
 import { useAISDKChatAdapter, type ChatPersona } from "@/hooks/useAISDKChatAdapter";
@@ -275,7 +276,17 @@ export function ChatContainer({ session }: ChatContainerProps) {
                 </div>
               )}
             </div>
-            
+
+            {/* PR4: Live provider/model switcher - only in AI SDK mode */}
+            {USE_AI_SDK_CHAT && (
+              <LiveProviderSwitcher
+                currentProvider={chatState.selectedProvider}
+                currentModel={chatState.selectedModel}
+                onSwitch={chatState.switchProvider}
+                disabled={isBusy}
+              />
+            )}
+
             {/* Send button */}
             <button
               type="submit"

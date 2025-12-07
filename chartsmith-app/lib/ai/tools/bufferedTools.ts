@@ -17,6 +17,7 @@ import { createGetChartContextTool } from "./getChartContext";
 import { createLatestSubchartVersionTool } from "./latestSubchartVersion";
 import { createLatestKubernetesVersionTool } from "./latestKubernetesVersion";
 import { createConvertK8sTool } from "./convertK8s";
+import { createValidateChartTool } from "./validateChart";
 import { BufferedToolCall } from "./toolInterceptor";
 
 /**
@@ -145,6 +146,8 @@ Use view to inspect files before editing. Use create for new files. Use str_repl
     ),
     latestSubchartVersion: createLatestSubchartVersionTool(authHeader),
     latestKubernetesVersion: createLatestKubernetesVersionTool(authHeader),
+    // PR4: Chart validation tool (read-only, always available)
+    validateChart: createValidateChartTool(authHeader, workspaceId, revisionNumber),
     // PR3.0: Include conversion tool if chatMessageId is provided
     ...(chatMessageId
       ? { convertK8sToHelm: createConvertK8sTool(authHeader, workspaceId, chatMessageId) }

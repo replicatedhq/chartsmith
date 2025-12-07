@@ -38,6 +38,7 @@ export interface Message {
   responseRenderId?: string;
   responsePlanId?: string;
   responseConversionId?: string;
+  responseValidationId?: string;  // PR4: ID for validation results
   responseRollbackToRevisionNumber?: number;
   planId?: string;
   revisionNumber?: number;
@@ -125,6 +126,7 @@ export interface RawChatMessage {
   responseRenderId?: string;
   responsePlanId?: string;
   responseConversionId?: string;
+  responseValidationId?: string;  // PR4: ID for validation results
   responseRollbackToRevisionNumber?: number;
   isComplete?: boolean;
   isApplied?: boolean;

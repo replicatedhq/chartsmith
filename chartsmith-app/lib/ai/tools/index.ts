@@ -1,14 +1,15 @@
 /**
  * AI SDK Tools Module
- * 
+ *
  * This module exports all AI SDK tools and the createTools factory function.
- * 
+ *
  * Tools available:
  * - getChartContext: Load workspace files and metadata (Go HTTP)
  * - textEditor: View, create, and edit files (Go HTTP)
  * - latestSubchartVersion: Look up subchart versions from ArtifactHub (Go HTTP)
  * - latestKubernetesVersion: Get Kubernetes version info (Go HTTP)
  * - convertK8sToHelm: Convert K8s manifests to Helm chart (PR3.0)
+ * - validateChart: Validate chart with helm lint, helm template, kube-score (PR4)
  */
 
 import { createGetChartContextTool } from './getChartContext';
@@ -16,6 +17,7 @@ import { createTextEditorTool } from './textEditor';
 import { createLatestSubchartVersionTool } from './latestSubchartVersion';
 import { createLatestKubernetesVersionTool } from './latestKubernetesVersion';
 import { createConvertK8sTool } from './convertK8s';
+import { createValidateChartTool } from './validateChart';
 
 // Re-export individual tool factories
 export { createGetChartContextTool } from './getChartContext';
@@ -23,6 +25,7 @@ export { createTextEditorTool } from './textEditor';
 export { createLatestSubchartVersionTool } from './latestSubchartVersion';
 export { createLatestKubernetesVersionTool } from './latestKubernetesVersion';
 export { createConvertK8sTool } from './convertK8s';
+export { createValidateChartTool } from './validateChart';
 
 // Re-export utility functions
 export { callGoEndpoint } from './utils';
@@ -32,6 +35,7 @@ export type { ChartContextResponse } from './getChartContext';
 export type { TextEditorResponse } from './textEditor';
 export type { SubchartVersionResponse } from './latestSubchartVersion';
 export type { KubernetesVersionResponse } from './latestKubernetesVersion';
+export type { ValidationResponse, ValidationResult, ValidationIssue } from './validateChart';
 
 /**
  * Create all AI SDK tools with the provided context
@@ -56,6 +60,8 @@ export function createTools(
     textEditor: createTextEditorTool(authHeader, workspaceId, revisionNumber),
     latestSubchartVersion: createLatestSubchartVersionTool(authHeader),
     latestKubernetesVersion: createLatestKubernetesVersionTool(authHeader),
+    // PR4: Chart validation tool (read-only, always available)
+    validateChart: createValidateChartTool(authHeader, workspaceId, revisionNumber),
   };
 
   // PR3.0: Add conversion tool if chatMessageId is provided

@@ -36,7 +36,10 @@ func StartHTTPServer(ctx context.Context, port string) error {
 
 	// PR3.0: K8s to Helm conversion bridge
 	mux.HandleFunc("POST /api/conversion/start", handlers.StartConversion)
-	
+
+	// PR4: Chart validation endpoint
+	mux.HandleFunc("POST /api/validate", handlers.ValidateChart)
+
 	// Health check endpoint
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		WriteJSON(w, http.StatusOK, map[string]interface{}{

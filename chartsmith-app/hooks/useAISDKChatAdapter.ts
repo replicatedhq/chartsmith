@@ -74,6 +74,15 @@ export interface AdaptedChatState {
 
   /** Current error, if any */
   error: Error | null;
+
+  /** PR4: Currently selected provider */
+  selectedProvider: string;
+
+  /** PR4: Currently selected model */
+  selectedModel: string;
+
+  /** PR4: Switch to a different provider/model mid-conversation */
+  switchProvider: (provider: string, model: string) => void;
 }
 
 /**
@@ -105,6 +114,10 @@ export function useAISDKChatAdapter(
   // Track cancel state (AI SDK doesn't expose this)
   const [isCanceled, setIsCanceled] = useState(false);
 
+  // PR4: Track selected provider/model for live switching
+  const [selectedProvider, setSelectedProvider] = useState<string>(DEFAULT_PROVIDER);
+  const [selectedModel, setSelectedModel] = useState<string>(DEFAULT_MODEL);
+
   // Jotai messages for real-time updates from Centrifugo
   const [jotaiMessages] = useAtom(messagesAtom);
 
@@ -135,16 +148,17 @@ export function useAISDKChatAdapter(
   // NOTE: body is NOT passed to useChat - it would be captured at initialization
   // Instead, pass body in each sendMessage() call for fresh values
   // PR3.0: Include chatMessageId for plan creation
+  // PR4: Use selected provider/model for live switching
   const getChatBody = useCallback(
     (messageId?: string) => ({
-      provider: DEFAULT_PROVIDER,
-      model: DEFAULT_MODEL,
+      provider: selectedProvider,
+      model: selectedModel,
       workspaceId,
       revisionNumber,
       persona: currentPersonaRef.current, // CRITICAL: Include persona
       chatMessageId: messageId, // PR3.0: For plan creation
     }),
-    [workspaceId, revisionNumber]
+    [workspaceId, revisionNumber, selectedProvider, selectedModel]
   );
 
   // Auto-send: If there's an initial message without a response, send it to AI SDK
@@ -282,6 +296,13 @@ export function useAISDKChatAdapter(
     [session, workspaceId, aiSendMessage, getChatBody]
   );
 
+  // PR4: Switch provider/model mid-conversation
+  const switchProvider = useCallback((provider: string, model: string) => {
+    setSelectedProvider(provider);
+    setSelectedModel(model);
+    console.log(`[useAISDKChatAdapter] Switched to provider: ${provider}, model: ${model}`);
+  }, []);
+
   // Cancel handler - sets isCanceled AND calls stop()
   // Also persists partial response to database
   const cancel = useCallback(() => {
@@ -323,6 +344,10 @@ export function useAISDKChatAdapter(
     isCanceled,
     cancel, // Use our wrapped cancel, not raw stop()
     error: error ?? null,
+    // PR4: Live provider switching
+    selectedProvider,
+    selectedModel,
+    switchProvider,
   };
 }
 

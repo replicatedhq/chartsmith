@@ -25,6 +25,7 @@ import {
 } from "@/atoms/workspace";
 import { createChatMessageAction } from "@/lib/workspace/actions/create-chat-message";
 import { type AdaptedChatState, type ChatPersona } from "./useAISDKChatAdapter";
+import { DEFAULT_PROVIDER, DEFAULT_MODEL } from "@/lib/ai/config";
 
 /**
  * Wraps the legacy Go worker chat path to match AdaptedChatState interface
@@ -87,6 +88,13 @@ export function useLegacyChat(session: Session): AdaptedChatState {
     isCanceled: false,
     cancel,
     error: null,
+    // PR4: Legacy path doesn't support live provider switching
+    // Return defaults for interface compatibility
+    selectedProvider: DEFAULT_PROVIDER,
+    selectedModel: DEFAULT_MODEL,
+    switchProvider: () => {
+      console.warn("[useLegacyChat] Provider switching not supported in legacy path");
+    },
   };
 }
 
