@@ -14,7 +14,7 @@ This is a next.js project that is the front end for chartsmith.
 - Each component subscribes to the relevant atoms. This is preferred over callbacks.
 
 ## SSR
-- We use server side rendering to avoid the "loading" state whenever possible. 
+- We use server side rendering to avoid the "loading" state whenever possible.
 - Move code that requires "use client" into separate controls.
 
 ## Database and functions
@@ -22,146 +22,383 @@ This is a next.js project that is the front end for chartsmith.
 - Front end should call server actions, which call lib/* functions.
 - Database queries are not allowed in the server action. Server actions are just wrappers for which lib functions we expose.
 
-## AI Chat Systems (PR1)
+## AI SDK Integration Overview
 
-Chartsmith has **two parallel chat systems** that coexist:
+Chartsmith uses the Vercel AI SDK for all LLM interactions. The AI SDK provides streaming chat, tool execution, and multi-provider support.
 
-### 1. Existing Go-Based Chat (Workspace Operations)
-- **Flow**: `ChatContainer` → `createChatMessageAction` → PostgreSQL queue → Go worker → Centrifugo
-- **State**: Managed via Jotai atoms (`messagesAtom`, `plansAtom` in `atoms/workspace.ts`)
-- **Components**: `ChatContainer.tsx`, `ChatMessage.tsx`, `PlanChatMessage.tsx`
-- **Use case**: Workspace operations, plan generation, file editing, renders
-- **LLM**: Go backend calls Anthropic/Groq directly
-
-### 2. NEW AI SDK Chat (Conversational - PR1)
-- **Flow**: `AIChat` → `useChat` hook → `/api/chat` → OpenRouter → LLM
-- **State**: Managed via AI SDK `useChat` hook
-- **Components**: `components/chat/AIChat.tsx`, `AIMessageList.tsx`, `ProviderSelector.tsx`
-- **Use case**: Conversational questions, multi-provider chat
-- **LLM**: Via OpenRouter (supports Claude Sonnet 4, GPT-4o, etc.)
-
-### AI SDK Architecture
+### AI SDK Packages
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    AI SDK Chat (PR1)                             │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  components/chat/           lib/ai/                              │
-│  ├── AIChat.tsx            ├── provider.ts  (getModel factory)  │
-│  ├── AIMessageList.tsx     ├── models.ts    (model definitions) │
-│  └── ProviderSelector.tsx  ├── config.ts    (system prompt)     │
-│                            └── index.ts     (exports)           │
-│                                                                  │
-│  app/api/chat/route.ts     ← streamText + OpenRouter             │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+ai: ^5.0.106                      # Core AI SDK
+@ai-sdk/react: ^2.0.106           # React hooks (useChat)
+@ai-sdk/anthropic: ^2.0.53        # Anthropic provider
+@ai-sdk/openai: ^2.0.77           # OpenAI provider
+@openrouter/ai-sdk-provider: ^1.3.0  # OpenRouter unified gateway
 ```
-
-### Key Files
-
-| File | Purpose |
-|------|---------|
-| `lib/ai/provider.ts` | Provider factory - `getModel()` returns OpenRouter models |
-| `lib/ai/models.ts` | Available models (Claude Sonnet 4 default, GPT-4o, etc.) |
-| `lib/ai/config.ts` | System prompt, defaults, streaming config |
-| `app/api/chat/route.ts` | API route using `streamText` from AI SDK |
-| `components/chat/AIChat.tsx` | Main chat component with `useChat` hook |
-| `components/chat/ProviderSelector.tsx` | Model selection UI (locks after first message) |
-
-### Environment Variables
-
-```env
-OPENROUTER_API_KEY=sk-or-v1-xxxxx  # Required for AI SDK chat
-DEFAULT_AI_PROVIDER=anthropic       # Default: anthropic
-DEFAULT_AI_MODEL=anthropic/claude-sonnet-4  # Default model
-GO_BACKEND_URL=http://localhost:8080  # Go HTTP server for tools (PR1.5)
-```
-
-### Testing
-
-- Unit tests: `lib/ai/__tests__/`, `app/api/chat/__tests__/`
-- Mock utilities: `lib/__tests__/ai-mock-utils.ts`
-- No real API calls in tests - all mocked for speed and determinism
-
-## AI SDK Tool Integration (PR1.5)
-
-PR1.5 adds tool support to the AI SDK chat, enabling the AI to perform chart operations.
 
 ### Architecture Overview
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    NODE / AI SDK CORE                            │
-│                    (All LLM "thinking")                          │
+│                    AI SDK Chat System                            │
+├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
-│  lib/ai/llmClient.ts     - Shared LLM client, runChat wrapper   │
-│  lib/ai/prompts.ts       - System prompts with tool docs        │
-│  lib/ai/tools/*.ts       - Tool definitions (4 total)           │
-│  lib/ai/tools/utils.ts   - callGoEndpoint helper                │
+│  components/chat/              lib/ai/                           │
+│  ├── ProviderSelector.tsx     ├── provider.ts  (getModel)       │
+│  ├── LiveProviderSwitcher.tsx ├── models.ts    (model defs)     │
+│  └── ValidationResults.tsx    ├── config.ts    (defaults)       │
+│                               ├── prompts.ts   (system prompts) │
+│  hooks/                       ├── intent.ts    (classification) │
+│  └── useAISDKChatAdapter.ts   ├── plan.ts      (plan creation)  │
+│                               └── tools/       (6 tools)        │
 │                                                                  │
-│  Tools (4 total):                                                │
-│  ┌─────────────────────────────────────────────────────────────┐│
-│  │ TYPESCRIPT-ONLY TOOLS (no Go endpoint):                      ││
-│  │ - getChartContext         → Direct getWorkspace() call       ││
-│  │                                                              ││
-│  │ GO BACKEND TOOLS (need HTTP endpoints):                      ││
-│  │ - textEditor              → POST /api/tools/editor           ││
-│  │ - latestSubchartVersion   → POST /api/tools/versions/subchart││
-│  │ - latestKubernetesVersion → POST /api/tools/versions/k8s     ││
-│  └─────────────────────────────────────────────────────────────┘│
+│  app/api/chat/route.ts        ← streamText + intent routing     │
+│                                                                  │
 └─────────────────────────────────────────────────────────────────┘
                               │
-                              ▼ HTTP (JSON, non-streaming)
+                              ▼ HTTP (JSON)
 ┌─────────────────────────────────────────────────────────────────┐
 │                    GO BACKEND (port 8080)                        │
-│                    (Pure application logic)                      │
 │                                                                  │
-│  pkg/api/server.go            - HTTP server startup              │
-│  pkg/api/errors.go            - Standardized error responses     │
-│  pkg/api/handlers/editor.go   - File operations (textEditor)     │
-│  pkg/api/handlers/versions.go - Version lookups (both tools)     │
+│  pkg/api/server.go              - HTTP server + routes           │
+│  pkg/api/handlers/editor.go     - File operations                │
+│  pkg/api/handlers/versions.go   - Version lookups                │
+│  pkg/api/handlers/context.go    - Chart context                  │
+│  pkg/api/handlers/intent.go     - Intent classification          │
+│  pkg/api/handlers/plan.go       - Plan creation                  │
+│  pkg/api/handlers/validate.go   - Chart validation               │
+│  pkg/api/handlers/conversion.go - K8s conversion                 │
 │                                                                  │
-│  NO LLM CALLS - Go is pure application logic                     │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### Tool Descriptions
+### Environment Variables
 
-| Tool | Purpose | Implementation |
-|------|---------|----------------|
-| `getChartContext` | Load workspace files and metadata | TypeScript-only (calls `getWorkspace()`) |
-| `textEditor` | View, create, edit files | Go HTTP (`/api/tools/editor`) |
-| `latestSubchartVersion` | ArtifactHub subchart lookup | Go HTTP (`/api/tools/versions/subchart`) |
-| `latestKubernetesVersion` | K8s version info | Go HTTP (`/api/tools/versions/kubernetes`) |
+```env
+# Provider API Keys (at least one required)
+OPENROUTER_API_KEY=sk-or-v1-xxxxx    # Recommended: unified gateway
+ANTHROPIC_API_KEY=sk-ant-xxxxx       # Direct Anthropic access
+OPENAI_API_KEY=sk-xxxxx              # Direct OpenAI access
 
-### Key Files (PR1.5)
+# Provider Configuration
+USE_OPENROUTER_PRIMARY=true          # Use OpenRouter as primary (default)
+DEFAULT_AI_PROVIDER=anthropic        # Default provider
+DEFAULT_AI_MODEL=anthropic/claude-sonnet-4  # Default model
+
+# Backend
+GO_BACKEND_URL=http://localhost:8080 # Go HTTP server
+NEXT_PUBLIC_USE_AI_SDK_CHAT=true     # Enable AI SDK (default)
+```
+
+## AI SDK Tools
+
+The AI SDK provides 6 tools for chart operations:
+
+| Tool | TypeScript File | Go Endpoint | Purpose |
+|------|-----------------|-------------|---------|
+| `getChartContext` | `getChartContext.ts` | `/api/tools/context` | Load workspace files and metadata |
+| `textEditor` | `textEditor.ts` | `/api/tools/editor` | View, create, edit files |
+| `latestSubchartVersion` | `latestSubchartVersion.ts` | `/api/tools/versions/subchart` | Subchart version lookup |
+| `latestKubernetesVersion` | `latestKubernetesVersion.ts` | `/api/tools/versions/kubernetes` | K8s version info |
+| `validateChart` | `validateChart.ts` | `/api/validate` | Helm lint, template, kube-score |
+| `convertK8sToHelm` | `convertK8s.ts` | `/api/conversion/start` | K8s manifest conversion |
+
+### Tool Files
 
 | File | Purpose |
 |------|---------|
 | `lib/ai/tools/index.ts` | Tool exports and `createTools()` factory |
-| `lib/ai/tools/utils.ts` | `callGoEndpoint()` for Go HTTP calls |
-| `lib/ai/tools/getChartContext.ts` | Workspace context tool (TypeScript-only) |
-| `lib/ai/tools/textEditor.ts` | File operations tool |
-| `lib/ai/tools/latestSubchartVersion.ts` | Subchart version lookup tool |
-| `lib/ai/tools/latestKubernetesVersion.ts` | K8s version info tool |
-| `lib/ai/llmClient.ts` | `runChat()` wrapper with tools support |
-| `lib/ai/prompts.ts` | System prompts with tool documentation |
-| `pkg/api/server.go` | Go HTTP server for tool endpoints |
-| `pkg/api/handlers/editor.go` | textEditor Go handler |
-| `pkg/api/handlers/versions.go` | Version lookup Go handlers |
+| `lib/ai/tools/bufferedTools.ts` | Buffered tools for plan workflow |
+| `lib/ai/tools/toolInterceptor.ts` | Buffer management infrastructure |
+| `lib/ai/tools/utils.ts` | `callGoEndpoint()` HTTP helper |
 
-### Request Flow
+### Tool Execution Modes
 
-1. User sends message to `/api/chat` with `workspaceId` and `revisionNumber`
-2. Route handler extracts auth header and creates tools via `createTools()`
-3. `streamText()` is called with model, messages, system prompt, and tools
-4. AI decides to use a tool based on user's request
-5. Tool's `execute()` function runs:
-   - For `getChartContext`: Calls TypeScript `getWorkspace()` directly
-   - For Go-backed tools: Calls `callGoEndpoint()` → Go HTTP server
-6. Tool result is returned to the AI
-7. AI incorporates result into its response
+**Immediate Execution** (read-only operations):
+- `getChartContext` - always immediate
+- `textEditor` with `view` command - always immediate
+- `latestSubchartVersion` - always immediate
+- `latestKubernetesVersion` - always immediate
+- `validateChart` - always immediate
+
+**Buffered Execution** (file modifications):
+- `textEditor` with `create` command - buffered for plan
+- `textEditor` with `str_replace` command - buffered for plan
+
+## Intent Classification (PR3.0)
+
+User prompts are classified via Go backend before AI SDK processing:
+
+### Intent Types
+
+| Intent | Route | Behavior |
+|--------|-------|----------|
+| `off-topic` | Immediate decline | No LLM call, polite message |
+| `proceed` | Execute plan | Run buffered tools |
+| `render` | Trigger render | Chart preview |
+| `plan` | Plan mode | AI SDK without tools |
+| `ai-sdk` | Normal | AI SDK with tools |
+
+### Intent Flow
+
+1. User sends message to `/api/chat`
+2. Route calls Go `/api/intent/classify` (Groq-based)
+3. Intent determines routing path
+4. Off-topic returns immediately without LLM call
+5. Other intents proceed to AI SDK
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `lib/ai/intent.ts` | `classifyIntent()` and `routeFromIntent()` |
+| `pkg/api/handlers/intent.go` | Go intent classification endpoint |
+
+## Plan Workflow (PR3.0)
+
+File modifications go through a plan-based approval workflow, matching legacy Go worker behavior.
+
+### Buffered Tool Flow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  User: "Create a deployment.yaml for nginx"                     │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  1. /api/chat receives request                                  │
+│  2. Intent classified as "ai-sdk" (proceed with tools)          │
+│  3. AI SDK streamText() with buffered tools                     │
+│  4. AI calls textEditor({ command: "create", path: "..." })     │
+│  5. Tool BUFFERS the call, returns { buffered: true }           │
+│  6. AI continues explaining what it will create                 │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  7. onFinish: bufferedToolCalls.length > 0                      │
+│  8. Call Go /api/plan/create-from-tools                         │
+│  9. Plan created with status "review"                           │
+│  10. Centrifugo publishes plan-updated event                    │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  11. Frontend receives event                                     │
+│  12. PlanChatMessage renders with Proceed/Ignore buttons        │
+│  13. User clicks Proceed → proceedPlanAction() executes tools   │
+│  14. Files written to content_pending                           │
+│  15. User can Commit/Discard changes                            │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Plan Key Files
+
+| File | Purpose |
+|------|---------|
+| `lib/ai/plan.ts` | `createPlanFromToolCalls()` client |
+| `lib/ai/tools/bufferedTools.ts` | `createBufferedTools()` factory |
+| `lib/ai/tools/toolInterceptor.ts` | `BufferedToolCall` interface |
+| `lib/workspace/actions/proceed-plan.ts` | `proceedPlanAction()` server action |
+| `pkg/api/handlers/plan.go` | Plan creation and update endpoints |
+
+### Text-Only Plans
+
+When intent is classified as `plan` but no tool calls are made:
+1. AI SDK runs without tools (plan generation mode)
+2. AI describes what it will do in natural language
+3. `onFinish` creates text-only plan with description
+4. User clicks Proceed → `executeViaAISDK()` runs with tools enabled
+
+## Chart Validation (PR4)
+
+The `validateChart` tool runs a three-stage validation pipeline: helm lint, helm template, and kube-score.
+
+### Go Validation Package
+
+The `pkg/validation/` package implements the validation pipeline:
+
+| File | Purpose |
+|------|---------|
+| `pkg/validation/types.go` | ValidationRequest/Result types and issue structures |
+| `pkg/validation/helm.go` | Helm lint and helm template execution with output parsing |
+| `pkg/validation/kubescore.go` | Kube-score execution with JSON parsing and suggestions |
+| `pkg/validation/pipeline.go` | Three-stage validation orchestration using `workspace.ListCharts()` |
+
+### Validation Pipeline Flow
+
+1. **Helm Lint** - Validates chart structure and syntax
+2. **Helm Template** - Renders templates to catch rendering errors
+3. **Kube-score** - Static analysis of rendered manifests (non-fatal failures)
+
+### Validation Response
+
+```typescript
+{
+  overall_status: "pass" | "warning" | "fail";
+  timestamp: string;
+  duration_ms: number;
+  results: {
+    helm_lint: LintResult;
+    helm_template?: TemplateResult;
+    kube_score?: ScoreResult;
+  };
+}
+```
+
+### Validation State Management
+
+- `atoms/validationAtoms.ts` - Jotai atoms for validation state
+- `responseValidationId` added to `Message` interface in `components/types.ts`
+- `ValidationResults` integrated into `ChatMessage.tsx`'s `SortedContent` component
+
+### Validation UI
+
+`components/chat/ValidationResults.tsx` displays:
+- Overall status badge (pass/warning/fail)
+- Issues grouped by severity (critical > warning > info)
+- Collapsible detail panels per issue
+- Kube-score summary
+- Metadata with duration
+
+### Validation Key Files
+
+| File | Purpose |
+|------|---------|
+| `lib/ai/tools/validateChart.ts` | AI SDK tool factory |
+| `lib/ai/tools/index.ts` | Tool registration |
+| `lib/ai/tools/bufferedTools.ts` | Buffered tools registration |
+| `atoms/validationAtoms.ts` | Validation state atoms |
+| `components/chat/ValidationResults.tsx` | Results display component |
+| `components/types.ts` | Message interface with `responseValidationId` |
+| `pkg/validation/types.go` | Go validation types |
+| `pkg/validation/helm.go` | Helm lint/template execution |
+| `pkg/validation/kubescore.go` | Kube-score execution |
+| `pkg/validation/pipeline.go` | Pipeline orchestration |
+| `pkg/api/handlers/validate.go` | POST /api/validate handler |
+
+## Live Provider Switching (PR4)
+
+Users can switch AI providers mid-conversation without losing context.
+
+### Supported Providers
+
+| Provider | Models | Default |
+|----------|--------|---------|
+| Anthropic | Claude Sonnet 4 | ✅ |
+| OpenAI | GPT-4o, GPT-4o Mini | |
+
+### Provider Priority
+
+When `USE_OPENROUTER_PRIMARY=true` (default):
+1. OpenRouter (unified gateway) - primary
+2. Direct Anthropic API - fallback
+3. Direct OpenAI API - fallback
+
+When `USE_OPENROUTER_PRIMARY=false`:
+1. Direct provider API - primary
+2. OpenRouter - fallback
+
+### Provider Switching Flow
+
+1. User clicks `LiveProviderSwitcher` in chat header
+2. Selects new provider/model from dropdown
+3. `switchProvider()` updates adapter state
+4. Next message uses new provider via `getChatBody()`
+5. Conversation context preserved (messages unchanged)
+
+### Implementation Details
+
+**useAISDKChatAdapter.ts extensions:**
+- `selectedProvider` and `selectedModel` state
+- `switchProvider()` callback for state updates
+- `getChatBody()` updated to use dynamic provider/model
+
+**useLegacyChat.ts:**
+- Extended for interface compatibility with adapter
+
+**ChatContainer.tsx:**
+- `LiveProviderSwitcher` integrated into input area
+
+### Provider Key Files
+
+| File | Purpose |
+|------|---------|
+| `lib/ai/provider.ts` | `getModel()` factory with fallback logic |
+| `lib/ai/models.ts` | Model and provider definitions |
+| `lib/ai/config.ts` | Default provider/model constants |
+| `components/chat/ProviderSelector.tsx` | Initial provider selection (locks after first message) |
+| `components/chat/LiveProviderSwitcher.tsx` | Dropdown component for mid-conversation switching |
+| `hooks/useAISDKChatAdapter.ts` | State management and `switchProvider()` callback |
+| `hooks/useLegacyChat.ts` | Interface compatibility for legacy path |
+| `components/ChatContainer.tsx` | LiveProviderSwitcher integration |
+
+## Chat Adapter (PR2.0)
+
+`useAISDKChatAdapter` bridges AI SDK's `useChat` hook with existing Chartsmith patterns.
+
+### Adapter Responsibilities
+
+- Converts AI SDK `UIMessage` to Chartsmith `Message` format
+- Merges streaming messages with Jotai atom state
+- Persists responses to database on completion
+- Generates followup actions based on tool calls
+- Coordinates with Centrifugo to prevent conflicts
+- Exposes provider switching state
+
+### Message Format Mapping
+
+| UIMessage Field | Message Field | Notes |
+|-----------------|---------------|-------|
+| `parts[].text` (user) | `prompt` | User message content |
+| `parts[].text` (assistant) | `response` | AI response content |
+| `status === 'streaming'` | `isComplete: false` | Streaming state |
+| `status === 'ready'` | `isComplete: true` | Complete state |
+
+### Persona Support
+
+| Persona | System Prompt | Focus |
+|---------|---------------|-------|
+| `auto` | `CHARTSMITH_TOOL_SYSTEM_PROMPT` | General assistant |
+| `developer` | `CHARTSMITH_DEVELOPER_PROMPT` | Technical deep-dive |
+| `operator` | `CHARTSMITH_OPERATOR_PROMPT` | Practical usage |
+
+### Adapter Key Files
+
+| File | Purpose |
+|------|---------|
+| `hooks/useAISDKChatAdapter.ts` | Main adapter hook |
+| `lib/chat/messageMapper.ts` | Format conversion utilities |
+| `lib/ai/prompts.ts` | Persona-specific system prompts |
+
+## Go HTTP API Endpoints
+
+### Tool Endpoints
+
+| Endpoint | Handler | Purpose |
+|----------|---------|---------|
+| `POST /api/tools/editor` | `handlers.TextEditor` | View/create/edit files |
+| `POST /api/tools/versions/subchart` | `handlers.GetSubchartVersion` | Subchart lookup |
+| `POST /api/tools/versions/kubernetes` | `handlers.GetKubernetesVersion` | K8s version |
+| `POST /api/tools/context` | `handlers.GetChartContext` | Workspace files |
+
+### Intent/Plan Endpoints
+
+| Endpoint | Handler | Purpose |
+|----------|---------|---------|
+| `POST /api/intent/classify` | `handlers.ClassifyIntent` | Groq intent classification |
+| `POST /api/plan/create-from-tools` | `handlers.CreatePlanFromToolCalls` | Create plan from buffered calls |
+| `POST /api/plan/update-action-file-status` | `handlers.UpdateActionFileStatus` | Update file status |
+| `POST /api/plan/publish-update` | `handlers.PublishPlanUpdate` | Publish plan event |
+
+### Other Endpoints
+
+| Endpoint | Handler | Purpose |
+|----------|---------|---------|
+| `POST /api/validate` | `handlers.ValidateChart` | Run validation pipeline |
+| `POST /api/conversion/start` | `handlers.StartConversion` | Start K8s conversion |
+| `GET /health` | inline | Health check |
 
 ### Error Response Format
 
@@ -175,91 +412,49 @@ All Go endpoints return standardized JSON errors:
 }
 ```
 
-Error codes: `VALIDATION_ERROR`, `NOT_FOUND`, `INTERNAL_ERROR`, `EXTERNAL_API_ERROR`
+Error codes: `VALIDATION_ERROR`, `NOT_FOUND`, `UNAUTHORIZED`, `INTERNAL_ERROR`, `EXTERNAL_API_ERROR`
 
-### Auth Pattern
+## Centrifugo Integration
 
-- Auth header is extracted from the incoming request in `route.ts`
-- Passed to tool factories via closure: `createTools(authHeader, workspaceId, revisionNumber)`
-- Tools forward auth header to Go endpoints via `callGoEndpoint()`
-- Go handlers validate tokens against `extension_token` table
+Real-time updates are published via Centrifugo:
 
-## AI SDK Chat Reintegration (PR2.0)
+| Event | Purpose |
+|-------|---------|
+| `artifact-updated` | File changes in workspace |
+| `plan-updated` | Plan status/files changed |
+| `chatmessage-updated` | Chat message updated (plan ID linked) |
+| `conversion-status` | K8s conversion progress |
 
-PR2.0 integrates the AI SDK chat transport into the main workspace path (`/workspace/[id]`),
-replacing the Go worker chat flow with AI SDK streaming while preserving all existing UI.
+### Streaming Coordination
 
-### Feature Flag
+- `currentStreamingMessageIdAtom` tracks active streaming message
+- Centrifugo updates are skipped for actively streaming messages
+- Prevents race conditions between streaming and DB updates
 
-```env
-# AI SDK is now the DEFAULT chat transport
-# Set to 'false' to fall back to legacy Go worker path (for rollback only)
-NEXT_PUBLIC_USE_AI_SDK_CHAT=true
-```
-
-### Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    ChatContainer (Feature Flag)                  │
-│                                                                  │
-│  NEXT_PUBLIC_USE_AI_SDK_CHAT=true (Default - AI SDK):           │
-│  ├── useAISDKChatAdapter → /api/chat (streaming)                │
-│  │                      → AI SDK tools → Go HTTP endpoints      │
-│  │                      → Centrifugo updates files (artifacts)  │
-│  │                      → Adapter merges with messagesAtom      │
-│  │                                                               │
-│  NEXT_PUBLIC_USE_AI_SDK_CHAT=false (Legacy fallback):           │
-│  ├── useLegacyChat → createChatMessageAction                    │
-│  │                 → PostgreSQL queue → Go worker               │
-│  │                 → Centrifugo updates messagesAtom            │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### Key Files (PR2.0)
-
-| File | Purpose |
-|------|---------|
-| `hooks/useAISDKChatAdapter.ts` | Adapter bridging AI SDK to existing Message format |
-| `hooks/useLegacyChat.ts` | Legacy Go worker path wrapper |
-| `lib/chat/messageMapper.ts` | UIMessage ↔ Message format conversion |
-| `lib/ai/prompts.ts` | Persona-specific prompts (developer/operator) |
-
-### Message Format Mapping
-
-AI SDK UIMessage parts are converted to existing Message format:
-
-| UIMessage Field | Message Field | Notes |
-|-----------------|---------------|-------|
-| `parts[].text` (user) | `prompt` | User message content |
-| `parts[].text` (assistant) | `response` | AI response content |
-| `status === 'streaming'` | `isComplete: false` | Streaming state |
-| `status === 'ready'` | `isComplete: true` | Complete state |
-
-### Persona Support
-
-Personas affect the system prompt sent to the LLM:
-
-| Persona | Prompt | Focus |
-|---------|--------|-------|
-| `auto` | `CHARTSMITH_TOOL_SYSTEM_PROMPT` | General assistant |
-| `developer` | `CHARTSMITH_DEVELOPER_PROMPT` | Technical deep-dive, best practices |
-| `operator` | `CHARTSMITH_OPERATOR_PROMPT` | Practical usage, troubleshooting |
-
-### Plan Workflow Difference
-
-- **Legacy path**: Creates `workspace_plan` records, shows `PlanChatMessage` UI
-- **AI SDK path**: Writes to `content_pending`, uses Commit/Discard buttons
-
-### Centrifugo Integration
-
-- AI SDK path receives `artifact-updated` events for file changes
-- `currentStreamingMessageIdAtom` prevents conflicts during streaming
-- `chatmessage-updated` events are skipped for actively streaming messages
-
-### Rollback Procedure
+## Rollback Procedure
 
 If issues occur with AI SDK path:
+
 1. Set `NEXT_PUBLIC_USE_AI_SDK_CHAT=false`
 2. Redeploy - changes take effect immediately
-3. Users fall back to Go worker path
+3. Users fall back to legacy Go worker path
+
+## Migration Progress
+
+- [x] AI SDK chat integration (PR1)
+- [x] Tool support via Go HTTP (PR1.5)
+- [x] Main workspace integration (PR2.0)
+- [x] Intent classification (PR3.0)
+- [x] Plan workflow parity (PR3.0)
+- [x] K8s conversion bridge (PR3.0)
+- [x] Chart validation tool (PR4)
+- [x] Live provider switching (PR4)
+- [ ] Remove legacy Go LLM code (future)
+
+## Testing
+
+- Unit tests: `lib/ai/__tests__/`, `app/api/chat/__tests__/`
+- Integration tests: `lib/ai/__tests__/integration/tools.test.ts`
+- E2E tests: `npx playwright test`
+- Mock utilities: `lib/__tests__/ai-mock-utils.ts`
+- No real API calls in unit tests - all mocked for speed and determinism
