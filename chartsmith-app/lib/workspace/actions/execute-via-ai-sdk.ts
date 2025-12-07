@@ -265,14 +265,15 @@ export async function executeViaAISDK({
       // onChunk fires as the stream is received - use to detect tool calls BEFORE execution
       onChunk: async ({ chunk }) => {
         if (chunk.type === 'tool-call' && chunk.toolName === 'textEditor') {
-          const args = chunk.args as { path?: string; command?: string };
-          if (args.path && (args.command === 'create' || args.command === 'str_replace')) {
+          // AI SDK v5 uses 'input' not 'args' for tool call parameters
+          const input = chunk.input as { path?: string; command?: string } | undefined;
+          if (input?.path && (input.command === 'create' || input.command === 'str_replace')) {
             // Tool call detected - mark file as "creating" BEFORE execution
-            if (!creatingFiles.has(args.path) && !completedFiles.has(args.path)) {
-              console.log('[executeViaAISDK] Tool call starting:', args.command, args.path);
-              const fileAction = args.command === 'create' ? 'create' : 'update';
-              await addOrUpdateActionFile(workspaceId, planId, args.path, fileAction, 'creating');
-              creatingFiles.add(args.path);
+            if (!creatingFiles.has(input.path) && !completedFiles.has(input.path)) {
+              console.log('[executeViaAISDK] Tool call starting:', input.command, input.path);
+              const fileAction = input.command === 'create' ? 'create' : 'update';
+              await addOrUpdateActionFile(workspaceId, planId, input.path, fileAction, 'creating');
+              creatingFiles.add(input.path);
               await publishPlanUpdate(workspaceId, planId);
             }
           }
@@ -284,15 +285,16 @@ export async function executeViaAISDK({
         // toolResults contains the results of executed tools
         console.log('[executeViaAISDK] Step finished with toolResults:', toolResults?.length || 0);
         for (const toolResult of toolResults ?? []) {
-          if (toolResult.toolName === 'textEditor' && 'args' in toolResult) {
-            const args = toolResult.args as { path?: string; command?: string };
-            console.log('[executeViaAISDK] textEditor completed:', args.command, args.path);
-            if (args.path && (args.command === 'create' || args.command === 'str_replace')) {
+          if (toolResult.toolName === 'textEditor') {
+            // AI SDK v5 uses 'input' not 'args' for tool result parameters
+            const input = toolResult.input as { path?: string; command?: string };
+            console.log('[executeViaAISDK] textEditor completed:', input.command, input.path);
+            if (input.path && (input.command === 'create' || input.command === 'str_replace')) {
               // Tool execution completed - mark as "created"
-              const fileAction = args.command === 'create' ? 'create' : 'update';
-              await addOrUpdateActionFile(workspaceId, planId, args.path, fileAction, 'created');
-              completedFiles.add(args.path);
-              creatingFiles.delete(args.path);
+              const fileAction = input.command === 'create' ? 'create' : 'update';
+              await addOrUpdateActionFile(workspaceId, planId, input.path, fileAction, 'created');
+              completedFiles.add(input.path);
+              creatingFiles.delete(input.path);
               await publishPlanUpdate(workspaceId, planId);
             }
           }
