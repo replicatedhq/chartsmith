@@ -25,6 +25,9 @@ interface ExecuteViaAISDKParams {
  * Use LLM to extract expected file paths from plan description.
  * This is more reliable than regex because the AI can understand context.
  * Returns file paths that will be created/modified during execution.
+ *
+ * The prompt is intentionally generic - not Helm-specific - so it works
+ * for any type of project (Helm charts, Kubernetes manifests, etc.)
  */
 async function extractExpectedFilesViaLLM(
   planDescription: string,
@@ -32,33 +35,23 @@ async function extractExpectedFilesViaLLM(
 ): Promise<string[]> {
   const model = getModel(provider);
 
-  const extractionPrompt = `You are a Helm chart file path extractor. Given a plan description, identify ALL file paths that will be created or modified.
-
-Standard Helm chart files (in typical creation order):
-1. Chart.yaml (chart metadata - always first)
-2. values.yaml (default configuration values)
-3. .helmignore (files to exclude from packaging)
-4. templates/_helpers.tpl (template helpers - before other templates)
-5. templates/serviceaccount.yaml (ServiceAccount)
-6. templates/configmap.yaml (ConfigMap)
-7. templates/secret.yaml (Secret)
-8. templates/deployment.yaml (Kubernetes Deployment)
-9. templates/service.yaml (Kubernetes Service)
-10. templates/ingress.yaml (Ingress)
-11. templates/hpa.yaml (HorizontalPodAutoscaler)
-12. templates/pdb.yaml (PodDisruptionBudget)
-13. templates/NOTES.txt (post-install notes)
-14. templates/tests/test-connection.yaml (helm test - last)
+  const extractionPrompt = `You are a file path extractor. Given a plan description, identify ALL file paths that will be created or modified.
 
 INSTRUCTIONS:
 1. Read the plan description carefully
-2. Identify ALL files that will be created or modified
-3. If the plan mentions creating a complete Helm chart, include standard files
-4. **IMPORTANT: Return files in the ORDER they should be created** (Chart.yaml first, then values.yaml, then helpers, then templates)
-5. Output ONLY a valid JSON array of file paths, nothing else
+2. Identify ALL files mentioned or implied that will be created or modified
+3. Look for explicit file paths (e.g., "Chart.yaml", "templates/deployment.yaml", "values.yaml")
+4. Look for file references in backticks, quotes, or bullet points
+5. If the plan describes creating a standard project structure (Helm chart, etc.), include the typical files for that structure
+6. Return files in the order they should logically be created (metadata/config first, then implementation files)
+7. Output ONLY a valid JSON array of file paths, nothing else
 
-Example output (note the order - metadata first, then helpers, then templates):
-["Chart.yaml", "values.yaml", "templates/_helpers.tpl", "templates/deployment.yaml", "templates/service.yaml"]
+Examples:
+- For a Helm chart: ["Chart.yaml", "values.yaml", "templates/_helpers.tpl", "templates/deployment.yaml", "templates/service.yaml"]
+- For K8s manifests: ["deployment.yaml", "service.yaml", "configmap.yaml"]
+- For a single file update: ["templates/deployment.yaml"]
+
+If you cannot determine specific files, return an empty array: []
 
 Plan description:
 ${planDescription}`;
@@ -254,8 +247,8 @@ export async function executeViaAISDK({
 
   // Track files that have been completed
   const completedFiles = new Set<string>();
-  // Track the single file currently being worked on (only one at a time)
-  let currentActiveFile: string | null = null;
+  // Track files currently marked as "creating" (spinner showing)
+  const creatingFiles = new Set<string>();
 
   try {
     // 4. Execute via AI SDK with tools
@@ -268,44 +261,39 @@ export async function executeViaAISDK({
       messages: [{ role: 'user', content: executionInstruction }],
       tools,
       stopWhen: stepCountIs(50), // Allow many tool calls for multi-file operations (AI SDK v5 pattern)
-      onStepFinish: async ({ toolCalls }) => {
-        // Update action file statuses as tools are called
-        console.log('[executeViaAISDK] Step finished with toolCalls:', toolCalls?.length || 0);
-        for (const toolCall of toolCalls ?? []) {
-          if (toolCall.toolName === 'textEditor' && 'input' in toolCall) {
-            // AI SDK v5 uses 'input' for tool arguments
-            const input = toolCall.input as { path?: string; command?: string };
-            console.log('[executeViaAISDK] textEditor call:', input.command, input.path);
-            if (input.path) {
-              const fileAction = input.command === 'create' ? 'create' : 'update';
 
-              if (input.command === 'create' || input.command === 'str_replace') {
-                // File is being created/modified - this is the active file
-                // First, mark any previous active file as still pending (if not completed)
-                // Then mark this file as "creating" (active with spinner)
-                if (currentActiveFile && currentActiveFile !== input.path && !completedFiles.has(currentActiveFile)) {
-                  // Previous file wasn't completed - keep it pending
-                  await addOrUpdateActionFile(workspaceId, planId, currentActiveFile, 'create', 'pending');
-                }
+      // onChunk fires as the stream is received - use to detect tool calls BEFORE execution
+      onChunk: async ({ chunk }) => {
+        if (chunk.type === 'tool-call' && chunk.toolName === 'textEditor') {
+          const args = chunk.args as { path?: string; command?: string };
+          if (args.path && (args.command === 'create' || args.command === 'str_replace')) {
+            // Tool call detected - mark file as "creating" BEFORE execution
+            if (!creatingFiles.has(args.path) && !completedFiles.has(args.path)) {
+              console.log('[executeViaAISDK] Tool call starting:', args.command, args.path);
+              const fileAction = args.command === 'create' ? 'create' : 'update';
+              await addOrUpdateActionFile(workspaceId, planId, args.path, fileAction, 'creating');
+              creatingFiles.add(args.path);
+              await publishPlanUpdate(workspaceId, planId);
+            }
+          }
+        }
+      },
 
-                // Mark current file as active (creating = spinner)
-                currentActiveFile = input.path;
-                await addOrUpdateActionFile(workspaceId, planId, input.path, fileAction, 'creating');
-                await publishPlanUpdate(workspaceId, planId);
-
-                // File is now done - mark as "created" (checkmark)
-                await addOrUpdateActionFile(workspaceId, planId, input.path, fileAction, 'created');
-                completedFiles.add(input.path);
-                currentActiveFile = null;
-                await publishPlanUpdate(workspaceId, planId);
-              } else if (input.command === 'view') {
-                // Viewing a file - mark it as "creating" to show it's being worked on
-                if (!completedFiles.has(input.path)) {
-                  currentActiveFile = input.path;
-                  await addOrUpdateActionFile(workspaceId, planId, input.path, fileAction, 'creating');
-                  await publishPlanUpdate(workspaceId, planId);
-                }
-              }
+      // onStepFinish fires AFTER tool execution - use to mark files as "created"
+      onStepFinish: async ({ toolResults }) => {
+        // toolResults contains the results of executed tools
+        console.log('[executeViaAISDK] Step finished with toolResults:', toolResults?.length || 0);
+        for (const toolResult of toolResults ?? []) {
+          if (toolResult.toolName === 'textEditor' && 'args' in toolResult) {
+            const args = toolResult.args as { path?: string; command?: string };
+            console.log('[executeViaAISDK] textEditor completed:', args.command, args.path);
+            if (args.path && (args.command === 'create' || args.command === 'str_replace')) {
+              // Tool execution completed - mark as "created"
+              const fileAction = args.command === 'create' ? 'create' : 'update';
+              await addOrUpdateActionFile(workspaceId, planId, args.path, fileAction, 'created');
+              completedFiles.add(args.path);
+              creatingFiles.delete(args.path);
+              await publishPlanUpdate(workspaceId, planId);
             }
           }
         }
