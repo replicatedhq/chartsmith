@@ -124,6 +124,7 @@ export interface RawChatMessage {
   isCanceled: boolean;
   responseRenderId?: string;
   responsePlanId?: string;
+  responseConversionId?: string;
   responseRollbackToRevisionNumber?: number;
   isComplete?: boolean;
   isApplied?: boolean;

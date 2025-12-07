@@ -33,7 +33,7 @@ export function NewChartContent({ session, chatInput, setChatInput, handleSubmit
   useEffect(() => {
     // Show input when plan is in review OR when AI SDK response is complete
     const hasReviewPlan = plans.length > 0 && plans[0].status === "review";
-    const aiSdkComplete = !isStreaming && !isThinking && messages.length > 0 && messages[messages.length - 1]?.response;
+    const aiSdkComplete = !isStreaming && !isThinking && messages.length > 0 && !!messages[messages.length - 1]?.response;
     setShowInput(hasReviewPlan || aiSdkComplete);
   }, [plans, isStreaming, isThinking, messages]);
 

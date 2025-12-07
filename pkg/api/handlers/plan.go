@@ -32,6 +32,9 @@ type CreatePlanFromToolCallsRequest struct {
 	WorkspaceID   string             `json:"workspaceId"`
 	ChatMessageID string             `json:"chatMessageId"`
 	ToolCalls     []BufferedToolCall `json:"toolCalls"`
+	// PR3.2: Optional plan description for text-only plans
+	// When provided, this is used instead of generating from tool calls
+	Description string `json:"description,omitempty"`
 }
 
 // CreatePlanFromToolCallsResponse represents the response from plan creation
@@ -58,10 +61,10 @@ func CreatePlanFromToolCalls(w http.ResponseWriter, r *http.Request) {
 		writeBadRequest(w, "chatMessageId is required")
 		return
 	}
-	if len(req.ToolCalls) == 0 {
-		writeBadRequest(w, "toolCalls array is required and must not be empty")
-		return
-	}
+	// PR3.2: Allow empty tool calls for text-only plans (two-phase workflow)
+	// When intent.isPlan=true and tools are disabled, we still create a plan record
+	// but with empty tool calls. The plan text IS the plan, stored via chat message response.
+	// Empty toolCalls array is valid for text-only plans.
 
 	// Create context with timeout
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
@@ -70,10 +73,16 @@ func CreatePlanFromToolCalls(w http.ResponseWriter, r *http.Request) {
 	logger.Debug("CreatePlanFromToolCalls request",
 		zap.String("workspaceId", req.WorkspaceID),
 		zap.String("chatMessageId", req.ChatMessageID),
-		zap.Int("toolCallCount", len(req.ToolCalls)))
+		zap.Int("toolCallCount", len(req.ToolCalls)),
+		zap.Bool("hasDescription", req.Description != ""))
 
-	// Generate plan description from tool calls
-	description := generatePlanDescription(req.ToolCalls)
+	// PR3.2: Use provided description for text-only plans, otherwise generate from tool calls
+	var description string
+	if req.Description != "" {
+		description = req.Description
+	} else {
+		description = generatePlanDescription(req.ToolCalls)
+	}
 
 	// Extract action files from tool calls
 	actionFiles := extractActionFiles(req.ToolCalls)
@@ -108,6 +117,11 @@ func CreatePlanFromToolCalls(w http.ResponseWriter, r *http.Request) {
 
 // generatePlanDescription creates a markdown description of what the plan will do
 func generatePlanDescription(toolCalls []BufferedToolCall) string {
+	// PR3.2: Handle text-only plans (empty tool calls)
+	if len(toolCalls) == 0 {
+		return "Plan awaiting approval. Click 'Create Chart' to proceed with file creation."
+	}
+
 	var lines []string
 	lines = append(lines, "I'll make the following changes:\n")
 

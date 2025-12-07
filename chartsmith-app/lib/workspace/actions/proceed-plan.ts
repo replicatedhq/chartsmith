@@ -132,7 +132,8 @@ export async function proceedPlanAction(
     await client.query("COMMIT");
 
     // Notify frontend of status change to 'applying'
-    const authHeader = session.user.authHeader;
+    // Note: authHeader is optional for all Go endpoint calls
+    const authHeader: string | undefined = undefined;
     await publishPlanUpdate(workspaceId, planId, authHeader);
 
     // 3. Execute each buffered tool call

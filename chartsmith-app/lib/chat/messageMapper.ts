@@ -395,9 +395,9 @@ export function generateFollowupActions(
   }
 
   // Check for tool results that indicate successful file operations
+  // AI SDK v5: Tool result parts have type "tool-result" or similar
   const toolResults = message.parts?.filter(
-    (p): p is { type: "tool-result"; toolName: string; result: unknown } =>
-      p.type === "tool-result"
+    (p) => p.type === "tool-result" || p.type?.startsWith("tool-")
   );
 
   if (toolResults) {

@@ -24,16 +24,20 @@
  */
 
 import { streamText, convertToModelMessages, stepCountIs, type UIMessage } from 'ai';
-import { 
-  getModel, 
-  isValidProvider, 
+import {
+  getModel,
+  isValidProvider,
   isValidModel,
 } from '@/lib/ai';
 import { createTools } from '@/lib/ai/tools';
 import { createBufferedTools } from '@/lib/ai/tools/bufferedTools';
 import { BufferedToolCall } from '@/lib/ai/tools/toolInterceptor';
 import { createPlanFromToolCalls } from '@/lib/ai/plan';
-import { getSystemPromptForPersona } from '@/lib/ai/prompts';
+import {
+  getSystemPromptForPersona,
+  CHARTSMITH_PLAN_SYSTEM_PROMPT,
+  getPlanOnlyUserMessage,
+} from '@/lib/ai/prompts';
 import { classifyIntent, routeFromIntent } from '@/lib/ai/intent';
 
 // Set maximum streaming duration (must be a literal for Next.js config)
@@ -155,9 +159,9 @@ export async function POST(request: Request) {
     // Only classify if we have a workspace context (non-initial messages)
     const lastUserMessage = messages.filter(m => m.role === 'user').pop();
     if (lastUserMessage && workspaceId) {
-      const userPrompt = typeof lastUserMessage.content === 'string' 
-        ? lastUserMessage.content 
-        : (lastUserMessage.parts?.find(p => p.type === 'text') as { type: 'text'; text: string } | undefined)?.text ?? '';
+      // AI SDK v5: UIMessage uses parts array, not content string
+      const textPart = lastUserMessage.parts?.find(p => p.type === 'text') as { type: 'text'; text: string } | undefined;
+      const userPrompt = textPart?.text ?? '';
       const isInitialPrompt = revisionNumber === 0 && messages.filter(m => m.role === 'user').length === 1;
 
       try {
@@ -182,10 +186,64 @@ export async function POST(request: Request) {
               { status: 200, headers: { 'Content-Type': 'application/json' } }
             );
 
+          case "plan": {
+            // PR3.2: PLAN GENERATION PHASE - No tools, plan-only prompt
+            // This matches Go behavior: pkg/llm/initial-plan.go:60-64 (no Tools param)
+            // Key insight: plan generation calls LLM without tools, forcing descriptive text
+            console.log('[/api/chat] Plan generation phase - NO TOOLS');
+
+            // Inject the "describe plan only" user message
+            // Mirrors Go: pkg/llm/initial-plan.go:56 and pkg/llm/plan.go:69
+            const planOnlyMessage = getPlanOnlyUserMessage(isInitialPrompt);
+            const messagesWithPlanPrompt = [
+              ...convertToModelMessages(messages),
+              { role: 'user' as const, content: planOnlyMessage },
+            ];
+
+            const planResult = streamText({
+              model: modelInstance,
+              system: CHARTSMITH_PLAN_SYSTEM_PROMPT,
+              messages: messagesWithPlanPrompt,
+              // NO TOOLS - forces descriptive text response
+              // This is the key difference from main branch parity
+              onFinish: async ({ finishReason, usage, text }) => {
+                console.log('[/api/chat] Plan streaming finished:', {
+                  finishReason,
+                  usage,
+                  chatMessageId,
+                  workspaceId,
+                  textLength: text?.length ?? 0,
+                });
+
+                // PR3.2: Create a plan record with empty tool calls for plan-only responses
+                // This enables the "Proceed" button to appear in the frontend
+                // IMPORTANT: Pass the full plan text as description so Go worker knows what to execute
+                if (workspaceId && chatMessageId) {
+                  try {
+                    const planId = await createPlanFromToolCalls(
+                      authHeader,
+                      workspaceId,
+                      chatMessageId,
+                      [], // Empty tool calls for text-only plan
+                      text // Pass the full plan text as description
+                    );
+                    console.log('[/api/chat] Created text-only plan:', planId);
+                  } catch (err) {
+                    console.error('[/api/chat] Failed to create text-only plan:', err);
+                    // Plan creation failure is logged but doesn't fail the response
+                  }
+                }
+              },
+            });
+
+            return planResult.toUIMessageStreamResponse();
+          }
+
           case "proceed":
-            // Note: Full proceed handling will be implemented in Phase 3 with plan workflow
-            // For now, let AI SDK handle it (user saying "proceed" without a plan)
-            console.log('[/api/chat] Proceed intent detected, passing to AI SDK');
+            // EXECUTION PHASE: Full tools enabled
+            // Note: Full proceed handling triggers proceedPlanAction
+            // For now, let AI SDK handle it with tools (user saying "proceed" triggers execution)
+            console.log('[/api/chat] Proceed intent detected, passing to AI SDK with tools');
             break;
 
           case "render":
@@ -195,7 +253,7 @@ export async function POST(request: Request) {
             break;
 
           case "ai-sdk":
-            // Continue to AI SDK processing below
+            // Continue to AI SDK processing below with tools
             break;
         }
       } catch (err) {
@@ -204,7 +262,13 @@ export async function POST(request: Request) {
       }
     }
 
-    // Convert messages to core format and stream the response
+    // EXECUTION/CONVERSATIONAL PATH: Tools enabled for file operations
+    // This handles:
+    // - route.type === "proceed" (execute existing plan)
+    // - route.type === "ai-sdk" (conversational with potential tool use)
+    // - route.type === "render" (acknowledge render request)
+    //
+    // Plan generation (route.type === "plan") is handled above and returns early.
     const result = streamText({
       model: modelInstance,
       system: systemPrompt,

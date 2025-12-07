@@ -66,16 +66,18 @@ export type IntentRoute =
   | { type: "off-topic" }
   | { type: "proceed" }
   | { type: "render" }
-  | { type: "ai-sdk" }; // Default - let AI SDK handle
+  | { type: "plan" }     // Plan generation phase (no tools) - PR3.2
+  | { type: "ai-sdk" };  // Default - let AI SDK handle with tools
 
 /**
  * Determines how to route based on classified intent
  *
- * Routing logic per PRD:
- * - IsProceed → create revision from existing plan
+ * Routing logic per PRD and PR3.2:
+ * - IsProceed → execute the existing plan
  * - IsOffTopic (+ not initial + has revision) → polite decline
  * - IsRender → trigger render
- * - All others → proceed to AI SDK
+ * - IsPlan (+ not conversational) → plan generation phase (NO TOOLS)
+ * - All others → proceed to AI SDK with tools
  *
  * @param intent - Classified intent from Groq
  * @param isInitialPrompt - Whether this is the first message
@@ -87,7 +89,7 @@ export function routeFromIntent(
   isInitialPrompt: boolean,
   currentRevision: number
 ): IntentRoute {
-  // IsProceed - create revision from existing plan
+  // IsProceed - execute the existing plan
   if (intent.isProceed) {
     return { type: "proceed" };
   }
@@ -102,7 +104,14 @@ export function routeFromIntent(
     return { type: "render" };
   }
 
-  // Default - let AI SDK process (covers IsPlan, IsConversational, etc.)
+  // IsPlan - generate plan description (NO TOOLS)
+  // This is the key parity change: plan requests go to plan-only prompt
+  // Mirrors Go: pkg/llm/initial-plan.go:60-64 (no Tools param)
+  if (intent.isPlan && !intent.isConversational) {
+    return { type: "plan" };
+  }
+
+  // Default - let AI SDK process with tools (conversational, etc.)
   return { type: "ai-sdk" };
 }
 

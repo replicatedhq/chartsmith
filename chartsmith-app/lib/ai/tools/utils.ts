@@ -36,7 +36,8 @@ export interface GoSuccessResponse<T = unknown> {
  */
 export async function callGoEndpoint<T>(
   endpoint: string,
-  body: Record<string, unknown>,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  body: Record<string, any>,
   authHeader?: string
 ): Promise<T> {
   const url = `${GO_BACKEND_URL}${endpoint}`;

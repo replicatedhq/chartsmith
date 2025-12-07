@@ -12,6 +12,8 @@ interface CreatePlanRequest {
   workspaceId: string;
   chatMessageId: string;
   toolCalls: BufferedToolCall[];
+  // PR3.2: Optional description for text-only plans
+  description?: string;
 }
 
 interface CreatePlanResponse {
@@ -32,13 +34,15 @@ interface CreatePlanResponse {
  * @param workspaceId - The current workspace ID
  * @param chatMessageId - The chat message ID to associate with the plan
  * @param toolCalls - Array of buffered tool calls to store
+ * @param description - Optional plan description for text-only plans (PR3.2)
  * @returns The created plan ID
  */
 export async function createPlanFromToolCalls(
   authHeader: string | undefined,
   workspaceId: string,
   chatMessageId: string,
-  toolCalls: BufferedToolCall[]
+  toolCalls: BufferedToolCall[],
+  description?: string
 ): Promise<string> {
   const response = await callGoEndpoint<CreatePlanResponse>(
     "/api/plan/create-from-tools",
@@ -46,6 +50,7 @@ export async function createPlanFromToolCalls(
       workspaceId,
       chatMessageId,
       toolCalls,
+      description,
     } as CreatePlanRequest,
     authHeader
   );
