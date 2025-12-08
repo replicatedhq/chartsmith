@@ -1,6 +1,77 @@
 # Architecture and Design for Chartsmith-app
 
-This is a next.js project that is the front end for chartsmith.
+This is a Next.js project that is the front end for Chartsmith.
+
+## System Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              REACT FRONTEND                                  │
+│  ┌─────────────────┐              ┌─────────────────┐                       │
+│  │   Chat UI       │              │  Jotai Atoms    │◄─── useCentrifugo     │
+│  │   Components    │◄────────────►│  (State Mgmt)   │     (WebSocket)       │
+│  └────────┬────────┘              └─────────────────┘          ▲            │
+└───────────┼─────────────────────────────────────────────────────┼────────────┘
+            │ useAISDKChatAdapter                                 │
+            ▼                                                     │
+┌─────────────────────────────────────────────────────────────────┼────────────┐
+│                     NEXT.JS + VERCEL AI SDK LAYER               │            │
+│                                                                 │            │
+│  ┌──────────────────────────────────────────────────────────────┼─────────┐  │
+│  │                      /api/chat Route                         │         │  │
+│  │  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────┴───────┐ │  │
+│  │  │ Intent Classify │───►│   streamText    │───►│  6 TypeScript Tools │ │  │
+│  │  │ (plan/proceed/  │    │   (AI SDK v5)   │    │  with Go HTTP calls │ │  │
+│  │  │  ai-sdk/render) │    └────────┬────────┘    └─────────────────────┘ │  │
+│  │  └─────────────────┘             │                                     │  │
+│  └──────────────────────────────────┼─────────────────────────────────────┘  │
+│                                     │                                        │
+│                                     ▼                                        │
+│                          ┌─────────────────┐                                 │
+│                          │   OpenRouter    │  ◄── Multi-Provider LLM         │
+│                          │  Claude Sonnet  │      (Switch models live!)      │
+│                          │  GPT-4o, etc.   │                                 │
+│                          └─────────────────┘                                 │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                     │
+                                     │ HTTP (Tool Execution)
+                                     ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                           GO HTTP API LAYER                                   │
+│                                                                              │
+│  ┌─────────────────────────────────────────────────────────────────────────┐ │
+│  │  /api/tools/editor  │  /api/validate  │  /api/intent/classify          │ │
+│  │  /api/tools/context │  /api/tools/convert  │  /api/plan/create-from-tools │
+│  └─────────────────────────────────────────────────────────────────────────┘ │
+│                                     │                                        │
+│        ┌────────────────────────────┴────────────────────────────┐           │
+│        ▼                                                         ▼           │
+│  ┌─────────────────┐                                    ┌─────────────────┐  │
+│  │  Plan Workflow  │                                    │   Centrifugo    │  │
+│  │  (buffered tool │                                    │   (Real-time)   │──┼──► WebSocket
+│  │   calls, review │                                    │                 │  │
+│  │   → applied)    │                                    └─────────────────┘  │
+│  └────────┬────────┘                                                         │
+│           │                                                                  │
+└───────────┼──────────────────────────────────────────────────────────────────┘
+            │
+            ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                              POSTGRESQL                                       │
+│  workspace_plan (buffered_tool_calls)  │  workspace_chat  │  workspace_file  │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Key Architecture Points:**
+- **Vercel AI SDK** handles streaming, tool orchestration, and multi-step agents
+- **OpenRouter** provides multi-provider LLM access (Claude, GPT-4, Mistral)
+- **TypeScript Tools** call Go HTTP endpoints for file ops, validation, Helm commands
+- **Intent Classification** routes messages: plan vs execute vs conversational
+- **Plan Workflow** buffers tool calls for user review before execution
+- **Centrifugo** provides real-time WebSocket updates, coordinated with AI SDK streaming
+
+---
 
 ## Monaco Editor Implementation
 - Avoid recreating editor instances
