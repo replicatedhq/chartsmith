@@ -23,7 +23,7 @@ export async function promptType(message: string): Promise<PromptType> {
     });
 
     const msg = await anthropic.messages.create({
-      model: "claude-3-5-sonnet-20241022",
+      model: "claude-4-5-sonnet-20250929",
       max_tokens: 1024,
       system: `You are ChartSmith, an expert at creating Helm charts for Kuberentes.
 You are invited to participate in an existing conversation between a user and an expert.
@@ -33,9 +33,8 @@ You should decide if the user is asking for a change to the plan/chart, or if th
 Be exceptionally brief and precise. in your response.
 Only say "plan" or "chat" in your response.
 `,
-      messages: [
-        { role: "user", content: message }
-    ]});
+      messages: [{ role: "user", content: message }],
+    });
     const text = msg.content[0].type === 'text' ? msg.content[0].text : '';
 
     if (text.toLowerCase().includes("plan")) {

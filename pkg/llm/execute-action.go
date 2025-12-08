@@ -17,11 +17,9 @@ import (
 )
 
 const (
-	TextEditor_Sonnet37 = "text_editor_20250124"
-	TextEditor_Sonnet35 = "text_editor_20241022"
-
-	Model_Sonnet37 = "claude-3-7-sonnet-20250219"
-	Model_Sonnet35 = "claude-3-5-sonnet-20241022"
+	// See https://docs.anthropic.com/en/docs/build-with-claude/tool-use/text-editor-tool
+	TextEditor_Sonnet45 = "text_editor_20250728"
+	Model_Sonnet45 = "claude-4-5-sonnet-20250929"
 
 	minFuzzyMatchLen  = 50 // Minimum length for fuzzy matching
 	fuzzyMatchTimeout = 10 * time.Second
@@ -509,7 +507,7 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 
 	tools := []anthropic.ToolParam{
 		{
-			Name: anthropic.F(TextEditor_Sonnet35),
+			Name: anthropic.F(TextEditor_Sonnet45),
 			InputSchema: anthropic.F(interface{}(map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
@@ -541,7 +539,7 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 
 	for {
 		stream := client.Messages.NewStreaming(ctx, anthropic.MessageNewParams{
-			Model:     anthropic.F(Model_Sonnet35),
+			Model:     anthropic.F(Model_Sonnet45),
 			MaxTokens: anthropic.F(int64(8192)),
 			Messages:  anthropic.F(messages),
 			Tools:     anthropic.F(toolUnionParams),
