@@ -29,4 +29,8 @@ export interface User {
 export interface UserSetting {
   automaticallyAcceptPatches: boolean;
   evalBeforeAccept: boolean;
+  theme: string;
+  tabSize: string;
+  showMinimap: boolean;
+  useSecureBuildImages: boolean;
 }

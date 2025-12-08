@@ -1,5 +1,6 @@
 import { userIdFromExtensionToken } from "@/lib/auth/extension-token";
 import { createChatMessage, CreateChatMessageParams } from "@/lib/workspace/workspace";
+import { getUserSettings } from "@/lib/auth/user";
 import { NextRequest, NextResponse } from "next/server";
 
 
@@ -28,8 +29,12 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { prompt } = body;
 
+    // Get user settings to access SecureBuild preference
+    const userSettings = await getUserSettings(userId);
+
     const createChatMessageParams: CreateChatMessageParams = {
       prompt,
+      useSecureBuildImages: userSettings.useSecureBuildImages,
     };
 
     const chatMessage = await createChatMessage(userId, workspaceId, createChatMessageParams);

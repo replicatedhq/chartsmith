@@ -311,8 +311,25 @@ VALUES
 	}
 
 	if enqueue {
+		// Get user IDs for the workspace to retrieve SecureBuild setting
+		userIDs, err := ListUserIDsForWorkspace(ctx, workspaceID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get user IDs for workspace: %w", err)
+		}
+
+		var useSecureBuildImages bool = false
+		if len(userIDs) > 0 {
+			// Get the first user's SecureBuild setting
+			useSecureBuildImages, err = GetUserSecureBuildSetting(ctx, userIDs[0])
+			if err != nil {
+				logger.Warn("Failed to get user SecureBuild setting, using default", zap.Error(err))
+				useSecureBuildImages = false
+			}
+		}
+
 		if err := persistence.EnqueueWork(ctx, "new_plan", map[string]interface{}{
 			"planId": id,
+			"useSecureBuildImages": useSecureBuildImages,
 		}); err != nil {
 			return nil, fmt.Errorf("error enqueuing new plan: %w", err)
 		}
