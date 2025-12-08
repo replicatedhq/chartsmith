@@ -124,12 +124,12 @@ func runBootstrap(ctx context.Context, pgURI string, workspaceDir string, force 
 		return fmt.Errorf("failed to delete charts: %w", err)
 	}
 
-	_, err = tx.Exec(ctx, "INSERT INTO bootstrap_workspace (id, name, current_revision) VALUES ($1, $2, $3) ON CONFLICT (id) DO UPDATE SET name = $2, current_revision = $3", workspaceID, workspaceName, 0)
+	_, err = tx.Exec(ctx, "INSERT INTO bootstrap_workspace (id, name, current_revision) VALUES ($1, $2, $3) ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, current_revision = EXCLUDED.current_revision", workspaceID, workspaceName, 0)
 	if err != nil {
 		return fmt.Errorf("failed to insert workspace: %w", err)
 	}
 
-	_, err = tx.Exec(ctx, "INSERT INTO bootstrap_revision (workspace_id, revision_number, is_complete) VALUES ($1, $2, $3) ON CONFLICT (workspace_id, revision_number) DO UPDATE SET is_complete = $3", workspaceID, 0, true)
+	_, err = tx.Exec(ctx, "INSERT INTO bootstrap_revision (workspace_id, revision_number, is_complete) VALUES ($1, $2, $3) ON CONFLICT (workspace_id, revision_number) DO UPDATE SET is_complete = EXCLUDED.is_complete", workspaceID, 0, true)
 	if err != nil {
 		return fmt.Errorf("failed to insert revision: %w", err)
 	}
