@@ -2,7 +2,6 @@
 
 import React, { useState, useRef, useEffect, FormEvent } from "react";
 import { useAtom } from "jotai";
-import { atom } from "jotai";
 import Image from "next/image";
 import { Send } from "lucide-react";
 import ReactMarkdown from 'react-markdown';
@@ -14,9 +13,19 @@ import { ConversionProgress } from "@/components/ConversionProgress";
 import { RollbackModal } from "@/components/RollbackModal";
 import { PlanChatMessage } from "@/components/PlanChatMessage";
 
-// Types
-import { Message } from "@/components/types";
+// Types - using discriminated unions and exhaustive matching
+import {
+  Message,
+  ChatMessage,
+  ChartsmithMessageMetadata,
+  UserChatMessage,
+  AssistantChatMessage,
+  deriveMessageStatus,
+  getStatusText,
+  handleMessageByRole,
+} from "@/components/types";
 import { Session } from "@/lib/types/session";
+import type { Workspace } from "@/lib/types/workspace";
 
 // Contexts
 import { useTheme } from "../contexts/ThemeContext";
@@ -28,18 +37,46 @@ import { conversionByIdAtom, messageByIdAtom, messagesAtom, renderByIdAtom, work
 import { cancelMessageAction } from "@/lib/workspace/actions/cancel-message";
 import { performFollowupAction } from "@/lib/workspace/actions/perform-followup-action";
 import { createChatMessageAction } from "@/lib/workspace/actions/create-chat-message";
-import { getWorkspaceMessagesAction } from "@/lib/workspace/actions/get-workspace-messages";
 
-export interface ChatMessageProps {
+// ============================================================================
+// COMPONENT PROPS - Using discriminated unions for type safety
+// ============================================================================
+
+/**
+ * Props for ChatMessageView - discriminated union based on streaming state.
+ * When streaming, onCancel is required. When not streaming, it's not needed.
+ * TypeScript enforces this - no tests needed for "onCancel undefined while streaming".
+ */
+export type ChatMessageViewProps =
+  | {
+      message: ChatMessage;
+      session: Session;
+      workspace: Workspace;  // Required - no null checks needed inside component
+      mode: "streaming";
+      onCancel: () => void;  // Required when streaming
+    }
+  | {
+      message: ChatMessage;
+      session: Session;
+      workspace: Workspace;
+      mode: "static";
+      // onCancel not needed when static
+    };
+
+/**
+ * Props for the legacy ChatMessage component
+ */
+export interface LegacyChatMessageProps {
   messageId: string;
   session: Session;
   showChatInput?: boolean;
   onContentUpdate?: () => void;
-  /** Called when user cancels a temp message (AI SDK streaming) */
   onCancel?: () => void;
-  /** Direct message data (for AI SDK where messages are managed by hook, not atom) */
-  message?: Message;
 }
+
+// ============================================================================
+// SHARED UI COMPONENTS
+// ============================================================================
 
 function LoadingSpinner({ message }: { message: string }) {
   const { theme } = useTheme();
@@ -51,15 +88,173 @@ function LoadingSpinner({ message }: { message: string }) {
   );
 }
 
+// ============================================================================
+// ROLE-SPECIFIC COMPONENTS - No branching logic, TypeScript ensures correct usage
+// ============================================================================
+
+/**
+ * User message component - only accepts UserChatMessage type
+ */
+function UserMessageView({
+  message,
+  session,
+  status,
+  onCancel,
+}: {
+  message: UserChatMessage;
+  session: Session;
+  status: ReturnType<typeof deriveMessageStatus>;
+  onCancel?: () => void;
+}) {
+  const { theme } = useTheme();
+  const metadata = message.metadata as ChartsmithMessageMetadata | undefined;
+
+  // Get text from message parts
+  const text = message.parts
+    .filter((part): part is { type: "text"; text: string } => part.type === "text")
+    .map((part) => part.text)
+    .join("");
+
+  return (
+    <div className="space-y-2" data-testid="chat-message">
+      <div className="px-2 py-1" data-testid="user-message">
+        <div className={`p-3 rounded-lg ${theme === "dark" ? "bg-primary/20" : "bg-primary/10"} rounded-tr-sm w-full`}>
+          <div className="flex items-start gap-2">
+            <Image
+              src={session.user.imageUrl}
+              alt={session.user.name}
+              width={24}
+              height={24}
+              className="w-6 h-6 rounded-full flex-shrink-0"
+            />
+            <div className="flex-1">
+              <div className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} text-[12px] pt-0.5 ${status.status === "canceled" ? "opacity-50" : ""}`}>
+                {text}
+              </div>
+              {status.status === "streaming" && (
+                <div className="flex items-center gap-2 mt-2 border-t border-primary/20 pt-2">
+                  <div className="flex-shrink-0 animate-spin rounded-full h-3 w-3 border border-t-transparent border-primary"></div>
+                  <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
+                    {getStatusText(status)}
+                  </div>
+                  {onCancel && (
+                    <button
+                      className={`ml-auto text-xs px-1.5 py-0.5 rounded border ${theme === "dark" ? "border-dark-border text-gray-400 hover:text-gray-200" : "border-gray-300 text-gray-500 hover:text-gray-700"} hover:bg-dark-border/40`}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onCancel();
+                      }}
+                    >
+                      cancel
+                    </button>
+                  )}
+                </div>
+              )}
+              {status.status === "canceled" && (
+                <div className="flex items-center gap-2 mt-2 border-t border-primary/20 pt-2">
+                  <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
+                    Message generation {getStatusText(status)}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Assistant message component - only accepts AssistantChatMessage type
+ */
+function AssistantMessageView({
+  message,
+  status,
+}: {
+  message: AssistantChatMessage;
+  status: ReturnType<typeof deriveMessageStatus>;
+}) {
+  const { theme } = useTheme();
+  const metadata = message.metadata as ChartsmithMessageMetadata | undefined;
+
+  return (
+    <div className="space-y-2" data-testid="chat-message">
+      <div className="px-2 py-1" data-testid="assistant-message">
+        <div className={`p-3 rounded-lg ${theme === "dark" ? "bg-dark-border/40" : "bg-gray-100"} rounded-tl-sm w-full`}>
+          <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"} mb-1 flex items-center justify-between`}>
+            <div>ChartSmith</div>
+            {metadata?.revisionNumber !== undefined && (
+              <div className="text-[10px] opacity-70">Rev #{metadata.revisionNumber}</div>
+            )}
+          </div>
+          <div className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} text-[12px] markdown-content`}>
+            {status.status === "streaming" ? (
+              <LoadingSpinner message={getStatusText(status)} />
+            ) : status.status === "complete" ? (
+              status.response ? (
+                <ReactMarkdown>{status.response}</ReactMarkdown>
+              ) : (
+                <span className="text-gray-500">Chart files created.</span>
+              )
+            ) : status.status === "canceled" ? (
+              <span className="text-gray-500 italic">{getStatusText(status)}</span>
+            ) : status.status === "error" ? (
+              <span className="text-red-500">{getStatusText(status)}</span>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// MAIN COMPONENT - Uses exhaustive matching, no branching tests needed
+// ============================================================================
+
+/**
+ * ChatMessageView - renders messages using exhaustive role matching.
+ * TypeScript ensures all message roles are handled - no tests needed.
+ */
+export function ChatMessageView(props: ChatMessageViewProps) {
+  const { message, session, workspace } = props;
+  const isStreaming = props.mode === "streaming";
+  const onCancel = props.mode === "streaming" ? props.onCancel : undefined;
+
+  // Derive status using discriminated union - single source of truth
+  const status = deriveMessageStatus(message, isStreaming);
+
+  // Exhaustive role matching - TypeScript errors if we miss a case
+  return handleMessageByRole(message, {
+    user: (msg) => (
+      <UserMessageView
+        message={msg}
+        session={session}
+        status={status}
+        onCancel={onCancel}
+      />
+    ),
+    assistant: (msg) => (
+      <AssistantMessageView message={msg} status={status} />
+    ),
+    system: () => null, // System messages not rendered
+  });
+}
+
+// ============================================================================
+// LEGACY COMPONENT - For backward compatibility with non-AI SDK path
+// ============================================================================
+
 // Helper function to determine if a message is the first one for its revision number
 function isFirstMessageForRevision(message: Message, messageId: string, allMessages: Message[]): boolean {
   if (!message.responseRollbackToRevisionNumber) {
-    return false; // No revision number to check
+    return false;
   }
 
   const revisionNumber = message.responseRollbackToRevisionNumber;
 
-  // Find all messages that have this revision number and sort by creation date
   const messagesWithRevision = allMessages
     .filter(m => m.responseRollbackToRevisionNumber === revisionNumber)
     .sort((a, b) => {
@@ -68,19 +263,22 @@ function isFirstMessageForRevision(message: Message, messageId: string, allMessa
       return aTime - bTime;
     });
 
-  // Check if this message is the first one with this revision
-  return messagesWithRevision.length > 0 &&
-         messagesWithRevision[0].id === messageId;
+  return messagesWithRevision.length > 0 && messagesWithRevision[0].id === messageId;
 }
 
-export function ChatMessage({
+/**
+ * Legacy ChatMessage component - uses the old Message format
+ *
+ * This is kept for backward compatibility with the non-AI SDK code path.
+ * It will be removed once the AI SDK migration is complete.
+ */
+export function LegacyChatMessage({
   messageId,
   session,
   showChatInput,
   onContentUpdate,
   onCancel,
-  message: messageProp,
-}: ChatMessageProps) {
+}: LegacyChatMessageProps) {
   const { theme } = useTheme();
   const [showReportModal, setShowReportModal] = useState(false);
   const [showRollbackModal, setShowRollbackModal] = useState(false);
@@ -91,24 +289,19 @@ export function ChatMessage({
 
   const [messages, setMessages] = useAtom(messagesAtom);
   const [messageGetter] = useAtom(messageByIdAtom);
-  // Use provided message prop if available, otherwise look up from atom
-  const message = messageProp ?? messageGetter(messageId);
+  const message = messageGetter(messageId);
 
   const [workspace, setWorkspace] = useAtom(workspaceAtom);
   const [renderGetter] = useAtom(renderByIdAtom);
-  // Only call the getter if responseRenderId exists
   const render = message?.responseRenderId ? renderGetter(message.responseRenderId) : undefined;
   const [conversionGetter] = useAtom(conversionByIdAtom);
-  // Only call the getter if responseConversionId exists
   const conversion = message?.responseConversionId ? conversionGetter(message.responseConversionId) : undefined;
 
-  // Check if this is the first message for its revision
   const isFirstForRevision = React.useMemo(() => {
     if (!message || !message.responseRollbackToRevisionNumber) return false;
     return isFirstMessageForRevision(message, messageId, messages);
   }, [message, messageId, messages]);
 
-  // Move the useEffect outside of renderAssistantContent
   useEffect(() => {
     if (onContentUpdate && message) {
       onContentUpdate();
@@ -148,12 +341,6 @@ export function ChatMessage({
     };
   }, []);
 
-  const handleApplyChanges = async () => {
-    console.log("handleApplyChanges");
-  }
-
-  // Create a pure sorted content component
-  // This ensures the order is always correct by hard-coding it
   const SortedContent = () => {
     return (
       <>
@@ -177,7 +364,7 @@ export function ChatMessage({
               session={session}
               messageId={messageId}
               workspaceId={workspace?.id}
-              messages={messages} // Pass messages to resolve the reference error
+              messages={messages}
             />
           </div>
         )}
@@ -252,7 +439,6 @@ export function ChatMessage({
                       e.preventDefault();
                       e.stopPropagation();
 
-                      // For temp messages (AI SDK streaming), cancel client-side
                       if (message.id.startsWith("temp-")) {
                         onCancel?.();
                         setMessages((messages: Message[]) =>
@@ -265,7 +451,6 @@ export function ChatMessage({
                         return;
                       }
 
-                      // For persisted messages, cancel via server action
                       const chatMessage = await cancelMessageAction(session, message.id);
                       if (chatMessage && setMessages) {
                         setMessages((messages: Message[]) => messages.map((m: Message) => m.id === message.id ? (chatMessage as Message) : m));
@@ -294,7 +479,6 @@ export function ChatMessage({
               <div>ChartSmith</div>
               <div className="text-[10px] opacity-70">
                 Rev #{
-                  // Try to get actual revision number, otherwise use a hash of the message ID to generate a stable pseudo-revision
                   message.revisionNumber !== undefined
                     ? message.revisionNumber
                     : message.id
@@ -304,13 +488,8 @@ export function ChatMessage({
               </div>
             </div>
             <div className={`${theme === "dark" ? "text-gray-200" : "text-gray-700"} ${message.isIgnored ? "opacity-50 line-through" : ""} text-[12px] markdown-content`}>
-              {/* Use our custom component that enforces order */}
               <SortedContent />
 
-              {/* Rollback link - only show if:
-                 1. It has a rollback revision number
-                 2. It's not the current revision
-                 3. It's the first message for that revision */}
               {message.responseRollbackToRevisionNumber !== undefined &&
                workspace.currentRevisionNumber !== message.responseRollbackToRevisionNumber &&
                isFirstForRevision && (
@@ -418,3 +597,6 @@ export function ChatMessage({
     </div>
   );
 }
+
+// Default export for backward compatibility
+export { LegacyChatMessage as ChatMessage };

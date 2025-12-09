@@ -16,11 +16,12 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import { userIdFromExtensionToken } from "@/lib/auth/extension-token";
 import { getWorkspace } from "@/lib/workspace/workspace";
 import { logger } from "@/lib/utils/logger";
-import { getSystemPrompt } from "@/lib/chat/message-builder";
+import { CHAT_SYSTEM_PROMPT } from "@/lib/chat/prompts/system";
 import { createWriteFileTool, WriteFileContext } from "@/lib/chat/tools/write-file";
 import { getDB } from "@/lib/data/db";
 import { getParam } from "@/lib/data/param";
 import { nanoid } from "nanoid";
+import { chatRequestSchema } from "@/lib/chat/schema";
 
 /**
  * Tool-specific instructions appended to the system prompt
@@ -51,15 +52,6 @@ CRITICAL REQUIREMENTS:
 5. Use 2 spaces for YAML indentation.
 </tool_instructions>
 `;
-
-/**
- * Request body schema - matches useChat format
- * workspaceId is passed via body extra params
- */
-const chatRequestSchema = z.object({
-  messages: z.array(z.any()).min(1, "Messages array is required"),
-  workspaceId: z.string().min(1, "Workspace ID is required"),
-});
 
 /**
  * POST /api/chat
@@ -120,7 +112,7 @@ export async function POST(req: NextRequest) {
     const messages = [...contextMessages, ...modelMessages];
 
     // Get system prompt - use the existing comprehensive prompt with tool instructions
-    const system = getSystemPrompt() + TOOL_INSTRUCTIONS;
+    const system = CHAT_SYSTEM_PROMPT + TOOL_INSTRUCTIONS;
 
     // Get the appropriate model based on CHAT_PROVIDER env var
     const model = getChatModel();

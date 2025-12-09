@@ -1,15 +1,23 @@
 import { atom } from 'jotai'
 import type { Workspace, Plan, RenderedWorkspace, Chart, WorkspaceFile, Conversion, ConversionFile, ConversionStatus } from '@/lib/types/workspace'
-import { Message, FileNode } from '@/components/types'
+import { Message, FileNode, ChatMessage } from '@/components/types'
 
 // Base atoms
 export const workspaceAtom = atom<Workspace | null>(null)
 export const editorContentAtom = atom<string>("")
 export const selectedFileAtom = atom<WorkspaceFile | undefined>(undefined)
 
+// Legacy messages atom (for non-AI SDK path)
 export const messagesAtom = atom<Message[]>([])
 export const messageByIdAtom = atom(get => {
   const messages = get(messagesAtom)
+  return (id: string) => messages.find(m => m.id === id)
+})
+
+// AI SDK messages atom (UIMessage format) - managed by useChat hook, this is just for reference
+export const chatMessagesAtom = atom<ChatMessage[]>([])
+export const chatMessageByIdAtom = atom(get => {
+  const messages = get(chatMessagesAtom)
   return (id: string) => messages.find(m => m.id === id)
 })
 

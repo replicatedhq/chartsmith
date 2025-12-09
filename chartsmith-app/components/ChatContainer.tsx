@@ -1,9 +1,11 @@
 "use client";
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { Send, Loader2, Users, Code, User, Sparkles } from "lucide-react";
+import { useChat } from "@ai-sdk/react";
+import { DefaultChatTransport } from "ai";
 import { useTheme } from "../contexts/ThemeContext";
 import { Session } from "@/lib/types/session";
-import { ChatMessage } from "./ChatMessage";
+import { ChatMessageView, LegacyChatMessage } from "./ChatMessage";
 import { messagesAtom, workspaceAtom, isRenderingAtom } from "@/atoms/workspace";
 import { useAtom } from "jotai";
 import { createChatMessageAction } from "@/lib/workspace/actions/create-chat-message";
@@ -11,8 +13,11 @@ import { getWorkspaceAction } from "@/lib/workspace/actions/get-workspace";
 import { ScrollingContent } from "./ScrollingContent";
 import { NewChartChatMessage } from "./NewChartChatMessage";
 import { NewChartContent } from "./NewChartContent";
-import { useChartsmithChat, useVercelAiSdkEnabled } from "@/hooks/useChartsmithChat";
-import type { Message } from "./types";
+import type { Message, ChatMessage } from "./types";
+
+// Feature flag - inline, no wrapper needed
+const useVercelAiSdkEnabled = () =>
+  typeof window !== "undefined" && process.env.NEXT_PUBLIC_USE_VERCEL_AI_SDK === "true";
 
 // Key for storing the initial prompt in localStorage (shared with PromptModal)
 const INITIAL_PROMPT_KEY = "chartsmith_initial_prompt";
@@ -34,36 +39,47 @@ export function ChatContainer({ session }: ChatContainerProps) {
   // Check if Vercel AI SDK is enabled
   const useVercelAiSdk = useVercelAiSdkEnabled();
 
-  // Use the Vercel AI SDK chat hook
-  const {
-    sendMessage: sendAiSdkMessage,
-    isLoading: aiSdkLoading,
-    messages: aiSdkMessages,
-    stop: stopStreaming,
-  } = useChartsmithChat({
-    onError: (error) => {
-      console.error("Chat error:", error);
-    },
-    onFinish: async () => {
-      console.log("[ChatContainer] onFinish called");
+  // Create transport with workspace ID - memoized to prevent re-renders
+  const transport = useMemo(
+    () =>
+      new DefaultChatTransport({
+        api: "/api/chat",
+        body: { workspaceId: workspace?.id },
+      }),
+    [workspace?.id]
+  );
 
+  // Use Vercel AI SDK's useChat directly - no wrapper needed
+  const {
+    messages: aiSdkMessages,
+    status,
+    stop: stopStreaming,
+    sendMessage: aiSendMessage,
+  } = useChat({
+    transport,
+    onFinish: async () => {
       // Refresh workspace to get newly created files from AI tools
       if (session && workspace?.id) {
-        console.log("[ChatContainer] Refreshing workspace:", workspace.id);
         try {
           const freshWorkspace = await getWorkspaceAction(session, workspace.id);
-          console.log("[ChatContainer] Got fresh workspace, files:", freshWorkspace?.files?.length, "charts:", freshWorkspace?.charts?.length, "chart files:", freshWorkspace?.charts?.[0]?.files?.length);
           if (freshWorkspace) {
             setWorkspace(freshWorkspace);
           }
         } catch (err) {
-          console.error("[ChatContainer] Failed to refresh workspace:", err);
+          console.error("Failed to refresh workspace:", err);
         }
-      } else {
-        console.log("[ChatContainer] Missing session or workspace.id", { session: !!session, workspaceId: workspace?.id });
       }
     },
   });
+
+  // Derive loading state from status - no wrapper needed
+  const aiSdkLoading = status === "submitted" || status === "streaming";
+
+  // Simple send wrapper - accepts string, SDK wants { text: string }
+  const sendAiSdkMessage = (content: string) => {
+    if (!workspace?.id || !content.trim()) return;
+    aiSendMessage({ text: content.trim() });
+  };
 
   // No need for refs as ScrollingContent manages its own scrolling
 
@@ -111,12 +127,56 @@ export function ChatContainer({ session }: ChatContainerProps) {
     }
   }, [useVercelAiSdk, workspace?.id, aiSdkLoading, sendAiSdkMessage]);
 
-  // Use AI SDK messages when enabled, otherwise use atom messages
-  const displayMessages = useVercelAiSdk ? aiSdkMessages : messages;
-
-  if (!displayMessages || !workspace) {
+  if (!workspace) {
     return null;
   }
+
+  // Determine if we're in streaming mode - affects required props for ChatMessageView
+  const isStreamingMode = status === "streaming" || status === "submitted";
+
+  // Render different message formats based on which path is active
+  const renderMessages = () => {
+    if (useVercelAiSdk) {
+      // AI SDK path: render UIMessage format with discriminated union props
+      // Cast to ChatMessage - SDK returns UIMessage<unknown>, we know it's our metadata type
+      const typedMessages = aiSdkMessages as ChatMessage[];
+
+      return typedMessages.map((message) => (
+        <div key={message.id}>
+          {isStreamingMode ? (
+            <ChatMessageView
+              key={message.id}
+              message={message}
+              session={session}
+              workspace={workspace}
+              mode="streaming"
+              onCancel={stopStreaming}
+            />
+          ) : (
+            <ChatMessageView
+              key={message.id}
+              message={message}
+              session={session}
+              workspace={workspace}
+              mode="static"
+            />
+          )}
+        </div>
+      ));
+    } else {
+      // Legacy path: render Message format
+      return messages.map((item) => (
+        <div key={item.id}>
+          <LegacyChatMessage
+            key={item.id}
+            messageId={item.id}
+            session={session}
+            onContentUpdate={() => {}}
+          />
+        </div>
+      ));
+    }
+  };
 
   const handleSubmitChat = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -181,21 +241,7 @@ export function ChatContainer({ session }: ChatContainerProps) {
       <div className="flex-1 min-h-0 overflow-hidden">
         <ScrollingContent forceScroll={true}>
           <div className={workspace?.currentRevisionNumber === 0 ? "" : "pb-32"}>
-            {displayMessages.map((item) => (
-              <div key={item.id}>
-                <ChatMessage
-                  key={item.id}
-                  messageId={item.id}
-                  session={session}
-                  onContentUpdate={() => {
-                    // No need to update state - ScrollingContent will handle scrolling
-                  }}
-                  onCancel={useVercelAiSdk ? stopStreaming : undefined}
-                  // Pass the message directly when using AI SDK (messages managed by hook, not atom)
-                  message={useVercelAiSdk ? item : undefined}
-                />
-              </div>
-            ))}
+            {renderMessages()}
           </div>
         </ScrollingContent>
       </div>
