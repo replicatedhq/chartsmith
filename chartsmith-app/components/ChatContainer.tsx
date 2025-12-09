@@ -32,7 +32,6 @@ export function ChatContainer({ session }: ChatContainerProps) {
     api: '/api/chat',
     id: workspace?.id,
     initialMessages: [],
-    experimental_toolCallStreaming: true,
     onFinish: (message: any) => {
       // Sync the final message content to the atom
     },
@@ -73,7 +72,8 @@ export function ChatContainer({ session }: ChatContainerProps) {
     // We pass the chatMessageId so the server knows which message to update
     console.log("[CLIENT] Calling sendMessage...");
     await sendMessage({
-      text: input,
+      role: 'user',
+      content: input,
     }, {
       body: {
         chatMessageId: chatMessage.id,
@@ -143,7 +143,8 @@ export function ChatContainer({ session }: ChatContainerProps) {
       if (aiMessages.length === 0) {
         console.log("[CLIENT] Found pending user message from handover. Triggering AI...", lastMessage.id);
         sendMessage({
-          text: lastMessage.prompt,
+          role: 'user',
+          content: lastMessage.prompt,
         }, {
           body: {
             chatMessageId: lastMessage.id,
@@ -234,7 +235,8 @@ export function ChatContainer({ session }: ChatContainerProps) {
 
       console.log("[CLIENT] (NewChart) Calling sendMessage...");
       await sendMessage({
-        text: input.trim(),
+        role: 'user',
+        content: input.trim(),
       }, {
         body: {
           chatMessageId: chatMessage.id,

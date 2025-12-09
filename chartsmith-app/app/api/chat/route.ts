@@ -1,5 +1,5 @@
 import { openai } from "@ai-sdk/openai";
-import { streamText, tool, convertToModelMessages } from "ai";
+import { streamText, tool } from "ai";
 import { z } from "zod";
 import { getDB } from "@/lib/data/db";
 import { getParam } from "@/lib/data/param";
@@ -16,7 +16,22 @@ export const maxDuration = 300;
 
 export async function POST(req: Request) {
     try {
-        const { messages, workspaceId, chatMessageId } = await req.json();
+        const body = await req.json();
+        const { messages, workspaceId, chatMessageId } = body;
+
+        logger.info("Chat request received", { hasMessages: !!messages, messagesLength: messages?.length, workspaceId, chatMessageId, bodyKeys: Object.keys(body) });
+
+        // Validate required parameters
+        if (!messages || !Array.isArray(messages) || messages.length === 0) {
+            logger.error("Invalid messages parameter", { messages, body });
+            return new Response(JSON.stringify({ error: "Messages array is required" }), {
+                status: 400,
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+
+        // Log message details
+        logger.info("Messages array content", { messages: messages.map((m: any) => ({ role: m?.role, contentLength: m?.content?.length, keys: Object.keys(m || {}) })) });
 
         // Auth check
         const cookieStore = await cookies();
@@ -80,15 +95,27 @@ If the user asks to create or modify a chart or perform a complex task that requ
             }
         }
 
+        // Format messages for the AI SDK
+        // Extract only role and content fields to avoid issues with extra fields like 'id'
+        const formattedMessages = messages.map((msg: any) => ({
+            role: msg.role,
+            content: msg.content
+        }));
+
+        logger.info("Formatted messages for AI SDK", {
+            originalCount: messages.length,
+            formattedCount: formattedMessages.length,
+            firstFormatted: formattedMessages[0]
+        });
+
         const result = streamText({
             model: openai("gpt-4o"),
             system: systemPrompt,
-            messages: convertToModelMessages(messages),
+            messages: formattedMessages,
             maxSteps: 5,
             // DISABLED: Tools cause client error "Cannot read properties of undefined (reading 'state')"
             // This is a known issue with @ai-sdk/react@2.0.106 and tool calling
             // TODO: Re-enable when AI SDK fixes this bug or we find a workaround
-            /*
             tools: {
                 latest_subchart_version: tool({
                     description: "Return the latest version of a subchart from name",
@@ -143,7 +170,6 @@ If the user asks to create or modify a chart or perform a complex task that requ
                     },
                 }),
             },
-            */
             onFinish: async ({ text }) => {
                 // Save to DB
                 if (chatMessageId) {

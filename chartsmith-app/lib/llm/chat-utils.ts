@@ -21,6 +21,14 @@ export interface WorkspaceFilter {
 async function getEmbeddings(content: string): Promise<string> {
     if (!content) return "";
 
+    // Mock mode: return empty embeddings
+    if (process.env.MOCK_AI_SERVICE === 'true') {
+        logger.info("Mock mode: skipping embeddings generation");
+        // Return a mock 1536-dimensional zero vector
+        const mockEmbedding = new Array(1536).fill(0);
+        return `[${mockEmbedding.join(",")}]`;
+    }
+
     const db = getDB(await getParam("DB_URI"));
     const contentSHA256 = crypto.createHash("sha256").update(content).digest("hex");
 
@@ -60,6 +68,12 @@ async function getEmbeddings(content: string): Promise<string> {
 }
 
 export async function expandPrompt(prompt: string): Promise<string> {
+    // Mock mode: return the original prompt
+    if (process.env.MOCK_AI_SERVICE === 'true') {
+        logger.info("Mock mode: skipping prompt expansion");
+        return prompt;
+    }
+
     try {
         const { text } = await generateText({
             model: openai("gpt-4o"),
