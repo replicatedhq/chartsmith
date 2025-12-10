@@ -20,7 +20,9 @@ type ConvertFileOpts struct {
 	ValuesYAML string
 }
 
-// ConvertFile is sync and will return a map of path:content
+// ConvertFile converts a Kubernetes manifest to a Helm template.
+// It returns a map of file paths to content, the updated values.yaml, and any error encountered.
+// This function is synchronous and uses the Groq LLM for conversion.
 func ConvertFile(ctx context.Context, opts ConvertFileOpts) (map[string]string, string, error) {
 	logger.Info("Converting file",
 		zap.String("path", opts.Path),
@@ -29,9 +31,11 @@ func ConvertFile(ctx context.Context, opts ConvertFileOpts) (map[string]string, 
 	return convertFileUsingGroq(ctx, opts)
 }
 
+// convertFileUsingGroq converts a Kubernetes manifest to Helm template using Groq LLM.
 func convertFileUsingGroq(ctx context.Context, opts ConvertFileOpts) (map[string]string, string, error) {
 	client := groq.NewClient(groq.WithAPIKey(param.Get().GroqAPIKey))
 
+	// Build conversion request messages
 	messages := []groq.Message{
 		{
 			Role:    "system",
@@ -66,14 +70,17 @@ Convert the following Kubernetes manifest to a helm template:
 		Messages: messages,
 	})
 	if err != nil {
+		logger.Errorf("Failed to get converted file content from Groq: %v", err)
 		return nil, "", fmt.Errorf("failed to get converted file content: %w", err)
 	}
 
 	artifacts, err := parseArtifactsInResponse(response.Choices[0].Message.Content)
 	if err != nil {
+		logger.Errorf("Failed to parse artifacts from Groq response: %v", err)
 		return nil, "", fmt.Errorf("failed to parse artifacts: %w", err)
 	}
 
+	// Process artifacts and handle values.yaml specially
 	updatedValuesYAML := opts.ValuesYAML
 	artifactsMap := make(map[string]string)
 	for _, artifact := range artifacts {
@@ -117,15 +124,19 @@ Convert the following Kubernetes manifest to a helm template:
 		}
 	}
 
+	logger.Debug("Conversion completed", zap.Int("artifactCount", len(artifactsMap)))
 	return artifactsMap, updatedValuesYAML, nil
 }
 
+// convertFileUsingClaude converts a Kubernetes manifest to Helm template using Claude.
 func convertFileUsingClaude(ctx context.Context, opts ConvertFileOpts) (map[string]string, string, error) {
 	client, err := newAnthropicClient(ctx)
 	if err != nil {
+		logger.Errorf("Failed to create Anthropic client: %v", err)
 		return nil, "", fmt.Errorf("failed to get anthropic client: %w", err)
 	}
 
+	// Build conversion request messages
 	messages := []anthropic.MessageParam{
 		anthropic.NewAssistantMessage(anthropic.NewTextBlock(executePlanSystemPrompt)),
 		anthropic.NewUserMessage(anthropic.NewTextBlock(convertFileSystemPrompt)),
@@ -145,20 +156,23 @@ Convert the following Kubernetes manifest to a helm template:
 		),
 	}
 
-	response, err := client.Messages.New(context.TODO(), anthropic.MessageNewParams{
-		Model:     anthropic.F(anthropic.ModelClaude3_7Sonnet20250219),
+	response, err := client.Messages.New(ctx, anthropic.MessageNewParams{
+		Model:     anthropic.F(DefaultModel),
 		MaxTokens: anthropic.F(int64(8192)),
 		Messages:  anthropic.F(messages),
 	})
 	if err != nil {
+		logger.Errorf("Failed to create message with Claude: %v", err)
 		return nil, "", fmt.Errorf("failed to create message: %w", err)
 	}
 
 	artifacts, err := parseArtifactsInResponse(response.Content[0].Text)
 	if err != nil {
+		logger.Errorf("Failed to parse artifacts from Claude response: %v", err)
 		return nil, "", fmt.Errorf("failed to parse artifacts: %w", err)
 	}
 
+	// Process artifacts and handle values.yaml specially
 	updatedValuesYAML := opts.ValuesYAML
 	artifactsMap := make(map[string]string)
 	for _, artifact := range artifacts {
@@ -202,10 +216,13 @@ Convert the following Kubernetes manifest to a helm template:
 		}
 	}
 
+	logger.Debug("Conversion completed", zap.Int("artifactCount", len(artifactsMap)))
 	return artifactsMap, updatedValuesYAML, nil
 }
 
-// applyPatch attempts to apply a unified diff patch to the original content
+// applyPatch attempts to apply a unified diff patch to the original content.
+// It parses the patch format and applies hunks sequentially, handling additions,
+// deletions, and context lines according to the unified diff specification.
 func applyPatch(original, patchContent string) (string, error) {
 	// Parse the patch
 	fileDiffs, err := diff.ParseMultiFileDiff([]byte(patchContent))
@@ -223,7 +240,7 @@ func applyPatch(original, patchContent string) (string, error) {
 	// Split the original content into lines
 	originalLines := strings.Split(original, "\n")
 
-	// Apply each hunk
+	// Apply each hunk to the original content
 	result := make([]string, len(originalLines))
 	copy(result, originalLines)
 
@@ -277,12 +294,14 @@ func applyPatch(original, patchContent string) (string, error) {
 	return strings.Join(result, "\n"), nil
 }
 
-// extractAddedContent extracts only the added content from a patch
+// extractAddedContent extracts only the added content from a unified diff patch.
+// It filters out the patch metadata and context lines, returning only the lines
+// that were added (marked with '+' prefix, excluding the '+++ filename' header).
 func extractAddedContent(patchContent string) string {
 	lines := strings.Split(patchContent, "\n")
 	var contentLines []string
 
-	// Skip header lines
+	// Skip header lines until we find a hunk
 	inHunk := false
 	for _, line := range lines {
 		if strings.HasPrefix(line, "@@") {
@@ -302,7 +321,9 @@ func extractAddedContent(patchContent string) string {
 	return strings.Join(contentLines, "\n")
 }
 
-// mergeValuesYAML merges the new values into the existing values
+// mergeValuesYAML merges new YAML values into existing values.
+// It attempts to parse both as YAML maps and perform a deep merge.
+// If either cannot be parsed as valid YAML, it falls back to text concatenation.
 func mergeValuesYAML(existingYAML, newYAML string) (string, error) {
 	// Check if the newYAML is empty
 	if strings.TrimSpace(newYAML) == "" {

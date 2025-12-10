@@ -97,20 +97,32 @@ schema: pgvector
 .PHONY: build
 build:
 	@echo "Building $(WORKER_BINARY_NAME)..."
+ifeq ($(OS),Windows_NT)
+	@if not exist $(WORKER_BUILD_DIR) mkdir $(WORKER_BUILD_DIR)
+	@go build -o $(WORKER_BUILD_DIR)/$(WORKER_BINARY_NAME).exe main.go
+else
 	@mkdir -p $(WORKER_BUILD_DIR)
 	@go build -o $(WORKER_BUILD_DIR)/$(WORKER_BINARY_NAME) main.go
+endif
 
 # Requires: ANTHROPIC_API_KEY, GROQ_API_KEY, VOYAGE_API_KEY
 .PHONY: run-worker
 run-worker: build
 	@echo "Running $(WORKER_BINARY_NAME) with environment variables from shell..."
+ifeq ($(OS),Windows_NT)
+	$(WORKER_BUILD_DIR)/$(WORKER_BINARY_NAME).exe run --
+else
 	./$(WORKER_BUILD_DIR)/$(WORKER_BINARY_NAME) run --
+endif
 
 .PHONY: bootstrap
 bootstrap: build
 	@echo "Bootstrapping chart..."
-	./$(WORKER_BUILD_DIR)/$(WORKER_BINARY_NAME) bootstrap \
-		--force
+ifeq ($(OS),Windows_NT)
+	$(WORKER_BUILD_DIR)/$(WORKER_BINARY_NAME).exe bootstrap --force
+else
+	./$(WORKER_BUILD_DIR)/$(WORKER_BINARY_NAME) bootstrap --force
+endif
 
 .PHONY: test-data
 test-data: build

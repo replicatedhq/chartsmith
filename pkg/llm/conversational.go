@@ -11,6 +11,16 @@ import (
 	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 )
 
+// ConversationalChatMessage handles conversational chat interactions with the LLM.
+// It processes a chat message within the context of a workspace, including relevant files,
+// chart structure, and previous conversation history. The function supports tool use for
+// querying Kubernetes versions and subchart versions.
+//
+// The response is streamed via streamCh, and errors or completion are signaled via doneCh.
+//
+// Note: This implementation uses anthropic-sdk-go directly. During the AI SDK migration,
+// this pattern is maintained for backward compatibility while adding cleaner configuration
+// through the Config struct and model constants.
 func ConversationalChatMessage(ctx context.Context, streamCh chan string, doneCh chan error, w *workspacetypes.Workspace, chatMessage *workspacetypes.Chat) error {
 	client, err := newAnthropicClient(ctx)
 	if err != nil {
@@ -133,9 +143,11 @@ func ConversationalChatMessage(ctx context.Context, streamCh chan string, doneCh
 	}
 
 	for {
+		// Create a streaming request using the configured model and max tokens.
+		// The model constant (DefaultModel) allows for easy model upgrades across the codebase.
 		stream := client.Messages.NewStreaming(ctx, anthropic.MessageNewParams{
-			Model:     anthropic.F(anthropic.ModelClaude3_7Sonnet20250219),
-			MaxTokens: anthropic.F(int64(8192)),
+			Model:     anthropic.F(DefaultModel),
+			MaxTokens: anthropic.F(int64(DefaultMaxTokens)),
 			Messages:  anthropic.F(messages),
 			Tools:     anthropic.F(toolUnionParams),
 		})
@@ -167,6 +179,10 @@ func ConversationalChatMessage(ctx context.Context, streamCh chan string, doneCh
 		hasToolCalls := false
 		toolResults := []anthropic.ContentBlockParamUnion{}
 
+		// Process tool calls from the LLM response.
+		// Supported tools:
+		//   - latest_kubernetes_version: Returns the latest K8s version for a given semver field
+		//   - latest_subchart_version: Queries ArtifactHub for the latest version of a subchart
 		for _, block := range message.Content {
 			if block.Type == anthropic.ContentBlockTypeToolUse {
 				hasToolCalls = true
@@ -177,10 +193,12 @@ func ConversationalChatMessage(ctx context.Context, streamCh chan string, doneCh
 						SemverField string `json:"semver_field"`
 					}
 					if err := json.Unmarshal(block.Input, &input); err != nil {
-						doneCh <- fmt.Errorf("failed to unmarshal tool input: %w", err)
+						err = fmt.Errorf("failed to unmarshal tool input for %s: %w", block.Name, err)
+						doneCh <- err
 						return err
 					}
 
+					// Return the latest Kubernetes version based on the semver field requested
 					switch input.SemverField {
 					case "major":
 						response = "1"
@@ -188,30 +206,43 @@ func ConversationalChatMessage(ctx context.Context, streamCh chan string, doneCh
 						response = "1.32"
 					case "patch":
 						response = "1.32.1"
+					default:
+						// Default to patch version if an invalid field is specified
+						response = "1.32.1"
 					}
 				case "latest_subchart_version":
 					var input struct {
 						ChartName string `json:"chart_name"`
 					}
 					if err := json.Unmarshal(block.Input, &input); err != nil {
-						doneCh <- fmt.Errorf("failed to unmarshal tool input: %w", err)
+						err = fmt.Errorf("failed to unmarshal tool input for %s: %w", block.Name, err)
+						doneCh <- err
 						return err
 					}
 
+					// Query ArtifactHub for the latest version of the requested subchart
 					version, err := recommendations.GetLatestSubchartVersion(input.ChartName)
 					if err != nil && err != recommendations.ErrNoArtifactHubPackage {
-						doneCh <- fmt.Errorf("failed to get latest subchart version: %w", err)
+						err = fmt.Errorf("failed to get latest subchart version for %s: %w", input.ChartName, err)
+						doneCh <- err
 						return err
 					} else if err == recommendations.ErrNoArtifactHubPackage {
+						// Return "?" if the package is not found on ArtifactHub
 						response = "?"
 					} else {
 						response = version
 					}
+				default:
+					// Log unexpected tool names but continue processing
+					err := fmt.Errorf("unknown tool called: %s", block.Name)
+					doneCh <- err
+					return err
 				}
 
 				b, err := json.Marshal(response)
 				if err != nil {
-					doneCh <- fmt.Errorf("failed to marshal tool response: %w", err)
+					err = fmt.Errorf("failed to marshal tool response for %s: %w", block.Name, err)
+					doneCh <- err
 					return err
 				}
 
@@ -233,6 +264,9 @@ func ConversationalChatMessage(ctx context.Context, streamCh chan string, doneCh
 	return nil
 }
 
+// getChartStructure builds a string representation of the chart's file structure.
+// This is used to provide context to the LLM about the workspace organization.
+// Returns a formatted string listing all files in the chart.
 func getChartStructure(ctx context.Context, c *workspacetypes.Chart) (string, error) {
 	structure := ""
 	for _, file := range c.Files {

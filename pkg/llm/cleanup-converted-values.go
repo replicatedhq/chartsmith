@@ -10,11 +10,15 @@ import (
 	"go.uber.org/zap"
 )
 
+// CleanUpConvertedValuesYAML processes a values.yaml file to remove errors and inconsistencies.
+// It merges duplicate keys, removes patch markers, cleans up comments, and ensures valid YAML syntax.
+// Returns the cleaned values.yaml content or an error if the cleanup fails.
 func CleanUpConvertedValuesYAML(ctx context.Context, valuesYAML string) (string, error) {
 	logger.Info("Cleaning up converted values.yaml")
 
 	client, err := newAnthropicClient(ctx)
 	if err != nil {
+		logger.Errorf("Failed to create Anthropic client: %v", err)
 		return "", fmt.Errorf("failed to get anthropic client: %w", err)
 	}
 

@@ -11,6 +11,7 @@ import (
 	"go.uber.org/zap"
 )
 
+// CreatePlanOpts contains options for creating a plan
 type CreatePlanOpts struct {
 	ChatMessages  []workspacetypes.Chat
 	Chart         *workspacetypes.Chart
@@ -18,6 +19,9 @@ type CreatePlanOpts struct {
 	IsUpdate      bool
 }
 
+// CreatePlan generates a plan for creating or updating a Helm chart based on chat messages and relevant files.
+// It streams the plan text to streamCh and signals completion (with any error) via doneCh.
+// If IsUpdate is true, the plan is for updating an existing chart; otherwise, it's for creating a new one.
 func CreatePlan(ctx context.Context, streamCh chan string, doneCh chan error, opts CreatePlanOpts) error {
 	fileNameArgs := []string{}
 	for _, file := range opts.RelevantFiles {
@@ -87,8 +91,8 @@ func CreatePlan(ctx context.Context, streamCh chan string, doneCh chan error, op
 	// 	},
 	// }
 
-	stream := client.Messages.NewStreaming(context.TODO(), anthropic.MessageNewParams{
-		Model:     anthropic.F(anthropic.ModelClaude3_7Sonnet20250219),
+	stream := client.Messages.NewStreaming(ctx, anthropic.MessageNewParams{
+		Model:     anthropic.F(DefaultModel),
 		MaxTokens: anthropic.F(int64(8192)),
 		// Tools:     anthropic.F(tools),
 		Messages: anthropic.F(messages),
@@ -107,10 +111,18 @@ func CreatePlan(ctx context.Context, streamCh chan string, doneCh chan error, op
 		}
 	}
 
-	if stream.Err() != nil {
-		doneCh <- stream.Err()
+	if err := stream.Err(); err != nil {
+		logger.Error(err,
+			zap.String("context", "stream error while creating plan"),
+			zap.Bool("isUpdate", opts.IsUpdate),
+		)
+		doneCh <- fmt.Errorf("failed to stream plan: %w", err)
+		return fmt.Errorf("failed to stream plan: %w", err)
 	}
 
+	logger.Debug("Plan created successfully",
+		zap.Bool("isUpdate", opts.IsUpdate),
+	)
 	doneCh <- nil
 	return nil
 }

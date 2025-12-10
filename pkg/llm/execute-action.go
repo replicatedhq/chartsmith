@@ -17,15 +17,21 @@ import (
 )
 
 const (
+	// TextEditor tool names for different Claude models
 	TextEditor_Sonnet37 = "text_editor_20250124"
 	TextEditor_Sonnet35 = "text_editor_20241022"
 
+	// Model identifiers for Claude API
 	Model_Sonnet37 = "claude-3-7-sonnet-20250219"
 	Model_Sonnet35 = "claude-3-5-sonnet-20241022"
 
-	minFuzzyMatchLen  = 50 // Minimum length for fuzzy matching
-	fuzzyMatchTimeout = 10 * time.Second
-	chunkSize         = 200 // Increased chunk size for better performance
+	// ActionDefaultModel is the default Claude model used for action execution
+	ActionDefaultModel = Model_Sonnet35
+
+	// String replacement fuzzy matching parameters
+	minFuzzyMatchLen  = 50                 // Minimum length for fuzzy matching
+	fuzzyMatchTimeout = 10 * time.Second   // Timeout for fuzzy matching operations
+	chunkSize         = 200                // Chunk size for fuzzy matching algorithm
 )
 
 type CreateWorkspaceFromArchiveAction struct {
@@ -49,7 +55,9 @@ type StrReplaceLog struct {
 	ErrorMessage   string    `json:"error_message,omitempty"`
 }
 
-// logStrReplaceOperation logs detailed information about each str_replace operation to the database
+// logStrReplaceOperation logs detailed information about each str_replace operation to the database.
+// This function records every string replacement attempt, including the file path, old/new strings,
+// whether the replacement was successful, and contextual information for debugging purposes.
 func logStrReplaceOperation(ctx context.Context, filePath, oldStr, newStr string, fileContent string, found bool) error {
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
@@ -116,7 +124,8 @@ func logStrReplaceOperation(ctx context.Context, filePath, oldStr, newStr string
 	return nil
 }
 
-// UpdateStrReplaceLogErrorMessage updates the error message for a recently logged str_replace operation
+// UpdateStrReplaceLogErrorMessage updates the error message for a recently logged str_replace operation.
+// This is used to add detailed error information after a failed replacement attempt has been logged.
 func UpdateStrReplaceLogErrorMessage(ctx context.Context, filePath, oldStr, errorMessage string) error {
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
@@ -140,7 +149,11 @@ func UpdateStrReplaceLogErrorMessage(ctx context.Context, filePath, oldStr, erro
 	return nil
 }
 
-// GetStrReplaceLogs retrieves a list of str_replace logs with optional filtering
+// GetStrReplaceLogs retrieves a list of str_replace logs with optional filtering.
+// Parameters:
+//   - limit: maximum number of records to return (0 for no limit)
+//   - foundOnly: if true, only return successful replacements
+//   - filePath: if non-empty, filter by specific file path
 func GetStrReplaceLogs(ctx context.Context, limit int, foundOnly bool, filePath string) ([]StrReplaceLog, error) {
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
@@ -230,11 +243,19 @@ func GetStrReplaceLogs(ctx context.Context, limit int, foundOnly bool, filePath 
 	return logs, nil
 }
 
-// GetStrReplaceFailures retrieves a list of failed str_replace operations
+// GetStrReplaceFailures retrieves a list of failed str_replace operations.
+// This is a convenience wrapper around GetStrReplaceLogs that returns both successful
+// and failed operations (foundOnly=false) across all files.
 func GetStrReplaceFailures(ctx context.Context, limit int) ([]StrReplaceLog, error) {
 	return GetStrReplaceLogs(ctx, limit, false, "")
 }
 
+// PerformStringReplacement attempts to replace oldStr with newStr in content.
+// It first tries an exact match, and if that fails, attempts fuzzy matching with a timeout.
+// Returns:
+//   - updatedContent: the content with replacement applied (or original if failed)
+//   - exactMatch: true if exact match was found, false if fuzzy match or no match
+//   - error: non-nil if replacement failed or timed out
 func PerformStringReplacement(content, oldStr, newStr string) (string, bool, error) {
 	// Add logging to track performance
 	startTime := time.Now()
@@ -316,6 +337,10 @@ func PerformStringReplacement(content, oldStr, newStr string) (string, bool, err
 	}
 }
 
+// findBestMatchRegion attempts to find the best matching region in content for oldStr
+// using a sliding window algorithm with fuzzy matching. It processes the oldStr in chunks
+// and tries to find and extend matches in the content.
+// Returns the start and end indices of the best match, or (-1, -1) if no suitable match found.
 func findBestMatchRegion(content, oldStr string, minMatchLen int) (int, int) {
 	// Early return if strings are too small
 	if len(oldStr) < minMatchLen {
@@ -434,6 +459,16 @@ func findBestMatchRegion(content, oldStr string, minMatchLen int) (int, int) {
 	return -1, -1
 }
 
+// ExecuteAction executes a single file action (create or update) using Claude's text editor tool.
+// It manages an interactive loop where the LLM can view files, perform string replacements, and create new files.
+// The function includes activity monitoring to detect stalled operations and streams interim content updates.
+// Parameters:
+//   - ctx: context for cancellation and timeout
+//   - actionPlanWithPath: the action to execute (create or update) with file path
+//   - plan: the overall plan this action belongs to
+//   - currentContent: the current content of the file (empty string if creating new file)
+//   - interimContentCh: channel to send interim content updates as the file is being modified
+// Returns the final content of the file after all modifications, or an error if the operation fails.
 func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWithPath, plan *workspacetypes.Plan, currentContent string, interimContentCh chan string) (string, error) {
 	updatedContent := currentContent
 	lastActivity := time.Now()
@@ -475,9 +510,10 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 	// Make sure to close the activity monitor when we're done
 	defer close(activityDone)
 
+	// Initialize Anthropic client for LLM API calls
 	client, err := newAnthropicClient(ctx)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to create Anthropic client: %w", err)
 	}
 
 	messages := []anthropic.MessageParam{
@@ -539,9 +575,10 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 	var disabled anthropic.ThinkingConfigEnabledType
 	disabled = "disabled"
 
+	// Main execution loop: stream LLM responses and handle tool calls
 	for {
 		stream := client.Messages.NewStreaming(ctx, anthropic.MessageNewParams{
-			Model:     anthropic.F(Model_Sonnet35),
+			Model:     anthropic.F(DefaultModel),
 			MaxTokens: anthropic.F(int64(8192)),
 			Messages:  anthropic.F(messages),
 			Tools:     anthropic.F(toolUnionParams),
@@ -550,12 +587,13 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 			}),
 		})
 
+		// Accumulate streaming message events
 		message := anthropic.Message{}
 		for stream.Next() {
 			event := stream.Current()
 			err := message.Accumulate(event)
 			if err != nil {
-				return "", err
+				return "", fmt.Errorf("failed to accumulate message event: %w", err)
 			}
 
 			switch event := event.AsUnion().(type) {
@@ -567,11 +605,12 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 		}
 
 		if stream.Err() != nil {
-			return "", stream.Err()
+			return "", fmt.Errorf("streaming error: %w", stream.Err())
 		}
 
 		messages = append(messages, message.ToParam())
 
+		// Process tool calls from the LLM response
 		hasToolCalls := false
 		toolResults := []anthropic.ContentBlockParamUnion{}
 
@@ -588,10 +627,10 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 				}
 
 				if err := json.Unmarshal(block.Input, &input); err != nil {
-					return "", err
+					return "", fmt.Errorf("failed to unmarshal tool input: %w", err)
 				}
 
-				// Update last activity timestamp on each tool use
+				// Update last activity timestamp on each tool use to prevent timeout
 				lastActivity = time.Now()
 
 				logger.Info("LLM text_editor tool use",
@@ -600,6 +639,7 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 					zap.Int("old_str_len", len(input.OldStr)),
 					zap.Int("new_str_len", len(input.NewStr)))
 
+				// Handle text_editor tool commands
 				if input.Command == "view" {
 					if updatedContent == "" {
 						// File doesn't exist yet
@@ -653,19 +693,22 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 					}
 				}
 
+				// Marshal the tool response and add to results
 				b, err := json.Marshal(response)
 				if err != nil {
-					return "", err
+					return "", fmt.Errorf("failed to marshal tool response: %w", err)
 				}
 
 				toolResults = append(toolResults, anthropic.NewToolResultBlock(block.ID, string(b), false))
 			}
 		}
 
+		// If no tool calls, the LLM is done with this action
 		if !hasToolCalls {
 			break
 		}
 
+		// Add tool results as user message to continue the conversation
 		messages = append(messages, anthropic.MessageParam{
 			Role:    anthropic.F(anthropic.MessageParamRoleUser),
 			Content: anthropic.F(toolResults),

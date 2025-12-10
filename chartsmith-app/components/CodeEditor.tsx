@@ -36,6 +36,52 @@ interface CodeEditorProps {
 // Initialize Monaco environment
 setupSafeMonacoCleanup();
 
+// Suppress the Monaco "TextModel disposed before DiffEditorWidget reset" error
+// This is a known issue with @monaco-editor/react when switching between editors
+// It doesn't affect functionality, just causes console noise
+const MONACO_ERROR_TO_SUPPRESS = 'TextModel got disposed before DiffEditorWidget';
+
+if (typeof window !== 'undefined' && !(window as any).__monacoErrorSuppressed) {
+  (window as any).__monacoErrorSuppressed = true;
+  
+  // Override window.onerror to catch uncaught errors
+  const originalOnError = window.onerror;
+  window.onerror = function(message, source, lineno, colno, error) {
+    const msgStr = typeof message === 'string' ? message : '';
+    const errMsg = error?.message || '';
+    if (msgStr.includes(MONACO_ERROR_TO_SUPPRESS) || errMsg.includes(MONACO_ERROR_TO_SUPPRESS)) {
+      return true; // Suppress - return true prevents the error from propagating
+    }
+    if (originalOnError) {
+      return originalOnError.call(window, message, source, lineno, colno, error);
+    }
+    return false;
+  };
+
+  // Also override addEventListener for 'error' events
+  const originalAddEventListener = window.addEventListener;
+  window.addEventListener = function(type: string, listener: EventListenerOrEventListenerObject, options?: boolean | AddEventListenerOptions) {
+    if (type === 'error') {
+      const wrappedListener = function(this: Window, event: Event) {
+        const errorEvent = event as ErrorEvent;
+        if (errorEvent.message?.includes(MONACO_ERROR_TO_SUPPRESS) || 
+            errorEvent.error?.message?.includes(MONACO_ERROR_TO_SUPPRESS)) {
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+        if (typeof listener === 'function') {
+          listener.call(this, event);
+        } else {
+          listener.handleEvent(event);
+        }
+      };
+      return originalAddEventListener.call(window, type, wrappedListener, options);
+    }
+    return originalAddEventListener.call(window, type, listener, options);
+  } as typeof window.addEventListener;
+}
+
 export const CodeEditor = React.memo(function CodeEditor({
   session,
   theme = "dark",
@@ -777,6 +823,36 @@ export const CodeEditor = React.memo(function CodeEditor({
     // We need to handle the diff editor mount differently
     editorRef.current = editor.getModifiedEditor(); // Store modified editor for consistency
     monacoRef.current = monaco;
+    
+    // Patch Monaco's error handler to suppress the DiffEditorWidget error
+    try {
+      const monacoGlobal = (window as any).monaco || monaco;
+      if (monacoGlobal && !monacoGlobal.__errorHandlerPatched) {
+        monacoGlobal.__errorHandlerPatched = true;
+        
+        // Monaco uses an internal error handler - we can intercept via the errors module
+        // The error is thrown via setTimeout, so we also need to patch that
+        const origSetTimeout = window.setTimeout;
+        (window as any).setTimeout = function(callback: TimerHandler, ms?: number, ...args: any[]) {
+          if (typeof callback === 'function') {
+            const wrappedCallback = function(this: any, ...cbArgs: any[]) {
+              try {
+                return (callback as Function).apply(this, cbArgs);
+              } catch (e: any) {
+                if (e?.message?.includes(MONACO_ERROR_TO_SUPPRESS)) {
+                  return; // Suppress
+                }
+                throw e;
+              }
+            };
+            return origSetTimeout.call(window, wrappedCallback, ms, ...args);
+          }
+          return origSetTimeout.call(window, callback, ms, ...args);
+        } as typeof setTimeout;
+      }
+    } catch (e) {
+      // Ignore patching errors
+    }
 
     // Add command palette shortcut to the modified editor too
     const commandId = 'chartsmith.openCommandPalette.diffEditor';
@@ -792,72 +868,67 @@ export const CodeEditor = React.memo(function CodeEditor({
     });
   };
 
-  // Create a stable key for editor rendering
-  const editorKey = selectedFile?.id || 'none';
-  const hasContentPending = selectedFile?.contentPending;
+  // Determine if we're in diff mode
+  const hasContentPending = selectedFile?.contentPending && selectedFile.contentPending.length > 0;
 
-  // Generate a unique key for the editor to force re-creation when needed
-  const editorStateKey = `${editorKey}-${(hasContentPending) ? 'diff' : 'normal'}-${Date.now()}`;
-
-  // Let's try a more conventional approach but with optimizations
+  // Instead of using keys that cause remounting, we keep both editors mounted but only show one
+  // This prevents the "TextModel disposed before DiffEditorWidget reset" error
   return (
     <div className="flex-1 h-full flex flex-col">
       {/* Always render header if it exists */}
       {headerElement}
 
-      <div className="flex-1 h-full">
-        {/* Using a stable key pattern for the outer container */}
-        <div key={editorStateKey} className="h-full">
-          {selectedFile?.contentPending && selectedFile.contentPending.length > 0 ? (
-            // Import DiffEditor dynamically for contentPending
-            <DiffEditor
-              height="100%"
-              language={language}
-              original={original}
-              modified={modifiedContent}
-              loading={null} // Disable the loading message
-              theme={theme === "light" ? "vs" : "vs-dark"}
-              options={{
-                ...editorOptions,
-                renderSideBySide: false,
-                originalEditable: false,
-                diffCodeLens: false,
-                readOnly: true
-              }}
-              onMount={handleDiffEditorMount}
-            />
-          ) : selectedFile?.contentPending ? (
-            // DiffEditor for contentPending
-            <DiffEditor
-              height="100%"
-              language={language}
-              original={selectedFile.content}
-              modified={selectedFile.contentPending}
-              loading={null} // Disable the loading message
-              theme={theme === "light" ? "vs" : "vs-dark"}
-              options={{
-                ...editorOptions,
-                renderSideBySide: false,
-                originalEditable: false,
-                diffCodeLens: false,
-                readOnly: true
-              }}
-              onMount={handleDiffEditorMount}
-            />
-          ) : (
-            // Regular editor for normal mode
-            <Editor
-              height="100%"
-              defaultLanguage={language}
-              language={language}
-              value={selectedFile?.content || ""}
-              loading={null} // Disable the loading message
-              onChange={handleContentChange}
-              theme={theme === "light" ? "vs" : "vs-dark"}
-              options={editorOptions}
-              onMount={handleEditorMount}
-            />
-          )}
+      <div className="flex-1 h-full relative">
+        {/* 
+          Keep both editors always mounted to avoid the "TextModel disposed" error.
+          Use CSS visibility/position to show/hide instead of conditional rendering.
+        */}
+        
+        {/* DiffEditor - always mounted, shown when there's pending content */}
+        <div 
+          className="h-full absolute inset-0" 
+          style={{ 
+            visibility: hasContentPending ? 'visible' : 'hidden',
+            zIndex: hasContentPending ? 1 : 0
+          }}
+        >
+          <DiffEditor
+            height="100%"
+            language={language}
+            original={hasContentPending ? original : ''}
+            modified={hasContentPending ? modifiedContent : ''}
+            loading={null}
+            theme={theme === "light" ? "vs" : "vs-dark"}
+            options={{
+              ...editorOptions,
+              renderSideBySide: false,
+              originalEditable: false,
+              diffCodeLens: false,
+              readOnly: true
+            }}
+            onMount={handleDiffEditorMount}
+          />
+        </div>
+        
+        {/* Regular Editor - always mounted, shown when there's no pending content */}
+        <div 
+          className="h-full absolute inset-0" 
+          style={{ 
+            visibility: hasContentPending ? 'hidden' : 'visible',
+            zIndex: hasContentPending ? 0 : 1
+          }}
+        >
+          <Editor
+            height="100%"
+            defaultLanguage={language}
+            language={language}
+            value={selectedFile?.content || ""}
+            loading={null}
+            onChange={handleContentChange}
+            theme={theme === "light" ? "vs" : "vs-dark"}
+            options={editorOptions}
+            onMount={handleEditorMount}
+          />
         </div>
       </div>
     </div>

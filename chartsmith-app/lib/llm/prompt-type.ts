@@ -1,4 +1,5 @@
-import Anthropic from '@anthropic-ai/sdk';
+import { generateText } from 'ai';
+import { anthropic } from '@ai-sdk/anthropic';
 import { logger } from "@/lib/utils/logger";
 
 export enum PromptType {
@@ -18,13 +19,8 @@ export interface PromptIntent {
 
 export async function promptType(message: string): Promise<PromptType> {
   try {
-    const anthropic = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY,
-    });
-
-    const msg = await anthropic.messages.create({
-      model: "claude-3-5-sonnet-20241022",
-      max_tokens: 1024,
+    const result = await generateText({
+      model: anthropic('claude-3-5-sonnet-20241022'),
       system: `You are ChartSmith, an expert at creating Helm charts for Kuberentes.
 You are invited to participate in an existing conversation between a user and an expert.
 The expert just provided a recommendation on how to plan the Helm chart to the user.
@@ -35,8 +31,11 @@ Only say "plan" or "chat" in your response.
 `,
       messages: [
         { role: "user", content: message }
-    ]});
-    const text = msg.content[0].type === 'text' ? msg.content[0].text : '';
+      ],
+      maxOutputTokens: 1024,
+    });
+
+    const text = result.text;
 
     if (text.toLowerCase().includes("plan")) {
       return PromptType.Plan;

@@ -157,7 +157,7 @@ async function downloadChartFilesFromArtifactHub(url: string): Promise<Workspace
       throw new Error(`Failed to fetch package info: ${packageInfo.status} ${packageInfo.statusText}`);
     }
 
-    const packageInfoJson = await packageInfo.json();
+    const packageInfoJson = await packageInfo.json() as { content_url?: string };
     const contentURL = packageInfoJson.content_url;
 
     if (!contentURL) {
@@ -234,6 +234,9 @@ async function downloadChartArchiveFromURL(url: string): Promise<string> {
   await fs.mkdir(extractPath);
 
   return new Promise((resolve, reject) => {
+    if (!response.body) {
+      return reject(new Error('Response body is null'));
+    }
     response.body.pipe(gunzip())
       .pipe(tar.extract({ cwd: extractPath }))
       .on('finish', () => resolve(extractPath))

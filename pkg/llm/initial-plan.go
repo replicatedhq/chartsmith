@@ -12,12 +12,16 @@ import (
 	"go.uber.org/zap"
 )
 
+// CreateInitialPlanOpts contains options for creating an initial plan
 type CreateInitialPlanOpts struct {
 	ChatMessages    []workspacetypes.Chat
 	PreviousPlans   []workspacetypes.Plan
 	AdditionalFiles []workspacetypes.File
 }
 
+// CreateInitialPlan generates an initial plan for creating a new Helm chart from scratch.
+// It streams the plan text to streamCh and signals completion (with any error) via doneCh.
+// The function analyzes chat messages, previous plans, and additional files to generate a comprehensive plan.
 func CreateInitialPlan(ctx context.Context, streamCh chan string, doneCh chan error, opts CreateInitialPlanOpts) error {
 	chatMessageFields := []zap.Field{}
 	for _, chatMessage := range opts.ChatMessages {
@@ -57,8 +61,8 @@ func CreateInitialPlan(ctx context.Context, streamCh chan string, doneCh chan er
 
 	messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(initialUserMessage)))
 
-	stream := client.Messages.NewStreaming(context.TODO(), anthropic.MessageNewParams{
-		Model:     anthropic.F(anthropic.ModelClaude3_7Sonnet20250219),
+	stream := client.Messages.NewStreaming(ctx, anthropic.MessageNewParams{
+		Model:     anthropic.F(DefaultModel),
 		MaxTokens: anthropic.F(int64(8192)),
 		Messages:  anthropic.F(messages),
 	})
@@ -76,14 +80,24 @@ func CreateInitialPlan(ctx context.Context, streamCh chan string, doneCh chan er
 		}
 	}
 
-	if stream.Err() != nil {
-		doneCh <- stream.Err()
+	if err := stream.Err(); err != nil {
+		logger.Error(err,
+			zap.String("context", "stream error while creating initial plan"),
+			zap.Int("chatMessageCount", len(opts.ChatMessages)),
+		)
+		doneCh <- fmt.Errorf("failed to stream initial plan: %w", err)
+		return fmt.Errorf("failed to stream initial plan: %w", err)
 	}
 
+	logger.Info("Initial plan created successfully",
+		zap.Int("chatMessageCount", len(opts.ChatMessages)),
+	)
 	doneCh <- nil
 	return nil
 }
 
+// summarizeBootstrapChart retrieves and formats the bootstrap chart files as a JSON string.
+// This provides context about the existing chart structure that the plan will be based on.
 func summarizeBootstrapChart(ctx context.Context) (string, error) {
 	bootstrapWorkspace, err := workspace.GetBootstrapWorkspace(ctx)
 	if err != nil {
