@@ -47,11 +47,6 @@ func IntegrationCmd() *cobra.Command {
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			realtime.Init(&realtimetypes.Config{
-				Address: param.Get().CentrifugoAddress,
-				APIKey:  param.Get().CentrifugoAPIKey,
-			})
-
 			ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 			defer stop()
 
@@ -84,6 +79,12 @@ func runIntegrationTests(ctx context.Context) error {
 	}); err != nil {
 		return fmt.Errorf("failed to init postgres: %w", err)
 	}
+
+	// Initialize realtime AFTER postgres pool is ready
+	realtime.Init(&realtimetypes.Config{
+		Address: param.Get().CentrifugoAddress,
+		APIKey:  param.Get().CentrifugoAPIKey,
+	})
 
 	if err := integration.IntegrationTest_ChooseRelevantFilesForChatMessage(); err != nil {
 		return fmt.Errorf("failed to run integration tests: %w", err)

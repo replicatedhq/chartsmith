@@ -83,8 +83,9 @@ type SummarizeResponse struct {
 }
 
 type CleanupValuesRequest struct {
-	ValuesYAML string `json:"valuesYAML"`
-	ModelID    string `json:"modelId,omitempty"`
+	ValuesYAML string         `json:"valuesYAML"`
+	ModelID    string         `json:"modelId,omitempty"`
+	Messages   []MessageParam `json:"messages,omitempty"`
 }
 
 type CleanupValuesResponse struct {
@@ -239,17 +240,24 @@ func (c *NextJSClient) postStream(ctx context.Context, path string, req any) (<-
 func (c *NextJSClient) parseStream(body io.Reader, textCh chan<- string, errCh chan<- error) {
 	// Peek at the first few bytes to detect the format
 	bufReader := bufio.NewReader(body)
-	peek, err := bufReader.Peek(2)
+	peek, err := bufReader.Peek(5)
 	if err != nil && err != io.EOF {
-		errCh <- fmt.Errorf("error peeking stream: %w", err)
-		return
+		// If we can't peek 5 bytes, try with what we have
+		peek, err = bufReader.Peek(2)
+		if err != nil && err != io.EOF {
+			errCh <- fmt.Errorf("error peeking stream: %w", err)
+			return
+		}
 	}
 
 	// Check if this looks like Data Stream Protocol (starts with "0:" or other prefixes)
-	isDataStreamProtocol := len(peek) >= 2 && (string(peek) == "0:" || string(peek) == "e:" || string(peek) == "d:")
+	// or SSE format (starts with "data:")
+	peekStr := string(peek)
+	isDataStreamProtocol := len(peek) >= 2 && (peekStr[:2] == "0:" || peekStr[:2] == "e:" || peekStr[:2] == "d:")
+	isSSEFormat := len(peek) >= 5 && peekStr[:5] == "data:"
 
-	if isDataStreamProtocol {
-		// Use line-based parsing for Data Stream Protocol
+	if isDataStreamProtocol || isSSEFormat {
+		// Use line-based parsing for Data Stream Protocol and SSE format
 		c.parseDataStreamProtocol(bufReader, textCh, errCh)
 	} else {
 		// Use raw byte reading for plain text streaming (toTextStreamResponse)

@@ -27,9 +27,8 @@ It's made for both the developer working on it and for AI models to read and app
 - Status from the workers is communicated via Centrifugo messages to the client.
 
 ## LLM Integration
-- All LLM interactions are handled via Vercel AI SDK in Next.js API routes (`chartsmith-app/app/api/llm/*` and `/api/chat`).
-- The Go worker makes HTTP requests to these routes using an internal API key (`INTERNAL_API_KEY`) for authentication.
+- All chat messages flow through the Go worker.
+- The Go worker calls Next.js API routes (`/api/llm/*` and `/api/chat`) which use the Vercel AI SDK.
+- Authentication between Go and Next.js uses an internal API key (`INTERNAL_API_KEY`).
 - We support multiple providers (Anthropic, OpenAI, Google, OpenRouter) via the AI SDK's unified API.
 - Model selection is automatic based on available API keys, with fallback support.
-- Tool execution for file operations is coordinated between Next.js (tool generation via `/api/llm/execute-action`) and Go (tool execution).
-- The frontend chat UI can also use the AI SDK directly for simple conversational chat via `/api/chat`.

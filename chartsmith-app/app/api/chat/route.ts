@@ -68,21 +68,6 @@ function getLatestKubernetesVersion(semverField: string): string {
   }
 }
 
-function buildSystemPrompt(workspaceId: string): string {
-  return `You are a helpful AI assistant for Chartsmith, a Helm chart development tool.
-You help users understand and work with Helm charts and Kubernetes configurations.
-
-Current workspace: ${workspaceId}
-
-Guidelines:
-- Provide clear, accurate information about Helm charts and Kubernetes
-- Use the available tools to get latest versions when needed
-- Be concise but thorough in your explanations
-- If you're unsure about something, say so
-
-Remember: You're in conversational mode. For chart modifications, the user should use the plan feature.`;
-}
-
 export async function POST(req: NextRequest) {
   try {
     const { messages, workspaceId, modelId } = await req.json();
@@ -102,12 +87,10 @@ export async function POST(req: NextRequest) {
     }
     
     const model = getModel(modelId);
-    const systemPrompt = buildSystemPrompt(workspaceId);
     
     const result = streamText({
       model,
       messages,
-      system: systemPrompt,
       abortSignal: AbortSignal.timeout(120000),
       tools: {
         latest_subchart_version: {

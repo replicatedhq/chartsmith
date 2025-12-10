@@ -14,10 +14,17 @@ func CleanUpConvertedValuesYAML(ctx context.Context, valuesYAML string, modelID 
 
 	// Use Next.js client (which uses Vercel AI SDK)
 	client := NewNextJSClient()
-	
+
+	// Build messages with system prompt from Go
+	messages := []MessageParam{
+		{Role: "assistant", Content: cleanupConvertedValuesSystemPrompt},
+		{Role: "user", Content: fmt.Sprintf("Here is the converted values.yaml file:\n---\n%s\n---", valuesYAML)},
+	}
+
 	cleanedText, err := client.CleanupValues(ctx, CleanupValuesRequest{
 		ValuesYAML: valuesYAML,
 		ModelID:    modelID,
+		Messages:   messages,
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to cleanup values via Next.js API: %w", err)

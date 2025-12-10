@@ -20,24 +20,15 @@ export async function POST(req: NextRequest) {
     
     const model = getModel(modelId);
     
-    const systemPrompt = `You are a helpful assistant that expands user prompts to be more specific and actionable.
-    
-Given a user's prompt, expand it to include:
-- Specific technical details
-- Clear intent
-- Relevant context
-
-Keep the expansion concise but complete. Return only the expanded prompt, nothing else.`;
-    
     logger.info('Expanding prompt via Vercel AI SDK', {
       modelId: modelId || 'default',
       promptLength: prompt.length,
     });
     
+    // Go sends the full prompt with expansion instructions embedded
     const { text } = await generateText({
       model,
       messages: [
-        { role: 'system', content: systemPrompt },
         { role: 'user', content: prompt },
       ],
       abortSignal: AbortSignal.timeout(60000),

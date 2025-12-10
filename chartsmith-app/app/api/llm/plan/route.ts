@@ -8,7 +8,7 @@ import { handleApiError } from '@/lib/utils/api-error';
 
 export async function POST(req: NextRequest) {
   try {
-    const { prompt, workspaceId, chartContext, modelId, messages } = await req.json();
+    const { workspaceId, modelId, messages } = await req.json();
     
     const auth = await checkApiAuth(req);
     if (!auth.isAuthorized) {
@@ -17,6 +17,10 @@ export async function POST(req: NextRequest) {
     
     if (!workspaceId) {
       return new Response('Workspace ID required', { status: 400 });
+    }
+    
+    if (!messages || !Array.isArray(messages)) {
+      return new Response('Messages required', { status: 400 });
     }
     
     const workspace = await getWorkspace(workspaceId);
@@ -29,36 +33,12 @@ export async function POST(req: NextRequest) {
     logger.info('Generating plan via Vercel AI SDK', {
       workspaceId,
       modelId: modelId || 'default',
-      messageCount: messages?.length || 0,
+      messageCount: messages.length,
     });
-    
-    let finalMessages;
-    
-    if (messages && Array.isArray(messages)) {
-      finalMessages = messages;
-    } else {
-      const systemPrompt = `You are an expert Helm chart developer. Your task is to create a detailed plan for modifying a Helm chart based on the user's request.
-
-The plan should:
-1. Break down the request into specific, actionable steps
-2. Identify which files need to be created, modified, or deleted
-3. Explain the reasoning behind each change
-4. Consider Helm best practices and Kubernetes conventions
-
-Chart Context:
-${chartContext || 'No chart context provided'}
-
-Respond with a clear, structured plan that can be executed step-by-step.`;
-      
-      finalMessages = [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: prompt },
-      ];
-    }
     
     const result = streamText({
       model,
-      messages: finalMessages,
+      messages,
       abortSignal: AbortSignal.timeout(120000),
     });
     

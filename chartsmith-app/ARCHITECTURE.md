@@ -22,3 +22,15 @@ This is a next.js project that is the front end for chartsmith.
 - Front end should call server actions, which call lib/* functions.
 - Database queries are not allowed in the server action. Server actions are just wrappers for which lib functions we expose.
 - API routes are used for: LLM operations (called by Go worker), real-time endpoints, and external integrations.
+
+## LLM API Routes
+The `/api/llm/*` and `/api/chat` routes are called by the Go worker, not the frontend directly.
+- `/api/chat` - Conversational chat with streaming
+- `/api/llm/plan` - Generate implementation plans
+- `/api/llm/execute-action` - Tool calling for file operations
+- `/api/llm/expand` - Expand short prompts
+- `/api/llm/summarize` - Summarize content
+- `/api/llm/cleanup-values` - Clean up Helm values YAML
+- `/api/models` - List available models (can be called by frontend)
+
+All routes use `INTERNAL_API_KEY` header for authentication from the Go worker.

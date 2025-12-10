@@ -7,7 +7,7 @@ import { handleApiError } from '@/lib/utils/api-error';
 
 export async function POST(req: NextRequest) {
   try {
-    const { content, context, modelId } = await req.json();
+    const { content, modelId } = await req.json();
     
     const auth = await checkApiAuth(req);
     if (!auth.isAuthorized) {
@@ -20,20 +20,16 @@ export async function POST(req: NextRequest) {
     
     const model = getModel(modelId);
     
-    const systemPrompt = `You are a technical writer who creates concise, accurate summaries of Helm chart changes and Kubernetes configurations.
-
-Create a clear, brief summary that captures the key points and changes.${context ? `\n\nContext: ${context}` : ''}`;
-    
     logger.info('Summarizing content via Vercel AI SDK', {
       modelId: modelId || 'default',
       contentLength: content.length,
     });
     
+    // Go sends the full prompt with summarization instructions embedded
     const { text } = await generateText({
       model,
       messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: `Summarize this:\n\n${content}` },
+        { role: 'user', content },
       ],
       abortSignal: AbortSignal.timeout(60000),
     });
