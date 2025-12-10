@@ -86,59 +86,6 @@ export function useCentrifugo({
     }
   }, [session, setMessages, setWorkspace]);
 
-  const handleChatMessageUpdated = useCallback((data: CentrifugoMessageData) => {
-    if (!data.chatMessage) return;
-
-    const chatMessage = data.chatMessage;
-
-    // If this message starts a render operation, track the render ID
-    if (chatMessage.responseRenderId) {
-      setActiveRenderIds(prev => {
-        // Only add if not already tracked
-        if (!prev.includes(chatMessage.responseRenderId!)) {
-          return [...prev, chatMessage.responseRenderId!];
-        }
-        return prev;
-      });
-    }
-
-    // If the message is complete and had a render ID, we can remove the render from active
-    if (chatMessage.isComplete && chatMessage.responseRenderId) {
-      setActiveRenderIds(prev => prev.filter(id => id !== chatMessage.responseRenderId));
-    }
-
-    setMessages(prev => {
-      const newMessages = [...prev];
-      const index = newMessages.findIndex(m => m.id === chatMessage.id);
-
-      const message: Message = {
-        id: chatMessage.id,
-        prompt: chatMessage.prompt,
-        response: chatMessage.responseRenderId ? "doing the render now..." : chatMessage.response,
-        isComplete: chatMessage.isComplete || false,  // Provide default value
-        isApplied: chatMessage.isApplied,
-        isApplying: chatMessage.isApplying,
-        isIgnored: chatMessage.isIgnored,
-        isCanceled: chatMessage.isCanceled,
-        createdAt: new Date(chatMessage.createdAt),
-        workspaceId: chatMessage.workspaceId,
-        userId: chatMessage.userId,
-        isIntentComplete: chatMessage.isIntentComplete,
-        followupActions: chatMessage.followupActions,
-        responseRenderId: chatMessage.responseRenderId,
-        responsePlanId: chatMessage.responsePlanId,
-        responseRollbackToRevisionNumber: chatMessage.responseRollbackToRevisionNumber,
-        revisionNumber: chatMessage.revisionNumber,
-      };
-
-      if (index >= 0) {
-        newMessages[index] = message;
-      } else {
-        newMessages.push(message);
-      }
-      return newMessages;
-    });
-  }, [setMessages, setActiveRenderIds]);
 
   const handleWorkspaceUpdated = useCallback((workspace: any) => {
     // Implementation can be added based on requirements
@@ -449,8 +396,6 @@ export function useCentrifugo({
         ...plan,
         createdAt: new Date(plan.createdAt)
       });
-    } else if (eventType === 'chatmessage-updated') {
-      handleChatMessageUpdated(message.data);
     } else if (eventType === 'revision-created') {
       handleRevisionCreated(message.data.revision!);
     } else if (eventType === 'render-stream') {
@@ -471,7 +416,6 @@ export function useCentrifugo({
     }
   }, [
     handlePlanUpdated,
-    handleChatMessageUpdated,
     handleRevisionCreated,
     handleRenderStreamEvent,
     handleWorkspaceUpdated,
