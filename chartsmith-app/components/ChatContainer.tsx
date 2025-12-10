@@ -1,9 +1,7 @@
 "use client";
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Send, Loader2, Code, User, Sparkles } from "lucide-react";
 import { useTheme } from "../contexts/ThemeContext";
-import { useChat } from "@ai-sdk/react";
-import { TextStreamChatTransport, type UIMessage } from "ai";
 import { Session } from "@/lib/types/session";
 import { ChatMessage } from "./ChatMessage";
 import { messagesAtom, workspaceAtom, isRenderingAtom } from "@/atoms/workspace";
@@ -11,10 +9,7 @@ import { useAtom } from "jotai";
 import { createChatMessageAction } from "@/lib/workspace/actions/create-chat-message";
 import { ScrollingContent } from "./ScrollingContent";
 import { NewChartContent } from "./NewChartContent";
-import { routeChatMessage, ChatMessageIntent } from "@/lib/chat/router";
 import { ModelSelector } from "./ModelSelector";
-import { Message as ChartsmithMessage } from "./types";
-import { ConversationalMessage } from "./ConversationalMessage";
 
 interface ChatContainerProps {
   session: Session;
@@ -36,27 +31,6 @@ export function ChatContainer({ session }: ChatContainerProps) {
   });
   const [isProcessing, setIsProcessing] = useState(false);
   const roleMenuRef = useRef<HTMLDivElement>(null);
-  
-  // Memoize the transport to prevent recreation on every render
-  const chatTransport = useMemo(() => new TextStreamChatTransport({
-    api: '/api/chat',
-    credentials: 'include', // Ensure cookies are sent with requests
-    body: {
-      workspaceId: workspace?.id,
-      modelId: selectedModelId,
-    },
-  }), [workspace?.id, selectedModelId]);
-  
-  // Vercel AI SDK useChat hook for conversational messages
-  const { 
-    messages: aiMessages, 
-    sendMessage,
-    status: aiStatus,
-  } = useChat({
-    transport: chatTransport,
-  });
-  
-  const aiIsLoading = aiStatus === 'streaming' || aiStatus === 'submitted';
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -71,37 +45,13 @@ export function ChatContainer({ session }: ChatContainerProps) {
     };
   }, []);
 
-  // Display messages type for rendering
-  type DisplayItem = 
-    | { type: 'chartsmith'; message: ChartsmithMessage }
-    | { type: 'ai'; message: UIMessage };
-
-  // Merge Chartsmith messages with AI SDK messages for display
-  // Chartsmith messages maintain their server order (already sorted by database), then AI messages
-  const displayMessages = useMemo((): DisplayItem[] => {
-    const items: DisplayItem[] = [];
-    
-    // Add all Chartsmith messages in their original order (server returns them sorted)
-    // Don't re-sort - the database already returns them in creation order
-    for (const msg of messages) {
-      items.push({ type: 'chartsmith', message: msg });
-    }
-    
-    // Add AI messages (conversational) - these maintain their own order
-    for (const msg of aiMessages) {
-      items.push({ type: 'ai', message: msg });
-    }
-    
-    return items;
-  }, [messages, aiMessages]);
-
   if (!messages || !workspace) {
     return null;
   }
 
   const handleSubmitChat = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!chatInput.trim() || isRendering || isProcessing || aiIsLoading) return;
+    if (!chatInput.trim() || isRendering || isProcessing) return;
 
     if (!session || !workspace) return;
 
@@ -110,31 +60,23 @@ export function ChatContainer({ session }: ChatContainerProps) {
     setIsProcessing(true);
 
     try {
-      const route = await routeChatMessage(messageText);
-
-      if (route.useAISDK && route.intent === ChatMessageIntent.NON_PLAN) {
-        // Conversational message - use Vercel AI SDK
-        await sendMessage({
-          text: messageText,
-        });
-      } else {
-        // Plan-related message - use existing Chartsmith flow
-        const chatMessage = await createChatMessageAction(
-          session,
-          workspace.id,
-          messageText,
-          selectedRole,
-          selectedModelId
-        );
-        
-        // Add the new message to state (check for duplicates from Centrifugo)
-        setMessages(currentMessages => {
-          if (currentMessages.some(m => m.id === chatMessage.id)) {
-            return currentMessages;
-          }
-          return [...currentMessages, chatMessage];
-        });
-      }
+      // All messages go through the Go backend for consistent persistence
+      // and real-time collaboration via Centrifugo
+      const chatMessage = await createChatMessageAction(
+        session,
+        workspace.id,
+        messageText,
+        selectedRole,
+        selectedModelId
+      );
+      
+      // Add the new message to state (check for duplicates from Centrifugo)
+      setMessages(currentMessages => {
+        if (currentMessages.some(m => m.id === chatMessage.id)) {
+          return currentMessages;
+        }
+        return [...currentMessages, chatMessage];
+      });
     } catch (error) {
       // Restore input on error
       setChatInput(messageText);
@@ -181,21 +123,13 @@ export function ChatContainer({ session }: ChatContainerProps) {
       <div className="flex-1 h-full">
         <ScrollingContent forceScroll={true}>
           <div className={workspace?.currentRevisionNumber === 0 ? "" : "pb-32"}>
-            {displayMessages.map((item) => (
-              <div key={`${item.type}-${item.message.id}`}>
-                {item.type === 'chartsmith' ? (
-                  <ChatMessage
-                    messageId={item.message.id}
-                    session={session}
-                    onContentUpdate={() => {}}
-                  />
-                ) : (
-                  <ConversationalMessage
-                    message={item.message}
-                    isLoading={aiIsLoading && item.message === aiMessages[aiMessages.length - 1]}
-                  />
-                )}
-              </div>
+            {messages.map((message) => (
+              <ChatMessage
+                key={message.id}
+                messageId={message.id}
+                session={session}
+                onContentUpdate={() => {}}
+              />
             ))}
           </div>
         </ScrollingContent>
@@ -294,16 +228,16 @@ export function ChatContainer({ session }: ChatContainerProps) {
                 
                 <button
                   type="submit"
-                  disabled={isRendering || isProcessing || aiIsLoading}
+                  disabled={isRendering || isProcessing}
                   className={`p-1.5 rounded-full ${
-                    isRendering || isProcessing || aiIsLoading
+                    isRendering || isProcessing
                       ? theme === "dark" ? "text-gray-600 cursor-not-allowed" : "text-gray-300 cursor-not-allowed"
                       : theme === "dark"
                         ? "text-gray-400 hover:text-gray-200 hover:bg-dark-border/40"
                         : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
                   }`}
                 >
-                  {(isRendering || isProcessing || aiIsLoading) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  {(isRendering || isProcessing) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                 </button>
               </div>
             </div>
