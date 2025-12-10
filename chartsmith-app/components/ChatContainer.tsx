@@ -25,7 +25,6 @@ export function ChatContainer({ session }: ChatContainerProps) {
   const [chatInput, setChatInput] = useState("");
   const [selectedRole, setSelectedRole] = useState<"auto" | "developer" | "operator">("auto");
   const [isRoleMenuOpen, setIsRoleMenuOpen] = useState(false);
-  const [useAIStreaming, setUseAIStreaming] = useState(true); // AI SDK streaming enabled by default
   const roleMenuRef = useRef<HTMLDivElement>(null);
 
   // AI SDK chat hook
@@ -61,26 +60,14 @@ export function ChatContainer({ session }: ChatContainerProps) {
     return null;
   }
 
-  // Use AI SDK or legacy based on toggle
-  const currentInput = useAIStreaming ? aiInput : chatInput;
-  const setCurrentInput = useAIStreaming ? setAiInput : setChatInput;
-  const currentIsLoading = useAIStreaming ? aiIsLoading : isRendering;
+  // AI SDK chat bindings
+  const currentInput = aiInput;
+  const setCurrentInput = setAiInput;
+  const currentIsLoading = aiIsLoading;
 
   const handleSubmitChat = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (useAIStreaming) {
-      // Use AI SDK streaming
-      handleAiSubmit(e, selectedRole);
-    } else {
-      // Legacy: Use existing implementation
-      if (!currentInput.trim() || isRendering) return;
-      if (!session || !workspace) return;
-
-      const chatMessage = await createChatMessageAction(session, workspace.id, currentInput.trim(), selectedRole);
-      setMessages(prev => [...prev, chatMessage]);
-      setChatInput("");
-    }
+    handleAiSubmit(e, selectedRole);
   };
   
   const getRoleLabel = (role: "auto" | "developer" | "operator"): string => {
@@ -138,7 +125,7 @@ export function ChatContainer({ session }: ChatContainerProps) {
               </div>
             ))}
             {/* AI SDK streaming messages */}
-            {useAIStreaming && aiMessages.map((message) => (
+            {aiMessages.map((message) => (
               <AIStreamingMessage
                 key={message.id}
                 message={message}
@@ -237,7 +224,7 @@ export function ChatContainer({ session }: ChatContainerProps) {
             </div>
             
             {/* Stop button (for AI streaming) */}
-            {useAIStreaming && aiIsLoading && (
+            {aiIsLoading && (
               <button
                 type="button"
                 onClick={() => aiStop()}

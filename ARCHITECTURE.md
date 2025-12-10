@@ -22,6 +22,15 @@ It's made for both the developer working on it and for AI models to read and app
 
 
 ## Workers
-- The go code is where we put all workers. 
+- The go code is where we put all workers.
 - Jobs for workers are enqueued and scheduled using postgres notify and a work_queue table.
 - Status from the workers is communicated via Centrifugo messages to the client.
+
+## AI Architecture
+
+AI functionality is split between TypeScript and Go:
+
+- **TypeScript (Vercel AI SDK)**: Handles intent classification and conversational chat streaming via `/api/chat`
+- **Go (Anthropic SDK)**: Handles plan generation and plan execution (file edits via computer use)
+
+See `chartsmith-app/ARCHITECTURE.md` for detailed AI integration documentation.
