@@ -5,7 +5,7 @@ export const anthropic = createAnthropic({
 });
 
 // Default model for chat
-export const chatModel = anthropic('claude-sonnet-4-20250514');
+export const chatModel = anthropic('claude-sonnet-4-5-20250929');
 
 // Model for intent classification (faster/cheaper)
-export const intentModel = anthropic('claude-3-5-sonnet-20241022');
+export const intentModel = anthropic('claude-sonnet-4-5-20250929');

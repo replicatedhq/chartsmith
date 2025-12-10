@@ -25,7 +25,7 @@ export function ChatContainer({ session }: ChatContainerProps) {
   const [chatInput, setChatInput] = useState("");
   const [selectedRole, setSelectedRole] = useState<"auto" | "developer" | "operator">("auto");
   const [isRoleMenuOpen, setIsRoleMenuOpen] = useState(false);
-  const [useAIStreaming, setUseAIStreaming] = useState(false); // Toggle for AI SDK streaming
+  const [useAIStreaming, setUseAIStreaming] = useState(true); // AI SDK streaming enabled by default
   const roleMenuRef = useRef<HTMLDivElement>(null);
 
   // AI SDK chat hook
