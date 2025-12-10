@@ -4,6 +4,8 @@ import React, { useState, useEffect, useCallback } from "react";
 import { X, AlertTriangle } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { Session } from "@/lib/types/session";
+import { Workspace } from "@/lib/types/workspace";
+import { Message } from "@/components/types";
 import { rollbackWorkspaceAction } from "@/lib/workspace/actions/rollback";
 import { getWorkspaceMessagesAction } from "@/lib/workspace/actions/get-workspace-messages";
 
@@ -13,7 +15,7 @@ interface RollbackModalProps {
   workspaceId: string;
   revisionNumber: number;
   session: Session;
-  onSuccess: (updatedWorkspace: any, updatedMessages: any[]) => void;
+  onSuccess: (updatedWorkspace: Workspace, updatedMessages: Message[]) => void;
 }
 
 export function RollbackModal({ 

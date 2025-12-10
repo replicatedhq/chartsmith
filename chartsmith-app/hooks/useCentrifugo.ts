@@ -1,12 +1,12 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Centrifuge } from "centrifuge";
+import { Centrifuge, DisconnectedContext, ErrorContext } from "centrifuge";
 import { useAtom } from "jotai";
 
 // types
 import { Session } from "@/lib/types/session";
-import { Message, CentrifugoMessageData } from "@/components/types";
+import { Message, CentrifugoMessageData, RawRevision, RawWorkspace } from "@/components/types";
 
 // actions
 import { getCentrifugoTokenAction } from "@/lib/centrifugo/actions/get-centrifugo-token-action";
@@ -72,7 +72,7 @@ export function useCentrifugo({
     fetchConfig();
   }, []);
 
-  const handleRevisionCreated = useCallback(async (revision: any) => {
+  const handleRevisionCreated = useCallback(async (revision: RawRevision) => {
     if (!session || !revision.workspaceId) return;
 
     const freshWorkspace = await getWorkspaceAction(session, revision.workspaceId);
@@ -140,7 +140,7 @@ export function useCentrifugo({
     });
   }, [setMessages, setActiveRenderIds]);
 
-  const handleWorkspaceUpdated = useCallback((workspace: any) => {
+  const handleWorkspaceUpdated = useCallback((_workspace: RawWorkspace) => {
     // Implementation can be added based on requirements
   }, []);
 
@@ -531,7 +531,7 @@ export function useCentrifugo({
         setIsReconnecting(false);
       };
 
-      const handleDisconnect = async (ctx: any) => {
+      const handleDisconnect = async (ctx: DisconnectedContext | ErrorContext) => {
         console.log(`Centrifugo disconnected`, { ctx });
         setIsReconnecting(true);
 

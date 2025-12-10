@@ -172,7 +172,7 @@ export interface Message {
   workspaceId?: string;
   userId?: string;
   isIntentComplete?: boolean;
-  followupActions?: any[];
+  followupActions?: FollowupAction[];
   responseRenderId?: string;
   responsePlanId?: string;
   responseConversionId?: string;

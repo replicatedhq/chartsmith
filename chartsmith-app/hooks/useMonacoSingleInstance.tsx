@@ -7,7 +7,7 @@ import type { WorkspaceFile } from "@/lib/types/workspace";
 // Global registry for Monaco models
 declare global {
   interface Window {
-    __monaco?: any;
+    __monaco?: typeof import("monaco-editor");
     __monacoEditor?: editor.IStandaloneCodeEditor;
     __monacoModels?: {
       [key: string]: editor.ITextModel;
@@ -718,19 +718,19 @@ export function setupSafeMonacoCleanup(): void {
     window.addEventListener('beforeunload', () => {
       try {
         // Try to clean up Monaco models on page unload
-        if ((window as any).monaco?.editor) {
-          const models = (window as any).monaco.editor.getModels();
-          models.forEach((model: any) => {
+        if (window.__monaco?.editor) {
+          const models = window.__monaco.editor.getModels();
+          models.forEach((model: editor.ITextModel) => {
             if (!model.isDisposed()) {
               try {
                 model.dispose();
-              } catch (e) {
+              } catch {
                 // Ignore errors
               }
             }
           });
         }
-      } catch (e) {
+      } catch {
         // Ignore any errors during cleanup on page unload
       }
     });

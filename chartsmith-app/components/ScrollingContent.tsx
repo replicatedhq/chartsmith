@@ -2,7 +2,7 @@
 
 /**
  * ScrollingContent - A component that handles automatic scrolling behavior
- * 
+ *
  * Behavior specs:
  * 1. Auto-scrolls to bottom when new content is added
  * 2. Stops auto-scrolling when user manually scrolls up
@@ -12,6 +12,19 @@
  */
 
 import React, { useRef, useEffect, useState, useLayoutEffect } from "react";
+
+// Type for test state exposed on window during testing
+interface ScrollTestState {
+  isAutoScrollEnabled: () => boolean;
+  hasScrolledUp: () => boolean;
+  isShowingJumpButton: () => boolean;
+}
+
+declare global {
+  interface Window {
+    __scrollTestState?: ScrollTestState;
+  }
+}
 import { ChevronDown } from "lucide-react";
 
 interface ScrollingContentProps {
@@ -31,7 +44,7 @@ export function ScrollingContent({ children, forceScroll = false }: ScrollingCon
   // Update test helpers if in test environment
   useEffect(() => {
     if (typeof window !== 'undefined' && process.env.NODE_ENV === 'test') {
-      (window as any).__scrollTestState = {
+      window.__scrollTestState = {
         isAutoScrollEnabled: () => shouldAutoScroll,
         hasScrolledUp: () => hasScrolledUpRef.current,
         isShowingJumpButton: () => showScrollButton
@@ -236,7 +249,7 @@ export function ScrollingContent({ children, forceScroll = false }: ScrollingCon
 
 // Expose test helpers for integration testing when in test environment
 if (typeof window !== 'undefined' && process.env.NODE_ENV === 'test') {
-  (window as any).__scrollTestState = {
+  window.__scrollTestState = {
     isAutoScrollEnabled: () => false, // Will be properly initialized during component render
     hasScrolledUp: () => false,       // Will be properly initialized during component render
     isShowingJumpButton: () => false  // Will be properly initialized during component render

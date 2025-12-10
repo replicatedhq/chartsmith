@@ -773,7 +773,7 @@ export const CodeEditor = React.memo(function CodeEditor({
   };
 
   // Handle diff editor mount differently
-  const handleDiffEditorMount = (editor: any, monaco: typeof import("monaco-editor")) => {
+  const handleDiffEditorMount = (editor: editor.IStandaloneDiffEditor, monaco: typeof import("monaco-editor")) => {
     // We need to handle the diff editor mount differently
     editorRef.current = editor.getModifiedEditor(); // Store modified editor for consistency
     monacoRef.current = monaco;
