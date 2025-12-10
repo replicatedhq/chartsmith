@@ -1,3 +1,20 @@
+/**
+ * @fileoverview Chat message component that displays individual chat messages.
+ * 
+ * This component displays messages in Chartsmith Message format, which includes:
+ * - User prompts and assistant responses
+ * - Tool invocations (with arguments and results)
+ * - Plan and render associations
+ * - Streaming state indicators
+ * 
+ * Messages are read from Jotai atoms, which are synced from the AI SDK useChat hook.
+ * The component handles display of markdown content, tool invocations, and
+ * associated plans/renders/conversions.
+ * 
+ * @see ChatContainer - Parent component that manages chat state
+ * @see useAIChat - Hook that provides messages via AI SDK
+ */
+
 "use client";
 
 import React, { useState, useRef, useEffect, FormEvent } from "react";
@@ -153,6 +170,62 @@ export function ChatMessage({
         {message?.response && (
           <div className="mb-4">
             <ReactMarkdown>{message.response}</ReactMarkdown>
+          </div>
+        )}
+
+        {/* Tool Invocations Display */}
+        {message?.toolInvocations && message.toolInvocations.length > 0 && (
+          <div className="mt-4 space-y-2">
+            {message.toolInvocations.map((tool, idx) => (
+              <div key={idx} className={`p-3 rounded-lg border ${
+                theme === "dark" 
+                  ? "bg-dark-border/20 border-dark-border/40" 
+                  : "bg-gray-50 border-gray-200"
+              }`}>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-sm">🔧</span>
+                  <span className={`text-sm font-medium ${
+                    theme === "dark" ? "text-gray-300" : "text-gray-700"
+                  }`}>
+                    {tool.toolName}
+                  </span>
+                </div>
+                {tool.args && (
+                  <div className="mb-2">
+                    <div className={`text-xs mb-1 ${
+                      theme === "dark" ? "text-gray-400" : "text-gray-500"
+                    }`}>
+                      Arguments:
+                    </div>
+                    <pre className={`text-xs p-2 rounded overflow-x-auto ${
+                      theme === "dark" 
+                        ? "bg-dark border-dark-border/40 text-gray-300" 
+                        : "bg-white border border-gray-200 text-gray-700"
+                    }`}>
+                      {JSON.stringify(tool.args, null, 2)}
+                    </pre>
+                  </div>
+                )}
+                {tool.result !== undefined && (
+                  <div>
+                    <div className={`text-xs mb-1 ${
+                      theme === "dark" ? "text-gray-400" : "text-gray-500"
+                    }`}>
+                      Result:
+                    </div>
+                    <div className={`text-xs p-2 rounded ${
+                      theme === "dark" 
+                        ? "bg-dark border-dark-border/40 text-gray-300" 
+                        : "bg-white border border-gray-200 text-gray-700"
+                    }`}>
+                      {typeof tool.result === 'string' 
+                        ? tool.result 
+                        : JSON.stringify(tool.result, null, 2)}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         )}
 

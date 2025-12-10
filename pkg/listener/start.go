@@ -36,13 +36,6 @@ func StartListeners(ctx context.Context) error {
 		return nil
 	}, nil)
 
-	l.AddHandler(ctx, "new_converational", 5, time.Second*10, func(notification *pgconn.Notification) error {
-		if err := handleConverationalNotification(ctx, notification.Payload); err != nil {
-			logger.Error(fmt.Errorf("failed to handle new converational notification: %w", err))
-			return fmt.Errorf("failed to handle new converational notification: %w", err)
-		}
-		return nil
-	}, nil)
 
 	l.AddHandler(ctx, "execute_plan", 5, time.Second*10, func(notification *pgconn.Notification) error {
 		if err := handleExecutePlanNotification(ctx, notification.Payload); err != nil {

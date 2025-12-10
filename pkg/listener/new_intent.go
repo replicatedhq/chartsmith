@@ -72,14 +72,8 @@ func handleNewIntentNotification(ctx context.Context, payload string) error {
 		return fmt.Errorf("error getting chat message: %w", err)
 	}
 
-	e := realtimetypes.ChatMessageUpdatedEvent{
-		WorkspaceID: w.ID,
-		ChatMessage: updatedChatMessage,
-	}
-
-	if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
-		return fmt.Errorf("failed to send chat message update: %w", err)
-	}
+	// Note: Chat message updates are now handled via AI SDK streaming, not Centrifugo events
+	// Intent classification updates are persisted to the database but not broadcast via Centrifugo
 
 	logger.Info("intent",
 		zap.String("prompt", chatMessage.Prompt),
@@ -116,13 +110,8 @@ func handleNewIntentNotification(ctx context.Context, payload string) error {
 					cleanedResponse = strings.TrimSpace(cleanedResponse)
 
 					updatedChatMessage.Response = cleanedResponse
-					e := realtimetypes.ChatMessageUpdatedEvent{
-						WorkspaceID: w.ID,
-						ChatMessage: updatedChatMessage,
-					}
-					if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
-						return fmt.Errorf("failed to send chat message update: %w", err)
-					}
+					// Note: Chat message updates are now handled via AI SDK streaming, not Centrifugo events
+					// Feedback messages are persisted to the database but not broadcast via Centrifugo
 
 					if err := workspace.SetChatMessageResponse(ctx, chatMessage.ID, cleanedResponse); err != nil {
 						return fmt.Errorf("failed to write chat message response to database: %w", err)
@@ -159,13 +148,8 @@ func handleNewIntentNotification(ctx context.Context, payload string) error {
 					cleanedResponse = strings.TrimSpace(cleanedResponse)
 
 					updatedChatMessage.Response = cleanedResponse
-					e := realtimetypes.ChatMessageUpdatedEvent{
-						WorkspaceID: w.ID,
-						ChatMessage: updatedChatMessage,
-					}
-					if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
-						return fmt.Errorf("failed to send chat message update: %w", err)
-					}
+					// Note: Chat message updates are now handled via AI SDK streaming, not Centrifugo events
+					// Feedback messages are persisted to the database but not broadcast via Centrifugo
 
 					if err := workspace.SetChatMessageResponse(ctx, chatMessage.ID, cleanedResponse); err != nil {
 						return fmt.Errorf("failed to write chat message response to database: %w", err)
@@ -204,13 +188,8 @@ func handleNewIntentNotification(ctx context.Context, payload string) error {
 				cleanedResponse = strings.TrimSpace(cleanedResponse)
 
 				updatedChatMessage.Response = cleanedResponse
-				e := realtimetypes.ChatMessageUpdatedEvent{
-					WorkspaceID: w.ID,
-					ChatMessage: updatedChatMessage,
-				}
-				if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
-					return fmt.Errorf("failed to send chat message update: %w", err)
-				}
+				// Note: Chat message updates are now handled via AI SDK streaming, not Centrifugo events
+				// Feedback messages are persisted to the database but not broadcast via Centrifugo
 
 				if err := workspace.SetChatMessageResponse(ctx, chatMessage.ID, cleanedResponse); err != nil {
 					return fmt.Errorf("failed to write chat message response to database: %w", err)
@@ -269,13 +248,8 @@ func handleNewIntentNotification(ctx context.Context, payload string) error {
 					cleanedResponse = strings.TrimSpace(cleanedResponse)
 
 					updatedChatMessage.Response = cleanedResponse
-					e := realtimetypes.ChatMessageUpdatedEvent{
-						WorkspaceID: w.ID,
-						ChatMessage: updatedChatMessage,
-					}
-					if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
-						return fmt.Errorf("failed to send chat message update: %w", err)
-					}
+					// Note: Chat message updates are now handled via AI SDK streaming, not Centrifugo events
+					// Feedback messages are persisted to the database but not broadcast via Centrifugo
 
 					if err := workspace.SetChatMessageResponse(ctx, chatMessage.ID, cleanedResponse); err != nil {
 						return fmt.Errorf("failed to write chat message response to database: %w", err)
@@ -295,18 +269,8 @@ func handleNewIntentNotification(ctx context.Context, payload string) error {
 			return fmt.Errorf("failed to enqueue render workspace: %w", err)
 		}
 
-		chatMesageWithRenderID, err := workspace.GetChatMessage(ctx, chatMessage.ID)
-		if err != nil {
-			return fmt.Errorf("failed to get chat message: %w", err)
-		}
-
-		e := realtimetypes.ChatMessageUpdatedEvent{
-			WorkspaceID: w.ID,
-			ChatMessage: chatMesageWithRenderID,
-		}
-		if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
-			return fmt.Errorf("failed to send chat message update: %w", err)
-		}
+		// Note: Chat message updates are now handled via AI SDK streaming, not Centrifugo events
+		// Render job creation is handled via other Centrifugo events (render-stream)
 
 		return nil
 	}
@@ -318,19 +282,11 @@ func handleNewIntentNotification(ctx context.Context, payload string) error {
 			return fmt.Errorf("failed to create plan: %w", err)
 		}
 
-		chatMessageWithPlanID, err := workspace.GetChatMessage(ctx, chatMessage.ID)
-		if err != nil {
-			return fmt.Errorf("failed to get chat message: %w", err)
-		}
+		// Note: Chat message updates are now handled via AI SDK streaming, not Centrifugo events
+		// Plan creation is handled via plan-updated Centrifugo events
 
-		e := realtimetypes.ChatMessageUpdatedEvent{
-			WorkspaceID: w.ID,
-			ChatMessage: chatMessageWithPlanID,
-		}
-		if err := realtime.SendEvent(ctx, realtimeRecipient, e); err != nil {
-			return fmt.Errorf("failed to send chat message update: %w", err)
-		}
 		return nil
+	}
 	} else if intent.IsConversational && !intent.IsOffTopic {
 		if err := persistence.EnqueueWork(ctx, "new_converational", map[string]interface{}{
 			"chatMessageId": chatMessage.ID,

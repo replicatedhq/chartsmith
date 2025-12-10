@@ -81,10 +81,6 @@ function handleWebSocketMessage(data: any): boolean {
 
   // Handle different event types
   switch (data.eventType) {
-    case 'chatmessage-updated':
-      handleChatMessageUpdated(data);
-      return true;
-
     case 'plan-created':
     case 'plan-updated':
       handlePlanEvent(data);
@@ -97,40 +93,6 @@ function handleWebSocketMessage(data: any): boolean {
     default:
       outputChannel.appendLine(`Unknown event type: ${data.eventType}`);
       return false;
-  }
-}
-
-/**
- * Handle a chatmessage-updated event
- * @param data The message payload
- */
-function handleChatMessageUpdated(data: any): void {
-  outputChannel.appendLine('========= PROCESSING CHAT MESSAGE UPDATE ==========');
-
-  if (!data.chatMessage) {
-    outputChannel.appendLine('ERROR: chatmessage-updated event missing chatMessage object');
-    return;
-  }
-
-  const message = data.chatMessage;
-  outputChannel.appendLine(`Processing chatmessage-updated for message ID: ${message.id}`);
-  outputChannel.appendLine(`Message details: ${JSON.stringify(message, null, 2)}`);
-
-  // Check if the message has the expected structure
-  if (!message.id) {
-    outputChannel.appendLine('ERROR: Message is missing ID field');
-    return;
-  }
-
-  // Update the message in the store
-  actions.updateMessage(message);
-
-  // Force re-render by notifying webview
-  if (globalState.webviewGlobal) {
-    globalState.webviewGlobal.postMessage({
-      command: 'messageUpdated',
-      message: message
-    });
   }
 }
 

@@ -4,3 +4,32 @@ bin
 test-results/
 .envrc
 .specstory/
+
+# Test artifacts and outputs
+*.test
+*.test.out
+*.prof
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Build artifacts
+.next/
+dist/
+build/
+*.o
+*.a
+*.so
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+Thumbs.db
+.DS_Store
