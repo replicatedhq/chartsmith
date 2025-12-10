@@ -1,8 +1,11 @@
 /**
  * Tool System Exports
  *
- * Simplified after AI SDK migration - only write_file tool is used.
+ * All AI tools for the chat system.
  */
 
 export { createWriteFileTool } from "./write-file";
 export type { WriteFileContext } from "./write-file";
+
+export { createKubernetesVersionTool } from "./kubernetes-version";
+export { createSubchartVersionTool } from "./subchart-version";

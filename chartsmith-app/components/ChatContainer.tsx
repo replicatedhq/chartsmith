@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { Send, Loader2, Users, Code, User, Sparkles } from "lucide-react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
@@ -39,14 +39,14 @@ export function ChatContainer({ session }: ChatContainerProps) {
   // Check if Vercel AI SDK is enabled
   const useVercelAiSdk = useVercelAiSdkEnabled();
 
-  // Create transport with workspace ID - memoized to prevent re-renders
+  // Create transport with workspace ID and persona - memoized to prevent re-renders
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
         api: "/api/chat",
-        body: { workspaceId: workspace?.id },
+        body: { workspaceId: workspace?.id, persona: selectedRole },
       }),
-    [workspace?.id]
+    [workspace?.id, selectedRole]
   );
 
   // Use Vercel AI SDK's useChat directly - no wrapper needed

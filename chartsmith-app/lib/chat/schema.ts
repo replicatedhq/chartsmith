@@ -15,6 +15,7 @@ import type { UIMessage } from "ai";
 export const chatRequestSchema = z.object({
   messages: z.array(z.custom<UIMessage>()).min(1, "Messages array is required"),
   workspaceId: z.string().min(1, "Workspace ID is required"),
+  persona: z.enum(["auto", "developer", "operator"]).optional().default("auto"),
 });
 
 /**

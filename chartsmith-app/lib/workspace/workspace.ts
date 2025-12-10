@@ -952,6 +952,15 @@ export async function listPlans(workspaceId: string): Promise<Plan[]> {
   }
 }
 
+/**
+ * Get the most recent plan for a workspace
+ * Returns the plan with the latest created_at timestamp
+ */
+export async function getMostRecentPlan(workspaceId: string): Promise<Plan | null> {
+  const plans = await listPlans(workspaceId);
+  return plans.length > 0 ? plans[0] : null;
+}
+
 export async function rollbackToRevision(workspaceId: string, revisionNumber: number) {
   logger.info("Rolling back to revision", { workspaceId, revisionNumber });
 
