@@ -4,6 +4,10 @@ WORKER_BUILD_DIR=bin
 GOOS?=$(shell go env GOOS)
 GOARCH?=$(shell go env GOARCH)
 
+# Read versions from VERSION file
+CHART_VERSION=$(shell grep CHART_VERSION VERSION | cut -d= -f2)
+REPLICATED_VERSION=$(shell grep REPLICATED_VERSION VERSION | cut -d= -f2)
+
 # =============================================================================
 # REQUIRED ENVIRONMENT VARIABLES (must be exported by the user)
 # =============================================================================
@@ -82,9 +86,9 @@ schema: pgvector
 	@echo "Running schema commands..."
 	rm -rf ./db/generated-schema
 
-	mkdir -p ./db/generated-schema/extensions
-	schemahero plan --driver postgres --uri $(CHARTSMITH_PG_URI) --spec-file ./db/schema/extensions --spec-type extension --out ./db/generated-schema/extensions
-	schemahero apply --driver postgres --uri $(CHARTSMITH_PG_URI) --ddl ./db/generated-schema/extensions
+	# mkdir -p ./db/generated-schema/extensions
+	# schemahero plan --driver postgres --uri $(CHARTSMITH_PG_URI) --spec-file ./db/schema/extensions --spec-type extension --out ./db/generated-schema/extensions
+	# schemahero apply --driver postgres --uri $(CHARTSMITH_PG_URI) --ddl ./db/generated-schema/extensions
 
 	mkdir -p ./db/generated-schema/tables
 	schemahero plan --driver postgres --uri "$(CHARTSMITH_PG_URI)" --spec-file ./db/schema/tables --spec-type table --out ./db/generated-schema/tables
@@ -160,41 +164,59 @@ release:
 		--op-service-account env:OP_SERVICE_ACCOUNT_PRODUCTION \
 		--progress plain
 
-# Requires: GITHUB_TOKEN, OP_SERVICE_ACCOUNT_PRODUCTION
-.PHONY: replicated
-replicated:
-	mkdir -p chart/chartsmith/db/schema/extensions
-	mkdir -p chart/chartsmith/db/schema/tables
-	cp db/schema/extensions/*.yaml chart/chartsmith/db/schema/extensions/
-	cp db/schema/tables/*.yaml chart/chartsmith/db/schema/tables/
-	dagger call release \
-		--version $(version) \
-		--build=false \
-		--staging=false \
-		--production=false \
-		--replicated=true \
-		--github-token env:GITHUB_TOKEN \
-		--op-service-account env:OP_SERVICE_ACCOUNT_PRODUCTION \
-		--progress plain
+# Check replicated CLI is installed and meets minimum version requirement
+.PHONY: check-replicated-cli
+check-replicated-cli:
+	@echo "Checking for replicated CLI..."
+	@if ! command -v replicated >/dev/null 2>&1; then \
+		echo "Error: replicated CLI is not installed"; \
+		echo "Please install it from: https://docs.replicated.com/reference/replicated-cli-installing"; \
+		exit 1; \
+	fi
+	@echo "Checking replicated CLI version..."
+	@REPLICATED_VERSION=$$(replicated version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1); \
+	if [ -z "$$REPLICATED_VERSION" ]; then \
+		echo "Error: Could not determine replicated CLI version"; \
+		exit 1; \
+	fi; \
+	echo "Found replicated CLI version: $$REPLICATED_VERSION"; \
+	MAJOR=$$(echo $$REPLICATED_VERSION | cut -d. -f1); \
+	MINOR=$$(echo $$REPLICATED_VERSION | cut -d. -f2); \
+	PATCH=$$(echo $$REPLICATED_VERSION | cut -d. -f3); \
+	MIN_MAJOR=0; MIN_MINOR=123; MIN_PATCH=0; \
+	if [ $$MAJOR -lt $$MIN_MAJOR ] || \
+	   ([ $$MAJOR -eq $$MIN_MAJOR ] && [ $$MINOR -lt $$MIN_MINOR ]) || \
+	   ([ $$MAJOR -eq $$MIN_MAJOR ] && [ $$MINOR -eq $$MIN_MINOR ] && [ $$PATCH -lt $$MIN_PATCH ]); then \
+		echo "Error: replicated CLI version $$REPLICATED_VERSION is below minimum required version 0.123.0"; \
+		echo "Please update your replicated CLI: https://docs.replicated.com/reference/replicated-cli-installing"; \
+		exit 1; \
+	fi; \
+	echo "replicated CLI version check passed (>=0.123.0)"
 
-# Requires: REPLICATED_API_TOKEN
-.PHONY: replicated-dev
-replicated-dev:
-	dagger call release-dev-replicated \
-		--version $(version) \
-		--endpoint=https://vendor-api-$(okteto-namespace).okteto.repldev.com \
-		--proxy-registry-domain=proxy-registry-$(okteto-namespace).okteto.repldev.com \
-		--api-token env:REPLICATED_API_TOKEN \
-		--progress plain
-
-# Requires: REPLICATED_API_TOKEN
-.PHONY: replicated-prod
-replicated-prod:
-	dagger call release-dev-replicated \
-		--version $(version) \
-		--app-slug $(app-slug) \
-		--api-token env:REPLICATED_API_TOKEN \
-		--progress plain
+# Release to Replicated
+.PHONY: release-replicated
+release-replicated: check-replicated-cli
+	@echo "Using versions from VERSION file:"
+	@echo "  Chart Version: $(CHART_VERSION)"
+	@echo "  Replicated Release Version: $(REPLICATED_VERSION)"
+	@echo ""
+	@echo "Updating chart version in Chart.yaml..."
+	@sed -i.bak 's/^version:.*/version: $(CHART_VERSION)/' chart/chartsmith/Chart.yaml && rm chart/chartsmith/Chart.yaml.bak
+	@echo "Updating chart version in helmchart.yaml..."
+	@sed -i.bak 's/chartVersion:.*/chartVersion: $(CHART_VERSION)/' replicated/helmchart.yaml && rm replicated/helmchart.yaml.bak
+	@echo "Verifying 'chartsmith' app exists..."
+	@if ! replicated app ls 2>&1 | grep -q "chartsmith"; then \
+		echo "Error: 'chartsmith' app not found in replicated apps list"; \
+		echo "Please ensure you are authenticated and have access to the chartsmith app"; \
+		echo "Run: replicated app ls"; \
+		exit 1; \
+	fi
+	@echo "Found 'chartsmith' app"
+	@echo "Packaging Helm chart..."
+	@cd chart/chartsmith && helm dependency update && helm package --version $(CHART_VERSION) --app-version $(CHART_VERSION) .
+	@echo "Creating release $(REPLICATED_VERSION) and promoting to Unstable channel..."
+	@cd chart/chartsmith && replicated release create --promote Unstable --version $(REPLICATED_VERSION)
+	@echo "Release $(REPLICATED_VERSION) created and promoted to Unstable channel successfully"
 
 # Requires: GITHUB_TOKEN, OP_SERVICE_ACCOUNT_PRODUCTION
 .PHONY: production
