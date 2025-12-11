@@ -27,24 +27,32 @@ You should decide if the user is asking for a change to the plan/chart, or if th
 Be exceptionally brief and precise in your response.
 Only say "plan" or "chat" in your response.`
 
-	msg, err := client.Messages.Create(ctx, &anthropic.MessageCreateParams{
-		Model:     anthropic.F(anthropic.ModelClaude3_7Sonnet20250219),
-		MaxTokens: anthropic.F(1024),
-		System:    []anthropic.SystemBlockParam{anthropic.NewSystemTextBlock(systemPrompt)},
+	msg, err := client.Messages.New(ctx, anthropic.MessageNewParams{
+		Model:     anthropic.ModelClaude3_7Sonnet20250219,
+		MaxTokens: int64(1024),
+		System: []anthropic.TextBlockParam{
+			{
+				Text: systemPrompt,
+				Type: "text",
+			},
+		},
 		Messages: []anthropic.MessageParam{
 			anthropic.NewUserMessage(anthropic.NewTextBlock(message)),
 		},
 	})
 
 	if err != nil {
-		logger.Error("Failed to classify prompt type", zap.Error(err), zap.String("message", message))
+		logger.Error(err, zap.String("message", message))
 		return "", fmt.Errorf("failed to classify prompt type: %w", err)
 	}
 
 	// Extract text from response
 	text := ""
 	if len(msg.Content) > 0 {
-		if textBlock, ok := msg.Content[0].(anthropic.TextBlock); ok {
+		// ContentBlockUnion has AsText() method or direct Text field
+		if msg.Content[0].Type == "text" {
+			text = msg.Content[0].Text
+		} else if textBlock := msg.Content[0].AsText(); textBlock.Text != "" {
 			text = textBlock.Text
 		}
 	}

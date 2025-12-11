@@ -1,8 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { findSession } from '@/lib/auth/session';
 import { cookies } from 'next/headers';
+import { getTestAuthTokenFromHeaders, validateTestAuthToken, isTestAuthBypassEnabled } from '@/lib/auth/test-auth-bypass';
+import { z } from 'zod';
 
 export const dynamic = 'force-dynamic';
+
+/**
+ * Zod schema for validating chat request body.
+ * Provides strict validation for security and data integrity.
+ */
+const ChatMessageSchema = z.object({
+  role: z.enum(['user', 'assistant', 'system']),
+  content: z.string().max(100000, 'Message content too large'), // 100KB limit per message
+});
+
+const ChatRequestSchema = z.object({
+  messages: z.array(ChatMessageSchema).min(1, 'At least one message is required').max(100, 'Too many messages'),
+  workspaceId: z.string().uuid('Invalid workspace ID format'),
+  role: z.enum(['auto', 'developer', 'operator']).optional(),
+});
 
 /**
  * @fileoverview Next.js API route that proxies chat requests to Go backend.
@@ -53,22 +70,38 @@ export const dynamic = 'force-dynamic';
  * ```
  */
 export async function POST(req: NextRequest) {
-  // Authenticate: try cookies first (web), then authorization header (extension)
-  // This dual-auth approach supports both web app and VS Code extension
+  // Authenticate: try test auth bypass first (test mode only), then cookies (web), then authorization header (extension)
   let userId: string | undefined;
-  
+
   try {
-    // Try to get session from cookies (web-based auth)
-    const cookieStore = await cookies();
-    const sessionToken = cookieStore.get('session')?.value;
-    
-    if (sessionToken) {
-      const session = await findSession(sessionToken);
-      if (session?.user?.id) {
-        userId = session.user.id;
+    // TEST AUTH BYPASS: Check for test auth header first (only in non-production test mode)
+    // Double-check NODE_ENV here as defense-in-depth
+    if (process.env.NODE_ENV !== 'production' && isTestAuthBypassEnabled()) {
+      const testAuthToken = getTestAuthTokenFromHeaders(req.headers);
+      if (testAuthToken) {
+        const authResult = await validateTestAuthToken(testAuthToken);
+        if (authResult) {
+          const session = await findSession(authResult.token);
+          if (session?.user?.id) {
+            userId = session.user.id;
+          }
+        }
       }
     }
-    
+
+    // Try to get session from cookies (web-based auth)
+    if (!userId) {
+      const cookieStore = await cookies();
+      const sessionToken = cookieStore.get('session')?.value;
+
+      if (sessionToken) {
+        const session = await findSession(sessionToken);
+        if (session?.user?.id) {
+          userId = session.user.id;
+        }
+      }
+    }
+
     // Fall back to authorization header (extension-based auth)
     if (!userId) {
       const authHeader = req.headers.get('authorization');
@@ -80,9 +113,8 @@ export async function POST(req: NextRequest) {
         }
       }
     }
-  } catch (error) {
-    console.error('Auth error:', error);
-    // Continue to check userId below
+  } catch {
+    // Auth error - continue to check userId below
   }
 
   if (!userId) {
@@ -92,33 +124,25 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Parse and validate request body
-  let body;
+  // Parse and validate request body with Zod
+  let validatedBody: z.infer<typeof ChatRequestSchema>;
   try {
-    body = await req.json();
+    const rawBody = await req.json();
+    validatedBody = ChatRequestSchema.parse(rawBody);
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: 'Validation error', details: error.issues.map(issue => issue.message) },
+        { status: 400 }
+      );
+    }
     return NextResponse.json(
       { error: 'Invalid request body' },
       { status: 400 }
     );
   }
 
-  const { messages, workspaceId } = body;
-
-  // Validate required fields
-  if (!messages || !Array.isArray(messages) || messages.length === 0) {
-    return NextResponse.json(
-      { error: 'Messages array is required' },
-      { status: 400 }
-    );
-  }
-
-  if (!workspaceId) {
-    return NextResponse.json(
-      { error: 'workspaceId is required' },
-      { status: 400 }
-    );
-  }
+  const { messages, workspaceId } = validatedBody;
 
   // Get Go worker URL (from env var, database param, or localhost default)
   const goWorkerUrl = await getGoWorkerUrl();
@@ -138,8 +162,6 @@ export async function POST(req: NextRequest) {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Go backend error:', response.status, errorText);
       return NextResponse.json(
         { error: 'Backend error' },
         { status: response.status }
@@ -162,8 +184,7 @@ export async function POST(req: NextRequest) {
         'Connection': 'keep-alive',
       },
     });
-  } catch (error) {
-    console.error('Chat API route error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

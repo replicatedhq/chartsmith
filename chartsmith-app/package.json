@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "next dev -p 3000",
     "clean-dev": "rm -rf .next && rm -rf node_modules/.cache && next dev --turbopack",
     "dev:clean": "rm -rf .next && rm -rf node_modules/.cache && next dev --turbopack",
     "dev:stable": "rm -rf .next && rm -rf node_modules/.cache && next dev",
@@ -52,7 +52,8 @@
     "secure-random-string": "^1.1.4",
     "tailwind-merge": "^3.0.2",
     "tar": "^7.4.3",
-    "unified-diff": "^5.0.0"
+    "unified-diff": "^5.0.0",
+    "zod": "^4.1.13"
   },
   "overrides": {
     "form-data": ">=4.0.5"

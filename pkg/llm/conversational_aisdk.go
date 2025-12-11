@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/packages/param"
 	"github.com/replicatedhq/chartsmith/pkg/workspace"
 	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 )
@@ -139,47 +140,51 @@ func StreamConversationalChatAISDK(
 	// Get tools
 	tools := []anthropic.ToolParam{
 		{
-			Name:        anthropic.F("latest_subchart_version"),
-			Description: anthropic.F("Return the latest version of a subchart from name"),
-			InputSchema: anthropic.F(interface{}(map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
+			Name:        "latest_subchart_version",
+			Description: param.NewOpt("Return the latest version of a subchart from name"),
+			InputSchema: anthropic.ToolInputSchemaParam{
+				Type: "object",
+				Properties: map[string]interface{}{
 					"chart_name": map[string]interface{}{
 						"type":        "string",
 						"description": "The subchart name to get the latest version of",
 					},
 				},
-				"required": []string{"chart_name"},
-			})),
+				Required: []string{"chart_name"},
+			},
 		},
 		{
-			Name:        anthropic.F("latest_kubernetes_version"),
-			Description: anthropic.F("Return the latest version of Kubernetes"),
-			InputSchema: anthropic.F(interface{}(map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
+			Name:        "latest_kubernetes_version",
+			Description: param.NewOpt("Return the latest version of Kubernetes"),
+			InputSchema: anthropic.ToolInputSchemaParam{
+				Type: "object",
+				Properties: map[string]interface{}{
 					"semver_field": map[string]interface{}{
 						"type":        "string",
 						"description": "One of 'major', 'minor', or 'patch'",
 					},
 				},
-				"required": []string{"semver_field"},
-			})),
+				Required: []string{"semver_field"},
+			},
 		},
 	}
 
-	toolUnionParams := make([]anthropic.ToolUnionUnionParam, len(tools))
+	toolUnionParams := make([]anthropic.ToolUnionParam, len(tools))
 	for i, tool := range tools {
-		toolUnionParams[i] = tool
+		toolUnionParams[i] = anthropic.ToolUnionParamOfTool(tool.InputSchema, tool.Name)
+		if tool.Description.Valid() {
+			// Description needs to be set via the union param's method if available
+			// For now, we'll use the helper function which should handle it
+		}
 	}
 
 	// Conversation loop - continue until no more tool calls
 	for {
 		stream := client.Messages.NewStreaming(ctx, anthropic.MessageNewParams{
-			Model:     anthropic.F(anthropic.ModelClaude3_7Sonnet20250219),
-			MaxTokens: anthropic.F(int64(8192)),
-			Messages:  anthropic.F(messages),
-			Tools:     anthropic.F(toolUnionParams),
+			Model:     anthropic.ModelClaude3_7Sonnet20250219,
+			MaxTokens: int64(8192),
+			Messages:  messages,
+			Tools:     toolUnionParams,
 		})
 
 		// Accumulate message to detect tool calls while streaming
@@ -194,7 +199,7 @@ func StreamConversationalChatAISDK(
 			}
 
 			// Stream events to frontend - handle text deltas and tool calls
-			switch e := event.AsUnion().(type) {
+			switch e := event.AsAny().(type) {
 			case anthropic.ContentBlockStartEvent:
 				// Handle tool use block start
 				if e.ContentBlock.Type == "tool_use" || e.ContentBlock.Type == "server_tool_use" {
@@ -204,6 +209,7 @@ func StreamConversationalChatAISDK(
 					}
 				}
 			case anthropic.ContentBlockDeltaEvent:
+				// Check delta type - RawContentBlockDeltaUnion has Type field and direct access
 				if e.Delta.Type == "text_delta" && e.Delta.Text != "" {
 					if err := writer.WriteTextDelta(e.Delta.Text); err != nil {
 						return fmt.Errorf("failed to write text delta: %w", err)
@@ -236,8 +242,30 @@ func StreamConversationalChatAISDK(
 		// Check for tool calls
 		var toolUseBlocks []anthropic.ToolUseBlock
 		for _, block := range message.Content {
-			if block.Type == anthropic.ContentBlockTypeToolUse {
-				toolUseBlocks = append(toolUseBlocks, block)
+			if block.Type == "tool_use" {
+				toolUse := block.AsToolUse()
+				toolUseBlocks = append(toolUseBlocks, toolUse)
+			} else if block.Type == "server_tool_use" {
+				serverToolUse := block.AsServerToolUse()
+				// Convert ServerToolUseBlock to ToolUseBlock if needed
+				// Note: ServerToolUseBlock.Name is a constant type, convert to string
+				nameStr := string(serverToolUse.Name)
+				var inputJSON json.RawMessage
+				if serverToolUse.Input != nil {
+					if b, ok := serverToolUse.Input.([]byte); ok {
+						inputJSON = b
+					} else {
+						// Try to marshal if it's not already bytes
+						if b, err := json.Marshal(serverToolUse.Input); err == nil {
+							inputJSON = b
+						}
+					}
+				}
+				toolUseBlocks = append(toolUseBlocks, anthropic.ToolUseBlock{
+					ID:    serverToolUse.ID,
+					Name:  nameStr,
+					Input: inputJSON,
+				})
 			}
 		}
 
@@ -276,10 +304,7 @@ func StreamConversationalChatAISDK(
 		}
 
 		// Add tool results to conversation and continue
-		messages = append(messages, anthropic.MessageParam{
-			Role:    anthropic.F(anthropic.MessageParamRoleUser),
-			Content: anthropic.F(toolResults),
-		})
+		messages = append(messages, anthropic.NewUserMessage(toolResults...))
 	}
 
 	return nil

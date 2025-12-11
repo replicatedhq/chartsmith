@@ -41,7 +41,7 @@ func HandlePromptType(w http.ResponseWriter, r *http.Request) {
 	// Call LLM for classification
 	promptType, err := llm.ClassifyPromptType(r.Context(), req.Message)
 	if err != nil {
-		logger.Error("Failed to classify prompt type", zap.Error(err))
+		logger.Error(err, zap.String("message", "Failed to classify prompt type"))
 		http.Error(w, "Failed to classify prompt type", http.StatusInternalServerError)
 		return
 	}
@@ -49,7 +49,7 @@ func HandlePromptType(w http.ResponseWriter, r *http.Request) {
 	response := PromptTypeResponse{Type: promptType}
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(response); err != nil {
-		logger.Error("Failed to encode response", zap.Error(err))
+		logger.Error(err, zap.String("message", "Failed to encode response"))
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
 	}

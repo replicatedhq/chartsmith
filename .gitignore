@@ -10,6 +10,16 @@ test-results/
 *.test.out
 *.prof
 
+# Test coverage files
+coverage/
+.nyc_output/
+.coverage/
+*.lcov
+coverage.json
+coverage-final.json
+.nyc_output/
+lib-cov/
+
 # Environment files
 .env
 .env.local

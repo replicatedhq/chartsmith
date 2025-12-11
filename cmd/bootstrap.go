@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -185,10 +186,15 @@ func runBootstrap(ctx context.Context, pgURI string, workspaceDir string, force 
 			if err != nil {
 				return fmt.Errorf("failed to get embeddings: %w", err)
 			}
+			
+			// Rate limiting: Wait 21 seconds between requests to respect Voyage AI's 3 RPM limit
+			// This ensures we don't exceed the free tier rate limit
+			time.Sleep(21 * time.Second)
 
 			_, err = tx.Exec(ctx, `
 				INSERT INTO bootstrap_file (id, chart_id, workspace_id, file_path, content, embeddings)
 				VALUES ($1, $2, $3, $4, $5, $6)
+				ON CONFLICT (id) DO UPDATE SET chart_id = EXCLUDED.chart_id, workspace_id = EXCLUDED.workspace_id, file_path = EXCLUDED.file_path, content = EXCLUDED.content, embeddings = EXCLUDED.embeddings
 			`, hashString(relativePath), chartID, workspaceID, relativePath, content, embeddings)
 			if err != nil {
 				return fmt.Errorf("failed to insert file: %w", err)
@@ -203,6 +209,7 @@ func runBootstrap(ctx context.Context, pgURI string, workspaceDir string, force 
 		_, err := tx.Exec(ctx, `
             INSERT INTO bootstrap_chart (id, workspace_id, name)
             VALUES ($1, $2, $3)
+            ON CONFLICT (id) DO UPDATE SET workspace_id = EXCLUDED.workspace_id, name = EXCLUDED.name
         `, chartID, workspaceID, chartName)
 		if err != nil {
 			return fmt.Errorf("failed to insert chart: %w", err)
