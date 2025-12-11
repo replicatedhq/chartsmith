@@ -8,6 +8,5 @@ chart/chartsmith/*.tgz
 .direnv/
 
 # Local setup documentation and scripts (not committed to git)
-docs/local-setup/
-docs/debugging/
+docs/
 scripts/
