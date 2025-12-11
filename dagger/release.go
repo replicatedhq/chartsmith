@@ -24,9 +24,6 @@ func (m *Chartsmith) Release(
 
 	// +default=false
 	production bool,
-
-	// +default=false
-	replicated bool,
 ) error {
 	latestVersion, newVersion, err := processVersion(ctx, version, githubToken)
 	if err != nil {
@@ -165,15 +162,6 @@ func (m *Chartsmith) Release(
 		}); err != nil {
 			return err
 		}
-	}
-
-	if replicated {
-		releaseSequence, err := createReplicatedRelease(ctx, source, newVersion, opServiceAccount)
-		if err != nil {
-			return err
-		}
-
-		fmt.Printf("Replicated release sequence: %d\n", releaseSequence)
 	}
 
 	if build {
