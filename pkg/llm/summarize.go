@@ -109,9 +109,9 @@ func summarizeContentWithClaude(ctx context.Context, content string) (string, er
 	startTime := time.Now()
 
 	resp, err := client.Messages.New(ctx, anthropic.MessageNewParams{
-		Model:     anthropic.F(anthropic.ModelClaude3_7Sonnet20250219),
-		MaxTokens: anthropic.F(int64(8192)),
-		Messages:  anthropic.F([]anthropic.MessageParam{anthropic.NewUserMessage(anthropic.NewTextBlock(userMessage))}),
+		Model:     anthropic.ModelClaude3_7Sonnet20250219,
+		MaxTokens: int64(8192),
+		Messages:  []anthropic.MessageParam{anthropic.NewUserMessage(anthropic.NewTextBlock(userMessage))},
 	})
 
 	if err != nil {

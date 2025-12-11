@@ -19,14 +19,14 @@
 
 import { useChat } from '@ai-sdk/react';
 import { useAtom } from 'jotai';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { messagesAtom } from '@/atoms/workspace';
 import { Session } from '@/lib/types/session';
 import { Message } from '@/components/types';
-import { 
-  messagesToAIMessages, 
+import {
+  messagesToAIMessages,
   aiMessageToMessage,
-  MessageMetadata 
+  MessageMetadata
 } from '@/lib/types/chat';
 import { getWorkspaceMessagesAction } from '@/lib/workspace/actions/get-workspace-messages';
 
@@ -114,25 +114,41 @@ export interface UseAIChatReturn {
 export function useAIChat({ workspaceId, session, initialMessages, onMessageComplete }: UseAIChatOptions): UseAIChatReturn {
   const [messages, setMessages] = useAtom(messagesAtom);
   const [selectedRole, setSelectedRole] = useState<'auto' | 'developer' | 'operator'>('auto');
-  
+
+  // Use refs to store callback and session to avoid re-triggering effects
+  const onMessageCompleteRef = useRef(onMessageComplete);
+  onMessageCompleteRef.current = onMessageComplete;
+
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
+
   // Load initial messages if not provided
   const [loadedMessages, setLoadedMessages] = useState<Message[]>(initialMessages || []);
   const [isLoadingHistory, setIsLoadingHistory] = useState(!initialMessages);
-  
+
+  // Track if we've already loaded history to prevent re-fetching
+  const hasLoadedRef = useRef(false);
+
   useEffect(() => {
-    if (!initialMessages && isLoadingHistory) {
+    // Skip loading if no workspaceId (hook called with empty string when workspace not available)
+    if (!workspaceId) {
+      setIsLoadingHistory(false);
+      return;
+    }
+    if (!initialMessages && isLoadingHistory && !hasLoadedRef.current) {
+      hasLoadedRef.current = true;
       // Load messages from server action
-      getWorkspaceMessagesAction(session, workspaceId)
+      getWorkspaceMessagesAction(sessionRef.current, workspaceId)
         .then((msgs) => {
           setLoadedMessages(msgs);
           setIsLoadingHistory(false);
         })
-        .catch((err) => {
-          console.error('Failed to load messages:', err);
+        .catch(() => {
+          // Silently handle load failure - empty state is acceptable
           setIsLoadingHistory(false);
         });
     }
-  }, [workspaceId, session, initialMessages, isLoadingHistory]);
+  }, [workspaceId, initialMessages, isLoadingHistory]);
   
   // Convert loaded messages from Chartsmith format to AI SDK format for useChat
   const initialAIMessages = useMemo(() => {
@@ -209,9 +225,8 @@ export function useAIChat({ workspaceId, session, initialMessages, onMessageComp
         return [...prev, convertedMessage];
       });
     },
-    onError: (error) => {
-      console.error('Chat error:', error);
-      // Error is exposed via return value
+    onError: () => {
+      // Error is exposed via the hook's return value - no logging needed
     },
   });
   
@@ -232,6 +247,11 @@ export function useAIChat({ workspaceId, session, initialMessages, onMessageComp
       .join('');
   }
   
+  // Track last synced messages to avoid unnecessary updates
+  const lastSyncedMessagesRef = useRef<string>('');
+  // Track which messages we've already called onMessageComplete for
+  const completedMessageIdsRef = useRef<Set<string>>(new Set());
+
   // Sync AI SDK messages to Jotai atom in real-time as they stream
   // This ensures backward compatibility with components that read from the atom
   useEffect(() => {
@@ -239,13 +259,13 @@ export function useAIChat({ workspaceId, session, initialMessages, onMessageComp
     // AI SDK uses separate user/assistant messages, but we combine them into pairs
     const convertedMessages: Message[] = [];
     let currentUserMessage: Message | null = null;
-    
+
     for (const aiMessage of aiMessages) {
       const metadata: MessageMetadata = {
         workspaceId,
-        userId: session.user.id,
+        userId: sessionRef.current.user.id,
       };
-      
+
       if (aiMessage.role === 'user') {
         // Save previous user message if exists
         if (currentUserMessage) {
@@ -258,7 +278,7 @@ export function useAIChat({ workspaceId, session, initialMessages, onMessageComp
           const assistantContent = extractContent((aiMessage as any).content || '');
           currentUserMessage.response = assistantContent;
           currentUserMessage.isComplete = chat.status === 'ready'; // Complete when status is ready
-          
+
           // Preserve tool invocations from AI SDK message
           const toolInvocations = (aiMessage as any).toolInvocations?.map((inv: any) => ({
             toolCallId: inv.toolCallId || inv.id,
@@ -269,16 +289,21 @@ export function useAIChat({ workspaceId, session, initialMessages, onMessageComp
           if (toolInvocations && toolInvocations.length > 0) {
             currentUserMessage.toolInvocations = toolInvocations;
           }
-          
+
           convertedMessages.push(currentUserMessage);
-          
+
           // Call onMessageComplete callback if provided and message is complete
-          if (onMessageComplete && currentUserMessage.isComplete && currentUserMessage.response) {
-            // Create assistant message for callback
-            const assistantMessage = aiMessageToMessage(aiMessage, metadata);
-            onMessageComplete(currentUserMessage, assistantMessage);
+          // Use ref to get latest callback and track already-completed messages
+          if (onMessageCompleteRef.current && currentUserMessage.isComplete && currentUserMessage.response) {
+            const messageId = currentUserMessage.id;
+            if (!completedMessageIdsRef.current.has(messageId)) {
+              completedMessageIdsRef.current.add(messageId);
+              // Create assistant message for callback
+              const assistantMessage = aiMessageToMessage(aiMessage, metadata);
+              onMessageCompleteRef.current(currentUserMessage, assistantMessage);
+            }
           }
-          
+
           currentUserMessage = null;
         } else {
           // Orphaned assistant message (shouldn't happen, but handle gracefully)
@@ -287,15 +312,34 @@ export function useAIChat({ workspaceId, session, initialMessages, onMessageComp
         }
       }
     }
-    
+
     // Add last user message if exists (no response yet)
     if (currentUserMessage) {
       convertedMessages.push(currentUserMessage);
     }
-    
-    // Update atom with converted messages
-    setMessages(convertedMessages);
-  }, [aiMessages, workspaceId, session.user.id, chat.status, setMessages, onMessageComplete]);
+
+    // Only update atom if messages actually changed (compare by stringified content)
+    const messagesKey = JSON.stringify(convertedMessages.map(m => ({
+      id: m.id,
+      prompt: m.prompt,
+      response: m.response,
+      isComplete: m.isComplete,
+    })));
+
+    if (messagesKey !== lastSyncedMessagesRef.current) {
+      lastSyncedMessagesRef.current = messagesKey;
+      // IMPORTANT: Don't overwrite atom with empty messages if it already has data.
+      // This prevents clearing server-loaded messages on initial render.
+      // Only sync if we have messages to sync OR if the atom is already empty.
+      setMessages(prev => {
+        if (convertedMessages.length === 0 && prev.length > 0) {
+          // Keep existing messages - don't clear them
+          return prev;
+        }
+        return convertedMessages;
+      });
+    }
+  }, [aiMessages, workspaceId, chat.status, setMessages]);
   
   // Handle input change
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {

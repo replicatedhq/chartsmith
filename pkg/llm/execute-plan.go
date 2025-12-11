@@ -50,9 +50,9 @@ func CreateExecutePlan(ctx context.Context, planActionCreatedCh chan types.Actio
 	messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(plan.Description)))
 
 	stream := client.Messages.NewStreaming(context.TODO(), anthropic.MessageNewParams{
-		Model:     anthropic.F(anthropic.ModelClaude3_7Sonnet20250219),
-		MaxTokens: anthropic.F(int64(8192)),
-		Messages:  anthropic.F(messages),
+		Model:     anthropic.ModelClaude3_7Sonnet20250219,
+		MaxTokens: int64(8192),
+		Messages:  messages,
 	})
 
 	fullResponseWithTags := ""
@@ -63,10 +63,10 @@ func CreateExecutePlan(ctx context.Context, planActionCreatedCh chan types.Actio
 		event := stream.Current()
 		message.Accumulate(event)
 
-		switch delta := event.Delta.(type) {
-		case anthropic.ContentBlockDeltaEventDelta:
-			if delta.Text != "" {
-				fullResponseWithTags += delta.Text
+		switch e := event.AsAny().(type) {
+		case anthropic.ContentBlockDeltaEvent:
+			if e.Delta.Type == "text_delta" && e.Delta.Text != "" {
+				fullResponseWithTags += e.Delta.Text
 
 				aps, err := parseActionsInResponse(fullResponseWithTags)
 				if err != nil {

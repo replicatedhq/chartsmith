@@ -286,7 +286,6 @@ func handleNewIntentNotification(ctx context.Context, payload string) error {
 		// Plan creation is handled via plan-updated Centrifugo events
 
 		return nil
-	}
 	} else if intent.IsConversational && !intent.IsOffTopic {
 		if err := persistence.EnqueueWork(ctx, "new_converational", map[string]interface{}{
 			"chatMessageId": chatMessage.ID,

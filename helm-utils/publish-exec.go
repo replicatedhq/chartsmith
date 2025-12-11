@@ -69,6 +69,16 @@ func runHelmPublish(dir string, workspaceID string, chartName string, kubeconfig
 	versionOutput, _ := versionCmd.CombinedOutput()
 	fmt.Printf("Helm version:\n%s\n", string(versionOutput))
 
+	// Update dependencies first
+	fmt.Printf("Updating helm dependencies...\n")
+	depUpdateCmd := exec.CommandContext(ctx, "helm", "dependency", "update", dir)
+	depUpdateCmd.Env = append(os.Environ(), "KUBECONFIG="+kubeconfig)
+	depUpdateOutput, err := depUpdateCmd.CombinedOutput()
+	fmt.Printf("Helm dependency update output:\n%s\n", string(depUpdateOutput))
+	if err != nil {
+		return fmt.Errorf("failed to update dependencies: %w\nOutput: %s", err, string(depUpdateOutput))
+	}
+
 	// SIMPLIFIED APPROACH: Package the chart first
 	fmt.Printf("Packaging chart...\n")
 	packageCmd := exec.CommandContext(ctx, "helm", "package", dir, "--destination", os.TempDir())

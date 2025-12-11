@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/replicatedhq/chartsmith/pkg/param"
@@ -74,19 +75,55 @@ func Embeddings(content string) (string, error) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", param.Get().VoyageAPIKey))
 
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("request error: %v", err)
-	}
-	defer resp.Body.Close()
+	// Retry logic for rate limiting (429 errors)
+	maxRetries := 5
+	baseDelay := 20 * time.Second // Start with 20 seconds for 3 RPM limit
+	var resp *http.Response
+	var body []byte
 
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("response read error: %v", err)
-	}
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if attempt > 0 {
+			// Exponential backoff: 20s, 40s, 60s, 80s, 100s
+			delay := time.Duration(attempt) * baseDelay
+			fmt.Printf("Rate limited, waiting %v before retry %d/%d...\n", delay, attempt+1, maxRetries)
+			time.Sleep(delay)
+			
+			// Recreate request for retry (body buffer gets consumed)
+			req, err = http.NewRequest("POST", VOYAGE_API_URL, bytes.NewBuffer(jsonData))
+			if err != nil {
+				return "", fmt.Errorf("request creation error: %v", err)
+			}
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", param.Get().VoyageAPIKey))
+		}
 
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("API error %d: %s", resp.StatusCode, body)
+		resp, err = http.DefaultClient.Do(req)
+		if err != nil {
+			return "", fmt.Errorf("request error: %v", err)
+		}
+
+		body, err = ioutil.ReadAll(resp.Body)
+		resp.Body.Close() // Close immediately after reading
+		if err != nil {
+			return "", fmt.Errorf("response read error: %v", err)
+		}
+
+		// If we get a 429 (rate limit), retry
+		if resp.StatusCode == http.StatusTooManyRequests {
+			if attempt < maxRetries-1 {
+				continue
+			}
+			// Last attempt failed
+			return "", fmt.Errorf("API error %d (rate limited, max retries exceeded): %s", resp.StatusCode, body)
+		}
+
+		// If we get any other error, don't retry
+		if resp.StatusCode != http.StatusOK {
+			return "", fmt.Errorf("API error %d: %s", resp.StatusCode, body)
+		}
+
+		// Success!
+		break
 	}
 
 	var embeddings embeddingResponse

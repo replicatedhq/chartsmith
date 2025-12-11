@@ -17,5 +17,5 @@ func newAnthropicClient(ctx context.Context) (*anthropic.Client, error) {
 		option.WithAPIKey(param.Get().AnthropicAPIKey),
 	)
 
-	return client, nil
+	return &client, nil
 }

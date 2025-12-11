@@ -8,6 +8,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/replicatedhq/chartsmith/pkg/api"
 	"github.com/replicatedhq/chartsmith/pkg/listener"
 	"github.com/replicatedhq/chartsmith/pkg/param"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
@@ -71,6 +72,15 @@ func runWorker(ctx context.Context, pgURI string) error {
 	// This ensures our connections stay alive even during idle periods
 	listener.StartHeartbeat(ctx)
 	
+	// Start HTTP server for API endpoints (chat streaming, etc.)
+	go func() {
+		port := 8080 // Default port for local development
+		if err := api.StartHTTPServer(ctx, port); err != nil {
+			fmt.Printf("HTTP server error: %v\n", err)
+		}
+	}()
+
+	// Start PostgreSQL LISTEN/NOTIFY listeners
 	if err := listener.StartListeners(ctx); err != nil {
 		return fmt.Errorf("failed to start listeners: %w", err)
 	}

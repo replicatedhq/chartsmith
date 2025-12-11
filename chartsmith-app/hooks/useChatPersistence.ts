@@ -63,7 +63,6 @@ export function useChatPersistence({
         setInitialMessages(history);
         setError(null);
       } catch (err) {
-        console.error('Failed to load chat history:', err);
         setError(err instanceof Error ? err : new Error('Failed to load history'));
       } finally {
         setIsLoadingHistory(false);
@@ -82,7 +81,6 @@ export function useChatPersistence({
       setInitialMessages(history);
       return history;
     } catch (err) {
-      console.error('Failed to load chat history:', err);
       throw err;
     }
   }, []);
@@ -96,7 +94,6 @@ export function useChatPersistence({
         await serviceRef.current.saveMessagePair(userMsg, assistantMsg);
         setError(null);
       } catch (err) {
-        console.error('Failed to save message:', err);
         // Don't throw - persistence failure shouldn't break chat
         setError(err instanceof Error ? err : new Error('Failed to save'));
       }

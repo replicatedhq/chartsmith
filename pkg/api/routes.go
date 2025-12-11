@@ -8,6 +8,6 @@ func RegisterRoutes(mux *http.ServeMux) {
 	// Prompt type classification endpoint
 	mux.HandleFunc("/api/prompt-type", HandlePromptType)
 	
-	// Note: Other routes (like /api/v1/chat/stream) should be registered here as well
-	// when they are implemented.
+	// Chat streaming endpoint (AI SDK protocol)
+	mux.HandleFunc("/api/v1/chat/stream", HandleChatStream)
 }

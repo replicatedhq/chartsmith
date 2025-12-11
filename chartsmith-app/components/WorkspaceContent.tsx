@@ -99,7 +99,9 @@ export function WorkspaceContent({
 
   const showEditor = workspace?.currentRevisionNumber && workspace?.currentRevisionNumber > 0 || workspace?.incompleteRevisionNumber;
 
-  if (!session || !workspace) return null;
+  if (!session || !workspace) {
+    return null;
+  }
 
   return (
     <EditorLayout>

@@ -1,35 +1,31 @@
 /**
  * @fileoverview Chat container component that manages chat UI and state.
- * 
+ *
  * This component uses the Vercel AI SDK's useChat hook (via useAIChat wrapper)
  * for all chat functionality. It handles:
  * - Message display and input
  * - Role selection (auto/developer/operator)
- * - Message persistence via useChatPersistence hook
  * - Integration with workspace state (Jotai atoms)
- * 
- * Chat messages flow through the AI SDK HTTP SSE protocol, while other
- * events (plans, renders, artifacts) still use Centrifugo WebSocket.
- * 
+ *
+ * Messages are loaded by WorkspaceContent from the server and stored in messagesAtom.
+ * This component passes those messages to useAIChat as initialMessages.
+ *
  * @see useAIChat - Main chat hook wrapper
- * @see useChatPersistence - Message persistence hook
  */
 
 "use client";
-import React, { useState, useRef, useEffect } from "react";
-import { Send, Loader2, Users, Code, User, Sparkles } from "lucide-react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
+import { Send, Loader2, Code, User, Sparkles } from "lucide-react";
 import { useTheme } from "../contexts/ThemeContext";
 import { Session } from "@/lib/types/session";
 import { ChatMessage } from "./ChatMessage";
-import { messagesAtom, workspaceAtom, isRenderingAtom } from "@/atoms/workspace";
+import { messagesAtom, workspaceAtom } from "@/atoms/workspace";
 import { useAtom } from "jotai";
 import { ScrollingContent } from "./ScrollingContent";
-import { NewChartChatMessage } from "./NewChartChatMessage";
 import { NewChartContent } from "./NewChartContent";
 import { useAIChat } from "@/hooks/useAIChat";
-import { useChatPersistence } from "@/hooks/useChatPersistence";
-import { CoreMessage } from 'ai';
-import { aiMessageToMessage } from "@/lib/types/chat";
+import { Message } from "./types";
+import { ChatPersistenceService } from "@/lib/services/chat-persistence";
 
 interface ChatContainerProps {
   session: Session;
@@ -38,88 +34,51 @@ interface ChatContainerProps {
 export function ChatContainer({ session }: ChatContainerProps) {
   const { theme } = useTheme();
   const [workspace] = useAtom(workspaceAtom)
-  const [messages, setMessages] = useAtom(messagesAtom)
-  const [isRendering] = useAtom(isRenderingAtom)
-  const [chatInput, setChatInput] = useState("");
-  const [selectedRole, setSelectedRole] = useState<"auto" | "developer" | "operator">("auto");
+  const [messages] = useAtom(messagesAtom)
   const [isRoleMenuOpen, setIsRoleMenuOpen] = useState(false);
   const roleMenuRef = useRef<HTMLDivElement>(null);
-  
-  // Use persistence hook to load chat history and save messages to database
-  const persistence = workspace ? useChatPersistence({
-    workspaceId: workspace.id,
-    enabled: true,
-  }) : null;
 
-  // Convert persistence messages (AI SDK CoreMessage format) to Chartsmith Message format for useAIChat
-  // AI SDK uses separate user/assistant messages, but we combine them into pairs
-  const persistenceMessages = React.useMemo(() => {
-    if (!persistence?.initialMessages || persistence.isLoadingHistory) {
-      return messages;
-    }
-    
-    // Convert CoreMessage[] to Message[] by pairing user/assistant messages
-    const convertedMessages: Message[] = [];
-    let currentUserMessage: Message | null = null;
-    
-    for (const msg of persistence.initialMessages) {
-      const metadata = {
-        workspaceId: workspace.id,
-        userId: session.user.id,
-        createdAt: (msg as any).createdAt ? new Date((msg as any).createdAt) : new Date(),
-      };
-      
-      if (msg.role === 'user') {
-        // Save previous user message if exists
-        if (currentUserMessage) {
-          convertedMessages.push(currentUserMessage);
-        }
-        currentUserMessage = aiMessageToMessage(msg, metadata);
-      } else if (msg.role === 'assistant' && currentUserMessage) {
-        // Merge assistant response with user message
-        const assistantMsg = aiMessageToMessage(msg, metadata);
-        currentUserMessage.response = assistantMsg.response;
-        currentUserMessage.isComplete = true;
-        convertedMessages.push(currentUserMessage);
-        currentUserMessage = null;
-      }
-    }
-    
-    // Add last user message if exists (no response yet)
-    if (currentUserMessage) {
-      convertedMessages.push(currentUserMessage);
-    }
-    
-    return convertedMessages.length > 0 ? convertedMessages : messages;
-  }, [persistence?.initialMessages, persistence?.isLoadingHistory, messages, workspace?.id, session.user.id]);
+  // Create persistence service ref
+  const persistenceServiceRef = useRef<ChatPersistenceService | null>(null);
 
-  // Use AI SDK chat hook (wraps useChat from @ai-sdk/react) with persistence integration
-  // This hook manages all chat state and streams messages via HTTP SSE
-  const aiChatHook = workspace ? useAIChat({
-    workspaceId: workspace.id,
+  // Initialize persistence service when workspace changes
+  useEffect(() => {
+    if (workspace?.id) {
+      persistenceServiceRef.current = new ChatPersistenceService(workspace.id);
+    }
+  }, [workspace?.id]);
+
+  // Callback to persist messages when streaming completes
+  const handleMessageComplete = useCallback(async (userMessage: Message, assistantMessage: Message) => {
+    if (!persistenceServiceRef.current) return;
+
+    try {
+      await persistenceServiceRef.current.saveMessagePair(
+        { role: 'user', content: userMessage.prompt },
+        { role: 'assistant', content: assistantMessage.response || '' }
+      );
+    } catch {
+      // Silently ignore persistence errors - don't break the chat experience
+    }
+  }, []);
+
+  // Messages are already loaded by WorkspaceContent from the server into messagesAtom.
+  // We pass them directly to useAIChat as initialMessages to avoid re-fetching.
+  // useAIChat will use these as the initial state and sync back any updates.
+  const aiChatHook = useAIChat({
+    workspaceId: workspace?.id || '',
     session,
-    initialMessages: persistenceMessages,
-    onMessageComplete: persistence ? async (userMsg, assistantMsg) => {
-      // When message completes, convert back to AI SDK format and persist to database
-      // Convert Message format to CoreMessage for persistence service
-      const userCoreMsg: CoreMessage = {
-        role: 'user',
-        content: userMsg.prompt || '',
-      } as CoreMessage;
-      const assistantCoreMsg: CoreMessage = {
-        role: 'assistant',
-        content: assistantMsg.response || '',
-      } as CoreMessage;
-      await persistence.saveMessage(userCoreMsg, assistantCoreMsg);
-    } : undefined,
-  }) : null;
+    // Pass the messages directly from the atom - they're already loaded by WorkspaceContent
+    initialMessages: messages,
+    // Persist messages when streaming completes
+    onMessageComplete: handleMessageComplete,
+  });
   
   // Use hook's state (AI SDK manages input, loading, and role selection)
-  // Fallback to local state if hook is not available (shouldn't happen in normal flow)
-  const effectiveChatInput = aiChatHook ? aiChatHook.input : chatInput;
-  const effectiveIsRendering = aiChatHook ? aiChatHook.isLoading : isRendering;
-  const effectiveSelectedRole = aiChatHook ? aiChatHook.selectedRole : selectedRole;
-  const effectiveSetSelectedRole = aiChatHook ? aiChatHook.setSelectedRole : setSelectedRole;
+  const effectiveChatInput = aiChatHook.input;
+  const effectiveIsRendering = aiChatHook.isLoading;
+  const effectiveSelectedRole = aiChatHook.selectedRole;
+  const effectiveSetSelectedRole = aiChatHook.setSelectedRole;
   
   // No need for refs as ScrollingContent manages its own scrolling
 
@@ -137,29 +96,14 @@ export function ChatContainer({ session }: ChatContainerProps) {
     };
   }, []);
 
-  // Show loading state while history loads
-  if (persistence?.isLoadingHistory) {
-    return (
-      <div className={`h-[calc(100vh-3.5rem)] border-r flex items-center justify-center ${theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"}`}>
-        <span className={`text-sm ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>
-          Loading chat history...
-        </span>
-      </div>
-    );
-  }
-
   if (!messages || !workspace) {
     return null;
   }
 
   const handleSubmitChat = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    
-    // Use hook's handler
-    if (aiChatHook) {
-      aiChatHook.handleSubmit(e);
-      return;
-    }
+    e.stopPropagation();
+    aiChatHook.handleSubmit(e);
   };
   
   const getRoleLabel = (role: "auto" | "developer" | "operator"): string => {
@@ -179,30 +123,28 @@ export function ChatContainer({ session }: ChatContainerProps) {
 
   if (workspace?.currentRevisionNumber === 0) {
     // For NewChartContent, create a simpler version of handleSubmitChat that doesn't use role selector
-    const handleNewChartSubmitChat = async (e: React.FormEvent<HTMLFormElement>) => {
+    const handleNewChartSubmitChat = (e: React.FormEvent) => {
       e.preventDefault();
-      
+
       // Use hook's handler (role is always "auto" for new charts)
-      if (aiChatHook) {
-        // Ensure role is set to auto
-        if (aiChatHook.selectedRole !== "auto") {
-          aiChatHook.setSelectedRole("auto");
-        }
-        aiChatHook.handleSubmit(e);
-        return;
+      // Ensure role is set to auto
+      if (aiChatHook.selectedRole !== "auto") {
+        aiChatHook.setSelectedRole("auto");
       }
+      // Cast to HTMLFormElement for the hook's handleSubmit
+      aiChatHook.handleSubmit(e as React.FormEvent<HTMLFormElement>);
     };
-    
+
     return <NewChartContent
       session={session}
       chatInput={effectiveChatInput}
-      setChatInput={aiChatHook ? (value: string) => {
+      setChatInput={(value: string) => {
         // Update hook's input via synthetic event
         const syntheticEvent = {
           target: { value },
         } as React.ChangeEvent<HTMLTextAreaElement>;
         aiChatHook.handleInputChange(syntheticEvent);
-      } : setChatInput}
+      }}
       handleSubmitChat={handleNewChartSubmitChat}
     />
   }
@@ -232,17 +174,27 @@ export function ChatContainer({ session }: ChatContainerProps) {
           <textarea
             value={effectiveChatInput}
             onChange={(e) => {
-              if (aiChatHook) {
-                aiChatHook.handleInputChange(e);
-              } else {
-                setChatInput(e.target.value);
-              }
+              aiChatHook.handleInputChange(e);
             }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                if (!effectiveIsRendering) {
-                  handleSubmitChat(e);
+                e.stopPropagation();
+                if (!effectiveIsRendering && effectiveChatInput.trim()) {
+                  // Directly call the chat hook's sendMessage instead of going through form submission
+                  // This completely avoids form submission and page refresh
+                  const form = e.currentTarget.closest('form');
+                  if (form) {
+                    // Create a synthetic form event for the hook's handleSubmit
+                    const syntheticEvent = {
+                      preventDefault: () => {},
+                      stopPropagation: () => {},
+                      target: form,
+                      currentTarget: form,
+                    } as unknown as React.FormEvent<HTMLFormElement>;
+                    // Call the hook's handleSubmit which will call sendMessage
+                    aiChatHook.handleSubmit(syntheticEvent);
+                  }
                 }
               }
             }}
@@ -324,15 +276,31 @@ export function ChatContainer({ session }: ChatContainerProps) {
             </div>
             
             {/* Error display */}
-            {aiChatHook?.error && (
+            {aiChatHook.error && (
               <div className="absolute bottom-full right-0 mb-2 p-2 bg-red-500/10 border border-red-500/20 rounded text-xs text-red-500 max-w-xs">
                 Error: {aiChatHook.error.message}
               </div>
             )}
-            
+
             {/* Send button */}
             <button
-              type="submit"
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (!effectiveIsRendering && effectiveChatInput.trim()) {
+                  const form = e.currentTarget.closest('form');
+                  if (form) {
+                    const syntheticEvent = {
+                      preventDefault: () => {},
+                      stopPropagation: () => {},
+                      target: form,
+                      currentTarget: form,
+                    } as unknown as React.FormEvent<HTMLFormElement>;
+                    aiChatHook.handleSubmit(syntheticEvent);
+                  }
+                }
+              }}
               disabled={effectiveIsRendering}
               className={`p-1.5 rounded-full ${
                 effectiveIsRendering
