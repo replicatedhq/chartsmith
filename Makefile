@@ -86,9 +86,9 @@ schema: pgvector
 	@echo "Running schema commands..."
 	rm -rf ./db/generated-schema
 
-	# mkdir -p ./db/generated-schema/extensions
-	# schemahero plan --driver postgres --uri $(CHARTSMITH_PG_URI) --spec-file ./db/schema/extensions --spec-type extension --out ./db/generated-schema/extensions
-	# schemahero apply --driver postgres --uri $(CHARTSMITH_PG_URI) --ddl ./db/generated-schema/extensions
+	mkdir -p ./db/generated-schema/extensions
+	schemahero plan --driver postgres --uri $(CHARTSMITH_PG_URI) --spec-file ./db/schema/extensions --spec-type extension --out ./db/generated-schema/extensions
+	schemahero apply --driver postgres --uri $(CHARTSMITH_PG_URI) --ddl ./db/generated-schema/extensions
 
 	mkdir -p ./db/generated-schema/tables
 	schemahero plan --driver postgres --uri "$(CHARTSMITH_PG_URI)" --spec-file ./db/schema/tables --spec-type table --out ./db/generated-schema/tables
@@ -212,10 +212,31 @@ release-replicated: check-replicated-cli
 		exit 1; \
 	fi
 	@echo "Found 'chartsmith' app"
+	@echo "Getting proxy registry hostname..."
+	@PROXY_HOSTNAME=$$(/Users/marccampbell/go/src/github.com/replicatedhq/replicated/bin/replicated app hostname ls --output json 2>&1 | jq -r '.proxy' 2>/dev/null); \
+	if [ -z "$$PROXY_HOSTNAME" ] || [ "$$PROXY_HOSTNAME" = "null" ]; then \
+		echo "Error: Could not determine proxy hostname from replicated app hostname ls"; \
+		replicated app hostname ls --output json || true; \
+		exit 1; \
+	fi
+	@echo "Proxy hostname: $$PROXY_HOSTNAME"
+	@echo "Backing up values.yaml..."
+	@cp chart/chartsmith/values.yaml chart/chartsmith/values.yaml.bak
+	@echo "Replacing proxy.replicated.com with proxy hostname in values.yaml..."
+	@PROXY_HOSTNAME=$$(/Users/marccampbell/go/src/github.com/replicatedhq/replicated/bin/replicated app hostname ls --output json 2>&1 | jq -r '.proxy' 2>/dev/null) && \
+	sed -i.tmp "s|proxy.replicated.com|$$PROXY_HOSTNAME|g" chart/chartsmith/values.yaml && \
+	rm chart/chartsmith/values.yaml.tmp
 	@echo "Packaging Helm chart..."
 	@cd chart/chartsmith && helm dependency update && helm package --version $(CHART_VERSION) --app-version $(CHART_VERSION) .
 	@echo "Creating release $(REPLICATED_VERSION) and promoting to Unstable channel..."
-	@cd chart/chartsmith && replicated release create --promote Unstable --version $(REPLICATED_VERSION)
+	@cd chart/chartsmith && replicated release create --promote Unstable --version $(REPLICATED_VERSION); \
+	RELEASE_STATUS=$$?; \
+	cd ../..; \
+	mv chart/chartsmith/values.yaml.bak chart/chartsmith/values.yaml; \
+	if [ $$RELEASE_STATUS -ne 0 ]; then \
+		echo "Error: Release creation failed"; \
+		exit $$RELEASE_STATUS; \
+	fi
 	@echo "Release $(REPLICATED_VERSION) created and promoted to Unstable channel successfully"
 
 # Requires: GITHUB_TOKEN, OP_SERVICE_ACCOUNT_PRODUCTION
@@ -231,21 +252,3 @@ production:
 		--op-service-account env:OP_SERVICE_ACCOUNT_PRODUCTION \
 		--progress plain
 
-.PHONY: devin
-devin:
-	direnv exec ~/repos/chartsmith bash -c '\
-		cd hack/chartsmith-dev && \
-		docker compose down && \
-		docker compose up -d && \
-		echo "Waiting for Postgres..." && \
-		until docker exec chartsmith-dev-postgres-1 pg_isready -U postgres > /dev/null 2>&1; do \
-			sleep 1; \
-		done && \
-		echo "Postgres is ready" && \
-		docker exec -u postgres chartsmith-dev-postgres-1 psql -d chartsmith -c '\''CREATE EXTENSION IF NOT EXISTS vector;'\'' && \
-		cd ../.. && \
-		make schema && \
-		go mod download && \
-		cd chartsmith-app && \
-		npm install \
-	'
