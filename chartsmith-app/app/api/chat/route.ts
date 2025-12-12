@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { findSession } from '@/lib/auth/session';
 import { cookies } from 'next/headers';
 import { getTestAuthTokenFromHeaders, validateTestAuthToken, isTestAuthBypassEnabled } from '@/lib/auth/test-auth-bypass';
+import { getGoWorkerUrl } from '@/lib/utils/go-worker';
 import { z } from 'zod';
 
 export const dynamic = 'force-dynamic';
@@ -142,7 +143,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { messages, workspaceId } = validatedBody;
+  const { messages, workspaceId, role } = validatedBody;
 
   // Get Go worker URL (from env var, database param, or localhost default)
   const goWorkerUrl = await getGoWorkerUrl();
@@ -158,6 +159,7 @@ export async function POST(req: NextRequest) {
         messages,
         workspaceId,
         userId,
+        role: role || 'auto',
       }),
     });
 
@@ -191,35 +193,3 @@ export async function POST(req: NextRequest) {
     );
   }
 }
-
-/**
- * Gets the Go worker URL from environment variable, database param, or defaults to localhost.
- * 
- * Priority order:
- * 1. GO_WORKER_URL environment variable
- * 2. Database parameter (if available)
- * 3. http://localhost:8080 (local development default)
- * 
- * @returns Go worker URL string
- */
-async function getGoWorkerUrl(): Promise<string> {
-  // Try environment variable first (highest priority)
-  if (process.env.GO_WORKER_URL) {
-    return process.env.GO_WORKER_URL;
-  }
-
-  // Fall back to database param (if helper exists)
-  try {
-    const { getParam } = await import('@/lib/data/param');
-    const paramUrl = await getParam('GO_WORKER_URL');
-    if (paramUrl) {
-      return paramUrl;
-    }
-  } catch (e) {
-    // Ignore if param helper doesn't exist or fails
-  }
-
-  // Default for local development
-  return 'http://localhost:8080';
-}
-

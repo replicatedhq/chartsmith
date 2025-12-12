@@ -1,31 +1,33 @@
 /**
- * @fileoverview Custom hook for AI SDK chat integration with Chartsmith workspace.
- * 
+ * @fileoverview Custom hook for AI SDK v5 chat integration with Chartsmith workspace.
+ *
  * This hook wraps @ai-sdk/react's useChat hook with Chartsmith-specific
  * configuration. It handles workspace context, message persistence, and
  * integration with existing Jotai atoms for backward compatibility.
- * 
+ *
  * Key Features:
- * - Message format conversion (AI SDK ↔ Chartsmith Message type)
+ * - Message format conversion (AI SDK v5 UIMessage ↔ Chartsmith Message type)
  * - Real-time Jotai atom synchronization
  * - Historical message loading from database
  * - Role selector integration (auto/developer/operator)
  * - Message persistence callbacks
- * 
+ *
  * @see https://sdk.vercel.ai/docs/reference/ai-sdk-ui/use-chat
  */
 
 'use client';
 
 import { useChat } from '@ai-sdk/react';
+import { UIMessage, DefaultChatTransport } from 'ai';
 import { useAtom } from 'jotai';
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { messagesAtom } from '@/atoms/workspace';
 import { Session } from '@/lib/types/session';
 import { Message } from '@/components/types';
 import {
-  messagesToAIMessages,
-  aiMessageToMessage,
+  messagesToUIMessages,
+  uiMessageToMessage,
+  extractTextFromParts,
   MessageMetadata
 } from '@/lib/types/chat';
 import { getWorkspaceMessagesAction } from '@/lib/workspace/actions/get-workspace-messages';
@@ -40,7 +42,7 @@ export interface UseAIChatOptions {
   session: Session;
   /** Optional initial messages (if not provided, loads from database) */
   initialMessages?: Message[];
-  /** 
+  /**
    * Callback when a message pair (user + assistant) is completed.
    * Used for persisting messages to the database.
    */
@@ -49,7 +51,7 @@ export interface UseAIChatOptions {
 
 /**
  * Return value from the useAIChat hook.
- * 
+ *
  * Combines AI SDK useChat return values with Chartsmith-specific features.
  */
 export interface UseAIChatReturn {
@@ -69,7 +71,7 @@ export interface UseAIChatReturn {
   stop: () => void;
   /** Regenerate the last assistant response */
   reload: () => void;
-  
+
   /** Currently selected role (auto/developer/operator) */
   selectedRole: 'auto' | 'developer' | 'operator';
   /** Set the selected role */
@@ -77,7 +79,7 @@ export interface UseAIChatReturn {
 }
 
 /**
- * Custom hook for AI SDK chat integration with Chartsmith workspace.
+ * Custom hook for AI SDK v5 chat integration with Chartsmith workspace.
  *
  * This hook wraps @ai-sdk/react's useChat hook with Chartsmith-specific
  * configuration. It handles workspace context, message persistence, and
@@ -85,7 +87,7 @@ export interface UseAIChatReturn {
  *
  * The hook automatically:
  * - Loads historical messages from the database if not provided
- * - Converts between AI SDK message format and Chartsmith Message type
+ * - Converts between AI SDK v5 UIMessage format and Chartsmith Message type
  * - Syncs messages to Jotai atoms for backward compatibility
  * - Handles message persistence via callbacks
  * - Manages role selection (auto/developer/operator)
@@ -122,6 +124,10 @@ export function useAIChat({ workspaceId, session, initialMessages, onMessageComp
   const sessionRef = useRef(session);
   sessionRef.current = session;
 
+  // Store selectedRole in ref to access in transport without causing re-renders
+  const selectedRoleRef = useRef(selectedRole);
+  selectedRoleRef.current = selectedRole;
+
   // Load initial messages if not provided
   const [loadedMessages, setLoadedMessages] = useState<Message[]>(initialMessages || []);
   const [isLoadingHistory, setIsLoadingHistory] = useState(!initialMessages);
@@ -149,54 +155,56 @@ export function useAIChat({ workspaceId, session, initialMessages, onMessageComp
         });
     }
   }, [workspaceId, initialMessages, isLoadingHistory]);
-  
-  // Convert loaded messages from Chartsmith format to AI SDK format for useChat
-  const initialAIMessages = useMemo(() => {
-    return messagesToAIMessages(loadedMessages);
+
+  // Convert loaded messages from Chartsmith format to AI SDK v5 UIMessage format for useChat
+  const initialUIMessages = useMemo(() => {
+    return messagesToUIMessages(loadedMessages);
   }, [loadedMessages]);
-  
-  // Manage input state ourselves (AI SDK v5 doesn't provide input state)
+
+  // Manage input state ourselves
   const [input, setInput] = useState('');
-  
+
+  // Create transport with memoization to avoid recreating on every render
+  // We use DefaultChatTransport which handles the stream conversion from bytes to UIMessageChunk
+  const transport = useMemo(() => {
+    return new DefaultChatTransport({
+      api: '/api/chat',
+      prepareSendMessagesRequest: ({ messages: uiMessages }) => {
+        // Convert UIMessages to simple format for our API and add extra fields
+        const apiMessages = uiMessages.map(msg => ({
+          role: msg.role,
+          content: extractTextFromParts(msg.parts),
+        }));
+
+        return {
+          body: {
+            messages: apiMessages,
+            workspaceId,
+            role: selectedRoleRef.current,
+          },
+        };
+      },
+    });
+  }, [workspaceId]);
+
   // Configure useChat hook with custom transport to proxy through our API route
   const chat = useChat({
     id: `chat-${workspaceId}`,
-    messages: initialAIMessages,
-    transport: {
-      async sendMessage({ messages, data }) {
-        const response = await fetch('/api/chat', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            messages,
-            workspaceId,
-            role: selectedRole,
-            ...data,
-          }),
-        });
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        return response.body;
-      },
-    },
+    messages: initialUIMessages,
+    transport,
     onFinish: ({ message }) => {
       // When message finishes streaming, convert from AI SDK format and sync to Jotai atom
       const metadata: MessageMetadata = {
         workspaceId,
         userId: session.user.id,
       };
-      
+
       // Try to find matching message in current state to preserve metadata (renderId, planId, etc.)
-      const msgContent = extractContent((message as any).content || '');
+      const msgContent = extractTextFromParts(message.parts);
       const existingMessage = messages.find(m => {
         return m.prompt === msgContent || m.response === msgContent;
       });
-      
+
       if (existingMessage) {
         // Preserve existing metadata
         Object.assign(metadata, {
@@ -214,9 +222,9 @@ export function useAIChat({ workspaceId, session, initialMessages, onMessageComp
           isCanceled: existingMessage.isCanceled,
         });
       }
-      
-      const convertedMessage = aiMessageToMessage(message as any, metadata);
-      
+
+      const convertedMessage = uiMessageToMessage(message, metadata);
+
       setMessages(prev => {
         const existing = prev.find(m => m.id === convertedMessage.id);
         if (existing) {
@@ -229,24 +237,14 @@ export function useAIChat({ workspaceId, session, initialMessages, onMessageComp
       // Error is exposed via the hook's return value - no logging needed
     },
   });
-  
+
   // Extract values from chat object
-  const aiMessages = chat.messages;
+  const uiMessages = chat.messages;
   const isLoading = chat.status === 'streaming' || chat.status === 'submitted';
   const error = chat.error;
   const stop = () => chat.stop();
   const reload = () => chat.regenerate();
-  
-  // Helper to extract content from AI SDK message
-  function extractContent(content: string | Array<{ type: string; text?: string }>): string {
-    if (typeof content === 'string') {
-      return content;
-    }
-    return content
-      .map(c => c.type === 'text' ? (c.text || '') : '')
-      .join('');
-  }
-  
+
   // Track last synced messages to avoid unnecessary updates
   const lastSyncedMessagesRef = useRef<string>('');
   // Track which messages we've already called onMessageComplete for
@@ -260,34 +258,38 @@ export function useAIChat({ workspaceId, session, initialMessages, onMessageComp
     const convertedMessages: Message[] = [];
     let currentUserMessage: Message | null = null;
 
-    for (const aiMessage of aiMessages) {
+    for (const uiMessage of uiMessages) {
       const metadata: MessageMetadata = {
         workspaceId,
         userId: sessionRef.current.user.id,
       };
 
-      if (aiMessage.role === 'user') {
+      if (uiMessage.role === 'user') {
         // Save previous user message if exists
         if (currentUserMessage) {
           convertedMessages.push(currentUserMessage);
         }
-        currentUserMessage = aiMessageToMessage(aiMessage, metadata);
-      } else if (aiMessage.role === 'assistant') {
+        currentUserMessage = uiMessageToMessage(uiMessage, metadata);
+      } else if (uiMessage.role === 'assistant') {
         if (currentUserMessage) {
           // Merge assistant response with user message
-          const assistantContent = extractContent((aiMessage as any).content || '');
+          const assistantContent = extractTextFromParts(uiMessage.parts);
           currentUserMessage.response = assistantContent;
           currentUserMessage.isComplete = chat.status === 'ready'; // Complete when status is ready
 
           // Preserve tool invocations from AI SDK message
-          const toolInvocations = (aiMessage as any).toolInvocations?.map((inv: any) => ({
-            toolCallId: inv.toolCallId || inv.id,
-            toolName: inv.toolName || inv.name,
-            args: inv.args,
-            result: inv.result,
-          }));
-          if (toolInvocations && toolInvocations.length > 0) {
-            currentUserMessage.toolInvocations = toolInvocations;
+          // In AI SDK v5, tool parts have type like 'tool-${name}' or 'dynamic-tool'
+          const toolParts = uiMessage.parts?.filter(
+            (part) => part.type.startsWith('tool-') || part.type === 'dynamic-tool'
+          ) || [];
+
+          if (toolParts.length > 0) {
+            currentUserMessage.toolInvocations = toolParts.map((part: any) => ({
+              toolCallId: part.toolCallId,
+              toolName: part.toolName || part.type.replace('tool-', ''),
+              args: part.input,
+              result: part.output,
+            }));
           }
 
           convertedMessages.push(currentUserMessage);
@@ -299,7 +301,7 @@ export function useAIChat({ workspaceId, session, initialMessages, onMessageComp
             if (!completedMessageIdsRef.current.has(messageId)) {
               completedMessageIdsRef.current.add(messageId);
               // Create assistant message for callback
-              const assistantMessage = aiMessageToMessage(aiMessage, metadata);
+              const assistantMessage = uiMessageToMessage(uiMessage, metadata);
               onMessageCompleteRef.current(currentUserMessage, assistantMessage);
             }
           }
@@ -307,7 +309,7 @@ export function useAIChat({ workspaceId, session, initialMessages, onMessageComp
           currentUserMessage = null;
         } else {
           // Orphaned assistant message (shouldn't happen, but handle gracefully)
-          const assistantMessage = aiMessageToMessage(aiMessage, metadata);
+          const assistantMessage = uiMessageToMessage(uiMessage, metadata);
           convertedMessages.push(assistantMessage);
         }
       }
@@ -339,26 +341,27 @@ export function useAIChat({ workspaceId, session, initialMessages, onMessageComp
         return convertedMessages;
       });
     }
-  }, [aiMessages, workspaceId, chat.status, setMessages]);
-  
+  }, [uiMessages, workspaceId, chat.status, setMessages]);
+
   // Handle input change
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
   };
-  
+
   // Wrap handleSubmit to send message with role
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
-    
+
+    // AI SDK v5 sendMessage expects UIMessage format
     chat.sendMessage({
-      content: input.trim(),
       role: 'user',
+      parts: [{ type: 'text', text: input.trim() }],
     });
-    
+
     setInput('');
   };
-  
+
   return {
     messages,
     input,

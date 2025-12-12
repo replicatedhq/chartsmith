@@ -1,12 +1,14 @@
 /**
  * Chat message format conversion utilities.
- * 
- * Converts between AI SDK message format and our internal Message type.
+ *
+ * Converts between AI SDK v5 UIMessage format and our internal Message type.
  * This enables the frontend to use Vercel AI SDK's useChat hook while
  * maintaining compatibility with existing components that use the Message type.
+ *
+ * AI SDK v5 uses UIMessage with a `parts` array instead of `content` string.
  */
 
-import { CoreMessage } from 'ai';
+import { UIMessage } from 'ai';
 import { Message } from '@/components/types';
 import * as srs from 'secure-random-string';
 
@@ -33,19 +35,6 @@ export interface MessageMetadata {
 }
 
 /**
- * Extract text content from AI SDK message content.
- * Handles both string and array formats.
- */
-function extractContent(content: string | Array<{ type: string; text?: string }>): string {
-  if (typeof content === 'string') {
-    return content;
-  }
-  return content
-    .map(c => c.type === 'text' ? (c.text || '') : '')
-    .join('');
-}
-
-/**
  * Generate a unique ID for messages.
  */
 function generateId(): string {
@@ -53,32 +42,52 @@ function generateId(): string {
 }
 
 /**
- * Convert AI SDK message to our Message format.
- * 
+ * Extract text content from UIMessage parts array.
+ * AI SDK v5 uses parts array with type: 'text' for text content.
+ */
+export function extractTextFromParts(parts: UIMessage['parts']): string {
+  if (!parts || !Array.isArray(parts)) {
+    return '';
+  }
+  return parts
+    .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
+    .map(part => part.text || '')
+    .join('');
+}
+
+/**
+ * Convert AI SDK v5 UIMessage to our Message format.
+ *
  * AI SDK messages are separate user/assistant messages, while our format
  * combines them into a single Message with prompt (user) and response (assistant).
- * 
- * @param aiMessage - AI SDK message (user or assistant)
+ *
+ * @param uiMessage - AI SDK v5 UIMessage (user or assistant)
  * @param metadata - Chartsmith-specific metadata to preserve
  * @returns Message in our format
  */
-export function aiMessageToMessage(
-  aiMessage: CoreMessage,
+export function uiMessageToMessage(
+  uiMessage: UIMessage,
   metadata: MessageMetadata = {}
 ): Message {
-  const content = extractContent(aiMessage.content);
-  // AI SDK messages may not have id, generate one if needed
-  const messageId = (aiMessage as any).id || generateId();
-  
-  // Extract tool invocations if present
-  const toolInvocations = (aiMessage as any).toolInvocations?.map((inv: any) => ({
-    toolCallId: inv.toolCallId || inv.id,
-    toolName: inv.toolName || inv.name,
-    args: inv.args,
-    result: inv.result,
-  }));
-  
-  if (aiMessage.role === 'user') {
+  const content = extractTextFromParts(uiMessage.parts);
+  const messageId = uiMessage.id || generateId();
+
+  // Extract tool invocations from parts if present
+  // In AI SDK v5, tool parts have type like 'tool-${name}' or 'dynamic-tool'
+  const toolParts = uiMessage.parts?.filter(
+    (part) => part.type.startsWith('tool-') || part.type === 'dynamic-tool'
+  ) || [];
+
+  const toolInvocations = toolParts.length > 0
+    ? toolParts.map((part: any) => ({
+        toolCallId: part.toolCallId,
+        toolName: part.toolName || part.type.replace('tool-', ''),
+        args: part.input,
+        result: part.output,
+      }))
+    : undefined;
+
+  if (uiMessage.role === 'user') {
     return {
       id: messageId,
       prompt: content,
@@ -88,7 +97,7 @@ export function aiMessageToMessage(
       toolInvocations,
       ...metadata,
     };
-  } else if (aiMessage.role === 'assistant') {
+  } else if (uiMessage.role === 'assistant') {
     return {
       id: messageId,
       prompt: '', // Assistant messages don't have prompts
@@ -99,46 +108,53 @@ export function aiMessageToMessage(
       ...metadata,
     };
   }
-  
-  throw new Error(`Unsupported message role: ${(aiMessage as any).role}`);
+
+  throw new Error(`Unsupported message role: ${uiMessage.role}`);
 }
 
 /**
- * Convert our Message format to AI SDK messages.
- * 
+ * Convert our Message format to AI SDK v5 UIMessage array.
+ *
  * Our Message format combines user prompt and assistant response into one object.
- * This function splits it into separate user and assistant messages for AI SDK.
- * 
+ * This function splits it into separate user and assistant UIMessages for AI SDK v5.
+ *
  * @param message - Our Message format
- * @returns Array of AI SDK messages (user, then assistant if response exists)
+ * @returns Array of AI SDK v5 UIMessages (user, then assistant if response exists)
  */
-export function messageToAIMessages(message: Message): CoreMessage[] {
-  const messages: CoreMessage[] = [];
-  
+export function messageToUIMessages(message: Message): UIMessage[] {
+  const messages: UIMessage[] = [];
+
   if (message.prompt) {
     messages.push({
+      id: `${message.id}-user`,
       role: 'user',
-      content: message.prompt,
-    } as CoreMessage);
+      parts: [{ type: 'text', text: message.prompt }],
+    });
   }
-  
+
   if (message.response) {
     messages.push({
+      id: `${message.id}-assistant`,
       role: 'assistant',
-      content: message.response,
-    } as CoreMessage);
+      parts: [{ type: 'text', text: message.response }],
+    });
   }
-  
+
   return messages;
 }
 
 /**
- * Convert array of Messages to AI SDK format for initial messages.
- * 
+ * Convert array of Messages to AI SDK v5 UIMessage format for initial messages.
+ *
  * @param messages - Array of our Message format
- * @returns Array of AI SDK messages
+ * @returns Array of AI SDK v5 UIMessages
  */
-export function messagesToAIMessages(messages: Message[]): CoreMessage[] {
-  return messages.flatMap(messageToAIMessages);
+export function messagesToUIMessages(messages: Message[]): UIMessage[] {
+  return messages.flatMap(messageToUIMessages);
 }
 
+// Legacy exports for backward compatibility with tests
+// These are deprecated and will be removed in a future version
+export const aiMessageToMessage = uiMessageToMessage;
+export const messageToAIMessages = messageToUIMessages;
+export const messagesToAIMessages = messagesToUIMessages;

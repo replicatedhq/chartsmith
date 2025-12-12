@@ -1,14 +1,24 @@
 /**
  * Chat Persistence Service
- * 
- * Service for persisting AI SDK chat messages to the database.
- * Handles conversion between AI SDK message format and our database schema.
+ *
+ * Service for persisting chat messages to the database.
+ * Handles conversion between various message formats and our database schema.
+ *
+ * Note: This service accepts messages in simple {role, content} format
+ * for compatibility with both AI SDK v5 and our internal APIs.
  */
 
-import { CoreMessage } from 'ai';
+/**
+ * Simple message format for API communication.
+ * Compatible with AI SDK's CoreMessage and our internal APIs.
+ */
+export interface SimpleMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string | Array<{ type: string; text?: string }>;
+}
 
 /**
- * Service for persisting AI SDK chat messages
+ * Service for persisting chat messages
  */
 export class ChatPersistenceService {
   private workspaceId: string;
@@ -20,7 +30,7 @@ export class ChatPersistenceService {
   }
 
   /**
-   * Extract text content from AI SDK message content.
+   * Extract text content from message content.
    * Handles both string and array formats.
    */
   private extractContent(content: string | Array<{ type: string; text?: string }>): string {
@@ -35,12 +45,12 @@ export class ChatPersistenceService {
   /**
    * Save a completed message pair to the database
    *
-   * AI SDK sends user and assistant messages separately.
+   * Messages are sent as user and assistant separately.
    * We need to pair them for our schema.
    */
   async saveMessagePair(
-    userMessage: CoreMessage,
-    assistantMessage: CoreMessage
+    userMessage: SimpleMessage,
+    assistantMessage: SimpleMessage
   ): Promise<{ id: string }> {
     const userContent = this.extractContent(userMessage.content);
     const assistantContent = this.extractContent(assistantMessage.content);
@@ -67,7 +77,7 @@ export class ChatPersistenceService {
   /**
    * Save a single message (for streaming in-progress saves)
    */
-  async savePartialMessage(message: CoreMessage): Promise<{ id: string }> {
+  async savePartialMessage(message: SimpleMessage): Promise<{ id: string }> {
     const content = this.extractContent(message.content);
     const isUser = message.role === 'user';
 
@@ -91,9 +101,9 @@ export class ChatPersistenceService {
   }
 
   /**
-   * Load chat history and convert to AI SDK format
+   * Load chat history and convert to simple message format
    */
-  async loadHistory(): Promise<CoreMessage[]> {
+  async loadHistory(): Promise<SimpleMessage[]> {
     const response = await fetch(
       `${this.apiBase}/${this.workspaceId}/messages`
     );
@@ -106,22 +116,22 @@ export class ChatPersistenceService {
     }
 
     const data = await response.json();
-    const messages: CoreMessage[] = [];
+    const messages: SimpleMessage[] = [];
 
-    // Convert each stored message to AI SDK format
+    // Convert each stored message to simple format
     // Each stored message may have prompt and/or response
     for (const msg of Array.isArray(data) ? data : (data.messages || [])) {
       if (msg.prompt) {
         messages.push({
           role: 'user',
           content: msg.prompt,
-        } as CoreMessage);
+        });
       }
       if (msg.response) {
         messages.push({
           role: 'assistant',
           content: msg.response,
-        } as CoreMessage);
+        });
       }
     }
 

@@ -34,8 +34,15 @@ jest.mock('@/lib/data/param', () => ({
   getParam: jest.fn(),
 }));
 
+jest.mock('@/lib/utils/go-worker', () => ({
+  getGoWorkerUrl: jest.fn(),
+}));
+
 // Mock fetch for Go backend calls
 global.fetch = jest.fn();
+
+// Import the mocked module
+import { getGoWorkerUrl } from '@/lib/utils/go-worker';
 
 describe('/api/chat POST', () => {
   const mockUserId = 'user-123';
@@ -44,9 +51,9 @@ describe('/api/chat POST', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    
-    // Setup default environment
-    process.env.GO_WORKER_URL = mockGoWorkerUrl;
+
+    // Setup default go worker URL mock
+    (getGoWorkerUrl as jest.Mock).mockResolvedValue(mockGoWorkerUrl);
     
     // Setup default cookie mock
     (cookies as jest.Mock).mockResolvedValue({
@@ -71,7 +78,7 @@ describe('/api/chat POST', () => {
   });
 
   afterEach(() => {
-    delete process.env.GO_WORKER_URL;
+    jest.resetAllMocks();
   });
 
   describe('Authentication', () => {
@@ -205,9 +212,10 @@ describe('/api/chat POST', () => {
 
       const response = await POST(req);
       const data = await response.json();
-      
+
       expect(response.status).toBe(400);
-      expect(data.error).toBe('Messages array is required');
+      expect(data.error).toBe('Validation error');
+      expect(data.details).toBeDefined();
     });
 
     it('should validate messages is an array', async () => {
@@ -224,9 +232,10 @@ describe('/api/chat POST', () => {
 
       const response = await POST(req);
       const data = await response.json();
-      
+
       expect(response.status).toBe(400);
-      expect(data.error).toBe('Messages array is required');
+      expect(data.error).toBe('Validation error');
+      expect(data.details).toBeDefined();
     });
 
     it('should validate messages array is not empty', async () => {
@@ -243,9 +252,10 @@ describe('/api/chat POST', () => {
 
       const response = await POST(req);
       const data = await response.json();
-      
+
       expect(response.status).toBe(400);
-      expect(data.error).toBe('Messages array is required');
+      expect(data.error).toBe('Validation error');
+      expect(data.details).toBeDefined();
     });
 
     it('should validate workspaceId is required', async () => {
@@ -261,9 +271,10 @@ describe('/api/chat POST', () => {
 
       const response = await POST(req);
       const data = await response.json();
-      
+
       expect(response.status).toBe(400);
-      expect(data.error).toBe('workspaceId is required');
+      expect(data.error).toBe('Validation error');
+      expect(data.details).toBeDefined();
     });
 
     it('should handle invalid JSON body', async () => {
@@ -277,7 +288,7 @@ describe('/api/chat POST', () => {
 
       const response = await POST(req);
       const data = await response.json();
-      
+
       expect(response.status).toBe(400);
       expect(data.error).toBe('Invalid request body');
     });
@@ -430,8 +441,9 @@ describe('/api/chat POST', () => {
   });
 
   describe('Go Worker URL Resolution', () => {
-    it('should use GO_WORKER_URL environment variable', async () => {
-      process.env.GO_WORKER_URL = 'http://custom-worker:8080';
+    it('should use the URL returned by getGoWorkerUrl', async () => {
+      // Test that the route uses whatever URL is returned by getGoWorkerUrl
+      (getGoWorkerUrl as jest.Mock).mockResolvedValue('http://custom-worker:9000');
 
       const req = new NextRequest('http://localhost/api/chat', {
         method: 'POST',
@@ -445,87 +457,30 @@ describe('/api/chat POST', () => {
       });
 
       await POST(req);
-      
+
+      expect(getGoWorkerUrl).toHaveBeenCalled();
       expect(global.fetch).toHaveBeenCalledWith(
-        'http://custom-worker:8080/api/v1/chat/stream',
+        'http://custom-worker:9000/api/v1/chat/stream',
         expect.any(Object)
       );
     });
 
-    it('should fall back to database param when env var not set', async () => {
-      delete process.env.GO_WORKER_URL;
-      
-      const { getParam } = await import('@/lib/data/param');
-      (getParam as jest.Mock).mockResolvedValue('http://db-worker:8080');
+    it('should call getGoWorkerUrl for each request', async () => {
+      // Verify getGoWorkerUrl is called dynamically (not cached)
+      (getGoWorkerUrl as jest.Mock).mockResolvedValue('http://worker1:8080');
 
-      const req = new NextRequest('http://localhost/api/chat', {
+      const req1 = new NextRequest('http://localhost/api/chat', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: [{ role: 'user', content: 'Hello' }],
           workspaceId: mockWorkspaceId,
         }),
       });
 
-      await POST(req);
-      
-      expect(global.fetch).toHaveBeenCalledWith(
-        'http://db-worker:8080/api/v1/chat/stream',
-        expect.any(Object)
-      );
-    });
+      await POST(req1);
 
-    it('should default to localhost when no config available', async () => {
-      delete process.env.GO_WORKER_URL;
-      
-      const { getParam } = await import('@/lib/data/param');
-      (getParam as jest.Mock).mockResolvedValue(null);
-
-      const req = new NextRequest('http://localhost/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          messages: [{ role: 'user', content: 'Hello' }],
-          workspaceId: mockWorkspaceId,
-        }),
-      });
-
-      await POST(req);
-      
-      expect(global.fetch).toHaveBeenCalledWith(
-        'http://localhost:8080/api/v1/chat/stream',
-        expect.any(Object)
-      );
-    });
-
-    it('should handle database param helper errors gracefully', async () => {
-      delete process.env.GO_WORKER_URL;
-      
-      const { getParam } = await import('@/lib/data/param');
-      (getParam as jest.Mock).mockRejectedValue(new Error('DB error'));
-
-      const req = new NextRequest('http://localhost/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          messages: [{ role: 'user', content: 'Hello' }],
-          workspaceId: mockWorkspaceId,
-        }),
-      });
-
-      await POST(req);
-      
-      // Should fall back to default
-      expect(global.fetch).toHaveBeenCalledWith(
-        'http://localhost:8080/api/v1/chat/stream',
-        expect.any(Object)
-      );
+      expect(getGoWorkerUrl).toHaveBeenCalledTimes(1);
     });
   });
 });

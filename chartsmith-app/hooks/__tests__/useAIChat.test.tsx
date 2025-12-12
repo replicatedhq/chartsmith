@@ -1,15 +1,15 @@
 /**
  * Comprehensive tests for useAIChat hook
- * 
+ *
  * This hook is critical as it:
  * - Wraps @ai-sdk/react's useChat hook
- * - Converts between AI SDK message format and Chartsmith Message type
+ * - Converts between AI SDK v5 UIMessage format and Chartsmith Message type
  * - Syncs messages to Jotai atoms for backward compatibility
  * - Handles message persistence callbacks
  * - Manages role selection
- * 
+ *
  * We test:
- * 1. Message format conversion (AI SDK ↔ Chartsmith)
+ * 1. Message format conversion (AI SDK v5 UIMessage ↔ Chartsmith)
  * 2. Jotai atom synchronization
  * 3. Historical message loading
  * 4. Role selection state management
@@ -17,19 +17,25 @@
  * 6. Error handling
  * 7. Input state management
  * 8. Message streaming updates
- * 
+ *
  * @jest-environment jsdom
  */
 
 import { renderHook, waitFor, act } from '@testing-library/react';
 import { useAIChat } from '../useAIChat';
-import { CoreMessage } from 'ai';
+import { UIMessage } from 'ai';
 import { Message } from '@/components/types';
 import { Session } from '@/lib/types/session';
 
 // Mock dependencies
 jest.mock('@ai-sdk/react', () => ({
   useChat: jest.fn(),
+}));
+
+jest.mock('ai', () => ({
+  DefaultChatTransport: jest.fn().mockImplementation(() => ({
+    sendMessages: jest.fn(),
+  })),
 }));
 
 jest.mock('@/lib/workspace/actions/get-workspace-messages', () => ({
@@ -49,6 +55,15 @@ import { getWorkspaceMessagesAction } from '@/lib/workspace/actions/get-workspac
 // Mock fetch for API calls
 global.fetch = jest.fn();
 
+// Helper to create UIMessage
+function createUIMessage(role: 'user' | 'assistant', text: string, id?: string): UIMessage {
+  return {
+    id: id || `msg-${Date.now()}`,
+    role,
+    parts: [{ type: 'text', text }],
+  };
+}
+
 describe('useAIChat', () => {
   const mockSession: Session = {
     user: {
@@ -65,10 +80,10 @@ describe('useAIChat', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    
+
     // Setup default Jotai mock
     (useAtom as jest.Mock).mockReturnValue([mockMessages, mockSetMessages]);
-    
+
     // Setup default useChat mock
     (useChat as jest.Mock).mockReturnValue({
       messages: [],
@@ -78,7 +93,7 @@ describe('useAIChat', () => {
       regenerate: jest.fn(),
       sendMessage: jest.fn(),
     });
-    
+
     // Setup default fetch mock
     (global.fetch as jest.Mock).mockResolvedValue({
       ok: true,
@@ -138,12 +153,11 @@ describe('useAIChat', () => {
       });
     });
 
-    it('should handle errors when loading messages from database', async () => {
+    it('should handle errors when loading messages from database silently', async () => {
       const error = new Error('Failed to load');
       (getWorkspaceMessagesAction as jest.Mock).mockRejectedValue(error);
 
-      const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
-
+      // The hook silently handles errors - no console.error expected
       renderHook(() =>
         useAIChat({
           workspaceId: mockWorkspaceId,
@@ -154,27 +168,18 @@ describe('useAIChat', () => {
       await waitFor(() => {
         expect(getWorkspaceMessagesAction).toHaveBeenCalled();
       });
-
-      expect(consoleSpy).toHaveBeenCalledWith('Failed to load messages:', error);
-      consoleSpy.mockRestore();
     });
   });
 
   describe('Message Format Conversion', () => {
-    it('should convert AI SDK messages to Chartsmith format and sync to atom', () => {
-      const aiMessages: CoreMessage[] = [
-        {
-          role: 'user',
-          content: 'Hello',
-        } as CoreMessage,
-        {
-          role: 'assistant',
-          content: 'Hi there!',
-        } as CoreMessage,
+    it('should convert AI SDK v5 UIMessages to Chartsmith format and sync to atom', () => {
+      const uiMessages: UIMessage[] = [
+        createUIMessage('user', 'Hello'),
+        createUIMessage('assistant', 'Hi there!'),
       ];
 
       (useChat as jest.Mock).mockReturnValue({
-        messages: aiMessages,
+        messages: uiMessages,
         status: 'ready',
         error: undefined,
         stop: jest.fn(),
@@ -199,19 +204,13 @@ describe('useAIChat', () => {
     });
 
     it('should handle streaming messages correctly', () => {
-      const aiMessages: CoreMessage[] = [
-        {
-          role: 'user',
-          content: 'Hello',
-        } as CoreMessage,
-        {
-          role: 'assistant',
-          content: 'Hi', // Partial response
-        } as CoreMessage,
+      const uiMessages: UIMessage[] = [
+        createUIMessage('user', 'Hello'),
+        createUIMessage('assistant', 'Hi'), // Partial response
       ];
 
       (useChat as jest.Mock).mockReturnValue({
-        messages: aiMessages,
+        messages: uiMessages,
         status: 'streaming',
         error: undefined,
         stop: jest.fn(),
@@ -259,11 +258,9 @@ describe('useAIChat', () => {
     });
 
     it('should include role in API request when sending message', async () => {
-      let capturedTransport: any;
       const mockSendMessage = jest.fn();
-      
-      (useChat as jest.Mock).mockImplementation((options) => {
-        capturedTransport = options.transport;
+
+      (useChat as jest.Mock).mockImplementation(() => {
         return {
           messages: [],
           status: 'ready',
@@ -285,7 +282,7 @@ describe('useAIChat', () => {
         result.current.setSelectedRole('operator');
       });
 
-      // Verify role is stored in state (can't easily test transport.sendMessage without full integration)
+      // Verify role is stored in state (can't easily test transport.sendMessages without full integration)
       expect(result.current.selectedRole).toBe('operator');
     });
   });
@@ -341,7 +338,7 @@ describe('useAIChat', () => {
       act(() => {
         const submitEvent = {
           preventDefault: jest.fn(),
-        } as React.FormEvent<HTMLFormElement>;
+        } as unknown as React.FormEvent<HTMLFormElement>;
         result.current.handleSubmit(submitEvent);
       });
 
@@ -371,7 +368,7 @@ describe('useAIChat', () => {
       act(() => {
         const submitEvent = {
           preventDefault: jest.fn(),
-        } as React.FormEvent<HTMLFormElement>;
+        } as unknown as React.FormEvent<HTMLFormElement>;
         result.current.handleSubmit(submitEvent);
       });
 
@@ -383,24 +380,18 @@ describe('useAIChat', () => {
   describe('Message Persistence', () => {
     it('should call onMessageComplete callback when message finishes', async () => {
       const onMessageComplete = jest.fn();
-      
-      const aiMessages: CoreMessage[] = [
-        {
-          role: 'user',
-          content: 'Hello',
-        } as CoreMessage,
-        {
-          role: 'assistant',
-          content: 'Hi there!',
-        } as CoreMessage,
+
+      const uiMessages: UIMessage[] = [
+        createUIMessage('user', 'Hello'),
+        createUIMessage('assistant', 'Hi there!'),
       ];
 
       // Mock useChat to call onFinish callback
-      let onFinishCallback: ((args: { message: CoreMessage }) => void) | undefined;
+      let onFinishCallback: ((args: { message: UIMessage }) => void) | undefined;
       (useChat as jest.Mock).mockImplementation((options) => {
         onFinishCallback = options.onFinish;
         return {
-          messages: aiMessages,
+          messages: uiMessages,
           status: 'ready',
           error: undefined,
           stop: jest.fn(),
@@ -421,7 +412,7 @@ describe('useAIChat', () => {
       if (onFinishCallback) {
         act(() => {
           onFinishCallback!({
-            message: aiMessages[1],
+            message: uiMessages[1],
           });
         });
       }
@@ -458,7 +449,7 @@ describe('useAIChat', () => {
 
     it('should handle API errors when sending messages', async () => {
       // This test verifies error handling is set up correctly
-      // Actual error handling happens in the transport.sendMessage function
+      // Actual error handling happens in the transport.sendMessages function
       // which is tested in the API route tests
       const mockSendMessage = jest.fn();
       (useChat as jest.Mock).mockReturnValue({
@@ -536,28 +527,28 @@ describe('useAIChat', () => {
   });
 
   describe('Tool Invocations', () => {
-    it('should preserve tool invocations from AI SDK messages', () => {
-      const aiMessages: CoreMessage[] = [
+    it('should preserve tool invocations from AI SDK v5 messages', () => {
+      const uiMessages: UIMessage[] = [
+        createUIMessage('user', 'Use tool'),
         {
-          role: 'user',
-          content: 'Use tool',
-        } as CoreMessage,
-        {
+          id: 'msg-assistant',
           role: 'assistant',
-          content: 'Tool result',
-          toolInvocations: [
+          parts: [
+            { type: 'text', text: 'Tool result' },
             {
+              type: 'tool-test',
               toolCallId: 'call-1',
               toolName: 'test-tool',
-              args: { param: 'value' },
-              result: 'result',
-            },
+              input: { param: 'value' },
+              output: 'result',
+              state: 'output-available',
+            } as any,
           ],
-        } as any,
+        },
       ];
 
       (useChat as jest.Mock).mockReturnValue({
-        messages: aiMessages,
+        messages: uiMessages,
         status: 'ready',
         error: undefined,
         stop: jest.fn(),
@@ -596,22 +587,16 @@ describe('useAIChat', () => {
 
       (useAtom as jest.Mock).mockReturnValue([[existingMessage], mockSetMessages]);
 
-      const aiMessages: CoreMessage[] = [
-        {
-          role: 'user',
-          content: 'Hello',
-        } as CoreMessage,
-        {
-          role: 'assistant',
-          content: 'Hi',
-        } as CoreMessage,
+      const uiMessages: UIMessage[] = [
+        createUIMessage('user', 'Hello'),
+        createUIMessage('assistant', 'Hi'),
       ];
 
-      let onFinishCallback: ((args: { message: CoreMessage }) => void) | undefined;
+      let onFinishCallback: ((args: { message: UIMessage }) => void) | undefined;
       (useChat as jest.Mock).mockImplementation((options) => {
         onFinishCallback = options.onFinish;
         return {
-          messages: aiMessages,
+          messages: uiMessages,
           status: 'ready',
           error: undefined,
           stop: jest.fn(),
@@ -631,7 +616,7 @@ describe('useAIChat', () => {
       if (onFinishCallback) {
         act(() => {
           onFinishCallback!({
-            message: aiMessages[1],
+            message: uiMessages[1],
           });
         });
       }
