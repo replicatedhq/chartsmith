@@ -21,7 +21,7 @@ const (
 	TextEditor_Sonnet35 = "text_editor_20241022"
 
 	Model_Sonnet37 = "claude-3-7-sonnet-20250219"
-	Model_Sonnet35 = "claude-3-5-sonnet-20241022"
+	Model_Sonnet35 = "claude-sonnet-4-20250514"
 
 	minFuzzyMatchLen  = 50 // Minimum length for fuzzy matching
 	fuzzyMatchTimeout = 10 * time.Second
@@ -509,10 +509,10 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 
 	tools := []anthropic.ToolParam{
 		{
-			Name: anthropic.F(TextEditor_Sonnet35),
-			InputSchema: anthropic.F(interface{}(map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
+			Name: TextEditor_Sonnet35,
+			InputSchema: anthropic.ToolInputSchemaParam{
+				Type: "object",
+				Properties: map[string]interface{}{
 					"command": map[string]interface{}{
 						"type": "string",
 						"enum": []string{"view", "str_replace", "create"},
@@ -527,27 +527,22 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 						"type": "string",
 					},
 				},
-			})),
+			},
 		},
 	}
 
-	toolUnionParams := make([]anthropic.ToolUnionUnionParam, len(tools))
+	toolUnionParams := make([]anthropic.ToolUnionParam, len(tools))
 	for i, tool := range tools {
-		toolUnionParams[i] = tool
+		toolUnionParams[i] = anthropic.ToolUnionParamOfTool(tool.InputSchema, tool.Name)
 	}
-
-	var disabled anthropic.ThinkingConfigEnabledType
-	disabled = "disabled"
 
 	for {
 		stream := client.Messages.NewStreaming(ctx, anthropic.MessageNewParams{
-			Model:     anthropic.F(Model_Sonnet35),
-			MaxTokens: anthropic.F(int64(8192)),
-			Messages:  anthropic.F(messages),
-			Tools:     anthropic.F(toolUnionParams),
-			Thinking: anthropic.F[anthropic.ThinkingConfigParamUnion](anthropic.ThinkingConfigEnabledParam{
-				Type: anthropic.F(disabled),
-			}),
+			Model:     anthropic.Model(Model_Sonnet35),
+			MaxTokens: int64(8192),
+			Messages:  messages,
+			Tools:     toolUnionParams,
+			// Thinking disabled by omitting the field
 		})
 
 		message := anthropic.Message{}
@@ -558,9 +553,9 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 				return "", err
 			}
 
-			switch event := event.AsUnion().(type) {
+			switch event := event.AsAny().(type) {
 			case anthropic.ContentBlockDeltaEvent:
-				if event.Delta.Text != "" {
+				if event.Delta.Type == "text_delta" && event.Delta.Text != "" {
 					fmt.Printf("%s", event.Delta.Text)
 				}
 			}
@@ -576,7 +571,7 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 		toolResults := []anthropic.ContentBlockParamUnion{}
 
 		for _, block := range message.Content {
-			if block.Type == anthropic.ContentBlockTypeToolUse {
+			if block.Type == "tool_use" || block.Type == "server_tool_use" {
 				hasToolCalls = true
 				var response interface{}
 
@@ -666,10 +661,7 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 			break
 		}
 
-		messages = append(messages, anthropic.MessageParam{
-			Role:    anthropic.F(anthropic.MessageParamRoleUser),
-			Content: anthropic.F(toolResults),
-		})
+		messages = append(messages, anthropic.NewUserMessage(toolResults...))
 	}
 
 	return updatedContent, nil

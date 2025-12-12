@@ -21,6 +21,13 @@ export interface Prompt {
   filesSent: string[];
 }
 
+export interface ToolInvocation {
+  toolCallId: string;
+  toolName: string;
+  args?: any;
+  result?: any;
+}
+
 export interface Message {
   id: string;
   prompt: string;
@@ -41,6 +48,7 @@ export interface Message {
   responseRollbackToRevisionNumber?: number;
   planId?: string;
   revisionNumber?: number;
+  toolInvocations?: ToolInvocation[];
 }
 
 // Interface for raw message from server before normalization

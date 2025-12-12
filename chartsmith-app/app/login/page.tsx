@@ -36,14 +36,10 @@ export default function LoginPage() {
       // Check for test auth parameter
       const params = new URLSearchParams(window.location.search);
       if (params.get('test-auth') === 'true') {
-        validateTestAuth().then((jwt) => {
-          if (jwt) {
-            const expires = new Date();
-            expires.setDate(expires.getDate() + 7);
-            document.cookie = `session=${jwt}; expires=${expires.toUTCString()}; path=/; SameSite=Lax`;
-            window.location.href = '/';
-          }
-        });
+        console.log('Test auth detected, redirecting to API endpoint...');
+        // Use server-side API route to set cookie properly
+        window.location.href = '/api/auth/test-auth';
+        return;
       }
     }
   }, [publicEnv.NEXT_PUBLIC_ENABLE_TEST_AUTH]);

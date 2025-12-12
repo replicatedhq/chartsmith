@@ -51,37 +51,103 @@ export const useSession = (redirectIfNotLoggedIn: boolean = false) => {
   const router = useRouter();
 
   useEffect(() => {
-    const token = document.cookie
-      .split("; ")
-      .find((cookie) => cookie.startsWith("session="))
-      ?.split("=")[1];
-
-    if (!token) {
-      setIsLoading(false);
-      return;
-    }
-
-    const validate = async (token: string) => {
+    const getCookieValue = (name: string): string | undefined => {
+      const cookies = document.cookie.split("; ");
+      const cookie = cookies.find((c) => c.trim().startsWith(`${name}=`));
+      if (!cookie) return undefined;
+      
+      // Get the value after the = sign
+      const value = cookie.split("=").slice(1).join("=");
+      // URL decode the value (cookies might be encoded)
       try {
-        const sess = await validateSession(token);
-        if (!sess && redirectIfNotLoggedIn) {
-          router.replace("/");
-          return;
-        }
-
-        setSession(sess);
-        setIsLoading(false);
-      } catch (error) {
-        logger.error("Session validation failed:", error);
-        if (redirectIfNotLoggedIn) {
-          router.replace("/");
-        }
-        setIsLoading(false);
+        return decodeURIComponent(value);
+      } catch {
+        return value;
       }
     };
 
-    validate(token);
-  }, [router, redirectIfNotLoggedIn]);
+    let mounted = true; // Track if component is still mounted
+
+    // In test mode, try to get token from cookie, but if not found, wait a bit
+    // (middleware might be setting it asynchronously)
+    const checkForSession = async () => {
+      let token = getCookieValue("session");
+      
+      // If no token and we're in test mode, wait a bit for middleware to set it
+      // But only check once to avoid infinite loops
+      if (!token && process.env.NEXT_PUBLIC_ENABLE_TEST_AUTH === 'true') {
+        logger.debug("No session cookie found in test mode, waiting...");
+        // Wait up to 2 seconds for cookie to appear (only once)
+        for (let i = 0; i < 4 && mounted; i++) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+          if (!mounted) return; // Component unmounted, stop
+          token = getCookieValue("session");
+          if (token) {
+            logger.debug("Session cookie found after waiting");
+            break;
+          }
+        }
+      }
+
+      if (!mounted) return; // Component unmounted during wait
+
+      if (!token) {
+        logger.debug("No session cookie found", { 
+          allCookies: document.cookie,
+          cookieCount: document.cookie.split(';').filter(c => c.trim()).length
+        });
+        if (mounted) {
+          setIsLoading(false);
+        }
+        return;
+      }
+
+      logger.debug("Found session cookie, validating...", { tokenPrefix: token.substring(0, 30) + '...' });
+
+      const validate = async (token: string) => {
+        if (!mounted) return; // Check again before async operation
+        
+        try {
+          const sess = await validateSession(token);
+          if (!mounted) return; // Check after async operation
+          
+          if (!sess) {
+            logger.warn("Session validation returned undefined", { tokenPrefix: token.substring(0, 30) + '...' });
+            if (redirectIfNotLoggedIn && mounted) {
+              router.replace("/");
+            }
+            if (mounted) {
+              setIsLoading(false);
+            }
+            return;
+          }
+
+          logger.debug("Session validated successfully", { userId: sess.user.id, email: sess.user.email });
+          if (mounted) {
+            setSession(sess);
+            setIsLoading(false);
+          }
+        } catch (error) {
+          if (!mounted) return;
+          logger.error("Session validation failed:", error);
+          if (redirectIfNotLoggedIn && mounted) {
+            router.replace("/");
+          }
+          if (mounted) {
+            setIsLoading(false);
+          }
+        }
+      };
+
+      validate(token);
+    };
+
+    checkForSession();
+    
+    return () => {
+      mounted = false; // Cleanup: mark as unmounted
+    };
+  }, [router, redirectIfNotLoggedIn]); // Only run once on mount
 
   return {
     isLoading,

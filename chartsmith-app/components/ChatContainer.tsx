@@ -1,15 +1,31 @@
+/**
+ * @fileoverview Chat container component that manages chat UI and state.
+ *
+ * This component uses the Vercel AI SDK's useChat hook (via useAIChat wrapper)
+ * for all chat functionality. It handles:
+ * - Message display and input
+ * - Role selection (auto/developer/operator)
+ * - Integration with workspace state (Jotai atoms)
+ *
+ * Messages are loaded by WorkspaceContent from the server and stored in messagesAtom.
+ * This component passes those messages to useAIChat as initialMessages.
+ *
+ * @see useAIChat - Main chat hook wrapper
+ */
+
 "use client";
-import React, { useState, useRef, useEffect } from "react";
-import { Send, Loader2, Users, Code, User, Sparkles } from "lucide-react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
+import { Send, Loader2, Code, User, Sparkles } from "lucide-react";
 import { useTheme } from "../contexts/ThemeContext";
 import { Session } from "@/lib/types/session";
 import { ChatMessage } from "./ChatMessage";
-import { messagesAtom, workspaceAtom, isRenderingAtom } from "@/atoms/workspace";
+import { messagesAtom, workspaceAtom } from "@/atoms/workspace";
 import { useAtom } from "jotai";
-import { createChatMessageAction } from "@/lib/workspace/actions/create-chat-message";
 import { ScrollingContent } from "./ScrollingContent";
-import { NewChartChatMessage } from "./NewChartChatMessage";
 import { NewChartContent } from "./NewChartContent";
+import { useAIChat } from "@/hooks/useAIChat";
+import { Message } from "./types";
+import { ChatPersistenceService } from "@/lib/services/chat-persistence";
 
 interface ChatContainerProps {
   session: Session;
@@ -18,12 +34,51 @@ interface ChatContainerProps {
 export function ChatContainer({ session }: ChatContainerProps) {
   const { theme } = useTheme();
   const [workspace] = useAtom(workspaceAtom)
-  const [messages, setMessages] = useAtom(messagesAtom)
-  const [isRendering] = useAtom(isRenderingAtom)
-  const [chatInput, setChatInput] = useState("");
-  const [selectedRole, setSelectedRole] = useState<"auto" | "developer" | "operator">("auto");
+  const [messages] = useAtom(messagesAtom)
   const [isRoleMenuOpen, setIsRoleMenuOpen] = useState(false);
   const roleMenuRef = useRef<HTMLDivElement>(null);
+
+  // Create persistence service ref
+  const persistenceServiceRef = useRef<ChatPersistenceService | null>(null);
+
+  // Initialize persistence service when workspace changes
+  useEffect(() => {
+    if (workspace?.id) {
+      persistenceServiceRef.current = new ChatPersistenceService(workspace.id);
+    }
+  }, [workspace?.id]);
+
+  // Callback to persist messages when streaming completes
+  const handleMessageComplete = useCallback(async (userMessage: Message, assistantMessage: Message) => {
+    if (!persistenceServiceRef.current) return;
+
+    try {
+      await persistenceServiceRef.current.saveMessagePair(
+        { role: 'user', content: userMessage.prompt },
+        { role: 'assistant', content: assistantMessage.response || '' }
+      );
+    } catch {
+      // Silently ignore persistence errors - don't break the chat experience
+    }
+  }, []);
+
+  // Messages are already loaded by WorkspaceContent from the server into messagesAtom.
+  // We pass them directly to useAIChat as initialMessages to avoid re-fetching.
+  // useAIChat will use these as the initial state and sync back any updates.
+  const aiChatHook = useAIChat({
+    workspaceId: workspace?.id || '',
+    session,
+    // Pass the messages directly from the atom - they're already loaded by WorkspaceContent
+    initialMessages: messages,
+    // Persist messages when streaming completes
+    onMessageComplete: handleMessageComplete,
+  });
+  
+  // Use hook's state (AI SDK manages input, loading, and role selection)
+  const effectiveChatInput = aiChatHook.input;
+  const effectiveIsRendering = aiChatHook.isLoading;
+  const effectiveSelectedRole = aiChatHook.selectedRole;
+  const effectiveSetSelectedRole = aiChatHook.setSelectedRole;
   
   // No need for refs as ScrollingContent manages its own scrolling
 
@@ -45,16 +100,10 @@ export function ChatContainer({ session }: ChatContainerProps) {
     return null;
   }
 
-  const handleSubmitChat = async (e: React.FormEvent) => {
+  const handleSubmitChat = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!chatInput.trim() || isRendering) return; // Don't submit if rendering is in progress
-
-    if (!session || !workspace) return;
-
-    const chatMessage = await createChatMessageAction(session, workspace.id, chatInput.trim(), selectedRole);
-    setMessages(prev => [...prev, chatMessage]);
-
-    setChatInput("");
+    e.stopPropagation();
+    aiChatHook.handleSubmit(e);
   };
   
   const getRoleLabel = (role: "auto" | "developer" | "operator"): string => {
@@ -74,21 +123,28 @@ export function ChatContainer({ session }: ChatContainerProps) {
 
   if (workspace?.currentRevisionNumber === 0) {
     // For NewChartContent, create a simpler version of handleSubmitChat that doesn't use role selector
-    const handleNewChartSubmitChat = async (e: React.FormEvent) => {
+    const handleNewChartSubmitChat = (e: React.FormEvent) => {
       e.preventDefault();
-      if (!chatInput.trim() || isRendering) return;
-      if (!session || !workspace) return;
 
-      // Always use AUTO for new chart creation
-      const chatMessage = await createChatMessageAction(session, workspace.id, chatInput.trim(), "auto");
-      setMessages(prev => [...prev, chatMessage]);
-      setChatInput("");
+      // Use hook's handler (role is always "auto" for new charts)
+      // Ensure role is set to auto
+      if (aiChatHook.selectedRole !== "auto") {
+        aiChatHook.setSelectedRole("auto");
+      }
+      // Cast to HTMLFormElement for the hook's handleSubmit
+      aiChatHook.handleSubmit(e as React.FormEvent<HTMLFormElement>);
     };
-    
+
     return <NewChartContent
       session={session}
-      chatInput={chatInput}
-      setChatInput={setChatInput}
+      chatInput={effectiveChatInput}
+      setChatInput={(value: string) => {
+        // Update hook's input via synthetic event
+        const syntheticEvent = {
+          target: { value },
+        } as React.ChangeEvent<HTMLTextAreaElement>;
+        aiChatHook.handleInputChange(syntheticEvent);
+      }}
       handleSubmitChat={handleNewChartSubmitChat}
     />
   }
@@ -116,16 +172,33 @@ export function ChatContainer({ session }: ChatContainerProps) {
       <div className={`absolute bottom-0 left-0 right-0 ${theme === "dark" ? "bg-dark-surface" : "bg-white"} border-t ${theme === "dark" ? "border-dark-border" : "border-gray-200"}`}>
         <form onSubmit={handleSubmitChat} className="p-3 relative">
           <textarea
-            value={chatInput}
-            onChange={(e) => setChatInput(e.target.value)}
+            value={effectiveChatInput}
+            onChange={(e) => {
+              aiChatHook.handleInputChange(e);
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                if (!isRendering) {
-                  handleSubmitChat(e);
+                e.stopPropagation();
+                if (!effectiveIsRendering && effectiveChatInput.trim()) {
+                  // Directly call the chat hook's sendMessage instead of going through form submission
+                  // This completely avoids form submission and page refresh
+                  const form = e.currentTarget.closest('form');
+                  if (form) {
+                    // Create a synthetic form event for the hook's handleSubmit
+                    const syntheticEvent = {
+                      preventDefault: () => {},
+                      stopPropagation: () => {},
+                      target: form,
+                      currentTarget: form,
+                    } as unknown as React.FormEvent<HTMLFormElement>;
+                    // Call the hook's handleSubmit which will call sendMessage
+                    aiChatHook.handleSubmit(syntheticEvent);
+                  }
                 }
               }
             }}
+            disabled={effectiveIsRendering}
             placeholder="Ask a question or ask for a change..."
             rows={3}
             style={{ height: 'auto', minHeight: '72px', maxHeight: '150px' }}
@@ -133,7 +206,9 @@ export function ChatContainer({ session }: ChatContainerProps) {
               theme === "dark"
                 ? "bg-dark border-dark-border/60 text-white placeholder-gray-500"
                 : "bg-white border-gray-200 text-gray-900 placeholder-gray-400"
-            } focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50`}
+            } focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50 ${
+              effectiveIsRendering ? "opacity-50 cursor-not-allowed" : ""
+            }`}
           />
           <div className="absolute right-4 top-[18px] flex gap-2">
             {/* Role selector button */}
@@ -145,12 +220,12 @@ export function ChatContainer({ session }: ChatContainerProps) {
                   theme === "dark"
                     ? "text-gray-400 hover:text-gray-200 hover:bg-dark-border/40"
                     : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
-                } ${selectedRole !== "auto" ? "bg-blue-500/10" : ""}`}
-                title={`Perspective: ${getRoleLabel(selectedRole)}`}
+                } ${effectiveSelectedRole !== "auto" ? "bg-blue-500/10" : ""}`}
+                title={`Perspective: ${getRoleLabel(effectiveSelectedRole)}`}
               >
-                {selectedRole === "auto" && <Sparkles className="w-4 h-4" />}
-                {selectedRole === "developer" && <Code className="w-4 h-4" />}
-                {selectedRole === "operator" && <User className="w-4 h-4" />}
+                {effectiveSelectedRole === "auto" && <Sparkles className="w-4 h-4" />}
+                {effectiveSelectedRole === "developer" && <Code className="w-4 h-4" />}
+                {effectiveSelectedRole === "operator" && <User className="w-4 h-4" />}
               </button>
               
               {/* Role selector dropdown */}
@@ -170,11 +245,11 @@ export function ChatContainer({ session }: ChatContainerProps) {
                       key={role}
                       type="button"
                       onClick={() => {
-                        setSelectedRole(role);
+                        effectiveSetSelectedRole(role);
                         setIsRoleMenuOpen(false);
                       }}
                       className={`w-full px-4 py-2 text-left text-sm flex items-center justify-between ${
-                        selectedRole === role
+                        effectiveSelectedRole === role
                           ? theme === "dark" 
                             ? "bg-dark-border/60 text-white" 
                             : "bg-gray-100 text-gray-900"
@@ -189,7 +264,7 @@ export function ChatContainer({ session }: ChatContainerProps) {
                         {role === "operator" && <User className="w-4 h-4" />}
                         <span>{getRoleLabel(role)}</span>
                       </div>
-                      {selectedRole === role && (
+                      {effectiveSelectedRole === role && (
                         <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                           <path d="M5 13L9 17L19 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                         </svg>
@@ -200,19 +275,42 @@ export function ChatContainer({ session }: ChatContainerProps) {
               )}
             </div>
             
+            {/* Error display */}
+            {aiChatHook.error && (
+              <div className="absolute bottom-full right-0 mb-2 p-2 bg-red-500/10 border border-red-500/20 rounded text-xs text-red-500 max-w-xs">
+                Error: {aiChatHook.error.message}
+              </div>
+            )}
+
             {/* Send button */}
             <button
-              type="submit"
-              disabled={isRendering}
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (!effectiveIsRendering && effectiveChatInput.trim()) {
+                  const form = e.currentTarget.closest('form');
+                  if (form) {
+                    const syntheticEvent = {
+                      preventDefault: () => {},
+                      stopPropagation: () => {},
+                      target: form,
+                      currentTarget: form,
+                    } as unknown as React.FormEvent<HTMLFormElement>;
+                    aiChatHook.handleSubmit(syntheticEvent);
+                  }
+                }
+              }}
+              disabled={effectiveIsRendering}
               className={`p-1.5 rounded-full ${
-                isRendering
+                effectiveIsRendering
                   ? theme === "dark" ? "text-gray-600 cursor-not-allowed" : "text-gray-300 cursor-not-allowed"
                   : theme === "dark"
                     ? "text-gray-400 hover:text-gray-200 hover:bg-dark-border/40"
                     : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
               }`}
             >
-              {isRendering ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              {effectiveIsRendering ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
             </button>
           </div>
         </form>

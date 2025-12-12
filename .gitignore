@@ -4,3 +4,46 @@ bin
 test-results/
 .envrc
 .specstory/
+
+# Test artifacts and outputs
+*.test
+*.test.out
+*.prof
+
+# Test coverage files
+coverage/
+.nyc_output/
+.coverage/
+*.lcov
+coverage.json
+coverage-final.json
+.nyc_output/
+lib-cov/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Build artifacts
+.next/
+dist/
+build/
+*.o
+*.a
+*.so
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Local setup documentation and scripts (not committed to git)
+docs/
+scripts/

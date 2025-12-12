@@ -58,9 +58,9 @@ func CreateInitialPlan(ctx context.Context, streamCh chan string, doneCh chan er
 	messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(initialUserMessage)))
 
 	stream := client.Messages.NewStreaming(context.TODO(), anthropic.MessageNewParams{
-		Model:     anthropic.F(anthropic.ModelClaude3_7Sonnet20250219),
-		MaxTokens: anthropic.F(int64(8192)),
-		Messages:  anthropic.F(messages),
+		Model:     anthropic.ModelClaude3_7Sonnet20250219,
+		MaxTokens: int64(8192),
+		Messages:  messages,
 	})
 
 	message := anthropic.Message{}
@@ -68,10 +68,10 @@ func CreateInitialPlan(ctx context.Context, streamCh chan string, doneCh chan er
 		event := stream.Current()
 		message.Accumulate(event)
 
-		switch delta := event.Delta.(type) {
-		case anthropic.ContentBlockDeltaEventDelta:
-			if delta.Text != "" {
-				streamCh <- delta.Text
+		switch e := event.AsAny().(type) {
+		case anthropic.ContentBlockDeltaEvent:
+			if e.Delta.Type == "text_delta" && e.Delta.Text != "" {
+				streamCh <- e.Delta.Text
 			}
 		}
 	}

@@ -7,6 +7,7 @@ import { useAtom } from "jotai";
 // types
 import { Session } from "@/lib/types/session";
 import { Message, CentrifugoMessageData } from "@/components/types";
+import { Plan } from "@/lib/types/workspace";
 
 // actions
 import { getCentrifugoTokenAction } from "@/lib/centrifugo/actions/get-centrifugo-token-action";
@@ -43,12 +44,14 @@ export function useCentrifugo({
   session,
 }: UseCentrifugoProps) {
   const centrifugeRef = useRef<Centrifuge | null>(null);
+  // Store pending plan-updated events to apply when messages become available
+  const pendingPlansRef = useRef<Plan[]>([]);
 
   const [isReconnecting, setIsReconnecting] = useState(false);
 
   const [workspace, setWorkspace] = useAtom(workspaceAtom)
   const [, setRenders] = useAtom(rendersAtom)
-  const [, setMessages] = useAtom(messagesAtom)
+  const [messages, setMessages] = useAtom(messagesAtom)
   const [, setSelectedFile] = useAtom(selectedFileAtom)
   const [, setChartsBeforeApplyingContentPending] = useAtom(chartsBeforeApplyingContentPendingAtom)
   const [, handleConversionUpdated] = useAtom(handleConversionUpdatedAtom)
@@ -86,59 +89,6 @@ export function useCentrifugo({
     }
   }, [session, setMessages, setWorkspace]);
 
-  const handleChatMessageUpdated = useCallback((data: CentrifugoMessageData) => {
-    if (!data.chatMessage) return;
-
-    const chatMessage = data.chatMessage;
-
-    // If this message starts a render operation, track the render ID
-    if (chatMessage.responseRenderId) {
-      setActiveRenderIds(prev => {
-        // Only add if not already tracked
-        if (!prev.includes(chatMessage.responseRenderId!)) {
-          return [...prev, chatMessage.responseRenderId!];
-        }
-        return prev;
-      });
-    }
-
-    // If the message is complete and had a render ID, we can remove the render from active
-    if (chatMessage.isComplete && chatMessage.responseRenderId) {
-      setActiveRenderIds(prev => prev.filter(id => id !== chatMessage.responseRenderId));
-    }
-
-    setMessages(prev => {
-      const newMessages = [...prev];
-      const index = newMessages.findIndex(m => m.id === chatMessage.id);
-
-      const message: Message = {
-        id: chatMessage.id,
-        prompt: chatMessage.prompt,
-        response: chatMessage.responseRenderId ? "doing the render now..." : chatMessage.response,
-        isComplete: chatMessage.isComplete || false,  // Provide default value
-        isApplied: chatMessage.isApplied,
-        isApplying: chatMessage.isApplying,
-        isIgnored: chatMessage.isIgnored,
-        isCanceled: chatMessage.isCanceled,
-        createdAt: new Date(chatMessage.createdAt),
-        workspaceId: chatMessage.workspaceId,
-        userId: chatMessage.userId,
-        isIntentComplete: chatMessage.isIntentComplete,
-        followupActions: chatMessage.followupActions,
-        responseRenderId: chatMessage.responseRenderId,
-        responsePlanId: chatMessage.responsePlanId,
-        responseRollbackToRevisionNumber: chatMessage.responseRollbackToRevisionNumber,
-        revisionNumber: chatMessage.revisionNumber,
-      };
-
-      if (index >= 0) {
-        newMessages[index] = message;
-      } else {
-        newMessages.push(message);
-      }
-      return newMessages;
-    });
-  }, [setMessages, setActiveRenderIds]);
 
   const handleWorkspaceUpdated = useCallback((workspace: any) => {
     // Implementation can be added based on requirements
@@ -440,17 +390,75 @@ export function useCentrifugo({
     handleConversionUpdated(data.conversion);
   }, []);
 
+  // Helper function to apply a plan to messages
+  const applyPlanToMessages = useCallback((plan: Plan, currentMessages: Message[]): Message[] => {
+    // If messages array is empty, we can't apply the plan yet
+    if (currentMessages.length === 0) {
+      return currentMessages;
+    }
+
+    // First, try to match by chatMessageIds (database IDs)
+    let foundMatch = false;
+    let updated = currentMessages.map(msg => {
+      if (plan.chatMessageIds && plan.chatMessageIds.includes(msg.id)) {
+        console.log('Found matching message by ID:', msg.id, 'setting responsePlanId to:', plan.id);
+        foundMatch = true;
+        return { ...msg, responsePlanId: plan.id, isIntentComplete: true };
+      }
+      return msg;
+    });
+
+    // If no match by ID, find the most recent message without a responsePlanId
+    // This handles the case where frontend AI SDK generates different IDs than the database
+    if (!foundMatch) {
+      console.log('No match by ID, looking for most recent message without responsePlanId');
+      // Find the last message that doesn't have a responsePlanId yet
+      for (let i = currentMessages.length - 1; i >= 0; i--) {
+        const msg = currentMessages[i];
+        if (!msg.responsePlanId && msg.prompt) {
+          console.log('Found message to apply plan to:', msg.id, '(prompt:', msg.prompt?.substring(0, 50) + '...)');
+          updated = [...currentMessages];
+          updated[i] = { ...msg, responsePlanId: plan.id, isIntentComplete: true };
+          foundMatch = true;
+          break;
+        }
+      }
+    }
+
+    if (!foundMatch) {
+      console.log('No matching message found for plan:', plan.id);
+    }
+
+    return updated;
+  }, []);
+
   const handleCentrifugoMessage = useCallback((message: { data: CentrifugoMessageData }) => {
     const eventType = message.data.eventType;
+    console.log('Centrifugo message received:', eventType, message.data);
 
     if (eventType === 'plan-updated') {
+      console.log('Plan updated event:', message.data.plan);
       const plan = message.data.plan!;
-      handlePlanUpdated({
+      const formattedPlan: Plan = {
         ...plan,
         createdAt: new Date(plan.createdAt)
+      };
+
+      handlePlanUpdated(formattedPlan);
+
+      // Try to update the associated message(s) with the responsePlanId
+      setMessages(prevMessages => {
+        console.log('Current messages count:', prevMessages.length);
+
+        // If messages are empty, store the plan for later application
+        if (prevMessages.length === 0) {
+          console.log('Messages empty, storing plan for later:', plan.id);
+          pendingPlansRef.current = [...pendingPlansRef.current, formattedPlan];
+          return prevMessages;
+        }
+
+        return applyPlanToMessages(formattedPlan, prevMessages);
       });
-    } else if (eventType === 'chatmessage-updated') {
-      handleChatMessageUpdated(message.data);
     } else if (eventType === 'revision-created') {
       handleRevisionCreated(message.data.revision!);
     } else if (eventType === 'render-stream') {
@@ -471,15 +479,33 @@ export function useCentrifugo({
     }
   }, [
     handlePlanUpdated,
-    handleChatMessageUpdated,
     handleRevisionCreated,
     handleRenderStreamEvent,
     handleWorkspaceUpdated,
     handleArtifactUpdated,
     handleRenderFileEvent,
     handleConversionFileUpdatedMessage,
-    handleConversationUpdatedMessage
+    handleConversationUpdatedMessage,
+    setMessages,
+    applyPlanToMessages
   ]);
+
+  // Apply pending plans when messages become available
+  useEffect(() => {
+    if (messages.length > 0 && pendingPlansRef.current.length > 0) {
+      console.log('Messages now available, applying', pendingPlansRef.current.length, 'pending plans');
+      const pendingPlans = [...pendingPlansRef.current];
+      pendingPlansRef.current = [];
+
+      setMessages(prevMessages => {
+        let updated = prevMessages;
+        for (const plan of pendingPlans) {
+          updated = applyPlanToMessages(plan, updated);
+        }
+        return updated;
+      });
+    }
+  }, [messages.length, applyPlanToMessages, setMessages]);
 
   // Clear active renders when component unmounts
   useEffect(() => {

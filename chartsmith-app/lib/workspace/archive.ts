@@ -6,8 +6,8 @@ import * as path from "node:path";
 import * as os from "node:os";
 import * as tar from 'tar';
 import gunzip from 'gunzip-maybe';
-import fetch from 'node-fetch';
 import yaml from 'yaml';
+// Note: Using built-in fetch API (available in Next.js 15+)
 
 export async function getFilesFromBytes(bytes: ArrayBuffer, fileName: string): Promise<WorkspaceFile[]> {
   const id = srs.default({ length: 12, alphanumeric: true });
@@ -233,8 +233,20 @@ async function downloadChartArchiveFromURL(url: string): Promise<string> {
 
   await fs.mkdir(extractPath);
 
+  // Convert ReadableStream to Node.js stream
+  const { Readable } = await import('stream');
+  const { pipeline } = await import('stream/promises');
+  
+  if (!response.body) {
+    throw new Error('Response body is null');
+  }
+
+  // Convert Web ReadableStream to Node.js Readable stream
+  const nodeStream = Readable.fromWeb(response.body as any);
+  
   return new Promise((resolve, reject) => {
-    response.body.pipe(gunzip())
+    nodeStream
+      .pipe(gunzip())
       .pipe(tar.extract({ cwd: extractPath }))
       .on('finish', () => resolve(extractPath))
       .on('error', reject);

@@ -25,3 +25,25 @@ It's made for both the developer working on it and for AI models to read and app
 - The go code is where we put all workers. 
 - Jobs for workers are enqueued and scheduled using postgres notify and a work_queue table.
 - Status from the workers is communicated via Centrifugo messages to the client.
+
+## Chat & LLM Integration
+
+Chartsmith uses the Vercel AI SDK for all conversational chat functionality.
+The Go worker outputs AI SDK Data Stream Protocol format, which the frontend
+consumes via the useChat hook.
+
+### Architecture
+- Frontend: useChat hook manages chat state
+- API Route: /api/chat proxies to Go worker
+- Backend: Go worker outputs AI SDK protocol (HTTP SSE)
+- Streaming: Server-Sent Events instead of WebSocket
+
+### Key Components
+- pkg/llm/aisdk.go: Adapter for AI SDK protocol
+- pkg/api/chat.go: HTTP endpoint for chat streaming
+- chartsmith-app/hooks/useAIChat.ts: Frontend hook wrapper
+- chartsmith-app/app/api/chat/route.ts: Next.js API route
+
+### Note on Centrifugo
+Centrifugo is still used for non-chat events (plans, renders, artifacts).
+Chat messages flow exclusively through the AI SDK HTTP SSE protocol.

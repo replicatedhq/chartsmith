@@ -19,7 +19,7 @@ export function CreateChartOptions() {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const setShowReplicatedModal = useState(false)[1];
   const [showPromptModal, setShowPromptModal] = useState(false);
-  const { session } = useSession();
+  const { session, isLoading: isSessionLoading } = useSession();
   const [isUploading, setIsUploading] = useState(false);
   const [isPromptLoading, setIsPromptLoading] = useState(false);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
@@ -38,8 +38,39 @@ export function CreateChartOptions() {
   }, [prompt]);
 
   const handlePromptSubmit = async () => {
-    if (!session) {
+    logger.info("handlePromptSubmit called", { 
+      isSessionLoading,
+      hasSession: !!session,
+      sessionUserId: session?.user?.id,
+      promptLength: prompt.length,
+      promptTrimmed: prompt.trim().length
+    });
+
+    // Wait for session to finish loading before checking
+    if (isSessionLoading) {
+      logger.debug('Session still loading, waiting...');
+      return;
+    }
+
+    // In test mode, allow submission even if session object isn't loaded yet
+    // The server action will get session from cookies
+    const isTestMode = process.env.NEXT_PUBLIC_ENABLE_TEST_AUTH === 'true';
+    
+    if (!session && !isTestMode) {
       sessionStorage.setItem('pendingPrompt', prompt.trim());
+      // Check if test auth is enabled via API config
+      try {
+        const configRes = await fetch('/api/config');
+        if (configRes.ok) {
+          const config = await configRes.json();
+          if (config.NEXT_PUBLIC_ENABLE_TEST_AUTH === 'true') {
+            router.push('/login?test-auth=true');
+            return;
+          }
+        }
+      } catch (err) {
+        logger.error('Failed to check test auth config', { error: err });
+      }
       router.push('/login');
       return;
     }
@@ -47,11 +78,33 @@ export function CreateChartOptions() {
     if (prompt.trim()) {
       try {
         setIsPromptLoading(true);
-        const w = await createWorkspaceFromPromptAction(session, prompt);
+        logger.info("Calling createWorkspaceFromPromptAction", { 
+          sessionUserId: session?.user?.id,
+          promptLength: prompt.length,
+          isTestMode,
+          hasSessionCookie: typeof document !== 'undefined' && document.cookie.includes('session=')
+        });
+        // Pass only the prompt - session will be retrieved from cookies/server
+        const w = await createWorkspaceFromPromptAction(prompt);
+        logger.info("Workspace created successfully", { workspaceId: w.id });
         router.replace(`/workspace/${w.id}`);
       } catch (err) {
-        logger.error("Failed to create workspace", { err });
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        const errorStack = err instanceof Error ? err.stack : undefined;
+        logger.error("Failed to create workspace", { 
+          err, 
+          errorMessage,
+          errorStack,
+          sessionUserId: session?.user?.id,
+          promptLength: prompt.length
+        });
+        
+        // Show error to user
+        alert(`Failed to create workspace: ${errorMessage}`);
+        
         setIsPromptLoading(false);
+        // Re-throw so it's visible in tests
+        throw err;
       }
     }
   };
@@ -59,6 +112,7 @@ export function CreateChartOptions() {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
+      e.stopPropagation();
       handlePromptSubmit();
     }
   };
@@ -122,6 +176,13 @@ export function CreateChartOptions() {
               }
             }}
             onKeyDown={handleKeyDown}
+            onKeyPress={(e) => {
+              // Prevent form submission on Enter
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                e.stopPropagation();
+              }
+            }}
             disabled={isPromptLoading}
             className="w-full min-h-[80px] sm:min-h-[120px] bg-transparent text-white placeholder-gray-500 text-base sm:text-lg resize-none focus:outline-none disabled:opacity-50"
             maxLength={MAX_CHARS}

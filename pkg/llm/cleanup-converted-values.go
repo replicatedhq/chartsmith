@@ -30,9 +30,9 @@ Here is the converted values.yaml file:
 	}
 
 	response, err := client.Messages.New(context.TODO(), anthropic.MessageNewParams{
-		Model:     anthropic.F(anthropic.ModelClaude3_7Sonnet20250219),
-		MaxTokens: anthropic.F(int64(8192)),
-		Messages:  anthropic.F(messages),
+		Model:     anthropic.ModelClaude3_7Sonnet20250219,
+		MaxTokens: int64(8192),
+		Messages:  messages,
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to create message: %w", err)
