@@ -15,26 +15,47 @@ spec:
         - name: database_host
           title: Database Host
           type: text
-          when: "{{repl ConfigOptionEquals \"external_database\" \"0\" }}"
+          when: "{{repl ConfigOptionEquals \"external_database\" \"1\" }}"
         - name: database_port
           title: Database Port
           type: text
-          when: "{{repl ConfigOptionEquals \"external_database\" \"0\" }}"
+          when: "{{repl ConfigOptionEquals \"external_database\" \"1\" }}"
         - name: database_name
           title: Database Name
           type: text
-          when: "{{repl ConfigOptionEquals \"external_database\" \"0\" }}"
+          when: "{{repl ConfigOptionEquals \"external_database\" \"1\" }}"
         - name: database_user
           title: Database User
           type: text
-          when: "{{repl ConfigOptionEquals \"external_database\" \"0\" }}"
+          when: "{{repl ConfigOptionEquals \"external_database\" \"1\" }}"
         - name: database_password
           title: Database Password
           type: password
-          when: "{{repl ConfigOptionEquals \"external_database\" \"0\" }}"
+          when: "{{repl ConfigOptionEquals \"external_database\" \"1\" }}"
         - name: database_ssl_mode
           title: Database SSL Mode
           type: text
+          when: "{{repl ConfigOptionEquals \"external_database\" \"1\" }}"
+        - name: embedded_database_username
+          title: Embedded Database Username
+          type: text
+          hidden: true
+          value: "chartsmith"
+          readonly: true
+          when: "{{repl ConfigOptionEquals \"external_database\" \"0\" }}"
+        - name: embedded_database_password
+          title: Embedded Database Password
+          type: password
+          hidden: true
+          value: "{{repl RandomString 32}}"
+          readonly: true
+          when: "{{repl ConfigOptionEquals \"external_database\" \"0\" }}"
+        - name: embedded_database_name
+          title: Embedded Database Name
+          type: text
+          hidden: true
+          value: "chartsmith"
+          readonly: true
           when: "{{repl ConfigOptionEquals \"external_database\" \"0\" }}"
     - name: llm_configuration
       title: LLM Configuration
@@ -68,3 +89,37 @@ spec:
           title: Google Redirect URI
           type: text
           required: true
+    - name: secrets
+      title: Application Secrets
+      description: "Auto-generated secrets for the application. These are hidden and generated automatically."
+      items:
+        - name: hmac_secret
+          title: HMAC Secret
+          type: password
+          hidden: true
+          value: "{{repl RandomString 32}}"
+          readonly: true
+        - name: centrifugo_api_key
+          title: Centrifugo API Key
+          type: password
+          hidden: true
+          value: "{{repl RandomString 32}}"
+          readonly: true
+        - name: centrifugo_token_hmac_secret
+          title: Centrifugo Token HMAC Secret
+          type: password
+          hidden: true
+          value: "{{repl RandomString 32}}"
+          readonly: true
+        - name: centrifugo_admin_password
+          title: Centrifugo Admin Password
+          type: password
+          hidden: true
+          value: "{{repl RandomString 32}}"
+          readonly: true
+        - name: centrifugo_admin_secret
+          title: Centrifugo Admin Secret
+          type: password
+          hidden: true
+          value: "{{repl RandomString 32}}"
+          readonly: true

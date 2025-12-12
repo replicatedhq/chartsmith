@@ -18,13 +18,8 @@ spec:
         app: chartsmith
         component: postgresql
     spec:
-      {{- if and .Values.global .Values.global.replicated .Values.global.replicated.dockerconfigjson }}
       imagePullSecrets:
-        - name: chartsmith-image-pull-secret
-      {{- else if .Values.imagePullSecrets }}
-      imagePullSecrets:
-        {{- toYaml .Values.imagePullSecrets | nindent 8 }}
-      {{- end }}
+        - name: enterprise-pull-secret
       containers:
         - name: postgresql
           image: "{{ .Values.images.pgvector.registry }}/{{ .Values.images.pgvector.repository }}:{{ .Values.images.pgvector.tag }}"

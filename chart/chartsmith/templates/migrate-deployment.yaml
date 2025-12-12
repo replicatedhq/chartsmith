@@ -16,6 +16,8 @@ spec:
         app.kubernetes.io/name: chartsmith
         app.kubernetes.io/component: migrations
     spec:
+      imagePullSecrets:
+        - name: enterprise-pull-secret
       restartPolicy: Always
       volumes:
         - name: plan
