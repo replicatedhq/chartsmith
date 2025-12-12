@@ -183,15 +183,15 @@ check-replicated-cli:
 	MAJOR=$$(echo $$REPLICATED_VERSION | cut -d. -f1); \
 	MINOR=$$(echo $$REPLICATED_VERSION | cut -d. -f2); \
 	PATCH=$$(echo $$REPLICATED_VERSION | cut -d. -f3); \
-	MIN_MAJOR=0; MIN_MINOR=123; MIN_PATCH=0; \
+	MIN_MAJOR=0; MIN_MINOR=124; MIN_PATCH=0; \
 	if [ $$MAJOR -lt $$MIN_MAJOR ] || \
 	   ([ $$MAJOR -eq $$MIN_MAJOR ] && [ $$MINOR -lt $$MIN_MINOR ]) || \
 	   ([ $$MAJOR -eq $$MIN_MAJOR ] && [ $$MINOR -eq $$MIN_MINOR ] && [ $$PATCH -lt $$MIN_PATCH ]); then \
-		echo "Error: replicated CLI version $$REPLICATED_VERSION is below minimum required version 0.123.0"; \
+		echo "Error: replicated CLI version $$REPLICATED_VERSION is below minimum required version 0.124.0"; \
 		echo "Please update your replicated CLI: https://docs.replicated.com/reference/replicated-cli-installing"; \
 		exit 1; \
 	fi; \
-	echo "replicated CLI version check passed (>=0.123.0)"
+	echo "replicated CLI version check passed (>=0.124.0)"
 
 # Release to Replicated
 .PHONY: release-replicated
@@ -213,7 +213,7 @@ release-replicated: check-replicated-cli
 	fi
 	@echo "Found 'chartsmith' app"
 	@echo "Getting proxy registry hostname..."
-	@PROXY_HOSTNAME=$$(/Users/marccampbell/go/src/github.com/replicatedhq/replicated/bin/replicated app hostname ls --output json 2>&1 | jq -r '.proxy' 2>/dev/null); \
+	@PROXY_HOSTNAME=$$(replicated app hostname ls --output json 2>&1 | jq -r '.proxy' 2>/dev/null); \
 	if [ -z "$$PROXY_HOSTNAME" ] || [ "$$PROXY_HOSTNAME" = "null" ]; then \
 		echo "Error: Could not determine proxy hostname from replicated app hostname ls"; \
 		replicated app hostname ls --output json || true; \
@@ -223,7 +223,7 @@ release-replicated: check-replicated-cli
 	@echo "Backing up values.yaml..."
 	@cp chart/chartsmith/values.yaml chart/chartsmith/values.yaml.bak
 	@echo "Replacing proxy.replicated.com with proxy hostname in values.yaml..."
-	@PROXY_HOSTNAME=$$(/Users/marccampbell/go/src/github.com/replicatedhq/replicated/bin/replicated app hostname ls --output json 2>&1 | jq -r '.proxy' 2>/dev/null) && \
+	@PROXY_HOSTNAME=$$(replicated app hostname ls --output json 2>&1 | jq -r '.proxy' 2>/dev/null) && \
 	sed -i.tmp "s|proxy.replicated.com|$$PROXY_HOSTNAME|g" chart/chartsmith/values.yaml && \
 	rm chart/chartsmith/values.yaml.tmp
 	@echo "Packaging Helm chart..."
