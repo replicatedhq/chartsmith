@@ -30,7 +30,7 @@
     "cmdk": "^1.0.4",
     "diff": "^7.0.0",
     "diff-match-patch": "^1.0.5",
-    "dotenv": "^16.4.7",
+    "dotenv": "^17.2.3",
     "gunzip-maybe": "^1.4.2",
     "jotai": "^2.16.0",
     "jsonwebtoken": "^9.0.3",
