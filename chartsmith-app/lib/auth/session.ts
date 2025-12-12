@@ -11,7 +11,7 @@ import { logger } from "../utils/logger";
 
 // Dynamic import for jsonwebtoken to avoid module loading issues
 let jwtModule: typeof import("jsonwebtoken") | null = null;
-async function getJWT() {
+async function getJWT(): Promise<typeof import("jsonwebtoken")> {
   if (!jwtModule) {
     try {
       jwtModule = await import("jsonwebtoken");
@@ -20,7 +20,7 @@ async function getJWT() {
       throw new Error("jsonwebtoken module failed to load");
     }
   }
-  return jwtModule.default;
+  return jwtModule;
 }
 
 const sessionDuration = "72h";

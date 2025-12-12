@@ -98,7 +98,7 @@ export function PromptModal({ isOpen, onClose }: PromptModalProps) {
         return;
       }
 
-      const w = await createWorkspaceFromPromptAction(session, prompt);
+      const w = await createWorkspaceFromPromptAction(prompt);
 
       // Don't reset loading state, let it persist through redirect
       router.push(`/workspace/${w.id}`);

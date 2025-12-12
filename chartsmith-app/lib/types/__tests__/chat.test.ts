@@ -1,72 +1,119 @@
 /**
  * Unit tests for chat message format conversion functions.
+ *
+ * These tests cover conversion between AI SDK v5 UIMessage format
+ * and our internal Message format.
  */
 
-import { CoreMessage } from 'ai';
+import { UIMessage } from 'ai';
 import { Message } from '@/components/types';
 import {
+  uiMessageToMessage,
+  messageToUIMessages,
+  messagesToUIMessages,
+  extractTextFromParts,
+  MessageMetadata,
+  // Legacy aliases for backward compatibility
   aiMessageToMessage,
   messageToAIMessages,
   messagesToAIMessages,
-  MessageMetadata,
 } from '../chat';
 
 describe('chat message conversion', () => {
-  describe('aiMessageToMessage', () => {
+  describe('extractTextFromParts', () => {
+    it('should extract text from parts array', () => {
+      const parts: UIMessage['parts'] = [
+        { type: 'text', text: 'Hello' },
+        { type: 'text', text: ' world!' },
+      ];
+
+      const result = extractTextFromParts(parts);
+
+      expect(result).toBe('Hello world!');
+    });
+
+    it('should return empty string for empty parts', () => {
+      const result = extractTextFromParts([]);
+      expect(result).toBe('');
+    });
+
+    it('should return empty string for undefined parts', () => {
+      const result = extractTextFromParts(undefined as any);
+      expect(result).toBe('');
+    });
+
+    it('should filter non-text parts', () => {
+      const parts: UIMessage['parts'] = [
+        { type: 'text', text: 'Hello' },
+        { type: 'reasoning', reasoning: 'thinking...' } as any,
+        { type: 'text', text: ' world!' },
+      ];
+
+      const result = extractTextFromParts(parts);
+
+      expect(result).toBe('Hello world!');
+    });
+  });
+
+  describe('uiMessageToMessage', () => {
     it('should convert user message correctly', () => {
-      const aiMessage: CoreMessage = {
+      const uiMessage: UIMessage = {
+        id: 'msg-123',
         role: 'user',
-        content: 'Hello, world!',
-      } as CoreMessage;
+        parts: [{ type: 'text', text: 'Hello, world!' }],
+      };
 
       const metadata: MessageMetadata = {
         workspaceId: 'ws-123',
         userId: 'user-456',
       };
 
-      const result = aiMessageToMessage(aiMessage, metadata);
+      const result = uiMessageToMessage(uiMessage, metadata);
 
       expect(result.prompt).toBe('Hello, world!');
       expect(result.response).toBeUndefined();
       expect(result.isComplete).toBe(true);
       expect(result.workspaceId).toBe('ws-123');
       expect(result.userId).toBe('user-456');
-      expect(result.id).toBeDefined();
+      expect(result.id).toBe('msg-123');
     });
 
     it('should convert assistant message correctly', () => {
-      const aiMessage: CoreMessage = {
+      const uiMessage: UIMessage = {
+        id: 'msg-456',
         role: 'assistant',
-        content: 'Hi there!',
-      } as CoreMessage;
+        parts: [{ type: 'text', text: 'Hi there!' }],
+      };
 
-      const result = aiMessageToMessage(aiMessage);
+      const result = uiMessageToMessage(uiMessage);
 
       expect(result.prompt).toBe('');
       expect(result.response).toBe('Hi there!');
       expect(result.isComplete).toBe(true);
-      expect(result.id).toBeDefined();
+      expect(result.id).toBe('msg-456');
     });
 
-    it('should handle array content format', () => {
-      const aiMessage: CoreMessage = {
+    it('should handle multiple text parts', () => {
+      const uiMessage: UIMessage = {
+        id: 'msg-789',
         role: 'user',
-        content: [
+        parts: [
           { type: 'text', text: 'Hello' },
           { type: 'text', text: ' world!' },
         ],
-      } as CoreMessage;
+      };
 
-      const result = aiMessageToMessage(aiMessage);
+      const result = uiMessageToMessage(uiMessage);
 
       expect(result.prompt).toBe('Hello world!');
     });
 
     it('should preserve metadata', () => {
-      const aiMessage: CoreMessage = {
+      const uiMessage: UIMessage = {
+        id: 'msg-123',
         role: 'user',
-        content: 'Test',
-      } as CoreMessage;
+        parts: [{ type: 'text', text: 'Test' }],
+      };
 
       const metadata: MessageMetadata = {
         workspaceId: 'ws-123',
@@ -75,7 +122,7 @@ describe('chat message conversion', () => {
         isApplied: true,
       };
 
-      const result = aiMessageToMessage(aiMessage, metadata);
+      const result = uiMessageToMessage(uiMessage, metadata);
 
       expect(result.workspaceId).toBe('ws-123');
       expect(result.responsePlanId).toBe('plan-456');
@@ -84,16 +131,29 @@ describe('chat message conversion', () => {
     });
 
     it('should throw error for unsupported role', () => {
-      const aiMessage = {
+      const uiMessage = {
+        id: 'msg-123',
         role: 'system',
-        content: 'System message',
-      } as CoreMessage;
+        parts: [{ type: 'text', text: 'System message' }],
+      } as UIMessage;
 
-      expect(() => aiMessageToMessage(aiMessage)).toThrow('Unsupported message role');
+      expect(() => uiMessageToMessage(uiMessage)).toThrow('Unsupported message role');
+    });
+
+    it('should generate id if not provided', () => {
+      const uiMessage = {
+        role: 'user',
+        parts: [{ type: 'text', text: 'Test' }],
+      } as UIMessage;
+
+      const result = uiMessageToMessage(uiMessage);
+
+      expect(result.id).toBeDefined();
+      expect(result.id.length).toBeGreaterThan(0);
     });
   });
 
-  describe('messageToAIMessages', () => {
+  describe('messageToUIMessages', () => {
     it('should convert message with prompt only', () => {
       const message: Message = {
         id: 'msg-123',
@@ -102,11 +162,11 @@ describe('chat message conversion', () => {
         isComplete: true,
       };
 
-      const result = messageToAIMessages(message);
+      const result = messageToUIMessages(message);
 
       expect(result).toHaveLength(1);
       expect(result[0].role).toBe('user');
-      expect(result[0].content).toBe('Hello');
+      expect(result[0].parts).toEqual([{ type: 'text', text: 'Hello' }]);
     });
 
     it('should convert message with response', () => {
@@ -117,13 +177,13 @@ describe('chat message conversion', () => {
         isComplete: true,
       };
 
-      const result = messageToAIMessages(message);
+      const result = messageToUIMessages(message);
 
       expect(result).toHaveLength(2);
       expect(result[0].role).toBe('user');
-      expect(result[0].content).toBe('Hello');
+      expect(result[0].parts).toEqual([{ type: 'text', text: 'Hello' }]);
       expect(result[1].role).toBe('assistant');
-      expect(result[1].content).toBe('Hi there!');
+      expect(result[1].parts).toEqual([{ type: 'text', text: 'Hi there!' }]);
     });
 
     it('should handle empty message', () => {
@@ -134,15 +194,29 @@ describe('chat message conversion', () => {
         isComplete: true,
       };
 
-      const result = messageToAIMessages(message);
+      const result = messageToUIMessages(message);
 
       expect(result).toHaveLength(0);
     });
+
+    it('should generate correct message IDs', () => {
+      const message: Message = {
+        id: 'msg-123',
+        prompt: 'Hello',
+        response: 'Hi',
+        isComplete: true,
+      };
+
+      const result = messageToUIMessages(message);
+
+      expect(result[0].id).toBe('msg-123-user');
+      expect(result[1].id).toBe('msg-123-assistant');
+    });
   });
 
-  describe('messagesToAIMessages', () => {
+  describe('messagesToUIMessages', () => {
     it('should convert empty array', () => {
-      const result = messagesToAIMessages([]);
+      const result = messagesToUIMessages([]);
       expect(result).toHaveLength(0);
     });
 
@@ -162,18 +236,50 @@ describe('chat message conversion', () => {
         },
       ];
 
-      const result = messagesToAIMessages(messages);
+      const result = messagesToUIMessages(messages);
 
       expect(result).toHaveLength(4); // 2 user + 2 assistant
       expect(result[0].role).toBe('user');
-      expect(result[0].content).toBe('Hello');
+      expect(result[0].parts).toEqual([{ type: 'text', text: 'Hello' }]);
       expect(result[1].role).toBe('assistant');
-      expect(result[1].content).toBe('Hi');
+      expect(result[1].parts).toEqual([{ type: 'text', text: 'Hi' }]);
       expect(result[2].role).toBe('user');
-      expect(result[2].content).toBe('How are you?');
+      expect(result[2].parts).toEqual([{ type: 'text', text: 'How are you?' }]);
       expect(result[3].role).toBe('assistant');
-      expect(result[3].content).toBe('Good!');
+      expect(result[3].parts).toEqual([{ type: 'text', text: 'Good!' }]);
+    });
+  });
+
+  describe('legacy aliases', () => {
+    it('aiMessageToMessage should work as alias for uiMessageToMessage', () => {
+      const uiMessage: UIMessage = {
+        id: 'msg-123',
+        role: 'user',
+        parts: [{ type: 'text', text: 'Test' }],
+      };
+
+      const result = aiMessageToMessage(uiMessage);
+
+      expect(result.prompt).toBe('Test');
+    });
+
+    it('messageToAIMessages should work as alias for messageToUIMessages', () => {
+      const message: Message = {
+        id: 'msg-123',
+        prompt: 'Hello',
+        response: undefined,
+        isComplete: true,
+      };
+
+      const result = messageToAIMessages(message);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].role).toBe('user');
+    });
+
+    it('messagesToAIMessages should work as alias for messagesToUIMessages', () => {
+      const result = messagesToAIMessages([]);
+      expect(result).toHaveLength(0);
     });
   });
 });
-

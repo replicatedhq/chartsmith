@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { findSession } from '@/lib/auth/session';
 import { cookies } from 'next/headers';
+import { getGoWorkerUrl } from '@/lib/utils/go-worker';
 
 export const dynamic = 'force-dynamic';
 
@@ -103,28 +104,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-}
-
-/**
- * Gets the Go worker URL from environment variable, database param, or defaults to localhost.
- */
-async function getGoWorkerUrl(): Promise<string> {
-  // Try environment variable first
-  if (process.env.GO_WORKER_URL) {
-    return process.env.GO_WORKER_URL;
-  }
-
-  // Fall back to database param (if helper exists)
-  try {
-    const { getParam } = await import('@/lib/data/param');
-    const paramUrl = await getParam('GO_WORKER_URL');
-    if (paramUrl) {
-      return paramUrl;
-    }
-  } catch (e) {
-    // Ignore if param helper doesn't exist or fails
-  }
-
-  // Default for local development
-  return 'http://localhost:8080';
 }
