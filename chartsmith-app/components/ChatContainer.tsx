@@ -1,15 +1,17 @@
 "use client";
 import React, { useState, useRef, useEffect } from "react";
-import { Send, Loader2, Users, Code, User, Sparkles } from "lucide-react";
+import { Send, Loader2, Code, User, Sparkles, StopCircle } from "lucide-react";
 import { useTheme } from "../contexts/ThemeContext";
 import { Session } from "@/lib/types/session";
 import { ChatMessage } from "./ChatMessage";
+import { AIStreamingMessage } from "./AIStreamingMessage";
 import { messagesAtom, workspaceAtom, isRenderingAtom } from "@/atoms/workspace";
 import { useAtom } from "jotai";
 import { createChatMessageAction } from "@/lib/workspace/actions/create-chat-message";
 import { ScrollingContent } from "./ScrollingContent";
 import { NewChartChatMessage } from "./NewChartChatMessage";
 import { NewChartContent } from "./NewChartContent";
+import { useAIChat } from "@/hooks/useAIChat";
 
 interface ChatContainerProps {
   session: Session;
@@ -24,7 +26,20 @@ export function ChatContainer({ session }: ChatContainerProps) {
   const [selectedRole, setSelectedRole] = useState<"auto" | "developer" | "operator">("auto");
   const [isRoleMenuOpen, setIsRoleMenuOpen] = useState(false);
   const roleMenuRef = useRef<HTMLDivElement>(null);
-  
+
+  // AI SDK chat hook
+  const {
+    messages: aiMessages,
+    input: aiInput,
+    setInput: setAiInput,
+    handleSubmit: handleAiSubmit,
+    isLoading: aiIsLoading,
+    stop: aiStop,
+  } = useAIChat({
+    session,
+    workspaceId: workspace?.id || '',
+  });
+
   // No need for refs as ScrollingContent manages its own scrolling
 
   // Close the role menu when clicking outside
@@ -34,7 +49,7 @@ export function ChatContainer({ session }: ChatContainerProps) {
         setIsRoleMenuOpen(false);
       }
     };
-    
+
     document.addEventListener('mousedown', handleClickOutside);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
@@ -45,16 +60,14 @@ export function ChatContainer({ session }: ChatContainerProps) {
     return null;
   }
 
+  // AI SDK chat bindings
+  const currentInput = aiInput;
+  const setCurrentInput = setAiInput;
+  const currentIsLoading = aiIsLoading;
+
   const handleSubmitChat = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!chatInput.trim() || isRendering) return; // Don't submit if rendering is in progress
-
-    if (!session || !workspace) return;
-
-    const chatMessage = await createChatMessageAction(session, workspace.id, chatInput.trim(), selectedRole);
-    setMessages(prev => [...prev, chatMessage]);
-
-    setChatInput("");
+    handleAiSubmit(e, selectedRole);
   };
   
   const getRoleLabel = (role: "auto" | "developer" | "operator"): string => {
@@ -98,7 +111,8 @@ export function ChatContainer({ session }: ChatContainerProps) {
       <div className="flex-1 h-full">
         <ScrollingContent forceScroll={true}>
           <div className={workspace?.currentRevisionNumber === 0 ? "" : "pb-32"}>
-            {messages.map((item, index) => (
+            {/* Existing messages from database */}
+            {messages.map((item) => (
               <div key={item.id}>
                 <ChatMessage
                   key={item.id}
@@ -110,18 +124,27 @@ export function ChatContainer({ session }: ChatContainerProps) {
                 />
               </div>
             ))}
+            {/* AI SDK streaming messages */}
+            {aiMessages.map((message) => (
+              <AIStreamingMessage
+                key={message.id}
+                message={message}
+                session={session}
+                isStreaming={aiIsLoading && message === aiMessages[aiMessages.length - 1]}
+              />
+            ))}
           </div>
         </ScrollingContent>
       </div>
       <div className={`absolute bottom-0 left-0 right-0 ${theme === "dark" ? "bg-dark-surface" : "bg-white"} border-t ${theme === "dark" ? "border-dark-border" : "border-gray-200"}`}>
         <form onSubmit={handleSubmitChat} className="p-3 relative">
           <textarea
-            value={chatInput}
-            onChange={(e) => setChatInput(e.target.value)}
+            value={currentInput}
+            onChange={(e) => setCurrentInput(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                if (!isRendering) {
+                if (!currentIsLoading) {
                   handleSubmitChat(e);
                 }
               }
@@ -200,19 +223,34 @@ export function ChatContainer({ session }: ChatContainerProps) {
               )}
             </div>
             
+            {/* Stop button (for AI streaming) */}
+            {aiIsLoading && (
+              <button
+                type="button"
+                onClick={() => aiStop()}
+                className={`p-1.5 rounded-full ${
+                  theme === "dark"
+                    ? "text-red-400 hover:text-red-300 hover:bg-dark-border/40"
+                    : "text-red-500 hover:text-red-600 hover:bg-gray-100"
+                }`}
+                title="Stop generating"
+              >
+                <StopCircle className="w-4 h-4" />
+              </button>
+            )}
             {/* Send button */}
             <button
               type="submit"
-              disabled={isRendering}
+              disabled={currentIsLoading}
               className={`p-1.5 rounded-full ${
-                isRendering
+                currentIsLoading
                   ? theme === "dark" ? "text-gray-600 cursor-not-allowed" : "text-gray-300 cursor-not-allowed"
                   : theme === "dark"
                     ? "text-gray-400 hover:text-gray-200 hover:bg-dark-border/40"
                     : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
               }`}
             >
-              {isRendering ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              {currentIsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
             </button>
           </div>
         </form>
