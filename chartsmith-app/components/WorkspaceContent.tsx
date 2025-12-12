@@ -15,6 +15,7 @@ import { EditorLayout } from "@/components/layout/EditorLayout";
 import { WorkspaceContainer } from "@/components/WorkspaceContainer";
 import { CommandMenuWrapper } from "@/components/CommandMenuWrapper";
 import { ChatContainer } from "@/components/ChatContainer";
+import { AIChatContainer } from "@/components/AIChatContainer";
 
 // server actions and types
 import { Conversion, Plan, RenderedWorkspace, Workspace } from "@/lib/types/workspace";
@@ -32,6 +33,12 @@ interface WorkspaceContentProps {
   initialRenders: RenderedWorkspace[];
   initialConversions: Conversion[];
   onOpenCommandMenu?: () => void;
+  /**
+   * Enable the new AI SDK-powered chat container.
+   * When true, uses streaming via Vercel AI SDK.
+   * When false (default), uses the existing Centrifugo-based chat.
+   */
+  useAISDKChat?: boolean;
 }
 
 export function WorkspaceContent({
@@ -40,6 +47,7 @@ export function WorkspaceContent({
   initialPlans,
   initialRenders,
   initialConversions,
+  useAISDKChat = false,
 }: WorkspaceContentProps) {
   // Instead of useHydrateAtoms, use useAtom and useEffect
   const [workspace, setWorkspace] = useAtom(workspaceAtom);
@@ -109,9 +117,15 @@ export function WorkspaceContent({
           }`}>
           <div className={`${(!workspace?.currentRevisionNumber && !workspace?.incompleteRevisionNumber) || (workspace.currentRevisionNumber === 0 && !workspace.incompleteRevisionNumber) ? 'w-full max-w-3xl px-4' : 'w-[480px] h-full flex flex-col'}`}>
             <div className="flex-1 overflow-y-auto">
-              <ChatContainer
-                session={session}
-              />
+              {useAISDKChat ? (
+                <AIChatContainer
+                  session={session}
+                />
+              ) : (
+                <ChatContainer
+                  session={session}
+                />
+              )}
             </div>
           </div>
         </div>

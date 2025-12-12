@@ -22,7 +22,8 @@ const tokenAuthPaths = [
   '/api/auth/status',
   '/api/upload-chart',
   '/api/workspace',
-  '/api/push'
+  '/api/push',
+  '/api/chat'  // AI SDK streaming endpoint
 ];
 
 // This function can be marked `async` if using `await` inside
@@ -52,8 +53,19 @@ export function middleware(request: NextRequest) {
   // For all other paths, check for session cookie
   const session = request.cookies.get('session');
   
-  // If no session, redirect to login
+  // If no session, handle based on path type
   if (!session) {
+    // For API routes, return 401 instead of redirecting
+    if (pathname.startsWith('/api/')) {
+      return new NextResponse(
+        JSON.stringify({ error: 'Unauthorized' }),
+        {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }
+    // For browser routes, redirect to login
     return NextResponse.redirect(new URL('/login', request.url));
   }
   

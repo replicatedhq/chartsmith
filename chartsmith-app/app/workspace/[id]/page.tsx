@@ -39,6 +39,9 @@ export default async function WorkspacePage({
     listWorkspaceConversionsAction(session, workspace.id)
   ])
 
+  // Check if AI SDK chat is enabled via environment variable
+  const useAISDKChat = process.env.USE_AI_SDK_CHAT === 'true';
+
   // Pass the initial data as props
   return (
     <WorkspaceContent
@@ -47,6 +50,7 @@ export default async function WorkspacePage({
       initialPlans={plans}
       initialRenders={renders}
       initialConversions={conversions}
+      useAISDKChat={useAISDKChat}
     />
   );
 }
