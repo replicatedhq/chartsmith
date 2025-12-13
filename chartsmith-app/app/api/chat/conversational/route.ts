@@ -17,7 +17,6 @@ import { streamText, tool } from 'ai';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { userIdFromExtensionToken } from '@/lib/auth/extension-token';
 import { getChatMessage, getWorkspace } from '@/lib/workspace/workspace';
 import { appendChatMessageResponse, markChatMessageComplete, getWorkspaceIdForChatMessage } from '@/lib/workspace/chat-helpers';
 import { publishChatMessageUpdate } from '@/lib/realtime/centrifugo-publish';
@@ -164,31 +163,32 @@ export async function POST(req: NextRequest) {
     const chatHistory = await getPreviousChatHistory(workspaceId, chatMessageId);
     console.log(`[CHAT API] Context loaded: ${relevantFiles.length} files, ${chatHistory.length} history messages`);
 
-    // Build messages array with context (like Go implementation)
+    // Build system prompt (includes instructions and chart context)
+    const systemPrompt = `${CHAT_SYSTEM_PROMPT}
+
+${CHAT_INSTRUCTIONS}
+
+I am working on a Helm chart that has the following structure: ${chartStructure}
+
+${relevantFiles.map(file => `File: ${file.filePath}, Content: ${file.content}`).join('\n\n')}`;
+
+    // Build messages array (conversation history + current message)
     const messages = [
-      { role: 'assistant' as const, content: CHAT_SYSTEM_PROMPT },
-      { role: 'assistant' as const, content: CHAT_INSTRUCTIONS },
-      // Add chart structure context
-      { role: 'assistant' as const, content: `I am working on a Helm chart that has the following structure: ${chartStructure}` },
-      // Add relevant files
-      ...relevantFiles.map(file => ({
-        role: 'assistant' as const,
-        content: `File: ${file.filePath}, Content: ${file.content}`
-      })),
       // Add conversation history
       ...chatHistory,
       // User's current message
       { role: 'user' as const, content: chatMessage.prompt },
     ];
 
-    console.log(`[CHAT API] Built ${messages.length} messages, calling streamText()...`);
+    console.log(`[CHAT API] Built system prompt and ${messages.length} messages, calling streamText()...`);
 
     let chunkCount = 0;
     let totalChars = 0;
 
     // Stream the response using Vercel AI SDK
     const result = streamText({
-      model: anthropic('claude-3-7-sonnet-20250219'),
+      model: anthropic('claude-3-5-sonnet-20241022'),
+      system: systemPrompt,
       messages,
       tools,
       onChunk: async ({ chunk }) => {
