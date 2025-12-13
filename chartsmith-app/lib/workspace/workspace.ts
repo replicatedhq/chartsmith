@@ -239,7 +239,11 @@ export async function createChatMessage(userId: string, workspaceId: string, par
         additionalFiles: params.additionalFiles,
       });
     } else if (params.knownIntent === ChatMessageIntent.NON_PLAN) {
-      await client.query(`SELECT pg_notify('new_nonplan_chat_message', $1)`, [chatMessageId]);
+      // Enqueue work for Next.js API route to handle conversational chat with Vercel AI SDK
+      await enqueueWork("new_ai_sdk_chat", {
+        chatMessageId,
+        workspaceId,
+      });
     } else if (params.knownIntent === ChatMessageIntent.RENDER) {
       await renderWorkspace(workspaceId, chatMessageId);
     } else if (params.knownIntent === ChatMessageIntent.CONVERT_K8S_TO_HELM) {

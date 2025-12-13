@@ -44,6 +44,15 @@ func StartListeners(ctx context.Context) error {
 		return nil
 	}, nil)
 
+	// Handler for Vercel AI SDK chat (Next.js API route)
+	l.AddHandler(ctx, "new_ai_sdk_chat", 5, time.Second*30, func(notification *pgconn.Notification) error {
+		if err := handleNewAISDKChatNotification(ctx, notification.Payload); err != nil {
+			logger.Error(fmt.Errorf("failed to handle new AI SDK chat notification: %w", err))
+			return fmt.Errorf("failed to handle new AI SDK chat notification: %w", err)
+		}
+		return nil
+	}, nil)
+
 	l.AddHandler(ctx, "execute_plan", 5, time.Second*10, func(notification *pgconn.Notification) error {
 		if err := handleExecutePlanNotification(ctx, notification.Payload); err != nil {
 			logger.Error(fmt.Errorf("failed to handle execute plan notification: %w", err))
