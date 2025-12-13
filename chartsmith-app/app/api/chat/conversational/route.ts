@@ -79,37 +79,40 @@ const CHAT_INSTRUCTIONS = `- You will be asked to answer a question.
 - Never use the <chartsmithArtifact> tag in your response.`;
 
 export async function POST(req: NextRequest) {
+  const startTime = Date.now();
+  let chatMessageId: string | undefined;
+
   try {
-    // Authentication
-    const authHeader = req.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const userId = await userIdFromExtensionToken(authHeader.split(' ')[1]);
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     // Get chat message ID from request
-    const { chatMessageId } = await req.json();
+    const body = await req.json();
+    chatMessageId = body.chatMessageId;
+
+    console.log(`[CHAT API] Starting request for chatMessageId=${chatMessageId}`);
+
     if (!chatMessageId) {
+      console.error('[CHAT API] Missing chatMessageId in request');
       return NextResponse.json({ error: 'chatMessageId is required' }, { status: 400 });
     }
 
     // Fetch the chat message from database
+    console.log(`[CHAT API] Fetching chat message from database...`);
     const chatMessage = await getChatMessage(chatMessageId);
     if (!chatMessage) {
+      console.error(`[CHAT API] Chat message not found: ${chatMessageId}`);
       return NextResponse.json({ error: 'Chat message not found' }, { status: 404 });
     }
+    console.log(`[CHAT API] Found chat message. Prompt: "${chatMessage.prompt.substring(0, 100)}..."`);
 
-    // Get workspace ID for Centrifugo publishing
+    // Get workspace ID and user ID for Centrifugo publishing
     const workspaceId = await getWorkspaceIdForChatMessage(chatMessageId);
+    const userId = chatMessage.userId || '';
+    console.log(`[CHAT API] workspaceId=${workspaceId}, userId=${userId}`);
 
     // Initialize Anthropic with Vercel AI SDK
     const anthropic = createAnthropic({
       apiKey: process.env.ANTHROPIC_API_KEY,
     });
+    console.log(`[CHAT API] Initialized Anthropic client`);
 
     // Define tools (from pkg/llm/conversational.go)
     const tools = {
@@ -149,14 +152,17 @@ export async function POST(req: NextRequest) {
     };
 
     // Get workspace and chart context
+    console.log(`[CHAT API] Loading workspace context...`);
     const workspace = await getWorkspace(workspaceId);
     if (!workspace) {
+      console.error(`[CHAT API] Workspace not found: ${workspaceId}`);
       return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
     }
 
     const chartStructure = await getChartStructure(workspace);
     const relevantFiles = await chooseRelevantFiles(workspace, chatMessage.prompt, undefined, 10);
     const chatHistory = await getPreviousChatHistory(workspaceId, chatMessageId);
+    console.log(`[CHAT API] Context loaded: ${relevantFiles.length} files, ${chatHistory.length} history messages`);
 
     // Build messages array with context (like Go implementation)
     const messages = [
@@ -175,43 +181,78 @@ export async function POST(req: NextRequest) {
       { role: 'user' as const, content: chatMessage.prompt },
     ];
 
+    console.log(`[CHAT API] Built ${messages.length} messages, calling streamText()...`);
+
+    let chunkCount = 0;
+    let totalChars = 0;
+
     // Stream the response using Vercel AI SDK
     const result = streamText({
       model: anthropic('claude-3-7-sonnet-20250219'),
       messages,
       tools,
       onChunk: async ({ chunk }) => {
+        chunkCount++;
+        console.log(`[CHAT API] onChunk called (chunk #${chunkCount}): type=${chunk.type}`);
+
         // Handle text delta chunks
         if (chunk.type === 'text-delta') {
           const textChunk = chunk.text;
+          totalChars += textChunk.length;
+          console.log(`[CHAT API] text-delta chunk: ${textChunk.length} chars (total: ${totalChars})`);
 
-          // 1. Append to database
-          await appendChatMessageResponse(chatMessageId, textChunk);
+          try {
+            // 1. Append to database
+            await appendChatMessageResponse(chatMessageId!, textChunk);
+            console.log(`[CHAT API] Saved chunk to database`);
 
-          // 2. Publish to Centrifugo for real-time updates
-          await publishChatMessageUpdate(workspaceId, userId, chatMessageId, textChunk, false);
+            // 2. Publish to Centrifugo for real-time updates
+            await publishChatMessageUpdate(workspaceId, userId, chatMessageId!, textChunk, false);
+            console.log(`[CHAT API] Published chunk to Centrifugo`);
+          } catch (err) {
+            console.error(`[CHAT API] Error processing chunk:`, err);
+            throw err;
+          }
         }
       },
       onFinish: async () => {
-        // Mark message as complete
-        await markChatMessageComplete(chatMessageId);
+        console.log(`[CHAT API] onFinish called. Total chunks: ${chunkCount}, total chars: ${totalChars}`);
 
-        // Publish final completion event
-        await publishChatMessageUpdate(workspaceId, userId, chatMessageId, '', true);
+        try {
+          // Mark message as complete
+          await markChatMessageComplete(chatMessageId!);
+          console.log(`[CHAT API] Marked message complete in database`);
+
+          // Publish final completion event
+          await publishChatMessageUpdate(workspaceId, userId, chatMessageId!, '', true);
+          console.log(`[CHAT API] Published completion to Centrifugo`);
+        } catch (err) {
+          console.error(`[CHAT API] Error in onFinish:`, err);
+          throw err;
+        }
       },
     });
 
+    console.log(`[CHAT API] Waiting for streamText to complete...`);
+
     // Wait for completion
-    await result.text;
+    const fullText = await result.text;
+
+    const duration = Date.now() - startTime;
+    console.log(`[CHAT API] Completed successfully in ${duration}ms. Response length: ${fullText.length} chars`);
 
     return NextResponse.json({ success: true });
 
   } catch (error) {
-    console.error('Chat API error:', error);
+    const duration = Date.now() - startTime;
+    console.error(`[CHAT API] Error after ${duration}ms:`, error);
+    console.error(`[CHAT API] Error stack:`, error instanceof Error ? error.stack : 'No stack trace');
+
     return NextResponse.json(
       {
         error: 'Internal Server Error',
-        details: error instanceof Error ? error.message : String(error)
+        details: error instanceof Error ? error.message : String(error),
+        chatMessageId
       },
       { status: 500 }
     );

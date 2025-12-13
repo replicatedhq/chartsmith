@@ -26,9 +26,12 @@ export async function publishToCentrifugo(
 
     const channel = `${workspaceId}#${userId}`;
 
+    // Flatten the event data to match what the frontend expects
+    // Frontend expects: { eventType: "...", ...otherFields }
     const messageData = {
-      event_type: event.eventType,
-      data: event.data,
+      eventType: event.eventType,
+      workspaceId,
+      ...event.data,
     };
 
     // Publish to Centrifugo

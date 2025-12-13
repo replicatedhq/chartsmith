@@ -87,6 +87,29 @@ export function useCentrifugo({
   }, [session, setMessages, setWorkspace]);
 
   const handleChatMessageUpdated = useCallback((data: CentrifugoMessageData) => {
+    // Handle conversational chat streaming format (new Vercel AI SDK format)
+    if (data.id && data.chunk !== undefined) {
+      setMessages(prev => {
+        const newMessages = [...prev];
+        const index = newMessages.findIndex(m => m.id === data.id);
+
+        if (index >= 0) {
+          const existingMessage = newMessages[index];
+          const updatedResponse = (existingMessage.response || '') + data.chunk;
+
+          newMessages[index] = {
+            ...existingMessage,
+            response: updatedResponse,
+            isComplete: data.isComplete || false,
+            isIntentComplete: data.isComplete || false,
+          };
+        }
+        return newMessages;
+      });
+      return;
+    }
+
+    // Handle legacy chat message format
     if (!data.chatMessage) return;
 
     const chatMessage = data.chatMessage;
