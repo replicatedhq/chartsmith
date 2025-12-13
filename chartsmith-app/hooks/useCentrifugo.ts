@@ -103,6 +103,8 @@ export function useCentrifugo({
             isComplete: data.isComplete || false,
             isIntentComplete: data.isComplete || false,
           };
+        } else {
+          console.warn(`[Centrifugo] Received chunk for unknown message: ${data.id}`);
         }
         return newMessages;
       });
