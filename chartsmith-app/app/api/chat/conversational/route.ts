@@ -82,6 +82,20 @@ export async function POST(req: NextRequest) {
   let chatMessageId: string | undefined;
 
   try {
+    // Validate Authorization header
+    const authHeader = req.headers.get('authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.error('[CHAT API] Missing or invalid Authorization header');
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+    const expectedToken = process.env.ANTHROPIC_API_KEY;
+    if (token !== expectedToken) {
+      console.error('[CHAT API] Invalid Bearer token');
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     // Get chat message ID from request
     const body = await req.json();
     chatMessageId = body.chatMessageId;

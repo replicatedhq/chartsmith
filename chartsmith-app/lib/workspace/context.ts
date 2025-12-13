@@ -90,6 +90,7 @@ export async function chooseRelevantFiles(
 
     // Query files with embeddings and calculate cosine similarity
     // Using pgvector's <=> operator for cosine distance
+    // Cast the embeddings array to vector type for proper pgvector operation
     const query = `
       WITH similarities AS (
         SELECT
@@ -98,7 +99,7 @@ export async function chooseRelevantFiles(
           file_path,
           content,
           embeddings,
-          1 - (embeddings <=> $1) as similarity
+          1 - (embeddings <=> $1::vector) as similarity
         FROM workspace_file
         WHERE workspace_id = $2
         AND revision_number = $3

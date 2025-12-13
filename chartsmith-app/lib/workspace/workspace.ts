@@ -490,7 +490,8 @@ export async function getChatMessage(chatMessageId: string): Promise<ChatMessage
         response_conversion_id,
         response_rollback_to_revision_number,
         revision_number,
-        sent_by
+        sent_by,
+        message_from_persona
       FROM workspace_chat
       WHERE id = $1`;
 
