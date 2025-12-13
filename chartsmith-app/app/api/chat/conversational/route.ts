@@ -22,6 +22,7 @@ import { getChatMessage, getWorkspace } from '@/lib/workspace/workspace';
 import { appendChatMessageResponse, markChatMessageComplete, getWorkspaceIdForChatMessage } from '@/lib/workspace/chat-helpers';
 import { publishChatMessageUpdate } from '@/lib/realtime/centrifugo-publish';
 import { getChartStructure, chooseRelevantFiles, getPreviousChatHistory } from '@/lib/workspace/context';
+import { getLatestSubchartVersion } from '@/lib/recommendations/subchart';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300; // 5 minutes
@@ -118,9 +119,13 @@ export async function POST(req: NextRequest) {
           chart_name: z.string().describe('The subchart name to get the latest version of'),
         }),
         execute: async ({ chart_name }) => {
-          // TODO: Implement getLatestSubchartVersion from pkg/recommendations
-          // For now, return placeholder
-          return '1.0.0';
+          try {
+            const version = await getLatestSubchartVersion(chart_name);
+            return version;
+          } catch (error) {
+            console.error(`Failed to get subchart version for ${chart_name}:`, error);
+            return 'unknown';
+          }
         },
       }),
       latest_kubernetes_version: tool({
