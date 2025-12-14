@@ -1,6 +1,5 @@
 'use server';
 
-import { getParam } from "@/lib/data/param";
 import { logger } from "@/lib/utils/logger";
 
 /**
@@ -10,15 +9,19 @@ import { logger } from "@/lib/utils/logger";
 export async function processAIChatMessage(chatMessageId: string): Promise<void> {
   try {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-    const apiKey = await getParam('ANTHROPIC_API_KEY');
 
-    // Get a valid auth token for server-to-server communication
-    // For now, we'll use a simple approach - the API route should accept requests from localhost
+    // Use process.env.ANTHROPIC_API_KEY to match what the API route validates against
+    // Both Go worker and Next.js should have ANTHROPIC_API_KEY in their environment
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+
+    if (!apiKey) {
+      throw new Error('ANTHROPIC_API_KEY not set in environment');
+    }
+
     const response = await fetch(`${appUrl}/api/chat/conversational`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        // TODO: Add proper server-to-server authentication
         'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({ chatMessageId }),

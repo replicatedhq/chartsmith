@@ -46,6 +46,9 @@ export function useCentrifugo({
 
   const [isReconnecting, setIsReconnecting] = useState(false);
 
+  // Buffer for chunks that arrive before the message is loaded
+  const pendingChunksRef = useRef<Map<string, string>>(new Map());
+
   const [workspace, setWorkspace] = useAtom(workspaceAtom)
   const [, setRenders] = useAtom(rendersAtom)
   const [, setMessages] = useAtom(messagesAtom)
@@ -95,7 +98,15 @@ export function useCentrifugo({
 
         if (index >= 0) {
           const existingMessage = newMessages[index];
-          const updatedResponse = (existingMessage.response || '') + data.chunk;
+
+          // Apply any pending chunks that arrived before this message was loaded
+          let pendingChunks = '';
+          if (data.id && pendingChunksRef.current.has(data.id)) {
+            pendingChunks = pendingChunksRef.current.get(data.id) || '';
+            pendingChunksRef.current.delete(data.id);
+          }
+
+          const updatedResponse = (existingMessage.response || '') + pendingChunks + data.chunk;
 
           newMessages[index] = {
             ...existingMessage,
@@ -103,8 +114,11 @@ export function useCentrifugo({
             isComplete: data.isComplete || false,
             isIntentComplete: data.isComplete || false,
           };
-        } else {
-          console.warn(`[Centrifugo] Received chunk for unknown message: ${data.id}`);
+        } else if (data.id) {
+          // Message not yet in state - buffer the chunk for when it arrives
+          console.warn(`[Centrifugo] Buffering chunk for message not yet in state: ${data.id}`);
+          const existingBuffer = pendingChunksRef.current.get(data.id) || '';
+          pendingChunksRef.current.set(data.id, existingBuffer + data.chunk);
         }
         return newMessages;
       });
