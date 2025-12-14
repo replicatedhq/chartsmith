@@ -124,6 +124,12 @@ export async function chooseRelevantFiles(
     const extensionsWithHighSimilarity = ['.yaml', '.yml', '.tpl'];
 
     for (const row of result.rows) {
+      // Skip if already in map with similarity 1.0 (pre-inserted Chart.yaml or values.yaml)
+      const existing = fileMap.get(row.id);
+      if (existing && existing.similarity === 1.0) {
+        continue;
+      }
+
       let similarity = row.similarity;
 
       // Reduce similarity for non-template files
@@ -132,8 +138,9 @@ export async function chooseRelevantFiles(
         similarity = similarity - 0.25;
       }
 
-      // Force high similarity for Chart.yaml and values.yaml
-      if (row.file_path === 'Chart.yaml' || row.file_path === 'values.yaml') {
+      // Force high similarity for Chart.yaml and values.yaml (any path)
+      if (row.file_path.endsWith('/Chart.yaml') || row.file_path === 'Chart.yaml' ||
+          row.file_path.endsWith('/values.yaml') || row.file_path === 'values.yaml') {
         similarity = 1.0;
       }
 
