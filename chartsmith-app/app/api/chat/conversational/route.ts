@@ -125,7 +125,13 @@ export async function POST(req: NextRequest) {
 
     // Get workspace ID and user ID for Centrifugo publishing
     const workspaceId = await getWorkspaceIdForChatMessage(chatMessageId);
-    const userId = chatMessage.userId || '';
+    const userId = chatMessage.userId;
+
+    if (!userId) {
+      console.error(`[CHAT API] Chat message missing userId: ${chatMessageId}`);
+      return NextResponse.json({ error: 'Chat message missing userId' }, { status: 400 });
+    }
+
     console.log(`[CHAT API] workspaceId=${workspaceId}, userId=${userId}`);
 
     // Initialize Anthropic with Vercel AI SDK

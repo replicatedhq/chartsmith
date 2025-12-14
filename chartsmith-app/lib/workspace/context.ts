@@ -48,10 +48,12 @@ export async function chooseRelevantFiles(
 
     const fileMap = new Map<string, RelevantFile>();
 
-    // Always include Chart.yaml if it exists
+    // Always include Chart.yaml if it exists (match nested paths too)
     const chartYamlResult = await db.query(
       `SELECT id, revision_number, file_path, content FROM workspace_file
-       WHERE workspace_id = $1 AND revision_number = $2 AND file_path = 'Chart.yaml'`,
+       WHERE workspace_id = $1 AND revision_number = $2
+       AND (file_path = 'Chart.yaml' OR file_path LIKE '%/Chart.yaml')
+       LIMIT 1`,
       [workspace.id, workspace.currentRevisionNumber]
     );
 
@@ -68,10 +70,12 @@ export async function chooseRelevantFiles(
       });
     }
 
-    // Always include values.yaml if it exists
+    // Always include values.yaml if it exists (match nested paths too)
     const valuesYamlResult = await db.query(
       `SELECT id, revision_number, file_path, content FROM workspace_file
-       WHERE workspace_id = $1 AND revision_number = $2 AND file_path = 'values.yaml'`,
+       WHERE workspace_id = $1 AND revision_number = $2
+       AND (file_path = 'values.yaml' OR file_path LIKE '%/values.yaml')
+       LIMIT 1`,
       [workspace.id, workspace.currentRevisionNumber]
     );
 

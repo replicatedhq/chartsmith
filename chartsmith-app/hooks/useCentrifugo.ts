@@ -47,7 +47,8 @@ export function useCentrifugo({
   const [isReconnecting, setIsReconnecting] = useState(false);
 
   // Buffer for chunks that arrive before the message is loaded
-  const pendingChunksRef = useRef<Map<string, string>>(new Map());
+  // Store both chunks and completion state
+  const pendingChunksRef = useRef<Map<string, { chunks: string; isComplete: boolean }>>(new Map());
 
   const [workspace, setWorkspace] = useAtom(workspaceAtom)
   const [, setRenders] = useAtom(rendersAtom)
@@ -115,10 +116,13 @@ export function useCentrifugo({
             pendingChunksRef.current.delete(data.id);
           }
         } else if (data.id) {
-          // Message not yet in state - buffer the chunk for when it arrives
+          // Message not yet in state - buffer the chunk AND completion state
           console.warn(`[Centrifugo] Buffering chunk for message not yet in state: ${data.id}`);
-          const existingBuffer = pendingChunksRef.current.get(data.id) || '';
-          pendingChunksRef.current.set(data.id, existingBuffer + data.chunk);
+          const existingBuffer = pendingChunksRef.current.get(data.id) || { chunks: '', isComplete: false };
+          pendingChunksRef.current.set(data.id, {
+            chunks: existingBuffer.chunks + (data.chunk || ''),
+            isComplete: data.isComplete || existingBuffer.isComplete
+          });
         }
         return newMessages;
       });
