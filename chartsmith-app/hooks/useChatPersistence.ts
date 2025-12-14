@@ -8,8 +8,7 @@
 'use client';
 
 import { useCallback, useRef, useEffect, useState } from 'react';
-import { CoreMessage } from 'ai';
-import { ChatPersistenceService } from '@/lib/services/chat-persistence';
+import { ChatPersistenceService, SimpleMessage } from '@/lib/services/chat-persistence';
 
 interface UseChatPersistenceOptions {
   workspaceId: string;
@@ -18,13 +17,13 @@ interface UseChatPersistenceOptions {
 
 interface UseChatPersistenceReturn {
   /** Load chat history */
-  loadHistory: () => Promise<CoreMessage[]>;
+  loadHistory: () => Promise<SimpleMessage[]>;
   /** Save completed message pair */
-  saveMessage: (userMsg: CoreMessage, assistantMsg: CoreMessage) => Promise<void>;
+  saveMessage: (userMsg: SimpleMessage, assistantMsg: SimpleMessage) => Promise<void>;
   /** Whether history is loading */
   isLoadingHistory: boolean;
   /** Initial messages loaded from history */
-  initialMessages: CoreMessage[];
+  initialMessages: SimpleMessage[];
   /** Error from persistence operations */
   error: Error | null;
 }
@@ -38,7 +37,7 @@ export function useChatPersistence({
 }: UseChatPersistenceOptions): UseChatPersistenceReturn {
   const serviceRef = useRef<ChatPersistenceService | null>(null);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
-  const [initialMessages, setInitialMessages] = useState<CoreMessage[]>([]);
+  const [initialMessages, setInitialMessages] = useState<SimpleMessage[]>([]);
   const [error, setError] = useState<Error | null>(null);
 
   // Initialize service
@@ -72,7 +71,7 @@ export function useChatPersistence({
     loadInitialHistory();
   }, [workspaceId, enabled]);
 
-  const loadHistory = useCallback(async (): Promise<CoreMessage[]> => {
+  const loadHistory = useCallback(async (): Promise<SimpleMessage[]> => {
     if (!serviceRef.current) {
       return [];
     }
@@ -86,7 +85,7 @@ export function useChatPersistence({
   }, []);
 
   const saveMessage = useCallback(
-    async (userMsg: CoreMessage, assistantMsg: CoreMessage): Promise<void> => {
+    async (userMsg: SimpleMessage, assistantMsg: SimpleMessage): Promise<void> => {
       if (!serviceRef.current || !enabled) {
         return;
       }
