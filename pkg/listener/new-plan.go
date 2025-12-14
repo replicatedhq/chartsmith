@@ -11,22 +11,30 @@ import (
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 	"github.com/replicatedhq/chartsmith/pkg/realtime"
 	realtimetypes "github.com/replicatedhq/chartsmith/pkg/realtime/types"
+	"github.com/replicatedhq/chartsmith/pkg/backend"
 	"github.com/replicatedhq/chartsmith/pkg/workspace"
 	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
+	"go.uber.org/zap"
 )
 
 type newPlanPayload struct {
-	PlanID          string                `json:"planId"`
-	AdditionalFiles []workspacetypes.File `json:"additionalFiles,omitempty"`
+	PlanID              string                `json:"planId"`
+	AdditionalFiles     []workspacetypes.File `json:"additionalFiles,omitempty"`
+	UseSecureBuildImages bool                  `json:"useSecureBuildImages,omitempty"`
 }
 
 func handleNewPlanNotification(ctx context.Context, payload string) error {
-	logger.Info("New plan notification received")
+	logger.Info("New plan notification received", zap.String("payload", payload))
 
 	var p newPlanPayload
 	if err := json.Unmarshal([]byte(payload), &p); err != nil {
 		return fmt.Errorf("failed to unmarshal payload: %w", err)
 	}
+
+	logger.Info("Parsed new_plan payload",
+		zap.String("planID", p.PlanID),
+		zap.Bool("useSecureBuildImages", p.UseSecureBuildImages),
+		zap.Int("additionalFilesCount", len(p.AdditionalFiles)))
 
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
@@ -60,7 +68,7 @@ func handleNewPlanNotification(ctx context.Context, payload string) error {
 	doneCh := make(chan error, 1)
 	go func() {
 		if w.CurrentRevision == 0 {
-			if err := createInitialPlan(ctx, streamCh, doneCh, w, plan, p.AdditionalFiles); err != nil {
+			if err := createInitialPlan(ctx, streamCh, doneCh, w, plan, p.AdditionalFiles, p.UseSecureBuildImages); err != nil {
 				fmt.Printf("Failed to create initial plan: %v\n", err)
 				doneCh <- fmt.Errorf("error creating initial plan: %w", err)
 			}
@@ -123,7 +131,7 @@ func handleNewPlanNotification(ctx context.Context, payload string) error {
 	return nil
 }
 
-func createInitialPlan(ctx context.Context, streamCh chan string, doneCh chan error, w *workspacetypes.Workspace, plan *workspacetypes.Plan, additionalFiles []workspacetypes.File) error {
+func createInitialPlan(ctx context.Context, streamCh chan string, doneCh chan error, w *workspacetypes.Workspace, plan *workspacetypes.Plan, additionalFiles []workspacetypes.File, useSecureBuildImages bool) error {
 	chatMessages, err := workspace.ListChatMessagesForWorkspace(ctx, w.ID)
 	if err != nil {
 		return fmt.Errorf("error listing chat messages after plan: %w", err)
@@ -132,6 +140,9 @@ func createInitialPlan(ctx context.Context, streamCh chan string, doneCh chan er
 	opts := llm.CreateInitialPlanOpts{
 		ChatMessages:    chatMessages,
 		AdditionalFiles: additionalFiles,
+		Options: backend.Options{
+			UseSecureBuildImages: useSecureBuildImages,
+		},
 	}
 	if err := llm.CreateInitialPlan(ctx, streamCh, doneCh, opts); err != nil {
 		return fmt.Errorf("error creating initial plan: %w", err)

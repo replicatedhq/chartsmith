@@ -12,13 +12,15 @@ import (
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 	"github.com/replicatedhq/chartsmith/pkg/realtime"
 	realtimetypes "github.com/replicatedhq/chartsmith/pkg/realtime/types"
+	"github.com/replicatedhq/chartsmith/pkg/backend"
 	"github.com/replicatedhq/chartsmith/pkg/workspace"
 	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
 	"go.uber.org/zap"
 )
 
 type executePlanPayload struct {
-	PlanID string `json:"planId"`
+	PlanID  string       `json:"planId"`
+	Options backend.Options `json:"options,omitempty"`
 }
 
 func handleExecutePlanNotification(ctx context.Context, payload string) error {
@@ -164,6 +166,7 @@ func handleExecutePlanNotification(ctx context.Context, payload string) error {
 			// This is what starts the actual processing
 			if err := persistence.EnqueueWork(ctx, "apply_plan", map[string]interface{}{
 				"planId": plan.ID,
+				"options": p.Options,
 			}); err != nil {
 				return fmt.Errorf("failed to enqueue apply plan: %w", err)
 			}

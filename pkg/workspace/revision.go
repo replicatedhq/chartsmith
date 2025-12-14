@@ -5,6 +5,7 @@ import (
 
 	"github.com/replicatedhq/chartsmith/pkg/logger"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
+	"github.com/replicatedhq/chartsmith/pkg/backend"
 	"github.com/replicatedhq/chartsmith/pkg/workspace/types"
 	"go.uber.org/zap"
 )
@@ -44,7 +45,7 @@ func GetRevision(ctx context.Context, workspaceID string, revisionNumber int) (*
 	return &revision, nil
 }
 
-func CreateRevision(ctx context.Context, workspaceID string, planID *string, userID string) (types.Revision, error) {
+func CreateRevision(ctx context.Context, workspaceID string, planID *string, userID string, options backend.Options) (types.Revision, error) {
 	logger.Info("Creating revision",
 		zap.String("workspace_id", workspaceID),
 		zap.String("user_id", userID))
@@ -141,6 +142,7 @@ func CreateRevision(ctx context.Context, workspaceID string, planID *string, use
 
 	if err := persistence.EnqueueWork(ctx, "execute_plan", map[string]interface{}{
 		"planId": planID,
+		"options": options,
 	}); err != nil {
 		logger.Warn("failed to enqueue execute_plan notification", zap.Error(err))
 		// but do not exit

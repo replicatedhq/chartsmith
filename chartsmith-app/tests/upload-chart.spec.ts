@@ -98,7 +98,7 @@ test('upload helm chart', async ({ page }) => {
     await page.screenshot({ path: './test-results/upload-proceed-button-verification.png' });
 
     // Test should fail if button is not visible in viewport
-    expect(isInViewport).toBe(true, 'Proceed button is not visible in the viewport without scrolling');
+    expect(isInViewport).toBe(true);
 
     // click on the Proceed button
     await proceedButton.click();

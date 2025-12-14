@@ -159,6 +159,7 @@ export interface CreateChatMessageParams {
   additionalFiles?: WorkspaceFile[];
   responseRollbackToRevisionNumber?: number;
   messageFromPersona?: ChatMessageFromPersona;
+  useSecureBuildImages?: boolean;
 }
 
 export async function createChatMessage(userId: string, workspaceId: string, params: CreateChatMessageParams): Promise<ChatMessage> {
@@ -237,9 +238,13 @@ export async function createChatMessage(userId: string, workspaceId: string, par
       await enqueueWork("new_plan", {
         planId: plan.id,
         additionalFiles: params.additionalFiles,
+        useSecureBuildImages: params.useSecureBuildImages,
       });
     } else if (params.knownIntent === ChatMessageIntent.NON_PLAN) {
-      await client.query(`SELECT pg_notify('new_nonplan_chat_message', $1)`, [chatMessageId]);
+      await enqueueWork("conversational", {
+        chatMessageId,
+        workspaceId,
+      });
     } else if (params.knownIntent === ChatMessageIntent.RENDER) {
       await renderWorkspace(workspaceId, chatMessageId);
     } else if (params.knownIntent === ChatMessageIntent.CONVERT_K8S_TO_HELM) {
@@ -1055,7 +1060,10 @@ export async function createRevision(plan: Plan, userID: string): Promise<number
     // Commit transaction
     await db.query('COMMIT');
 
-    await enqueueWork("execute_plan", { planId: plan.id });
+    await enqueueWork("execute_plan", { 
+      planId: plan.id,
+      options: { useSecureBuildImages: false }  // Default options for frontend-created revisions
+    });
 
     return newRevisionNumber;
 

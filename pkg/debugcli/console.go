@@ -16,6 +16,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/pkg/errors"
+	"github.com/replicatedhq/chartsmith/pkg/backend"
 	"github.com/replicatedhq/chartsmith/pkg/llm"
 	llmtypes "github.com/replicatedhq/chartsmith/pkg/llm/types"
 	"github.com/replicatedhq/chartsmith/pkg/logger"
@@ -1363,7 +1364,7 @@ func (c *DebugConsole) executePlan(args []string) error {
 	doneCh := make(chan error)
 
 	go func() {
-		_, err := llm.ExecuteAction(c.ctx, actionPlanWithPath, plan, currentContent, interimContentCh)
+		_, err := llm.ExecuteAction(c.ctx, actionPlanWithPath, plan, currentContent, interimContentCh, backend.Options{})
 		if err != nil {
 			fmt.Println(dimText(fmt.Sprintf("Error: %v", err)))
 		}

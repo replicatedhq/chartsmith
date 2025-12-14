@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/replicatedhq/chartsmith/pkg/backend"
 	llmtypes "github.com/replicatedhq/chartsmith/pkg/llm/types"
 	"github.com/replicatedhq/chartsmith/pkg/param"
 	workspacetypes "github.com/replicatedhq/chartsmith/pkg/workspace/types"
@@ -1131,7 +1132,7 @@ unsupported:
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			patchStreamCh := make(chan string)
-			got, err := ExecuteAction(ctx, tt.actionPlanWithPath, tt.plan, tt.currentContent, patchStreamCh)
+			got, err := ExecuteAction(ctx, tt.actionPlanWithPath, tt.plan, tt.currentContent, patchStreamCh, backend.Options{})
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ExecuteAction() error = %v, wantErr %v", err, tt.wantErr)
 				return
