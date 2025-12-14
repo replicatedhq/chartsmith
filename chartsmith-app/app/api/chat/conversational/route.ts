@@ -18,7 +18,7 @@ import { createAnthropic } from '@ai-sdk/anthropic';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getChatMessage, getWorkspace } from '@/lib/workspace/workspace';
-import { appendChatMessageResponse, markChatMessageComplete, getWorkspaceIdForChatMessage } from '@/lib/workspace/chat-helpers';
+import { appendChatMessageResponse, clearChatMessageResponse, markChatMessageComplete, getWorkspaceIdForChatMessage } from '@/lib/workspace/chat-helpers';
 import { publishChatMessageUpdate } from '@/lib/realtime/centrifugo-publish';
 import { getChartStructure, chooseRelevantFiles, getPreviousChatHistory } from '@/lib/workspace/context';
 import { getLatestSubchartVersion } from '@/lib/recommendations/subchart';
@@ -133,6 +133,10 @@ export async function POST(req: NextRequest) {
     }
 
     console.log(`[CHAT API] workspaceId=${workspaceId}, userId=${userId}`);
+
+    // Clear any existing response to prevent duplication on retry
+    await clearChatMessageResponse(chatMessageId);
+    console.log(`[CHAT API] Cleared existing response`);
 
     // Initialize Anthropic with Vercel AI SDK
     const anthropic = createAnthropic({

@@ -472,7 +472,7 @@ export async function createPlan(userId: string, workspaceId: string, chatMessag
   }
 }
 
-export async function getChatMessage(chatMessageId: string): Promise<ChatMessage> {
+export async function getChatMessage(chatMessageId: string): Promise<ChatMessage | null> {
   try {
     const db = getDB(await getParam("DB_URI"));
 
@@ -496,6 +496,11 @@ export async function getChatMessage(chatMessageId: string): Promise<ChatMessage
       WHERE id = $1`;
 
     const result = await db.query(query, [chatMessageId]);
+
+    // Return null if no message found (404 case)
+    if (result.rows.length === 0) {
+      return null;
+    }
 
     const chatMessage: ChatMessage = {
       id: result.rows[0].id,

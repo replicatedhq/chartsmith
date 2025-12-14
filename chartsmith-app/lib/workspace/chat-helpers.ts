@@ -44,6 +44,21 @@ export async function appendChatMessageResponse(chatMessageId: string, chunk: st
 }
 
 /**
+ * Clears the response field for a chat message
+ * This prevents duplication when a job is retried
+ */
+export async function clearChatMessageResponse(chatMessageId: string): Promise<void> {
+  try {
+    const db = getDB(await getParam("DB_URI"));
+    const query = `UPDATE workspace_chat SET response = NULL, is_intent_complete = false WHERE id = $1`;
+    await db.query(query, [chatMessageId]);
+  } catch (err) {
+    logger.error("Failed to clear chat message response", { err, chatMessageId });
+    throw err;
+  }
+}
+
+/**
  * Marks a chat message as complete
  */
 export async function markChatMessageComplete(chatMessageId: string): Promise<void> {

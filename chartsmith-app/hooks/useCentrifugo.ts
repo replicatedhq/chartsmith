@@ -84,7 +84,24 @@ export function useCentrifugo({
       setWorkspace(freshWorkspace);
 
       const updatedMessages = await getWorkspaceMessagesAction(session, revision.workspaceId);
-      setMessages(updatedMessages);
+
+      // Apply any buffered chunks to newly loaded messages
+      const messagesWithBuffered = updatedMessages.map(msg => {
+        const buffered = pendingChunksRef.current.get(msg.id);
+        if (buffered) {
+          console.log(`[Centrifugo] Applying buffered chunks to message ${msg.id}: ${buffered.chunks.length} chars`);
+          pendingChunksRef.current.delete(msg.id);
+          return {
+            ...msg,
+            response: (msg.response || '') + buffered.chunks,
+            isComplete: buffered.isComplete,
+            isIntentComplete: buffered.isComplete,
+          };
+        }
+        return msg;
+      });
+
+      setMessages(messagesWithBuffered);
 
       setChartsBeforeApplyingContentPending([]);
     }
