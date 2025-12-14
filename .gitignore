@@ -4,3 +4,5 @@ bin
 test-results/
 .envrc
 .specstory/
+chart/chartsmith/*.tgz
+.direnv/
