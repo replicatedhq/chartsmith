@@ -13,7 +13,7 @@ interface ArtifactHubResponse {
 
 // Override map for pinned versions
 const subchartVersion: Record<string, string> = {
-  'subchart-name': '0.0.0',
+  // Add specific version overrides here if needed
 };
 
 // Cache for Replicated subchart version

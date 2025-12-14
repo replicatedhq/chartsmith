@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/replicatedhq/chartsmith/pkg/logger"
 	"go.uber.org/zap"
@@ -60,7 +61,10 @@ func handleNewAISDKChatNotification(ctx context.Context, payload string) error {
 	}
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", internalToken))
 
-	client := &http.Client{}
+	// Set timeout slightly longer than Next.js route maxDuration (5 minutes)
+	client := &http.Client{
+		Timeout: 6 * time.Minute,
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to call API route: %w", err)

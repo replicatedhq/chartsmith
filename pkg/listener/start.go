@@ -45,7 +45,8 @@ func StartListeners(ctx context.Context) error {
 	}, nil)
 
 	// Handler for Vercel AI SDK chat (Next.js API route)
-	l.AddHandler(ctx, "new_ai_sdk_chat", 5, time.Second*30, func(notification *pgconn.Notification) error {
+	// Match Next.js route maxDuration of 5 minutes to prevent premature re-queueing
+	l.AddHandler(ctx, "new_ai_sdk_chat", 5, time.Minute*5, func(notification *pgconn.Notification) error {
 		if err := handleNewAISDKChatNotification(ctx, notification.Payload); err != nil {
 			logger.Error(fmt.Errorf("failed to handle new AI SDK chat notification: %w", err))
 			return fmt.Errorf("failed to handle new AI SDK chat notification: %w", err)
