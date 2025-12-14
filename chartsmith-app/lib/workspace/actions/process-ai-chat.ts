@@ -10,19 +10,19 @@ export async function processAIChatMessage(chatMessageId: string): Promise<void>
   try {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
-    // Use process.env.ANTHROPIC_API_KEY to match what the API route validates against
-    // Both Go worker and Next.js should have ANTHROPIC_API_KEY in their environment
-    const apiKey = process.env.ANTHROPIC_API_KEY;
+    // Use dedicated internal API token for worker->Next.js authentication
+    // This is separate from ANTHROPIC_API_KEY to avoid leaking the LLM key
+    const internalToken = process.env.INTERNAL_API_TOKEN;
 
-    if (!apiKey) {
-      throw new Error('ANTHROPIC_API_KEY not set in environment');
+    if (!internalToken) {
+      throw new Error('INTERNAL_API_TOKEN not set in environment');
     }
 
     const response = await fetch(`${appUrl}/api/chat/conversational`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
+        'Authorization': `Bearer ${internalToken}`,
       },
       body: JSON.stringify({ chatMessageId }),
     });

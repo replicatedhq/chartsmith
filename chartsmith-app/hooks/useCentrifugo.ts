@@ -99,14 +99,9 @@ export function useCentrifugo({
         if (index >= 0) {
           const existingMessage = newMessages[index];
 
-          // Apply any pending chunks that arrived before this message was loaded
-          let pendingChunks = '';
-          if (data.id && pendingChunksRef.current.has(data.id)) {
-            pendingChunks = pendingChunksRef.current.get(data.id) || '';
-            pendingChunksRef.current.delete(data.id);
-          }
-
-          const updatedResponse = (existingMessage.response || '') + pendingChunks + data.chunk;
+          // Simply append the new chunk
+          // Don't apply pending chunks here - they're already in the DB response
+          const updatedResponse = (existingMessage.response || '') + data.chunk;
 
           newMessages[index] = {
             ...existingMessage,
@@ -114,6 +109,11 @@ export function useCentrifugo({
             isComplete: data.isComplete || false,
             isIntentComplete: data.isComplete || false,
           };
+
+          // Clear any pending chunks since message is now in state and being updated
+          if (data.id && pendingChunksRef.current.has(data.id)) {
+            pendingChunksRef.current.delete(data.id);
+          }
         } else if (data.id) {
           // Message not yet in state - buffer the chunk for when it arrives
           console.warn(`[Centrifugo] Buffering chunk for message not yet in state: ${data.id}`);

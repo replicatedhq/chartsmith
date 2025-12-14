@@ -82,7 +82,8 @@ export async function POST(req: NextRequest) {
   let chatMessageId: string | undefined;
 
   try {
-    // Validate Authorization header
+    // Validate Authorization header using dedicated internal API token
+    // This prevents leaking the Anthropic API key via request headers
     const authHeader = req.headers.get('authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       console.error('[CHAT API] Missing or invalid Authorization header');
@@ -90,7 +91,13 @@ export async function POST(req: NextRequest) {
     }
 
     const token = authHeader.substring(7); // Remove 'Bearer ' prefix
-    const expectedToken = process.env.ANTHROPIC_API_KEY;
+    const expectedToken = process.env.INTERNAL_API_TOKEN;
+
+    if (!expectedToken) {
+      console.error('[CHAT API] INTERNAL_API_TOKEN not configured');
+      return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 });
+    }
+
     if (token !== expectedToken) {
       console.error('[CHAT API] Invalid Bearer token');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

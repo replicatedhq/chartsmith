@@ -51,12 +51,14 @@ func handleNewAISDKChatNotification(ctx context.Context, payload string) error {
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	// TODO: Add proper authentication token
-	// For now, we'll rely on the API route accepting requests from localhost
-	anthropicKey := os.Getenv("ANTHROPIC_API_KEY")
-	if anthropicKey != "" {
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", anthropicKey))
+
+	// Use dedicated internal API token for authentication
+	// This is separate from ANTHROPIC_API_KEY to avoid exposing the LLM key
+	internalToken := os.Getenv("INTERNAL_API_TOKEN")
+	if internalToken == "" {
+		return fmt.Errorf("INTERNAL_API_TOKEN not set in environment")
 	}
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", internalToken))
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
