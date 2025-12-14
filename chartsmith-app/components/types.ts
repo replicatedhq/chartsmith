@@ -107,6 +107,10 @@ export interface CentrifugoMessageData {
   status?: string;
   completedAt?: string;
   isAutorender?: boolean;
+  // Conversational chat streaming fields
+  id?: string;
+  chunk?: string;
+  isComplete?: boolean;
 }
 
 export interface RawRevision {

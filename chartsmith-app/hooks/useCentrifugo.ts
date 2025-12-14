@@ -46,6 +46,10 @@ export function useCentrifugo({
 
   const [isReconnecting, setIsReconnecting] = useState(false);
 
+  // Buffer for chunks that arrive before the message is loaded
+  // Store both chunks and completion state
+  const pendingChunksRef = useRef<Map<string, { chunks: string; isComplete: boolean }>>(new Map());
+
   const [workspace, setWorkspace] = useAtom(workspaceAtom)
   const [, setRenders] = useAtom(rendersAtom)
   const [, setMessages] = useAtom(messagesAtom)
@@ -80,13 +84,69 @@ export function useCentrifugo({
       setWorkspace(freshWorkspace);
 
       const updatedMessages = await getWorkspaceMessagesAction(session, revision.workspaceId);
-      setMessages(updatedMessages);
+
+      // Apply any buffered chunks to newly loaded messages
+      const messagesWithBuffered = updatedMessages.map(msg => {
+        const buffered = pendingChunksRef.current.get(msg.id);
+        if (buffered) {
+          console.log(`[Centrifugo] Applying buffered chunks to message ${msg.id}: ${buffered.chunks.length} chars`);
+          pendingChunksRef.current.delete(msg.id);
+          return {
+            ...msg,
+            response: (msg.response || '') + buffered.chunks,
+            isComplete: buffered.isComplete,
+            isIntentComplete: buffered.isComplete,
+          };
+        }
+        return msg;
+      });
+
+      setMessages(messagesWithBuffered);
 
       setChartsBeforeApplyingContentPending([]);
     }
   }, [session, setMessages, setWorkspace]);
 
   const handleChatMessageUpdated = useCallback((data: CentrifugoMessageData) => {
+    // Handle conversational chat streaming format (new Vercel AI SDK format)
+    if (data.id && data.chunk !== undefined) {
+      setMessages(prev => {
+        const newMessages = [...prev];
+        const index = newMessages.findIndex(m => m.id === data.id);
+
+        if (index >= 0) {
+          const existingMessage = newMessages[index];
+
+          // Simply append the new chunk
+          // Don't apply pending chunks here - they're already in the DB response
+          const updatedResponse = (existingMessage.response || '') + data.chunk;
+
+          newMessages[index] = {
+            ...existingMessage,
+            response: updatedResponse,
+            isComplete: data.isComplete || false,
+            isIntentComplete: data.isComplete || false,
+          };
+
+          // Clear any pending chunks since message is now in state and being updated
+          if (data.id && pendingChunksRef.current.has(data.id)) {
+            pendingChunksRef.current.delete(data.id);
+          }
+        } else if (data.id) {
+          // Message not yet in state - buffer the chunk AND completion state
+          console.warn(`[Centrifugo] Buffering chunk for message not yet in state: ${data.id}`);
+          const existingBuffer = pendingChunksRef.current.get(data.id) || { chunks: '', isComplete: false };
+          pendingChunksRef.current.set(data.id, {
+            chunks: existingBuffer.chunks + (data.chunk || ''),
+            isComplete: data.isComplete || existingBuffer.isComplete
+          });
+        }
+        return newMessages;
+      });
+      return;
+    }
+
+    // Handle legacy chat message format
     if (!data.chatMessage) return;
 
     const chatMessage = data.chatMessage;

@@ -239,7 +239,11 @@ export async function createChatMessage(userId: string, workspaceId: string, par
         additionalFiles: params.additionalFiles,
       });
     } else if (params.knownIntent === ChatMessageIntent.NON_PLAN) {
-      await client.query(`SELECT pg_notify('new_nonplan_chat_message', $1)`, [chatMessageId]);
+      // Enqueue work for Next.js API route to handle conversational chat with Vercel AI SDK
+      await enqueueWork("new_ai_sdk_chat", {
+        chatMessageId,
+        workspaceId,
+      });
     } else if (params.knownIntent === ChatMessageIntent.RENDER) {
       await renderWorkspace(workspaceId, chatMessageId);
     } else if (params.knownIntent === ChatMessageIntent.CONVERT_K8S_TO_HELM) {
@@ -468,7 +472,7 @@ export async function createPlan(userId: string, workspaceId: string, chatMessag
   }
 }
 
-export async function getChatMessage(chatMessageId: string): Promise<ChatMessage> {
+export async function getChatMessage(chatMessageId: string): Promise<ChatMessage | null> {
   try {
     const db = getDB(await getParam("DB_URI"));
 
@@ -485,11 +489,18 @@ export async function getChatMessage(chatMessageId: string): Promise<ChatMessage
         response_plan_id,
         response_conversion_id,
         response_rollback_to_revision_number,
-        revision_number
+        revision_number,
+        sent_by,
+        message_from_persona
       FROM workspace_chat
       WHERE id = $1`;
 
     const result = await db.query(query, [chatMessageId]);
+
+    // Return null if no message found (404 case)
+    if (result.rows.length === 0) {
+      return null;
+    }
 
     const chatMessage: ChatMessage = {
       id: result.rows[0].id,
@@ -506,6 +517,7 @@ export async function getChatMessage(chatMessageId: string): Promise<ChatMessage
       revisionNumber: result.rows[0].revision_number,
       isComplete: true,
       messageFromPersona: result.rows[0].message_from_persona,
+      userId: result.rows[0].sent_by,
     };
 
     return chatMessage;
@@ -1192,6 +1204,35 @@ async function listFilesWithoutChartsForWorkspace(workspaceID: string, revisionN
     return files;
   } catch (err) {
     logger.error("Failed to list files without charts for workspace", { err });
+    throw err;
+  }
+}
+
+export async function deleteWorkspace(workspaceId: string, userId: string): Promise<void> {
+  logger.info("Deleting workspace", { workspaceId, userId });
+  const db = getDB(await getParam("DB_URI"));
+
+  try {
+    // Verify the workspace belongs to the user
+    const workspaceResult = await db.query(
+      `SELECT created_by_user_id FROM workspace WHERE id = $1`,
+      [workspaceId]
+    );
+
+    if (workspaceResult.rows.length === 0) {
+      throw new Error("Workspace not found");
+    }
+
+    if (workspaceResult.rows[0].created_by_user_id !== userId) {
+      throw new Error("Unauthorized");
+    }
+
+    // Delete the workspace (cascade will handle related records)
+    await db.query(`DELETE FROM workspace WHERE id = $1`, [workspaceId]);
+
+    logger.info("Workspace deleted successfully", { workspaceId });
+  } catch (err) {
+    logger.error("Failed to delete workspace", { err });
     throw err;
   }
 }

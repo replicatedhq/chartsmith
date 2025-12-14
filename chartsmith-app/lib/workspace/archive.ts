@@ -6,8 +6,8 @@ import * as path from "node:path";
 import * as os from "node:os";
 import * as tar from 'tar';
 import gunzip from 'gunzip-maybe';
-import fetch from 'node-fetch';
 import yaml from 'yaml';
+import { Readable } from 'node:stream';
 
 export async function getFilesFromBytes(bytes: ArrayBuffer, fileName: string): Promise<WorkspaceFile[]> {
   const id = srs.default({ length: 12, alphanumeric: true });
@@ -234,7 +234,13 @@ async function downloadChartArchiveFromURL(url: string): Promise<string> {
   await fs.mkdir(extractPath);
 
   return new Promise((resolve, reject) => {
-    response.body.pipe(gunzip())
+    if (!response.body) {
+      reject(new Error('Response body is null'));
+      return;
+    }
+    // Convert Web ReadableStream to Node.js Readable stream
+    const nodeStream = Readable.fromWeb(response.body as any);
+    nodeStream.pipe(gunzip())
       .pipe(tar.extract({ cwd: extractPath }))
       .on('finish', () => resolve(extractPath))
       .on('error', reject);
