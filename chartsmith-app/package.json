@@ -2,6 +2,9 @@
   "name": "chartsmith-app",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "dev": "next dev --turbopack",
     "clean-dev": "rm -rf .next && rm -rf node_modules/.cache && next dev --turbopack",
