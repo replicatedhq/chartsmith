@@ -10,3 +10,4 @@ chart/chartsmith/*.tgz
 # Local setup documentation and scripts (not committed to git)
 docs/
 scripts/
+.env
