@@ -128,6 +128,13 @@ export function useAIChat({ workspaceId, session, initialMessages, onMessageComp
   const selectedRoleRef = useRef(selectedRole);
   selectedRoleRef.current = selectedRole;
 
+  // Wrapper for setSelectedRole that updates both state and ref synchronously
+  // This ensures the ref is updated immediately, even if state update is async
+  const setSelectedRoleWithRef = (role: 'auto' | 'developer' | 'operator') => {
+    selectedRoleRef.current = role; // Update ref immediately
+    setSelectedRole(role); // Update state (async, but ref is already updated)
+  };
+
   // Load initial messages if not provided
   const [loadedMessages, setLoadedMessages] = useState<Message[]>(initialMessages || []);
   const [isLoadingHistory, setIsLoadingHistory] = useState(!initialMessages);
@@ -249,6 +256,26 @@ export function useAIChat({ workspaceId, session, initialMessages, onMessageComp
   const lastSyncedMessagesRef = useRef<string>('');
   // Track which messages we've already called onMessageComplete for
   const completedMessageIdsRef = useRef<Set<string>>(new Set());
+  // Track initial message IDs to distinguish historical vs new messages
+  const initialMessageIdsRef = useRef<Set<string>>(new Set());
+  // Track which messages were complete when initially loaded
+  const initialCompleteMessageIdsRef = useRef<Set<string>>(new Set());
+
+  // Initialize tracking refs with historical messages to prevent duplicate persistence
+  useEffect(() => {
+    if (loadedMessages.length > 0 && initialMessageIdsRef.current.size === 0) {
+      // First time loading messages - initialize tracking sets
+      for (const msg of loadedMessages) {
+        initialMessageIdsRef.current.add(msg.id);
+        // If message was already complete when loaded, mark it as already completed
+        // This prevents onMessageComplete from being called for historical messages
+        if (msg.isComplete && msg.response) {
+          initialCompleteMessageIdsRef.current.add(msg.id);
+          completedMessageIdsRef.current.add(msg.id);
+        }
+      }
+    }
+  }, [loadedMessages]);
 
   // Sync AI SDK messages to Jotai atom in real-time as they stream
   // This ensures backward compatibility with components that read from the atom
@@ -295,10 +322,18 @@ export function useAIChat({ workspaceId, session, initialMessages, onMessageComp
           convertedMessages.push(currentUserMessage);
 
           // Call onMessageComplete callback if provided and message is complete
-          // Use ref to get latest callback and track already-completed messages
+          // IMPORTANT: Only trigger for NEW messages that complete during this session,
+          // not historical messages that were already complete when loaded.
+          // Historical messages are tracked in initialCompleteMessageIdsRef to prevent duplicates.
           if (onMessageCompleteRef.current && currentUserMessage.isComplete && currentUserMessage.response) {
             const messageId = currentUserMessage.id;
-            if (!completedMessageIdsRef.current.has(messageId)) {
+            const wasHistoricalComplete = initialCompleteMessageIdsRef.current.has(messageId);
+            const alreadyProcessed = completedMessageIdsRef.current.has(messageId);
+            
+            // Only call callback if:
+            // 1. Message wasn't already complete when initially loaded (not historical)
+            // 2. We haven't already processed this message
+            if (!wasHistoricalComplete && !alreadyProcessed) {
               completedMessageIdsRef.current.add(messageId);
               // Create assistant message for callback
               const assistantMessage = uiMessageToMessage(uiMessage, metadata);
@@ -372,6 +407,6 @@ export function useAIChat({ workspaceId, session, initialMessages, onMessageComp
     stop,
     reload,
     selectedRole,
-    setSelectedRole,
+    setSelectedRole: setSelectedRoleWithRef,
   };
 }
