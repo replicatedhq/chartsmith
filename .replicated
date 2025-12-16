@@ -1,0 +1,9 @@
+appSlug: "chartsmith"
+charts: [
+  {
+    path: "./chart/chartsmith",
+  }
+]
+manifests: ["replicated/**/*.yaml"]
+repl-lint:
+  version: 1

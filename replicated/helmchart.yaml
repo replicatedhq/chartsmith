@@ -5,4 +5,72 @@ metadata:
 spec:
   chart:
     name: chartsmith
-    chartVersion: CHART_VERSION
+    chartVersion: 0.3.0
+  
+  releaseName: chartsmith
+  
+  values:
+    # External Database Configuration
+    postgresql:
+      enabled: repl{{ ConfigOptionEquals "external_database" "0" }}
+      externalUri: 'repl{{ if ConfigOptionEquals "external_database" "1" }}postgres://repl{{ ConfigOption "database_user" }}:repl{{ ConfigOption "database_password" }}@repl{{ ConfigOption "database_host" }}:repl{{ ConfigOption "database_port" }}/repl{{ ConfigOption "database_name" }}?sslmode=repl{{ ConfigOption "database_ssl_mode" }}repl{{ end }}'
+      credentials:
+        username: 'repl{{ ConfigOption "embedded_database_username" }}'
+        password: 'repl{{ ConfigOption "embedded_database_password" }}'
+        database: 'repl{{ ConfigOption "embedded_database_name" }}'
+    
+    # LLM API Keys
+    anthropic:
+      apiKey: 'repl{{ ConfigOption "anthropic_api_key" }}'
+    
+    groq:
+      apiKey: 'repl{{ ConfigOption "groq_api_key" }}'
+    
+    voyage:
+      apiKey: 'repl{{ ConfigOption "voyage_api_key" }}'
+    
+    # Authentication Configuration
+    auth:
+      google:
+        clientId: 'repl{{ ConfigOption "google_client_id" }}'
+        clientSecret: 'repl{{ ConfigOption "google_client_secret" }}'
+        redirectUri: 'repl{{ ConfigOption "google_redirect_uri" }}'
+    
+    # HMAC secret for JWT tokens
+    hmac:
+      secret: 'repl{{ ConfigOption "hmac_secret" }}'
+    
+    # Centrifugo configuration
+    centrifugo:
+      enabled: true
+      apiKey: 'repl{{ ConfigOption "centrifugo_api_key" }}'
+      tokenHmacSecret: 'repl{{ ConfigOption "centrifugo_token_hmac_secret" }}'
+      adminPassword: 'repl{{ ConfigOption "centrifugo_admin_password" }}'
+      adminSecret: 'repl{{ ConfigOption "centrifugo_admin_secret" }}'
+  
+  builder:
+    postgresql:
+      enabled: true
+      credentials:
+        username: "chartsmith"
+        password: "password"
+        database: "chartsmith"
+    anthropic:
+      apiKey: "sk-ant-example"
+    groq:
+      apiKey: "gsk_example"
+    voyage:
+      apiKey: "pa-example"
+    auth:
+      google:
+        clientId: "example.apps.googleusercontent.com"
+        clientSecret: "GOCSPX-example"
+        redirectUri: "http://example.com/auth/google"
+    hmac:
+      secret: "examplehmacsecret32characterslong"
+    centrifugo:
+      enabled: true
+      apiKey: "exampleapikey"
+      tokenHmacSecret: "exampletokenhmac"
+      adminPassword: "exampleadminpass"
+      adminSecret: "exampleadminsecret"
