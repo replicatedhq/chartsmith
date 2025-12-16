@@ -4,3 +4,6 @@ bin
 test-results/
 .envrc
 .specstory/
+.ai-git
+.claude
+.pluto

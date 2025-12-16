@@ -18,11 +18,14 @@
     "test:parseDiff": "jest parseDiff"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^2.0.56",
+    "@ai-sdk/groq": "^2.0.33",
     "@anthropic-ai/sdk": "^0.39.0",
     "@monaco-editor/react": "^4.7.0",
     "@radix-ui/react-toast": "^1.2.7",
     "@tailwindcss/typography": "^0.5.16",
     "@types/diff": "^7.0.1",
+    "ai": "^5.0.113",
     "autoprefixer": "^10.4.20",
     "centrifuge": "^5.3.4",
     "class-variance-authority": "^0.7.1",
@@ -50,7 +53,8 @@
     "secure-random-string": "^1.1.4",
     "tailwind-merge": "^3.0.2",
     "tar": "^7.4.3",
-    "unified-diff": "^5.0.0"
+    "unified-diff": "^5.0.0",
+    "zod": "^4.2.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",
