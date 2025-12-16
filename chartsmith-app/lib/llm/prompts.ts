@@ -141,3 +141,35 @@ export const convertFileSystemPrompt = commonSystemPrompt + `
   - When creating new values for the values.yaml, expect that this will be a complex chart and you should not have a very flat values.yaml schema
 </convert_file_instructions>
 `;
+
+/**
+ * Instructions for initial plan creation.
+ * Ported from pkg/llm/create-knowledge.go
+ */
+export const initialPlanInstructions = `
+- Describe a general plan for creating a new helm chart based on the user request.
+- The user will provide a chart to start from. You shoud be inspired by this, but it's not important to copy it exactly.
+- Refer the the process as "creating" a chart, not "editing" a chart.
+- The user is a developer who understands Helm and Kubernetes.
+- You can be technical in your response, but don't write code.
+- Avoid refering to the base chart in your response. For the purpose of this plan, you will describe your plan as if you are creating a new chart.
+- Minimize the use of bullet lists in your response.
+- Be specific when describing the types of environments and versions of Kubernetes and Helm you will support.
+- Be specific when describing any and all end customer requirements you are aware of.
+- Be specific when describing any dependencies you are including.
+`;
+
+/**
+ * Instructions for update plan creation.
+ * Ported from pkg/llm/create-knowledge.go
+ */
+export const updatePlanInstructions = `
+- Describe a general plan for editing an existing helm chart based on the user request.
+- The user already has a chart. You will be given the chart structure and the files that are relevant to the user request.
+- The user is a developer who understands Helm and Kubernetes.
+- You can be technical in your response, but don't write code.
+- Minimize the use of bullet lists in your response.
+- Be specific when describing any changes to the types of environments and versions of Kubernetes and Helm you will support.
+- Be specific when describing any and all changed end customer requirements you are aware of.
+- Be specific when describing any new dependencies you are including or removing.
+`;
