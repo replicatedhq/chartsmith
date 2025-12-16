@@ -5,7 +5,14 @@
 
 import { anthropic } from '@ai-sdk/anthropic';
 import { groq } from '@ai-sdk/groq';
-import { createMockModel, shouldUseMock } from './mock-provider';
+
+/**
+ * Check if mock responses should be used instead of real API calls.
+ * Controlled by MOCK_LLM_RESPONSES environment variable.
+ */
+function shouldUseMock(): boolean {
+  return process.env.MOCK_LLM_RESPONSES === 'true';
+}
 
 /**
  * Default mock response for chat interactions.
@@ -33,9 +40,11 @@ const DEFAULT_INTENT_MOCK_RESPONSE = JSON.stringify({
  * Get the model to use for chat interactions.
  * Returns a mock model if MOCK_LLM_RESPONSES is true, otherwise returns the real Anthropic model.
  */
-export function getChatModel() {
+export async function getChatModel() {
   if (shouldUseMock()) {
-    return createMockModel([DEFAULT_CHAT_MOCK_RESPONSE]);
+    // Dynamic import to avoid bundling test dependencies in production
+    const { createMockModel } = await import('./mock-provider');
+    return await createMockModel([DEFAULT_CHAT_MOCK_RESPONSE]);
   }
   return anthropic('claude-sonnet-4-20250514');
 }
@@ -45,9 +54,11 @@ export function getChatModel() {
  * Uses Groq (Llama) for fast, cheap classification.
  * Returns a mock model if MOCK_LLM_RESPONSES is true.
  */
-export function getIntentModel() {
+export async function getIntentModel() {
   if (shouldUseMock()) {
-    return createMockModel([DEFAULT_INTENT_MOCK_RESPONSE]);
+    // Dynamic import to avoid bundling test dependencies in production
+    const { createMockModel } = await import('./mock-provider');
+    return await createMockModel([DEFAULT_INTENT_MOCK_RESPONSE]);
   }
   return groq('llama-3.3-70b-versatile');
 }

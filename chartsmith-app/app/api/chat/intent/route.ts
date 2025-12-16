@@ -138,8 +138,9 @@ export async function POST(req: NextRequest) {
 
     const prompt = buildClassificationPrompt(message, persona);
 
+    const model = await getIntentModel();
     const result = await generateText({
-      model: getIntentModel(),
+      model,
       prompt,
     });
 

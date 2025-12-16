@@ -38,8 +38,9 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    const model = await getChatModel();
     const result = streamText({
-      model: getChatModel(),
+      model,
       system: chatOnlySystemPrompt,
       messages,
     });

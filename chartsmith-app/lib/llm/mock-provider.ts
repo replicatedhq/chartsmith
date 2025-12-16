@@ -1,9 +1,10 @@
 /**
  * Mock LLM provider for testing without API calls.
  * Uses Vercel AI SDK's MockLanguageModelV2 for realistic streaming behavior.
+ *
+ * This file uses dynamic imports to avoid bundling test dependencies in production.
  */
 
-import { MockLanguageModelV2, simulateReadableStream } from 'ai/test';
 import type { LanguageModelV2StreamPart } from '@ai-sdk/provider';
 
 /**
@@ -13,7 +14,10 @@ import type { LanguageModelV2StreamPart } from '@ai-sdk/provider';
  * @param responses - Array of responses to return in sequence
  * @returns A mock language model compatible with Vercel AI SDK
  */
-export function createMockModel(responses: string[]) {
+export async function createMockModel(responses: string[]) {
+  // Dynamic import to avoid bundling test dependencies in production
+  const { MockLanguageModelV2, simulateReadableStream } = await import('ai/test');
+
   let callIndex = 0;
 
   return new MockLanguageModelV2({

@@ -4,12 +4,17 @@ import { Send, Loader2, Users, Code, User, Sparkles } from "lucide-react";
 import { useTheme } from "../contexts/ThemeContext";
 import { Session } from "@/lib/types/session";
 import { ChatMessage } from "./ChatMessage";
+import { AIChatMessage } from "./AIChatMessage";
 import { messagesAtom, workspaceAtom, isRenderingAtom } from "@/atoms/workspace";
 import { useAtom } from "jotai";
 import { createChatMessageAction } from "@/lib/workspace/actions/create-chat-message";
 import { ScrollingContent } from "./ScrollingContent";
 import { NewChartChatMessage } from "./NewChartChatMessage";
 import { NewChartContent } from "./NewChartContent";
+import { useAIChat } from "@/hooks/useAIChat";
+
+// Feature flag for Vercel AI SDK
+const useVercelAISDK = process.env.NEXT_PUBLIC_USE_VERCEL_AI_SDK === "true";
 
 interface ChatContainerProps {
   session: Session;
@@ -24,8 +29,12 @@ export function ChatContainer({ session }: ChatContainerProps) {
   const [selectedRole, setSelectedRole] = useState<"auto" | "developer" | "operator">("auto");
   const [isRoleMenuOpen, setIsRoleMenuOpen] = useState(false);
   const roleMenuRef = useRef<HTMLDivElement>(null);
-  
-  // No need for refs as ScrollingContent manages its own scrolling
+
+  // AI SDK Chat hook (only used when feature flag is enabled)
+  const aiChat = useAIChat({
+    session,
+    workspaceId: workspace?.id || "",
+  });
 
   // Close the role menu when clicking outside
   useEffect(() => {
@@ -34,20 +43,26 @@ export function ChatContainer({ session }: ChatContainerProps) {
         setIsRoleMenuOpen(false);
       }
     };
-    
+
     document.addEventListener('mousedown', handleClickOutside);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
 
-  if (!messages || !workspace) {
+  if (!workspace) {
     return null;
   }
 
-  const handleSubmitChat = async (e: React.FormEvent) => {
+  // For Centrifugo mode, check messages; for AI SDK mode, it's always ready
+  if (!useVercelAISDK && !messages) {
+    return null;
+  }
+
+  // Legacy Centrifugo-based submit handler
+  const handleSubmitChatLegacy = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!chatInput.trim() || isRendering) return; // Don't submit if rendering is in progress
+    if (!chatInput.trim() || isRendering) return;
 
     if (!session || !workspace) return;
 
@@ -56,6 +71,25 @@ export function ChatContainer({ session }: ChatContainerProps) {
 
     setChatInput("");
   };
+
+  // AI SDK submit handler
+  const handleSubmitChatAI = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!aiChat.input.trim() || aiChat.isLoading) return;
+
+    aiChat.handleSubmit(e);
+  };
+
+  // Use appropriate handler based on feature flag
+  const handleSubmitChat = useVercelAISDK ? handleSubmitChatAI : handleSubmitChatLegacy;
+  const currentInput = useVercelAISDK ? aiChat.input : chatInput;
+  const setCurrentInput = useVercelAISDK
+    ? (value: string) => aiChat.setInput(value)
+    : setChatInput;
+  const handleInputChange = useVercelAISDK
+    ? aiChat.handleInputChange
+    : (e: React.ChangeEvent<HTMLTextAreaElement>) => setChatInput(e.target.value);
+  const isSubmitting = useVercelAISDK ? aiChat.isLoading : isRendering;
   
   const getRoleLabel = (role: "auto" | "developer" | "operator"): string => {
     switch (role) {
@@ -93,35 +127,50 @@ export function ChatContainer({ session }: ChatContainerProps) {
     />
   }
 
+  // Get messages to display based on mode
+  const displayMessages = useVercelAISDK ? aiChat.messages : messages;
+
   return (
     <div className={`h-[calc(100vh-3.5rem)] border-r flex flex-col min-h-0 overflow-hidden transition-all duration-300 ease-in-out w-full relative ${theme === "dark" ? "bg-dark-surface border-dark-border" : "bg-white border-gray-200"}`}>
       <div className="flex-1 h-full">
         <ScrollingContent forceScroll={true}>
           <div className={workspace?.currentRevisionNumber === 0 ? "" : "pb-32"}>
-            {messages.map((item, index) => (
-              <div key={item.id}>
-                <ChatMessage
-                  key={item.id}
-                  messageId={item.id}
+            {useVercelAISDK ? (
+              // AI SDK mode: render AI SDK messages
+              aiChat.messages.map((message) => (
+                <AIChatMessage
+                  key={message.id}
+                  message={message}
                   session={session}
-                  onContentUpdate={() => {
-                    // No need to update state - ScrollingContent will handle scrolling
-                  }}
                 />
-              </div>
-            ))}
+              ))
+            ) : (
+              // Legacy Centrifugo mode: render existing messages
+              messages.map((item) => (
+                <div key={item.id}>
+                  <ChatMessage
+                    key={item.id}
+                    messageId={item.id}
+                    session={session}
+                    onContentUpdate={() => {
+                      // No need to update state - ScrollingContent will handle scrolling
+                    }}
+                  />
+                </div>
+              ))
+            )}
           </div>
         </ScrollingContent>
       </div>
       <div className={`absolute bottom-0 left-0 right-0 ${theme === "dark" ? "bg-dark-surface" : "bg-white"} border-t ${theme === "dark" ? "border-dark-border" : "border-gray-200"}`}>
         <form onSubmit={handleSubmitChat} className="p-3 relative">
           <textarea
-            value={chatInput}
-            onChange={(e) => setChatInput(e.target.value)}
+            value={currentInput}
+            onChange={handleInputChange}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                if (!isRendering) {
+                if (!isSubmitting) {
                   handleSubmitChat(e);
                 }
               }
@@ -203,16 +252,16 @@ export function ChatContainer({ session }: ChatContainerProps) {
             {/* Send button */}
             <button
               type="submit"
-              disabled={isRendering}
+              disabled={isSubmitting}
               className={`p-1.5 rounded-full ${
-                isRendering
+                isSubmitting
                   ? theme === "dark" ? "text-gray-600 cursor-not-allowed" : "text-gray-300 cursor-not-allowed"
                   : theme === "dark"
                     ? "text-gray-400 hover:text-gray-200 hover:bg-dark-border/40"
                     : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
               }`}
             >
-              {isRendering ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
             </button>
           </div>
         </form>
