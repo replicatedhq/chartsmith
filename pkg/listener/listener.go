@@ -202,7 +202,7 @@ func (l *Listener) processNotifications(ctx context.Context) {
 
 					// Use a dedicated connection for health checks
 					healthCtx, healthCancel := context.WithTimeout(ctx, 5*time.Second)
-					
+
 					// Create a new connection just for this health check
 					healthConn, err := pgx.Connect(healthCtx, l.pgURI)
 					if err != nil {
@@ -210,12 +210,12 @@ func (l *Listener) processNotifications(ctx context.Context) {
 						healthCancel()
 						continue
 					}
-					
+
 					var result int
 					err = healthConn.QueryRow(healthCtx, "SELECT 1").Scan(&result)
-					
+
 					// Always close the health check connection
-					healthConn.Close(healthCtx) 
+					healthConn.Close(healthCtx)
 					healthCancel()
 
 					if err != nil {
@@ -381,7 +381,7 @@ func (l *Listener) processQueue(ctx context.Context, processor *queueProcessor) 
 
 		// Create a context with timeout for database operations
 		dbCtx, dbCancel := context.WithTimeout(ctx, 10*time.Second)
-		
+
 		// PHASE 1: Get queue statistics with a dedicated connection
 		statsConn, err := pgx.Connect(dbCtx, l.pgURI)
 		if err != nil {
@@ -400,7 +400,7 @@ func (l *Listener) processQueue(ctx context.Context, processor *queueProcessor) 
 			FROM %s
 			WHERE channel = $1
 			AND completed_at IS NULL`, WorkQueueTable), processor.channel).Scan(&total, &inFlight, &available)
-		
+
 		// Always close the connection when done
 		statsConn.Close(dbCtx)
 
@@ -480,7 +480,7 @@ func (l *Listener) processQueue(ctx context.Context, processor *queueProcessor) 
 			messages = append(messages, msg)
 		}
 		rows.Close()
-		
+
 		// Close the fetch connection as soon as we're done with it
 		fetchConn.Close(dbCtx)
 		dbCancel()
@@ -540,7 +540,7 @@ func (l *Listener) processQueue(ctx context.Context, processor *queueProcessor) 
 
 				// Create a new context with timeout for database operations
 				updateCtx, updateCancel := context.WithTimeout(ctx, 10*time.Second)
-				
+
 				// Use a new pooled connection for updating the message status
 				updateConn, connErr := pgx.Connect(updateCtx, l.pgURI)
 				if connErr != nil {
@@ -548,9 +548,9 @@ func (l *Listener) processQueue(ctx context.Context, processor *queueProcessor) 
 					updateCancel()
 					return
 				}
-				
+
 				var dbErr error
-				
+
 				if handlerErr != nil {
 					// If processing failed, mark it as available for retry
 					_, dbErr = updateConn.Exec(updateCtx, fmt.Sprintf(`
@@ -573,11 +573,11 @@ func (l *Listener) processQueue(ctx context.Context, processor *queueProcessor) 
 						logger.Error(fmt.Errorf("failed to mark message %s as completed: %w", messageID, dbErr))
 					}
 				}
-				
+
 				// Always clean up the database connection
 				updateConn.Close(updateCtx)
 				updateCancel()
-				
+
 				if handlerErr != nil || dbErr != nil {
 					return
 				}

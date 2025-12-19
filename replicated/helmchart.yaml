@@ -6,9 +6,9 @@ spec:
   chart:
     name: chartsmith
     chartVersion: 0.3.0
-  
+
   releaseName: chartsmith
-  
+
   values:
     # External Database Configuration
     postgresql:
@@ -18,28 +18,28 @@ spec:
         username: 'repl{{ ConfigOption "embedded_database_username" }}'
         password: 'repl{{ ConfigOption "embedded_database_password" }}'
         database: 'repl{{ ConfigOption "embedded_database_name" }}'
-    
+
     # LLM API Keys
     anthropic:
       apiKey: 'repl{{ ConfigOption "anthropic_api_key" }}'
-    
+
     groq:
       apiKey: 'repl{{ ConfigOption "groq_api_key" }}'
-    
+
     voyage:
       apiKey: 'repl{{ ConfigOption "voyage_api_key" }}'
-    
+
     # Authentication Configuration
     auth:
       google:
         clientId: 'repl{{ ConfigOption "google_client_id" }}'
         clientSecret: 'repl{{ ConfigOption "google_client_secret" }}'
         redirectUri: 'repl{{ ConfigOption "google_redirect_uri" }}'
-    
+
     # HMAC secret for JWT tokens
     hmac:
       secret: 'repl{{ ConfigOption "hmac_secret" }}'
-    
+
     # Centrifugo configuration
     centrifugo:
       enabled: true
@@ -47,7 +47,7 @@ spec:
       tokenHmacSecret: 'repl{{ ConfigOption "centrifugo_token_hmac_secret" }}'
       adminPassword: 'repl{{ ConfigOption "centrifugo_admin_password" }}'
       adminSecret: 'repl{{ ConfigOption "centrifugo_admin_secret" }}'
-  
+
   builder:
     postgresql:
       enabled: true
@@ -74,3 +74,679 @@ spec:
       tokenHmacSecret: "exampletokenhmac"
       adminPassword: "exampleadminpass"
       adminSecret: "exampleadminsecret"
+  docs:
+    reference: |
+      # Chartsmith Helm Chart Configuration Reference
+
+      This document provides a comprehensive reference for all configuration options available in the Chartsmith Helm chart.
+
+      ## Table of Contents
+
+      - [Container Images](#container-images)
+      - [Service Account](#service-account)
+      - [Pod Configuration](#pod-configuration)
+      - [Service Configuration](#service-configuration)
+      - [Health Checks](#health-checks)
+      - [Resource Management](#resource-management)
+      - [Ingress Configuration](#ingress-configuration)
+      - [Public Endpoint Configuration](#public-endpoint-configuration)
+      - [Autoscaling](#autoscaling)
+      - [Metrics and Monitoring](#metrics-and-monitoring)
+      - [Worker Configuration](#worker-configuration)
+      - [Authentication](#authentication)
+      - [API Keys](#api-keys)
+      - [Database Configuration](#database-configuration)
+      - [Real-time Communication (Centrifugo)](#real-time-communication-centrifugo)
+      - [Deployment Configuration](#deployment-configuration)
+
+      ---
+
+      ## Container Images
+
+      Configure container images for all Chartsmith components.
+
+      ### `images.app`
+      **Required:** No
+      **Default:** Uses proxy.replicated.com registry
+
+      ```yaml
+      images:
+        app:
+          registry: proxy.replicated.com                                    # Container registry
+          repository: proxy/chartsmith/dockerhub/chartsmith/chartsmith-app  # Image repository
+          tag: ""                                                           # Image tag (defaults to chart appVersion)
+          pullPolicy: IfNotPresent                                          # Image pull policy
+      ```
+
+      ### `images.worker`
+      **Required:** No
+      **Default:** Uses proxy.replicated.com registry
+
+      ```yaml
+      images:
+        worker:
+          registry: proxy.replicated.com                                       # Container registry
+          repository: proxy/chartsmith/dockerhub/chartsmith/chartsmith-worker  # Worker image repository
+          tag: ""                                                              # Image tag (defaults to chart appVersion)
+          pullPolicy: IfNotPresent                                             # Image pull policy
+      ```
+
+      ### `images.centrifugo`
+      **Required:** No
+      **Default:** Uses proxy.replicated.com registry
+
+      ```yaml
+      images:
+        centrifugo:
+          registry: proxy.replicated.com                                  # Container registry
+          repository: proxy/chartsmith/dockerhub/centrifugo/centrifugo    # Centrifugo image repository
+          tag: "v5"                                                       # Image tag
+          pullPolicy: IfNotPresent                                        # Image pull policy
+      ```
+
+      ### `images.pgvector`
+      **Required:** No
+      **Default:** Uses proxy.replicated.com registry
+
+      ```yaml
+      images:
+        pgvector:
+          registry: proxy.replicated.com                               # Container registry
+          repository: proxy/chartsmith/dockerhub/ankane/pgvector       # PostgreSQL with pgvector extension
+          tag: "latest"                                                # Image tag
+          pullPolicy: IfNotPresent                                     # Image pull policy
+      ```
+
+      ---
+
+      ## Service Account
+
+      Configure Kubernetes service account for Chartsmith pods.
+
+      ### `serviceAccount`
+      **Required:** No
+      **Default:** Creates a new service account
+
+      ```yaml
+      serviceAccount:
+        create: true          # Whether to create a service account
+        automount: true       # Whether to automount the service account token
+        annotations: {}       # Annotations to add to the service account
+        name: ""              # Name of the service account (auto-generated if empty)
+      ```
+
+      ---
+
+      ## Pod Configuration
+
+      Configure pod-level settings for Chartsmith deployments.
+
+      ### `nameOverride` and `fullnameOverride`
+      **Required:** No
+      **Default:** Uses chart name
+
+      ```yaml
+      nameOverride: ""      # Override the name of the chart
+      fullnameOverride: ""  # Override the full name of resources
+      ```
+
+      ### `podAnnotations`
+      **Required:** No
+      **Default:** No annotations
+
+      ```yaml
+      podAnnotations: {}    # Kubernetes annotations to add to pods
+      # Example:
+      # podAnnotations:
+      #   prometheus.io/scrape: "true"
+      #   prometheus.io/port: "8080"
+      ```
+
+      ### `podLabels`
+      **Required:** No
+      **Default:** No additional labels
+
+      ```yaml
+      podLabels: {}         # Kubernetes labels to add to pods
+      # Example:
+      # podLabels:
+      #   environment: production
+      #   team: platform
+      ```
+
+      ### `podSecurityContext`
+      **Required:** No
+      **Default:** Empty (uses cluster defaults)
+
+      ```yaml
+      podSecurityContext: {}  # Pod-level security context
+      # Example:
+      # podSecurityContext:
+      #   fsGroup: 2000
+      #   runAsNonRoot: true
+      ```
+
+      ### `securityContext`
+      **Required:** No
+      **Default:** Empty (uses cluster defaults)
+
+      ```yaml
+      securityContext: {}     # Container-level security context
+      # Example:
+      # securityContext:
+      #   capabilities:
+      #     drop:
+      #     - ALL
+      #   readOnlyRootFilesystem: true
+      #   runAsNonRoot: true
+      #   runAsUser: 1000
+      ```
+
+      ### `nodeSelector`
+      **Required:** No
+      **Default:** No node selection
+
+      ```yaml
+      nodeSelector: {}        # Node selector for pod scheduling
+      # Example:
+      # nodeSelector:
+      #   kubernetes.io/arch: amd64
+      ```
+
+      ### `tolerations`
+      **Required:** No
+      **Default:** No tolerations
+
+      ```yaml
+      tolerations: []         # Tolerations for pod scheduling
+      # Example:
+      # tolerations:
+      # - key: "key1"
+      #   operator: "Equal"
+      #   value: "value1"
+      #   effect: "NoSchedule"
+      ```
+
+      ### `affinity`
+      **Required:** No
+      **Default:** No affinity rules
+
+      ```yaml
+      affinity: {}            # Affinity rules for pod scheduling
+      # Example:
+      # affinity:
+      #   podAntiAffinity:
+      #     preferredDuringSchedulingIgnoredDuringExecution:
+      #     - weight: 100
+      #       podAffinityTerm:
+      #         labelSelector:
+      #           matchExpressions:
+      #           - key: app.kubernetes.io/name
+      #             operator: In
+      #             values:
+      #             - chartsmith
+      #         topologyKey: kubernetes.io/hostname
+      ```
+
+      ---
+
+      ## Service Configuration
+
+      Configure Kubernetes service for external access.
+
+      ### `service`
+      **Required:** No
+      **Default:** NodePort service on port 3000
+
+      ```yaml
+      service:
+        type: NodePort        # Service type (ClusterIP, NodePort, LoadBalancer)
+        port: 3000           # Service port
+        targetPort: 3000     # Container port
+        nodePort: 30080      # NodePort (only used when type is NodePort)
+        annotations: {}      # Service annotations
+        labels: {}           # Service labels
+      ```
+
+      **Service Types:**
+      - `ClusterIP`: Internal access only
+      - `NodePort`: Access via node IP and port
+      - `LoadBalancer`: External load balancer (cloud provider dependent)
+
+      ---
+
+      ## Health Checks
+
+      Configure liveness and readiness probes for application health monitoring.
+
+      ### `livenessProbe`
+      **Required:** No
+      **Default:** HTTP probe on root path
+
+      ```yaml
+      livenessProbe:
+        httpGet:
+          path: /                    # Health check endpoint
+          port: http                 # Port name or number
+        initialDelaySeconds: 30      # Delay before first probe
+        periodSeconds: 10            # Probe frequency
+      ```
+
+      ### `readinessProbe`
+      **Required:** No
+      **Default:** HTTP probe on root path
+
+      ```yaml
+      readinessProbe:
+        httpGet:
+          path: /                    # Readiness check endpoint
+          port: http                 # Port name or number
+        initialDelaySeconds: 5       # Delay before first probe
+        periodSeconds: 5             # Probe frequency
+      ```
+
+      ---
+
+      ## Resource Management
+
+      Configure CPU and memory resources for containers.
+
+      ### `resources`
+      **Required:** No
+      **Default:** 1 CPU / 1Gi memory limit, 100m CPU / 128Mi memory request
+
+      ```yaml
+      resources:
+        limits:
+          cpu: 1000m              # Maximum CPU (1 core)
+          memory: 1Gi             # Maximum memory (1 GiB)
+        requests:
+          cpu: 100m               # Requested CPU (0.1 core)
+          memory: 128Mi           # Requested memory (128 MiB)
+      ```
+
+      **Resource Units:**
+      - CPU: `100m` = 0.1 core, `1000m` = 1 core
+      - Memory: `128Mi` = 128 MiB, `1Gi` = 1 GiB
+
+      ---
+
+      ## Ingress Configuration
+
+      Configure ingress for external HTTP/HTTPS access.
+
+      ### `ingress`
+      **Required:** No
+      **Default:** Disabled
+
+      ```yaml
+      ingress:
+        enabled: false              # Enable ingress
+        className: ""               # Ingress class name
+        annotations: {}             # Ingress annotations
+        hosts: []                   # Host configurations
+        tls: []                     # TLS configurations
+      ```
+
+      **Example Configuration:**
+      ```yaml
+      ingress:
+        enabled: true
+        className: "nginx"
+        annotations:
+          nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+          nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+        hosts:
+        - host: chartsmith.example.com
+          paths:
+          - path: /connection/websocket
+            pathType: Prefix
+            service: centrifugo
+          - path: /
+            pathType: Prefix
+            service: app
+        tls:
+        - secretName: chartsmith-tls
+          hosts:
+          - chartsmith.example.com
+      ```
+
+      ---
+
+      ## Public Endpoint Configuration
+
+      Configure public API and WebSocket endpoints for the frontend.
+
+      ### `config`
+      **Required:** Yes (for frontend functionality)
+      **Default:** localhost development URLs
+
+      ```yaml
+      config:
+        # Public API endpoint URL that the frontend will use
+        apiEndpoint: "http://chartsmith.localdev.me:3000/api"
+
+        # WebSocket endpoint for real-time updates via Centrifugo
+        centrifugoAddress: "ws://chartsmith.localdev.me:3000/centrifugo/connection"
+      ```
+
+      **⚠️ Important:** These URLs must be accessible from users' browsers and should match your ingress configuration.
+
+      ---
+
+      ## Autoscaling
+
+      Configure horizontal pod autoscaling based on CPU and memory usage.
+
+      ### `autoscaling`
+      **Required:** No
+      **Default:** Disabled
+
+      ```yaml
+      autoscaling:
+        enabled: false                        # Enable horizontal pod autoscaling
+        minReplicas: 1                        # Minimum number of replicas
+        maxReplicas: 100                      # Maximum number of replicas
+        targetCPUUtilizationPercentage: 80    # Target CPU utilization
+        targetMemoryUtilizationPercentage: 80 # Target memory utilization
+      ```
+
+      **Note:** Requires metrics-server to be installed in the cluster.
+
+      ---
+
+      ## Metrics and Monitoring
+
+      Configure metrics collection and monitoring integration.
+
+      ### `metrics`
+      **Required:** No
+      **Default:** Disabled
+
+      ```yaml
+      metrics:
+        enabled: false                # Enable metrics collection
+        serviceMonitor:
+          enabled: false              # Enable Prometheus ServiceMonitor
+          interval: 30s               # Scrape interval
+      ```
+
+      ### `configmap`
+      **Required:** No
+      **Default:** Enabled with empty data
+
+      ```yaml
+      configmap:
+        enabled: true                 # Enable additional ConfigMap
+        data: {}                      # Additional configuration data
+      ```
+
+      ---
+
+      ## Worker Configuration
+
+      Configure the Chartsmith worker component for background processing.
+
+      ### `worker`
+      **Required:** No
+      **Default:** Bootstrap disabled, no AWS configuration
+
+      ```yaml
+      worker:
+        bootstrap:
+          enabled: false              # Bootstrap initial workspace on startup
+          workspaceDir: ""            # Custom workspace directory (default: "/bootstrap/default-workspace")
+        aws:
+          useEC2Parameters: false     # Use EC2 instance metadata for AWS configuration
+          region: ""                  # AWS region (default: "us-east-1")
+      ```
+
+      **Bootstrap Options:**
+      - When `bootstrap.enabled` is `true`, the worker will create an initial workspace on startup
+      - Use `workspaceDir` to specify a custom path for bootstrap data
+
+      **AWS Integration:**
+      - Set `aws.useEC2Parameters` to `true` when running on EC2 instances
+      - Specify `aws.region` for AWS service calls
+
+      ---
+
+      ## Authentication
+
+      Configure authentication providers and security settings.
+
+      ### `auth.enableTestAuth`
+      **Required:** No
+      **Default:** `false`
+
+      ```yaml
+      auth:
+        enableTestAuth: false         # ⚠️ NEVER USE IN PRODUCTION - enables test authentication
+      ```
+
+      **⚠️ Security Warning:** Never enable test authentication in production environments.
+
+      ### `auth.google` (Google OAuth)
+      **Required:** Yes (for Google authentication)
+      **Default:** Empty
+
+      ```yaml
+      auth:
+        google:
+          redirectUri: ""             # OAuth redirect URI (must match Google OAuth configuration)
+          clientId: ""                # Google OAuth client ID
+          clientSecret: ""            # Google OAuth client secret (or use existingK8sSecret)
+          existingK8sSecret: ""       # Existing Kubernetes secret (key must be GOOGLE_CLIENT_SECRET)
+      ```
+
+      **Setup Instructions:**
+      1. Create OAuth credentials at https://console.cloud.google.com/
+      2. Set authorized redirect URI to match your `redirectUri` value
+      3. Either provide `clientSecret` directly or reference an existing secret
+
+      ### `auth.replicated` (Replicated OAuth)
+      **Required:** No
+      **Default:** Empty
+
+      ```yaml
+      auth:
+        replicated:
+          redirectUri: ""             # Replicated OAuth redirect URI (leave empty if not using)
+      ```
+
+      ---
+
+      ## API Keys
+
+      Configure API keys for external services. All API keys are required for full functionality.
+
+      ### `hmac` (JWT Token Signing)
+      **Required:** Yes
+      **Default:** Empty
+
+      ```yaml
+      hmac:
+        secret: ""                    # 32-byte hex string for signing JWTs
+        existingK8sSecret: ""         # Existing Kubernetes secret (key must be HMAC_SECRET)
+      ```
+
+      **Generate HMAC Secret:**
+      ```bash
+      openssl rand -hex 32
+      ```
+
+      ### `anthropic` (Claude AI)
+      **Required:** Yes
+      **Default:** Empty
+
+      ```yaml
+      anthropic:
+        apiKey: ""                    # Anthropic API key (starts with 'sk-ant-')
+        existingSecret: ""            # Existing Kubernetes secret (key must be ANTHROPIC_API_KEY)
+      ```
+
+      **Get API Key:** https://console.anthropic.com/
+
+      ### `groq` (Groq AI)
+      **Required:** Yes
+      **Default:** Empty
+
+      ```yaml
+      groq:
+        apiKey: ""                    # Groq API key (starts with 'gsk_')
+        existingSecret: ""            # Existing Kubernetes secret (key must be GROQ_API_KEY)
+      ```
+
+      **Get API Key:** https://console.groq.com/docs/quickstart
+
+      ### `voyage` (Voyage AI Embeddings)
+      **Required:** Yes
+      **Default:** Empty
+
+      ```yaml
+      voyage:
+        apiKey: ""                    # Voyage AI API key (starts with 'pa-')
+        existingSecret: ""            # Existing Kubernetes secret (key must be VOYAGE_API_KEY)
+      ```
+
+      **Get API Key:** https://docs.voyageai.com/docs/faq#how-do-i-get-the-voyage-api-key
+
+      ---
+
+      ## Real-time Communication (Centrifugo)
+
+      Configure Centrifugo for real-time WebSocket communication.
+
+      ### `centrifugo`
+      **Required:** Yes
+      **Default:** Enabled with empty credentials
+
+      ```yaml
+      centrifugo:
+        enabled: true                 # Enable Centrifugo service
+        apiKey: ""                    # Centrifugo API key
+        tokenHmacSecret: ""           # HMAC secret for token signing
+        adminPassword: ""             # Admin interface password
+        adminSecret: ""               # Admin interface secret
+        existingSecret: ""            # Existing Kubernetes secret with config.json
+      ```
+
+      **Using Existing Secret:**
+      If using `existingSecret`, the secret must contain a `config.json` key following the [Centrifugo v5 JSON config format](https://centrifugal.dev/docs/5/server/configuration).
+
+      **Generate Secrets:**
+      ```bash
+      # Generate API key (32 characters)
+      openssl rand -base64 24
+
+      # Generate HMAC secret (32 characters)
+      openssl rand -base64 24
+
+      # Generate admin password
+      openssl rand -base64 16
+
+      # Generate admin secret
+      openssl rand -base64 24
+      ```
+
+      ---
+
+      ## Database Configuration
+
+      Configure PostgreSQL database with pgvector extension.
+
+      ### `postgresql`
+      **Required:** Yes (either embedded or external)
+      **Default:** Embedded database enabled
+
+      ```yaml
+      postgresql:
+        enabled: true                 # Create embedded PostgreSQL instance
+        externalUri: ""               # External PostgreSQL connection URI
+        credentials:                  # Credentials for embedded database
+          username: ""                # Database username
+          password: ""                # Database password
+          database: ""                # Database name
+          existingSecret: ""          # Existing secret (keys: username, password, database)
+        storage:
+          size: "10Gi"                # Storage size for embedded database
+          className: ""               # Storage class name
+      ```
+
+      **Configuration Options:**
+
+      1. **Embedded Database** (`enabled: true`):
+         - Creates a PostgreSQL StatefulSet with pgvector extension
+         - Requires `credentials.username`, `credentials.password`, and `credentials.database`
+         - Uses persistent storage with configurable size
+
+      2. **External Database** (`enabled: false`):
+         - Connects to existing PostgreSQL instance
+         - Requires `externalUri` in format: `postgres://user:password@host:port/dbname?options`
+         - External database must have pgvector extension installed
+
+      **External URI Examples:**
+      ```
+      postgres://chartsmith:password@db.example.com:5432/chartsmith?sslmode=require
+      postgres://user:pass@localhost:5432/mydb?sslmode=disable
+      ```
+
+      **Database Requirements:**
+      - PostgreSQL 12+ with pgvector extension
+      - Sufficient storage for vector embeddings and application data
+      - Network connectivity from Kubernetes cluster
+
+      ---
+
+      ## Security Best Practices
+
+      ### Secret Management
+      - **Never commit secrets to version control**
+      - Use Kubernetes secrets or external secret management systems
+      - Rotate API keys and secrets regularly
+      - Use least privilege access for database users
+
+      ### Network Security
+      - Configure ingress with TLS termination
+      - Restrict database access to private networks only
+      - Use strong authentication methods
+      - Enable audit logging where available
+
+      ### Resource Security
+      - Set appropriate resource limits and requests
+      - Use security contexts to run containers as non-root
+      - Enable pod security policies or pod security standards
+      - Regular security scanning of container images
+
+      ---
+
+      ## Troubleshooting
+
+      ### Common Issues
+
+      1. **Database Connection Failures**
+         - Verify database credentials and connection URI
+         - Check network connectivity between pods and database
+         - Ensure pgvector extension is installed
+
+      2. **Authentication Issues**
+         - Verify OAuth redirect URIs match exactly
+         - Check API key formats and validity
+         - Ensure HMAC secret is properly configured
+
+      3. **Real-time Features Not Working**
+         - Verify Centrifugo configuration and credentials
+         - Check WebSocket endpoint accessibility
+         - Ensure proper ingress configuration for WebSocket traffic
+
+      4. **Resource Issues**
+         - Monitor CPU and memory usage
+         - Adjust resource limits and requests as needed
+         - Check for storage space issues with embedded database
+
+      ### Getting Help
+
+      - Check pod logs: `kubectl logs -f deployment/chartsmith-app`
+      - Verify configuration: `kubectl get configmap chartsmith-configs -o yaml`
+      - Check secrets: `kubectl get secrets` (do not expose secret values)
+      - Monitor resources: `kubectl top pods`

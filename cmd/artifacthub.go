@@ -89,7 +89,7 @@ func runArtifactHubCache(ctx context.Context, pgURI string, force bool, verbose 
 		if err != nil && err != pgx.ErrNoRows {
 			return fmt.Errorf("failed to get last updated time: %w", err)
 		}
-		
+
 		if lastUpdated.Valid {
 			// If cache was updated in the last 6 hours, skip
 			if time.Since(lastUpdated.Time) < 6*time.Hour {
@@ -136,7 +136,7 @@ func runArtifactHubCache(ctx context.Context, pgURI string, force bool, verbose 
 	if err != nil {
 		return fmt.Errorf("failed to drop artifacthub_chart table: %w", err)
 	}
-	
+
 	_, err = tx.Exec(ctx, `
 		CREATE TABLE artifacthub_chart (
 			id TEXT PRIMARY KEY,
@@ -186,32 +186,32 @@ func runArtifactHubCache(ctx context.Context, pgURI string, force bool, verbose 
 	// Insert new data
 	batchSize := 1000
 	inserted := 0
-	
+
 	// Use a map to deduplicate packages with the same name+version
 	deduplicated := make(map[string]HarborPackage)
 	for _, pkg := range packages {
 		key := fmt.Sprintf("%s-%s", pkg.Package, pkg.Version)
 		deduplicated[key] = pkg
 	}
-	
+
 	// Convert back to slice for batch processing
 	uniquePackages := make([]HarborPackage, 0, len(deduplicated))
 	for _, pkg := range deduplicated {
 		uniquePackages = append(uniquePackages, pkg)
 	}
-	
+
 	// Group packages by name to get the latest version
 	chartsByName := make(map[string][]HarborPackage)
 	for _, pkg := range uniquePackages {
 		chartsByName[pkg.Package] = append(chartsByName[pkg.Package], pkg)
 	}
-	
+
 	if verbose {
 		logger.Debug(fmt.Sprintf("Found %d unique chart names after deduplication", len(chartsByName)))
-		logger.Debug(fmt.Sprintf("Processing %d unique packages (removed %d duplicates)", 
-			len(uniquePackages), len(packages) - len(uniquePackages)))
+		logger.Debug(fmt.Sprintf("Processing %d unique packages (removed %d duplicates)",
+			len(uniquePackages), len(packages)-len(uniquePackages)))
 	}
-	
+
 	// Process in batches to avoid memory issues
 	for _, batch := range createBatches(uniquePackages, batchSize) {
 		_, err = tx.CopyFrom(
@@ -231,11 +231,11 @@ func runArtifactHubCache(ctx context.Context, pgURI string, force bool, verbose 
 				}, nil
 			}),
 		)
-		
+
 		if err != nil {
 			return fmt.Errorf("failed to insert chart data batch: %w", err)
 		}
-		
+
 		inserted += len(batch)
 		if verbose {
 			logger.Debug(fmt.Sprintf("Inserted %d/%d unique packages", inserted, len(uniquePackages)))
@@ -264,7 +264,7 @@ func runArtifactHubCache(ctx context.Context, pgURI string, force bool, verbose 
 
 func createBatches(items []HarborPackage, batchSize int) [][]HarborPackage {
 	var batches [][]HarborPackage
-	
+
 	for i := 0; i < len(items); i += batchSize {
 		end := i + batchSize
 		if end > len(items) {
@@ -272,6 +272,6 @@ func createBatches(items []HarborPackage, batchSize int) [][]HarborPackage {
 		}
 		batches = append(batches, items[i:end])
 	}
-	
+
 	return batches
 }

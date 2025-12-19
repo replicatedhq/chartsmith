@@ -15,7 +15,7 @@ import (
 func DebugConsoleCmd() *cobra.Command {
 	var workspaceID string
 	var nonInteractive bool
-	
+
 	cmd := &cobra.Command{
 		Use:   "debug-console [command] [flags]",
 		Short: "Interactive debug console for chartsmith",
@@ -71,7 +71,7 @@ Examples:
 			return debugcli.RunConsole(opts)
 		},
 	}
-	
+
 	// Add flags
 	cmd.Flags().StringVar(&workspaceID, "workspace-id", "", "Workspace ID to use for commands")
 

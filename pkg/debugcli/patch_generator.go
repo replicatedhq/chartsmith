@@ -10,16 +10,16 @@ import (
 type PatchType string
 
 const (
-	PatchTypeAddValue      PatchType = "add-value"
-	PatchTypeChangeValue   PatchType = "change-value"
-	PatchTypeRemoveValue   PatchType = "remove-value"
-	PatchTypeAddBlock      PatchType = "add-block"
-	PatchTypeRemoveBlock   PatchType = "remove-block"
-	PatchTypeIndentation   PatchType = "indentation"
-	PatchTypeComments      PatchType = "comments"
-	PatchTypeReplaceBlock  PatchType = "replace-block"
-	PatchTypeRenameKey     PatchType = "rename-key"
-	PatchTypeSwapSections  PatchType = "swap-sections"
+	PatchTypeAddValue     PatchType = "add-value"
+	PatchTypeChangeValue  PatchType = "change-value"
+	PatchTypeRemoveValue  PatchType = "remove-value"
+	PatchTypeAddBlock     PatchType = "add-block"
+	PatchTypeRemoveBlock  PatchType = "remove-block"
+	PatchTypeIndentation  PatchType = "indentation"
+	PatchTypeComments     PatchType = "comments"
+	PatchTypeReplaceBlock PatchType = "replace-block"
+	PatchTypeRenameKey    PatchType = "rename-key"
+	PatchTypeSwapSections PatchType = "swap-sections"
 )
 
 // LineType categorizes what kind of line we're dealing with
@@ -66,7 +66,7 @@ func NewPatchGenerator(content string) *PatchGenerator {
 			PatchTypeRenameKey,
 		},
 	}
-	
+
 	pg.parseLines()
 	return pg
 }
@@ -75,26 +75,26 @@ func NewPatchGenerator(content string) *PatchGenerator {
 func (pg *PatchGenerator) parseLines() {
 	pg.parsedLines = make([]YAMLLine, 0, len(pg.lines))
 	parentKeyStack := []string{""}
-	
+
 	for i, line := range pg.lines {
 		trimmed := strings.TrimSpace(line)
 		indent := len(line) - len(strings.TrimLeft(line, " \t"))
-		
+
 		yamlLine := YAMLLine{
-			Content:  line,
-			LineNum:  i,
-			Indent:   indent,
+			Content: line,
+			LineNum: i,
+			Indent:  indent,
 		}
-		
+
 		// Track parent based on indentation
 		for len(parentKeyStack) > 0 && (len(parentKeyStack) > 1 && indent <= pg.parsedLines[pg.getLastLineWithIndent(indent)].Indent) {
 			parentKeyStack = parentKeyStack[:len(parentKeyStack)-1]
 		}
-		
+
 		if len(parentKeyStack) > 0 {
 			yamlLine.ParentKey = parentKeyStack[len(parentKeyStack)-1]
 		}
-		
+
 		// Determine line type
 		switch {
 		case trimmed == "":
@@ -114,7 +114,7 @@ func (pg *PatchGenerator) parseLines() {
 			yamlLine.LineType = LineTypeKey
 			yamlLine.Key = key
 			yamlLine.Value = value
-			
+
 			// If this is a block start (ends with :), push to parent stack
 			if value == "" || value == "{}" {
 				yamlLine.LineType = LineTypeBlockStart
@@ -125,7 +125,7 @@ func (pg *PatchGenerator) parseLines() {
 			yamlLine.LineType = LineTypeListItem
 			yamlLine.Value = trimmed
 		}
-		
+
 		pg.parsedLines = append(pg.parsedLines, yamlLine)
 	}
 }
@@ -146,9 +146,9 @@ func (pg *PatchGenerator) GeneratePatch() string {
 	for {
 		// Select a random patch type
 		patchType := pg.patchTypes[rand.Intn(len(pg.patchTypes))]
-		
+
 		var patch string
-		
+
 		switch patchType {
 		case PatchTypeAddValue:
 			patch = pg.generateAddValuePatch()
@@ -166,12 +166,12 @@ func (pg *PatchGenerator) GeneratePatch() string {
 			// If something goes wrong, fall back to adding a value
 			patch = pg.generateAddValuePatch()
 		}
-		
+
 		// Check if we have a valid patch with actual content changes (at least one + or - line)
 		if patch != "" && containsAdditionOrDeletion(patch) {
 			return patch
 		}
-		
+
 		// If we got here, the patch wasn't valid - try again with a different type
 		// Favor types that are more likely to generate changes
 		if rand.Intn(100) < 70 {
@@ -189,7 +189,7 @@ func containsAdditionOrDeletion(patch string) bool {
 		// Look for lines that start with + or - but not just header lines (like +++ or ---)
 		// This is a simple heuristic to find actual content changes
 		if (strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++")) ||
-		   (strings.HasPrefix(line, "-") && !strings.HasPrefix(line, "---")) {
+			(strings.HasPrefix(line, "-") && !strings.HasPrefix(line, "---")) {
 			// Make sure it's not just an empty context line
 			if len(strings.TrimSpace(line)) > 1 {
 				return true
@@ -207,25 +207,25 @@ func (pg *PatchGenerator) generateAddValuePatch() string {
 		// Fallback to adding at root level
 		return pg.generateRootLevelValuePatch()
 	}
-	
+
 	// Pick a random block
 	blockLine := blockLines[rand.Intn(len(blockLines))]
-	
+
 	// Determine the indentation level for the new value
 	indentation := blockLine.Indent + 2
-	
+
 	// Generate a random key and value
 	key := fmt.Sprintf("new_%s_%d", getRandomItem(randomNames), rand.Intn(100))
 	value := generateRandomValue(key)
-	
+
 	// For string values, wrap in quotes
 	if !strings.ContainsAny(value, "{}[]") && !isNumeric(value) && value != "true" && value != "false" {
 		value = fmt.Sprintf("\"%s\"", value)
 	}
-	
+
 	// Build the patch
 	newLine := fmt.Sprintf("%s%s: %s", strings.Repeat(" ", indentation), key, value)
-	
+
 	// Find the last line in this block to insert after
 	lastLineIndex := blockLine.LineNum
 	for i := blockLine.LineNum + 1; i < len(pg.parsedLines); i++ {
@@ -234,17 +234,17 @@ func (pg *PatchGenerator) generateAddValuePatch() string {
 		}
 		lastLineIndex = i
 	}
-	
+
 	// Generate the patch
 	var builder strings.Builder
 	builder.WriteString("--- file\n")
 	builder.WriteString("+++ file\n")
-	builder.WriteString(fmt.Sprintf("@@ -%d,%d +%d,%d @@\n", 
-		lastLineIndex+1, 1, 
+	builder.WriteString(fmt.Sprintf("@@ -%d,%d +%d,%d @@\n",
+		lastLineIndex+1, 1,
 		lastLineIndex+1, 2))
 	builder.WriteString(fmt.Sprintf(" %s\n", pg.lines[lastLineIndex]))
 	builder.WriteString(fmt.Sprintf("+%s\n", newLine))
-	
+
 	return builder.String()
 }
 
@@ -253,12 +253,12 @@ func (pg *PatchGenerator) generateRootLevelValuePatch() string {
 	// Generate random key and value
 	key := fmt.Sprintf("root_%s_%d", getRandomItem(randomNames), rand.Intn(100))
 	value := generateRandomValue(key)
-	
+
 	// For string values, wrap in quotes
 	if !strings.ContainsAny(value, "{}[]") && !isNumeric(value) && value != "true" && value != "false" {
 		value = fmt.Sprintf("\"%s\"", value)
 	}
-	
+
 	// Find where to insert (after the last root level entry)
 	lastRootIndex := len(pg.lines) - 1
 	for i := len(pg.parsedLines) - 1; i >= 0; i-- {
@@ -267,17 +267,17 @@ func (pg *PatchGenerator) generateRootLevelValuePatch() string {
 			break
 		}
 	}
-	
+
 	// Build the patch
 	var builder strings.Builder
 	builder.WriteString("--- file\n")
 	builder.WriteString("+++ file\n")
-	builder.WriteString(fmt.Sprintf("@@ -%d,%d +%d,%d @@\n", 
-		lastRootIndex+1, 1, 
+	builder.WriteString(fmt.Sprintf("@@ -%d,%d +%d,%d @@\n",
+		lastRootIndex+1, 1,
 		lastRootIndex+1, 2))
 	builder.WriteString(fmt.Sprintf(" %s\n", pg.lines[lastRootIndex]))
 	builder.WriteString(fmt.Sprintf("+%s: %s\n", key, value))
-	
+
 	return builder.String()
 }
 
@@ -290,36 +290,36 @@ func (pg *PatchGenerator) generateChangeValuePatch() string {
 			valueLines = append(valueLines, line)
 		}
 	}
-	
+
 	if len(valueLines) == 0 {
 		// Fall back to adding a value
 		return pg.generateAddValuePatch()
 	}
-	
+
 	// Pick a random value to change
 	valueLine := valueLines[rand.Intn(len(valueLines))]
-	
+
 	// Generate a new value
 	newValue := generateRandomValue(valueLine.Key)
-	
+
 	// For string values, wrap in quotes if the original had them
 	if strings.HasPrefix(valueLine.Value, "\"") && strings.HasSuffix(valueLine.Value, "\"") {
 		newValue = fmt.Sprintf("\"%s\"", newValue)
 	}
-	
+
 	// Build the new line with the same indentation
 	newLine := fmt.Sprintf("%s%s: %s", strings.Repeat(" ", valueLine.Indent), valueLine.Key, newValue)
-	
+
 	// Generate the patch
 	var builder strings.Builder
 	builder.WriteString("--- file\n")
 	builder.WriteString("+++ file\n")
-	builder.WriteString(fmt.Sprintf("@@ -%d,%d +%d,%d @@\n", 
-		valueLine.LineNum+1, 1, 
+	builder.WriteString(fmt.Sprintf("@@ -%d,%d +%d,%d @@\n",
+		valueLine.LineNum+1, 1,
 		valueLine.LineNum+1, 1))
 	builder.WriteString(fmt.Sprintf("-%s\n", pg.lines[valueLine.LineNum]))
 	builder.WriteString(fmt.Sprintf("+%s\n", newLine))
-	
+
 	return builder.String()
 }
 
@@ -332,58 +332,58 @@ func (pg *PatchGenerator) generateRemoveValuePatch() string {
 			valueLines = append(valueLines, line)
 		}
 	}
-	
+
 	if len(valueLines) == 0 {
 		// Fall back to adding a value
 		return pg.generateAddValuePatch()
 	}
-	
+
 	// Pick a random value to remove
 	valueLine := valueLines[rand.Intn(len(valueLines))]
-	
+
 	// Get context lines
 	contextBefore := ""
 	if valueLine.LineNum > 0 {
 		contextBefore = pg.lines[valueLine.LineNum-1]
 	}
-	
+
 	contextAfter := ""
 	if valueLine.LineNum < len(pg.lines)-1 {
 		contextAfter = pg.lines[valueLine.LineNum+1]
 	}
-	
+
 	// Generate the patch
 	var builder strings.Builder
 	builder.WriteString("--- file\n")
 	builder.WriteString("+++ file\n")
-	
+
 	// If we have context lines, include them
 	if contextBefore != "" && contextAfter != "" {
-		builder.WriteString(fmt.Sprintf("@@ -%d,%d +%d,%d @@\n", 
-			valueLine.LineNum, 3, 
+		builder.WriteString(fmt.Sprintf("@@ -%d,%d +%d,%d @@\n",
+			valueLine.LineNum, 3,
 			valueLine.LineNum, 2))
 		builder.WriteString(fmt.Sprintf(" %s\n", contextBefore))
 		builder.WriteString(fmt.Sprintf("-%s\n", pg.lines[valueLine.LineNum]))
 		builder.WriteString(fmt.Sprintf(" %s\n", contextAfter))
 	} else if contextBefore != "" {
-		builder.WriteString(fmt.Sprintf("@@ -%d,%d +%d,%d @@\n", 
-			valueLine.LineNum, 2, 
+		builder.WriteString(fmt.Sprintf("@@ -%d,%d +%d,%d @@\n",
+			valueLine.LineNum, 2,
 			valueLine.LineNum, 1))
 		builder.WriteString(fmt.Sprintf(" %s\n", contextBefore))
 		builder.WriteString(fmt.Sprintf("-%s\n", pg.lines[valueLine.LineNum]))
 	} else if contextAfter != "" {
-		builder.WriteString(fmt.Sprintf("@@ -%d,%d +%d,%d @@\n", 
-			valueLine.LineNum+1, 2, 
+		builder.WriteString(fmt.Sprintf("@@ -%d,%d +%d,%d @@\n",
+			valueLine.LineNum+1, 2,
 			valueLine.LineNum+1, 1))
 		builder.WriteString(fmt.Sprintf("-%s\n", pg.lines[valueLine.LineNum]))
 		builder.WriteString(fmt.Sprintf(" %s\n", contextAfter))
 	} else {
-		builder.WriteString(fmt.Sprintf("@@ -%d,%d +%d,%d @@\n", 
-			valueLine.LineNum+1, 1, 
+		builder.WriteString(fmt.Sprintf("@@ -%d,%d +%d,%d @@\n",
+			valueLine.LineNum+1, 1,
 			valueLine.LineNum+1, 0))
 		builder.WriteString(fmt.Sprintf("-%s\n", pg.lines[valueLine.LineNum]))
 	}
-	
+
 	return builder.String()
 }
 
@@ -392,14 +392,14 @@ func (pg *PatchGenerator) generateAddBlockPatch() string {
 	// Find a place to add a block - either at root level or in an existing block
 	insertAfterLine := 0
 	indentation := 0
-	
+
 	// First, try to find a block to add to
 	blockLines := pg.findBlockStartLines()
 	if len(blockLines) > 0 {
 		// Pick a random block
 		blockLine := blockLines[rand.Intn(len(blockLines))]
 		indentation = blockLine.Indent + 2
-		
+
 		// Find the last line in this block to insert after
 		insertAfterLine = blockLine.LineNum
 		for i := blockLine.LineNum + 1; i < len(pg.parsedLines); i++ {
@@ -417,40 +417,40 @@ func (pg *PatchGenerator) generateAddBlockPatch() string {
 			}
 		}
 	}
-	
+
 	// Generate a block name
 	blockName := fmt.Sprintf("new_%s_%d", getRandomItem(randomNames), rand.Intn(100))
-	
+
 	// Create the block with random content
 	var blockBuilder strings.Builder
 	blockBuilder.WriteString(fmt.Sprintf("%s%s:\n", strings.Repeat(" ", indentation), blockName))
-	
+
 	// Add 2-5 fields to the block
 	fieldCount := rand.Intn(4) + 2
 	for i := 0; i < fieldCount; i++ {
 		fieldName := fmt.Sprintf("field_%d", i+1)
 		fieldValue := generateRandomValue(fieldName)
-		
+
 		// For string values, wrap in quotes
 		if !strings.ContainsAny(fieldValue, "{}[]") && !isNumeric(fieldValue) && fieldValue != "true" && fieldValue != "false" {
 			fieldValue = fmt.Sprintf("\"%s\"", fieldValue)
 		}
-		
+
 		blockBuilder.WriteString(fmt.Sprintf("%s  %s: %s\n", strings.Repeat(" ", indentation), fieldName, fieldValue))
 	}
-	
+
 	blockContent := blockBuilder.String()
-	
+
 	// Create the patch
 	var patchBuilder strings.Builder
 	patchBuilder.WriteString("--- file\n")
 	patchBuilder.WriteString("+++ file\n")
-	patchBuilder.WriteString(fmt.Sprintf("@@ -%d,%d +%d,%d @@\n", 
-		insertAfterLine+1, 1, 
+	patchBuilder.WriteString(fmt.Sprintf("@@ -%d,%d +%d,%d @@\n",
+		insertAfterLine+1, 1,
 		insertAfterLine+1, 1+strings.Count(blockContent, "\n")))
 	patchBuilder.WriteString(fmt.Sprintf(" %s\n", pg.lines[insertAfterLine]))
 	patchBuilder.WriteString(blockContent)
-	
+
 	return patchBuilder.String()
 }
 
@@ -475,32 +475,32 @@ func (pg *PatchGenerator) generateAddCommentPatch() string {
 			nonEmptyLines = append(nonEmptyLines, line)
 		}
 	}
-	
+
 	if len(nonEmptyLines) == 0 {
 		// Fall back to adding at the beginning
 		return pg.generateAddValuePatch()
 	}
-	
+
 	// Pick a random line
 	targetLine := nonEmptyLines[rand.Intn(len(nonEmptyLines))]
-	
+
 	// Generate a comment
 	commentText := getRandomComment()
 	indentation := targetLine.Indent
-	
+
 	// Build the comment line
 	commentLine := fmt.Sprintf("%s# %s", strings.Repeat(" ", indentation), commentText)
-	
+
 	// Generate the patch
 	var builder strings.Builder
 	builder.WriteString("--- file\n")
 	builder.WriteString("+++ file\n")
-	builder.WriteString(fmt.Sprintf("@@ -%d,%d +%d,%d @@\n", 
-		targetLine.LineNum+1, 1, 
+	builder.WriteString(fmt.Sprintf("@@ -%d,%d +%d,%d @@\n",
+		targetLine.LineNum+1, 1,
 		targetLine.LineNum+1, 2))
 	builder.WriteString(fmt.Sprintf(" %s\n", pg.lines[targetLine.LineNum]))
 	builder.WriteString(fmt.Sprintf("+%s\n", commentLine))
-	
+
 	return builder.String()
 }
 
@@ -510,27 +510,27 @@ func (pg *PatchGenerator) generateChangeCommentPatch() string {
 	if len(commentLines) == 0 {
 		return pg.generateAddCommentPatch()
 	}
-	
+
 	// Pick a random comment
 	commentLine := commentLines[rand.Intn(len(commentLines))]
-	
+
 	// Generate a new comment
 	newCommentText := getRandomComment()
 	indentation := commentLine.Indent
-	
+
 	// Build the new comment line
 	newCommentLine := fmt.Sprintf("%s# %s", strings.Repeat(" ", indentation), newCommentText)
-	
+
 	// Generate the patch
 	var builder strings.Builder
 	builder.WriteString("--- file\n")
 	builder.WriteString("+++ file\n")
-	builder.WriteString(fmt.Sprintf("@@ -%d,%d +%d,%d @@\n", 
-		commentLine.LineNum+1, 1, 
+	builder.WriteString(fmt.Sprintf("@@ -%d,%d +%d,%d @@\n",
+		commentLine.LineNum+1, 1,
 		commentLine.LineNum+1, 1))
 	builder.WriteString(fmt.Sprintf("-%s\n", pg.lines[commentLine.LineNum]))
 	builder.WriteString(fmt.Sprintf("+%s\n", newCommentLine))
-	
+
 	return builder.String()
 }
 
@@ -543,18 +543,18 @@ func (pg *PatchGenerator) generateRenameKeyPatch() string {
 			keyLines = append(keyLines, line)
 		}
 	}
-	
+
 	if len(keyLines) == 0 {
 		// Fall back to adding a value
 		return pg.generateAddValuePatch()
 	}
-	
+
 	// Pick a random key to rename
 	keyLine := keyLines[rand.Intn(len(keyLines))]
-	
+
 	// Generate a new key name
 	newKey := fmt.Sprintf("renamed_%s_%d", keyLine.Key, rand.Intn(100))
-	
+
 	// Build the new line with the same indentation
 	var newLine string
 	if keyLine.Value == "" {
@@ -564,17 +564,17 @@ func (pg *PatchGenerator) generateRenameKeyPatch() string {
 		// This is a key-value pair
 		newLine = fmt.Sprintf("%s%s: %s", strings.Repeat(" ", keyLine.Indent), newKey, keyLine.Value)
 	}
-	
+
 	// Generate the patch
 	var builder strings.Builder
 	builder.WriteString("--- file\n")
 	builder.WriteString("+++ file\n")
-	builder.WriteString(fmt.Sprintf("@@ -%d,%d +%d,%d @@\n", 
-		keyLine.LineNum+1, 1, 
+	builder.WriteString(fmt.Sprintf("@@ -%d,%d +%d,%d @@\n",
+		keyLine.LineNum+1, 1,
 		keyLine.LineNum+1, 1))
 	builder.WriteString(fmt.Sprintf("-%s\n", pg.lines[keyLine.LineNum]))
 	builder.WriteString(fmt.Sprintf("+%s\n", newLine))
-	
+
 	return builder.String()
 }
 

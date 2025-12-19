@@ -1,0 +1,54 @@
+# =============================================================================
+# MINIMAL AWS INFRASTRUCTURE
+# Creates AWS infrastructure needed for Chartsmith
+# Copy this file to terraform.tfvars and customize for your deployment
+# =============================================================================
+
+# =============================================================================
+# ENVIRONMENT IDENTIFICATION (REQUIRED)
+# =============================================================================
+environment_name = "production"       # Environment name (e.g., "production", "staging", "dev")
+aws_region = "us-west-2"             # AWS region for deployment
+
+# =============================================================================
+# INFRASTRUCTURE CHOICES
+# Create all infrastructure (recommended for new deployments)
+# =============================================================================
+create_vpc = true                     # Create new VPC with subnets
+create_eks_cluster = true            # Create new EKS cluster
+create_database = true               # Create PostgreSQL database with pgvector
+
+# =============================================================================
+# OPTIONAL: NETWORK SECURITY
+# Restrict access to your office/VPN IP ranges (recommended for production)
+# =============================================================================
+# allowed_cidr_blocks = [
+#   "203.0.113.0/24",    # Your office IP range
+#   "198.51.100.0/24"    # Your VPN IP range
+# ]
+
+# =============================================================================
+# OPTIONAL: DATABASE SIZING
+# =============================================================================
+# database_instance_class = "db.t3.small"      # RDS instance size
+# database_allocated_storage = 100             # Initial storage in GB
+# backup_retention_period = 7                  # Days to keep backups
+
+# =============================================================================
+# OPTIONAL: VPC CONFIGURATION
+# =============================================================================
+# vpc_cidr = "10.0.0.0/16"                    # VPC CIDR block
+# private_subnet_cidrs = [                     # Private subnet CIDRs
+#   "10.0.1.0/24",
+#   "10.0.2.0/24",
+#   "10.0.3.0/24"
+# ]
+
+# =============================================================================
+# OPTIONAL: RESOURCE TAGGING
+# =============================================================================
+tags = {
+  Environment = "production"
+  Team        = "platform"
+  Owner       = "devops-team@acme-corp.com"
+}

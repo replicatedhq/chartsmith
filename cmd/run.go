@@ -70,7 +70,7 @@ func runWorker(ctx context.Context, pgURI string) error {
 	// Start the connection heartbeat before starting the listeners
 	// This ensures our connections stay alive even during idle periods
 	listener.StartHeartbeat(ctx)
-	
+
 	if err := listener.StartListeners(ctx); err != nil {
 		return fmt.Errorf("failed to start listeners: %w", err)
 	}

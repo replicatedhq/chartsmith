@@ -1,0 +1,73 @@
+# =============================================================================
+# EXISTING VPC INFRASTRUCTURE
+# Create Chartsmith infrastructure in your existing AWS VPC
+# Copy this file to terraform.tfvars and customize for your deployment
+# =============================================================================
+
+# =============================================================================
+# ENVIRONMENT IDENTIFICATION (REQUIRED)
+# =============================================================================
+environment_name = "production"       # Environment name for this deployment
+aws_region = "us-west-2"             # AWS region (must match your existing VPC)
+
+# =============================================================================
+# INFRASTRUCTURE CHOICES
+# Use existing VPC, create database and other resources
+# =============================================================================
+create_vpc = false                    # Use existing VPC
+create_eks_cluster = true            # Create new EKS cluster
+create_database = true               # Create new PostgreSQL database
+
+# =============================================================================
+# EXISTING VPC CONFIGURATION (REQUIRED)
+# Get these from your AWS VPC console
+# =============================================================================
+existing_vpc_id = "vpc-0123456789abcdef0"    # Your existing VPC ID
+
+# Private subnets for EKS worker nodes and database
+# Must be in different AZs and have internet access via NAT Gateway
+existing_subnet_ids = [
+  "subnet-0123456789abcdef0",    # Private subnet in us-west-2a
+  "subnet-0123456789abcdef1",    # Private subnet in us-west-2b
+  "subnet-0123456789abcdef2"     # Private subnet in us-west-2c
+]
+
+# Public subnets for Load Balancer
+# Must be in different AZs and have internet access via Internet Gateway
+existing_public_subnet_ids = [
+  "subnet-0fedcba987654321",     # Public subnet in us-west-2a
+  "subnet-0fedcba987654322"      # Public subnet in us-west-2b
+]
+
+# Database subnets (optional - will use private subnets if not provided)
+# If you have dedicated database subnets, uncomment and specify them here.
+# Otherwise, the database will be placed in your private subnets automatically.
+# existing_database_subnet_ids = [
+#   "subnet-0abcdef123456789",     # Database subnet in us-west-2a
+#   "subnet-0abcdef123456790"      # Database subnet in us-west-2b
+# ]
+
+
+# =============================================================================
+# OPTIONAL: NETWORK SECURITY
+# =============================================================================
+allowed_cidr_blocks = [
+  "10.0.0.0/16",        # Your VPC CIDR (adjust to match your VPC)
+  "203.0.113.0/24"      # Your office/VPN IP range
+]
+
+# =============================================================================
+# OPTIONAL: DATABASE CONFIGURATION
+# =============================================================================
+database_instance_class = "db.t3.small"
+database_allocated_storage = 100
+backup_retention_period = 7
+
+# =============================================================================
+# OPTIONAL: RESOURCE TAGGING
+# =============================================================================
+tags = {
+  Environment = "production"
+  Team        = "platform"
+  VPC         = "existing"
+}

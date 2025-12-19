@@ -6,3 +6,11 @@ test-results/
 .specstory/
 chart/chartsmith/*.tgz
 .direnv/
+
+# Terraform
+**/.terraform/
+**/.terraform.lock.hcl
+**/terraform.tfvars
+**/terraform.tfstate
+**/terraform.tfstate.backup
+**/.terraform.tfvars.backup
