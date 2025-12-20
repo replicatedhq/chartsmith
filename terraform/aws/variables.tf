@@ -46,33 +46,18 @@ variable "existing_vpc_id" {
   description = "ID of existing VPC (required if create_vpc = false)"
   type        = string
   default     = ""
-
-  validation {
-    condition     = var.create_vpc || var.existing_vpc_id != ""
-    error_message = "When using existing VPC (create_vpc = false), you must provide existing_vpc_id."
-  }
 }
 
 variable "existing_subnet_ids" {
   description = "Private subnet IDs in existing VPC (required if create_vpc = false)"
   type        = list(string)
   default     = []
-
-  validation {
-    condition     = var.create_vpc || length(var.existing_subnet_ids) >= 2
-    error_message = "When using existing VPC (create_vpc = false), you must provide at least 2 private subnet IDs in different availability zones for existing_subnet_ids."
-  }
 }
 
 variable "existing_public_subnet_ids" {
   description = "Public subnet IDs in existing VPC (required if create_vpc = false)"
   type        = list(string)
   default     = []
-
-  validation {
-    condition     = var.create_vpc || length(var.existing_public_subnet_ids) >= 2
-    error_message = "When using existing VPC (create_vpc = false), you must provide at least 2 public subnet IDs in different availability zones for existing_public_subnet_ids."
-  }
 }
 
 variable "existing_database_subnet_ids" {
