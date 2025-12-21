@@ -66,7 +66,7 @@ func TestApplyPatch(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := ApplyPatch(tt.content, tt.patch)
-			
+
 			// Check error expectation
 			if tt.expectError && err == nil {
 				t.Error("expected an error but got none")
@@ -76,7 +76,7 @@ func TestApplyPatch(t *testing.T) {
 				t.Errorf("unexpected error: %v", err)
 				return
 			}
-			
+
 			// Skip comparison if we expected an error
 			if tt.expectError {
 				return
@@ -119,9 +119,9 @@ func TestApplyPatches(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name:    "empty patches",
-			content: "test content\n",
-			patches: []string{"", "   ", "\n"},
+			name:        "empty patches",
+			content:     "test content\n",
+			patches:     []string{"", "   ", "\n"},
 			expected:    "test content\n",
 			expectError: false,
 		},
@@ -140,7 +140,7 @@ func TestApplyPatches(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := ApplyPatches(tt.content, tt.patches)
-			
+
 			// Check error expectation
 			if tt.expectError && err == nil {
 				t.Error("expected an error but got none")
@@ -150,7 +150,7 @@ func TestApplyPatches(t *testing.T) {
 				t.Errorf("unexpected error: %v", err)
 				return
 			}
-			
+
 			// Skip comparison if we expected an error
 			if tt.expectError {
 				return

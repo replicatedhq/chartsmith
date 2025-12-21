@@ -1,0 +1,54 @@
+apiVersion: kots.io/v1beta1
+kind: Terraform
+metadata:
+  name: aws-infra
+spec:
+  # filename references a .tgz file containing Terraform modules
+  filename: terraform-module-v1.0.0.tgz
+  
+  # minTerraformVersion specifies the minimum Terraform version required
+  minTerraformVersion: "1.5.0"
+  
+  # docs provides documentation for various user-defined steps
+  docs:
+    prerequisites: |
+      Before installing this Terraform configuration, ensure you have:
+      - AWS CLI configured with credentials
+      - Terraform installed (>= 1.5.0)
+      - Sufficient AWS permissions:
+        - EC2FullAccess (VPC, Security Groups)
+        - RDSFullAccess (PostgreSQL database)
+        - SecretsManagerFullAccess (API key storage)
+        - IAMFullAccess (Service roles)
+      - Sufficient AWS resource limits:
+        - VPCs: 1 additional (if creating new VPC)
+        - RDS Instances: 1 additional
+        - Security Groups: 5 additional
+    install: |
+      This step initializes and applies the Terraform configuration.
+      
+      1. Choose Your Deployment Scenario:
+         - Minimal - Create everything from scratch (recommended for new deployments)
+         - Existing VPC - Use your existing VPC infrastructure
+         - Existing Cluster - Use your existing EKS cluster
+      
+      2. Create Infrastructure:
+         ```bash
+         cd examples/minimal  # or your chosen example
+         cp terraform.tfvars.example terraform.tfvars
+         # Edit terraform.tfvars with your values
+         terraform init
+         terraform plan
+         terraform apply
+         ```
+      
+      3. Basic Configuration:
+         ```hcl
+         # Environment identification
+         environment_name = "production"
+         aws_region = "us-west-2"
+         
+         # Infrastructure choices
+         create_vpc = true          # Create new VPC
+         create_database = true     # Create PostgreSQL database
+         ```

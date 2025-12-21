@@ -1,0 +1,61 @@
+apiVersion: kots.io/v1beta1
+kind: Terraform
+metadata:
+  name: gcp-infra
+spec:
+  # filename references a .tgz file containing Terraform modules
+  filename: terraform-module-v1.0.0.tgz
+  
+  # minTerraformVersion specifies the minimum Terraform version required
+  minTerraformVersion: "1.5.0"
+  
+  # docs provides documentation for various user-defined steps
+  docs:
+    prerequisites: |
+      Before installing this Terraform configuration, ensure you have:
+      - gcloud CLI configured with credentials
+      - Terraform installed (>= 1.5.0)
+      - Sufficient GCP permissions:
+        - Compute Network Admin (VPC, Subnets, Firewall)
+        - Kubernetes Engine Admin (GKE cluster)
+        - Cloud SQL Admin (PostgreSQL database)
+        - Secret Manager Admin (API key storage)
+        - Service Account Admin (Service accounts and IAM)
+      - APIs enabled in your GCP project:
+        - Compute Engine API
+        - Kubernetes Engine API
+        - Cloud SQL Admin API
+        - Secret Manager API
+      - Sufficient GCP resource quotas:
+        - VPCs: 1 additional (if creating new VPC)
+        - Cloud SQL instances: 1 additional
+        - GKE clusters: 1 additional
+    install: |
+      This step initializes and applies the Terraform configuration.
+      
+      1. Choose Your Deployment Scenario:
+         - Minimal - Create everything from scratch (recommended for new deployments)
+         - Existing VPC - Use your existing VPC infrastructure
+         - Existing Cluster - Use your existing GKE cluster
+      
+      2. Create Infrastructure:
+         ```bash
+         cd examples/minimal  # or your chosen example
+         cp terraform.tfvars.example terraform.tfvars
+         # Edit terraform.tfvars with your values
+         terraform init
+         terraform plan
+         terraform apply
+         ```
+      
+      3. Basic Configuration:
+         ```hcl
+         # Environment identification
+         environment_name = "production"
+         gcp_region = "us-central1"
+         gcp_project = "your-project-id"
+         
+         # Infrastructure choices
+         create_vpc = true          # Create new VPC
+         create_database = true     # Create Cloud SQL PostgreSQL database
+         ```
