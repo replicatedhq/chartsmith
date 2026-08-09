@@ -33,7 +33,7 @@ export default async function WorkspaceLayout({
   params
 }: {
   children: React.ReactNode;
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
   const { workspace } = await getSessionAndWorkspace(id);

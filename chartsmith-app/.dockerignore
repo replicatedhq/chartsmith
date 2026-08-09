@@ -1,0 +1,7 @@
+.DS_Store
+.env*
+.next
+node_modules
+npm-debug.log*
+playwright-report
+test-results

@@ -188,8 +188,8 @@ func extractGVKAndName(content string) (string, string) {
 	return gvk, resource.Metadata.Name
 }
 
-// getGVKPriority returns a priority value for a GVK
-// ConfigMap = 0, Secret = 1, Deployment = 2, others = 3
+// getGVKPriority returns a priority value for a GVK.
+// Lower values are converted before resources that commonly depend on them.
 func getGVKPriority(gvk string) int {
 	switch gvk {
 	case "v1/ConfigMap":

@@ -3,6 +3,7 @@ package llm
 import (
 	"context"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -12,6 +13,10 @@ import (
 )
 
 func TestExecuteAction(t *testing.T) {
+	if os.Getenv("CHARTSMITH_RUN_LLM_INTEGRATION_TESTS") != "1" {
+		t.Skip("set CHARTSMITH_RUN_LLM_INTEGRATION_TESTS=1 to run the live Anthropic integration test")
+	}
+
 	// Add a timeout of 5 minutes for this test
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()

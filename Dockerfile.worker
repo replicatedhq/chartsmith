@@ -1,0 +1,35 @@
+ARG GO_VERSION=1.24.5
+
+FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-bookworm AS build
+
+WORKDIR /src
+
+COPY go.mod go.sum go.work go.work.sum ./
+COPY helm-utils/go.mod helm-utils/go.sum ./helm-utils/
+RUN go mod download
+
+COPY main.go ./
+COPY cmd ./cmd
+COPY helm-utils ./helm-utils
+COPY pkg ./pkg
+
+ARG TARGETARCH
+ARG TARGETOS
+RUN CGO_ENABLED=0 GOARCH=${TARGETARCH} GOOS=${TARGETOS} \
+    go build -trimpath -ldflags="-s -w" -o /out/chartsmith-worker ./main.go
+
+FROM golang:${GO_VERSION}-bookworm
+
+ARG HELM_VERSION=3.17.0
+ARG TARGETARCH
+
+RUN curl -fsSLO "https://get.helm.sh/helm-v${HELM_VERSION}-linux-${TARGETARCH}.tar.gz" \
+    && tar -xzf "helm-v${HELM_VERSION}-linux-${TARGETARCH}.tar.gz" \
+    && mv "linux-${TARGETARCH}/helm" "/usr/local/bin/helm-v${HELM_VERSION}" \
+    && ln -s "/usr/local/bin/helm-v${HELM_VERSION}" /usr/local/bin/helm \
+    && rm -rf "linux-${TARGETARCH}" "helm-v${HELM_VERSION}-linux-${TARGETARCH}.tar.gz"
+
+COPY --from=build /out/chartsmith-worker /chartsmith-worker
+COPY bootstrap /bootstrap
+
+ENTRYPOINT ["/chartsmith-worker"]
