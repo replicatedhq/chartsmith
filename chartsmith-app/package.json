@@ -32,7 +32,7 @@
     "diff-match-patch": "^1.0.5",
     "dotenv": "^17.2.3",
     "gunzip-maybe": "^1.4.2",
-    "jotai": "^2.16.0",
+    "jotai": "^2.20.2",
     "jsonwebtoken": "^9.0.3",
     "lodash": "^4.17.23",
     "lucide-react": "^0.561.0",
