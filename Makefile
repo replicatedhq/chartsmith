@@ -292,8 +292,18 @@ promote-replicated: check-replicated-cli
 		echo "Error: channel must be Beta or Stable"; \
 		exit 1; \
 	fi
-	@echo "Promoting existing release sequence $(sequence) to $(channel)..."
-	@replicated release promote "$(sequence)" "$(channel)"
+	@APP_ID=$$(replicated app ls chartsmith --output json | jq -r '.[] | select(.app.slug == "chartsmith") | .app.id'); \
+	if [ -z "$$APP_ID" ] || [ "$$APP_ID" = "null" ]; then \
+		echo "Error: could not resolve the Chartsmith app ID"; \
+		exit 1; \
+	fi; \
+	RELEASE_VERSION=$$(replicated release inspect "$(sequence)" --app "$$APP_ID" --output json | jq -r '.charts[] | select(.name == "chartsmith" and .status == "pushed") | .version' | head -n1); \
+	if ! echo "$$RELEASE_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$$'; then \
+		echo "Error: could not resolve a semantic chart version for release $(sequence)"; \
+		exit 1; \
+	fi; \
+	echo "Promoting existing release sequence $(sequence) to $(channel) as $$RELEASE_VERSION..."; \
+	replicated release promote "$(sequence)" "$(channel)" --app "$$APP_ID" --version "$$RELEASE_VERSION"
 
 promote-beta:
 	@$(MAKE) --no-print-directory promote-replicated sequence="$(sequence)" channel=Beta

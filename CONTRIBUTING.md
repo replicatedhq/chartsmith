@@ -194,6 +194,11 @@ make promote-stable sequence=123
 The equivalent Replicated CLI commands are:
 
 ```bash
-replicated release promote 123 Beta
-replicated release promote 123 Stable
+APP_ID=$(replicated app ls chartsmith --output json | jq -r '.[] | select(.app.slug == "chartsmith") | .app.id')
+RELEASE_VERSION=$(replicated release inspect 123 --app "$APP_ID" --output json | jq -r '.charts[] | select(.name == "chartsmith" and .status == "pushed") | .version')
+replicated release promote 123 Beta --app "$APP_ID" --version "$RELEASE_VERSION"
+replicated release promote 123 Stable --app "$APP_ID" --version "$RELEASE_VERSION"
 ```
+
+Passing the app ID is important in local Vandoor environments, where channel
+lookup by app slug is not supported.
