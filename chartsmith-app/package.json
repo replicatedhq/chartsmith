@@ -35,7 +35,7 @@
     "jotai": "^2.20.2",
     "jsonwebtoken": "^9.0.3",
     "lodash": "^4.17.23",
-    "lucide-react": "^0.561.0",
+    "lucide-react": "^1.28.0",
     "monaco-editor": "^0.55.1",
     "next": "^15.5.15",
     "parse-duration": "^2.1.6",
