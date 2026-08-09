@@ -19,7 +19,7 @@
         # SchemaHero binary derivation
         schemahero = pkgs.stdenv.mkDerivation rec {
           pname = "schemahero";
-          version = "0.23.0";
+          version = "0.25.1";
 
           platform = if pkgs.stdenv.isDarwin then "darwin" else "linux";
           arch = if pkgs.stdenv.isAarch64 then "arm64" else "amd64";
@@ -27,10 +27,10 @@
           src = pkgs.fetchurl {
             url = "https://github.com/schemahero/schemahero/releases/download/v${version}/kubectl-schemahero_${platform}_${arch}.tar.gz";
             sha256 = {
-              "darwin-arm64" = "sha256-mpR5Xv816RqMvBruVSC3YtvLddqItgn4MYXLpJYEus4=";
-              "darwin-amd64" = "sha256-aEgWPyATpRu5Z1Yem9k1h53v4Qzx8sq6KBUjyLgrjJg=";
-              "linux-amd64"  = "sha256-MbdIHeOXrO3upXuHlbvXQZuo80I8Kgz3y0l4DGqawLw=";
-              "linux-arm64"  = "sha256-hRNdhPAZjcii3hVpKZ6m3pOujiuFGp35YIQwC9dTzoI=";
+              "darwin-arm64" = "sha256-jwRha4uiWHHcsiYyjxkisj3WiSQng/+5eWoikxxo5ew=";
+              "darwin-amd64" = "sha256-3eVPdw7auny1csOfaECXtVzvtQKXdKB5oo55JFwjKGs=";
+              "linux-amd64"  = "sha256-J1HWYZN1uAnGi84jKXGCz447Mw/IHGpuXmUyZ/lhnoY=";
+              "linux-arm64"  = "sha256-MrTEXy1BzP901R1Tn8pw57zPjLRTWxbf48+kZryw7lI=";
             }."${platform}-${arch}";
           };
 
