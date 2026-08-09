@@ -21,7 +21,7 @@ export async function promptType(message: string): Promise<PromptType> {
     const provider = process.env.LLM_PROVIDER || (process.env.FIREWORKS_API_KEY ? "fireworks" : "anthropic");
     const apiKey = provider === "fireworks" ? process.env.FIREWORKS_API_KEY : process.env.ANTHROPIC_API_KEY;
     const model = process.env.LLM_MODEL || (provider === "fireworks"
-      ? "accounts/fireworks/models/kimi-k2-instruct-0905"
+      ? "accounts/fireworks/models/kimi-k2p6"
       : "claude-sonnet-5");
     if (!apiKey) {
       throw new Error(`${provider === "fireworks" ? "FIREWORKS_API_KEY" : "ANTHROPIC_API_KEY"} is not configured`);

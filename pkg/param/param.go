@@ -72,7 +72,7 @@ func Init(sess *session.Session) error {
 	llmModel := paramsMap["LLM_MODEL"]
 	if llmModel == "" {
 		if llmProvider == "fireworks" {
-			llmModel = "accounts/fireworks/models/kimi-k2-instruct-0905"
+			llmModel = "accounts/fireworks/models/kimi-k2p6"
 		} else {
 			llmModel = "claude-sonnet-5"
 		}

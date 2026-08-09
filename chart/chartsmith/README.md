@@ -72,7 +72,7 @@ anthropic:
 # Alternatively:
 # llm:
 #   provider: fireworks
-#   model: accounts/fireworks/models/kimi-k2-instruct-0905
+#   model: accounts/fireworks/models/kimi-k2p6
 # fireworks:
 #   apiKey: "..."
 

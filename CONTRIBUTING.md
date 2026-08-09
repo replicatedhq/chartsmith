@@ -19,7 +19,7 @@ This doc is a development guide for how engineers can contribute to this project
 Before starting, ensure you have the following secrets configured locally on your computer:
 
 - `LLM_PROVIDER`: `anthropic` (default) or `fireworks`
-- `LLM_MODEL`: for example, `claude-sonnet-5` or `accounts/fireworks/models/kimi-k2-instruct-0905`
+- `LLM_MODEL`: for example, `claude-sonnet-5` or `accounts/fireworks/models/kimi-k2p6`
 - The selected provider's key: `ANTHROPIC_API_KEY` or `FIREWORKS_API_KEY`
 - `CHARTSMITH_PG_URI=postgresql://postgres:password@localhost:5432/chartsmith?sslmode=disable`
 - `CHARTSMITH_CENTRIFUGO_ADDRESS=http://localhost:8000/api`

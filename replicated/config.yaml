@@ -85,13 +85,37 @@ spec:
         - name: fireworks_model
           title: Model
           type: select_one
-          default: accounts/fireworks/models/kimi-k2-instruct-0905
+          default: accounts/fireworks/models/kimi-k2p6
           when: 'repl{{ ConfigOptionEquals "llm_provider" "fireworks" }}'
           items:
-            - name: accounts/fireworks/models/kimi-k2-instruct-0905
-              title: Kimi K2 Instruct 0905
-            - name: accounts/fireworks/models/kimi-k2p5
-              title: Kimi K2.5
+            - name: accounts/fireworks/models/deepseek-v4-flash-0731
+              title: DeepSeek V4 Flash 0731
+            - name: accounts/fireworks/models/kimi-k3
+              title: Kimi K3
+            - name: accounts/fireworks/models/glm-5p2
+              title: GLM 5.2
+            - name: accounts/fireworks/models/kimi-k2p7-code
+              title: Kimi K2.7 Code
+            - name: accounts/fireworks/models/minimax-m3
+              title: MiniMax M3
+            - name: accounts/fireworks/models/qwen3p7-plus
+              title: Qwen 3.7 Plus
+            - name: accounts/fireworks/models/deepseek-v4-pro
+              title: DeepSeek V4 Pro
+            - name: accounts/fireworks/models/kimi-k2p6
+              title: Kimi K2.6
+            - name: accounts/fireworks/models/minimax-m2p7
+              title: MiniMax M2.7
+            - name: accounts/fireworks/models/gpt-oss-120b
+              title: GPT-OSS 120B
+            - name: accounts/fireworks/models/gpt-oss-20b
+              title: GPT-OSS 20B
+            - name: accounts/fireworks/models/nemotron-3-ultra-nvfp4
+              title: Nemotron 3 Ultra NVFP4
+            - name: accounts/fireworks/models/inkling
+              title: Inkling
+            - name: accounts/fireworks/models/deepseek-v4-flash
+              title: DeepSeek V4 Flash
         - name: anthropic_api_key
           title: Anthropic API Key
           type: password
