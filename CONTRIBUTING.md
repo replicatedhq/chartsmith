@@ -14,13 +14,13 @@ This doc is a development guide for how engineers can contribute to this project
 - [Schemahero](https://schemahero.io/docs/installation/) (must rename the binary to `schemahero` and put on path)
 - A SQL DB editor available. Confider Beekeeper Studio if you don't already have one available
 
-### Required Secrets
+### Required configuration
 
 Before starting, ensure you have the following secrets configured locally on your computer:
 
-- `ANTHROPIC_API_KEY`: Get your own key (Create a new API key in Anthropic Console)
-- `GROQ_API_KEY`: Get your own key (Get a new API key from groq.com)
-- `VOYAGE_API_KEY`: Get your own key (Generate new key)
+- `LLM_PROVIDER`: `anthropic` (default) or `fireworks`
+- `LLM_MODEL`: for example, `claude-sonnet-5` or `accounts/fireworks/models/kimi-k2-instruct-0905`
+- The selected provider's key: `ANTHROPIC_API_KEY` or `FIREWORKS_API_KEY`
 - `CHARTSMITH_PG_URI=postgresql://postgres:password@localhost:5432/chartsmith?sslmode=disable`
 - `CHARTSMITH_CENTRIFUGO_ADDRESS=http://localhost:8000/api`
 - `CHARTSMITH_CENTRIFUGO_API_KEY=api_key` (Already set)
@@ -28,17 +28,21 @@ Before starting, ensure you have the following secrets configured locally on you
 - `CHARTSMITH_SLACK_TOKEN=` (Can ignore)
 - `CHARTSMITH_SLACK_CHANNEL=` (Can ignore)
 
-You should also create a .env.local file in the `chartsmith-app` directory with some of the same content. You will update this with your Anthropic API key, and your Google Client secret information.
+You should also create a `.env.local` file in the `chartsmith-app` directory. Google OAuth is optional; set `AUTH_REQUIRED=true` and provide its three Google settings only when testing authenticated mode.
 
 ```
 NEXT_PUBLIC_GOOGLE_CLIENT_ID=730758876435-8v7frmnqtt7k7v65edpc6u3hso9olqbe.apps.googleusercontent.com
 NEXT_PUBLIC_GOOGLE_REDIRECT_URI=http://localhost:3000/auth/google
 GOOGLE_CLIENT_SECRET=<get from 1password>
+AUTH_REQUIRED=false
+NEXT_PUBLIC_AUTH_REQUIRED=false
 HMAC_SECRET=not-secure
 CENTRIFUGO_TOKEN_HMAC_SECRET=change.me
 NEXT_PUBLIC_CENTRIFUGO_ADDRESS=ws://localhost:8000/connection/websocket
 TOKEN_ENCRYPTION=H5984PaaBSbFZTMKjHiqshqRCG4dg49JAs0dDdLbvEs=
 NEXT_PUBLIC_REPLICATED_REDIRECT_URI=https://vendor-web-<youruser>.okteto.repldev.com/chartsmith-login?redirect_uri=https://chartsmith-app-<youruser>.okteto.repldev.com/auth/replicated
+LLM_PROVIDER=anthropic
+LLM_MODEL=claude-sonnet-5
 ANTHROPIC_API_KEY=
 NEXT_PUBLIC_ENABLE_TEST_AUTH=true
 ENABLE_TEST_AUTH=true

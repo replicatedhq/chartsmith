@@ -8,9 +8,9 @@ import (
 )
 
 func ExpandPrompt(ctx context.Context, prompt string) (string, error) {
-	client, err := newAnthropicClient(ctx)
+	client, err := newLLMClient(ctx)
 	if err != nil {
-		return "", fmt.Errorf("failed to create anthropic client: %w", err)
+		return "", fmt.Errorf("failed to create LLM client: %w", err)
 	}
 
 	userMessage := fmt.Sprintf(`The following question is about developing a Helm chart.
@@ -30,21 +30,21 @@ Here is the prompt:
 	`, prompt)
 
 	resp, err := client.Messages.New(ctx, anthropic.MessageNewParams{
-		Model:     anthropic.F(anthropic.ModelClaude3_7Sonnet20250219),
+		Model:     anthropic.F(configuredModel()),
 		MaxTokens: anthropic.F(int64(8192)),
 		Messages:  anthropic.F([]anthropic.MessageParam{anthropic.NewUserMessage(anthropic.NewTextBlock(userMessage))}),
 	})
 	if err != nil {
-		return "", fmt.Errorf("failed to call Anthropic API: %w", err)
+		return "", fmt.Errorf("failed to call LLM API: %w", err)
 	}
 
 	// Check if response or response.Content is nil or empty
 	if resp == nil {
-		return "", fmt.Errorf("received nil response from Anthropic API")
+		return "", fmt.Errorf("received nil response from LLM API")
 	}
 
 	if len(resp.Content) == 0 {
-		return "", fmt.Errorf("received empty content from Anthropic API")
+		return "", fmt.Errorf("received empty content from LLM API")
 	}
 
 	expandedPrompt := resp.Content[0].Text

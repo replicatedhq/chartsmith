@@ -27,3 +27,5 @@ schema:
         notNull: true
     - name: embeddings
       type: vector (1024)
+    - name: embedding_version
+      type: text

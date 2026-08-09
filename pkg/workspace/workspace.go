@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/replicatedhq/chartsmith/pkg/embedding"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 	"github.com/replicatedhq/chartsmith/pkg/workspace/types"
 )
@@ -402,9 +403,10 @@ func NotifyWorkerToCaptureEmbeddings(ctx context.Context, workspaceID string, re
 	FROM
 		workspace_file
 	WHERE
-		workspace_id = $1 AND revision_number = $2 AND embeddings IS NULL`
+		workspace_id = $1 AND revision_number = $2
+		AND (embeddings IS NULL OR embedding_version IS DISTINCT FROM $3)`
 
-	rows, err := conn.Query(ctx, query, workspaceID, revisionNumber)
+	rows, err := conn.Query(ctx, query, workspaceID, revisionNumber, embedding.Version())
 	if err != nil {
 		return fmt.Errorf("error scanning files needing summaries and embeddings: %w", err)
 	}

@@ -39,6 +39,10 @@ func ChooseRelevantFilesForChatMessage(
 		zap.Int("expanded_prompt_len", len(expandedPrompt)),
 	)
 
+	if err := ensureCurrentEmbeddings(ctx, w.ID, revisionNumber); err != nil {
+		return nil, fmt.Errorf("error refreshing workspace embeddings: %w", err)
+	}
+
 	// Get embeddings for the prompt
 	promptEmbeddings, err := embedding.Embeddings(expandedPrompt)
 	if err != nil {
@@ -103,6 +107,7 @@ func ChooseRelevantFilesForChatMessage(
 			WHERE workspace_id = $2
 			AND revision_number = $3
 			AND embeddings IS NOT NULL
+			AND embedding_version = $4
 		)
 		SELECT
 			id,
@@ -116,7 +121,7 @@ func ChooseRelevantFilesForChatMessage(
 		ORDER BY similarity DESC
 	`
 
-	rows, err := conn.Query(ctx, query, promptEmbeddings, w.ID, revisionNumber)
+	rows, err := conn.Query(ctx, query, promptEmbeddings, w.ID, revisionNumber, embedding.Version())
 	if err != nil {
 		return nil, fmt.Errorf("error querying relevant files: %w", err)
 	}
@@ -172,4 +177,51 @@ func ChooseRelevantFilesForChatMessage(
 	})
 
 	return sorted, nil
+}
+
+func ensureCurrentEmbeddings(ctx context.Context, workspaceID string, revisionNumber int) error {
+	conn := persistence.MustGetPooledPostgresSession()
+	rows, err := conn.Query(ctx, `
+		SELECT id, content
+		FROM workspace_file
+		WHERE workspace_id = $1 AND revision_number = $2
+		AND (embeddings IS NULL OR embedding_version IS DISTINCT FROM $3)
+	`, workspaceID, revisionNumber, embedding.Version())
+	if err != nil {
+		conn.Release()
+		return err
+	}
+
+	type fileContent struct {
+		id      string
+		content string
+	}
+	files := []fileContent{}
+	for rows.Next() {
+		var file fileContent
+		if err := rows.Scan(&file.id, &file.content); err != nil {
+			rows.Close()
+			conn.Release()
+			return err
+		}
+		files = append(files, file)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		conn.Release()
+		return err
+	}
+	rows.Close()
+	conn.Release()
+
+	for _, file := range files {
+		vector, err := embedding.Embeddings(file.content)
+		if err != nil {
+			return err
+		}
+		if err := SetFileEmbeddings(ctx, file.id, revisionNumber, vector); err != nil {
+			return err
+		}
+	}
+	return nil
 }

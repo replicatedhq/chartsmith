@@ -11,3 +11,4 @@ data:
   NEXT_PUBLIC_REPLICATED_REDIRECT_URI: {{ .Values.auth.replicated.redirectUri | quote }}
   NEXT_PUBLIC_GOOGLE_CLIENT_ID: {{ .Values.auth.google.clientId | quote }}
   NEXT_PUBLIC_ENABLE_TEST_AUTH: {{ .Values.auth.enableTestAuth | quote }}
+  NEXT_PUBLIC_AUTH_REQUIRED: {{ .Values.auth.google.enabled | quote }}

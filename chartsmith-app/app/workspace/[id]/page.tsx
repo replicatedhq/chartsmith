@@ -1,7 +1,7 @@
 "use server"
 import { WorkspaceContent } from "@/components/WorkspaceContent";
 import { getWorkspaceAction } from "@/lib/workspace/actions/get-workspace";
-import { validateSession } from "@/lib/auth/actions/validate-session";
+import { getSessionAction } from "@/lib/auth/actions/validate-session";
 import { cookies } from "next/headers";
 
 import { getWorkspaceMessagesAction } from "@/lib/workspace/actions/get-workspace-messages";
@@ -19,10 +19,7 @@ export default async function WorkspacePage({
   const { id } = await params;
   const cookieStore = await cookies();
   const sessionToken = cookieStore.get('session')?.value;
-  if (!sessionToken) {
-    return null;
-  }
-  const session = await validateSession(sessionToken);
+  const session = await getSessionAction(sessionToken);
   if (!session) {
     return null;
   }

@@ -12,9 +12,9 @@ import (
 )
 
 func ConversationalChatMessage(ctx context.Context, streamCh chan string, doneCh chan error, w *workspacetypes.Workspace, chatMessage *workspacetypes.Chat) error {
-	client, err := newAnthropicClient(ctx)
+	client, err := newLLMClient(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to create anthropic client: %w", err)
+		return fmt.Errorf("failed to create LLM client: %w", err)
 	}
 
 	messages := []anthropic.MessageParam{
@@ -134,7 +134,7 @@ func ConversationalChatMessage(ctx context.Context, streamCh chan string, doneCh
 
 	for {
 		stream := client.Messages.NewStreaming(ctx, anthropic.MessageNewParams{
-			Model:     anthropic.F(anthropic.ModelClaude3_7Sonnet20250219),
+			Model:     anthropic.F(configuredModel()),
 			MaxTokens: anthropic.F(int64(8192)),
 			Messages:  anthropic.F(messages),
 			Tools:     anthropic.F(toolUnionParams),

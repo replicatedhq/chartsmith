@@ -61,34 +61,70 @@ spec:
       title: LLM Configuration
       description: "Configure the LLM provider and model to use for the application."
       items:
+        - name: llm_provider
+          title: Model Provider
+          type: select_one
+          default: anthropic
+          items:
+            - name: anthropic
+              title: Anthropic
+            - name: fireworks
+              title: Fireworks AI
+        - name: anthropic_model
+          title: Model
+          type: select_one
+          default: claude-sonnet-5
+          when: 'repl{{ ConfigOptionEquals "llm_provider" "anthropic" }}'
+          items:
+            - name: claude-sonnet-5
+              title: Claude Sonnet 5
+            - name: claude-opus-5
+              title: Claude Opus 5
+            - name: claude-fable-5
+              title: Claude Fable 5
+        - name: fireworks_model
+          title: Model
+          type: select_one
+          default: accounts/fireworks/models/kimi-k2-instruct-0905
+          when: 'repl{{ ConfigOptionEquals "llm_provider" "fireworks" }}'
+          items:
+            - name: accounts/fireworks/models/kimi-k2-instruct-0905
+              title: Kimi K2 Instruct 0905
+            - name: accounts/fireworks/models/kimi-k2p5
+              title: Kimi K2.5
         - name: anthropic_api_key
           title: Anthropic API Key
           type: password
           required: true
-        - name: groq_api_key
-          title: Groq API Key
+          when: 'repl{{ ConfigOptionEquals "llm_provider" "anthropic" }}'
+        - name: fireworks_api_key
+          title: Fireworks API Key
           type: password
           required: true
-        - name: voyage_api_key
-          title: Voyage API Key
-          type: password
-          required: true
+          when: 'repl{{ ConfigOptionEquals "llm_provider" "fireworks" }}'
     - name: auth
       title: Authentication Configuration
-      description: "Configure the authentication provider to use for the application."
+      description: "Google authentication is optional. When disabled, the site is available without a login."
       items:
+        - name: google_auth_enabled
+          title: Require Google Authentication
+          type: bool
+          default: "0"
         - name: google_client_id
           title: Google Client ID
           type: text
           required: true
+          when: 'repl{{ ConfigOptionEquals "google_auth_enabled" "1" }}'
         - name: google_client_secret
           title: Google Client Secret
           type: password
           required: true
+          when: 'repl{{ ConfigOptionEquals "google_auth_enabled" "1" }}'
         - name: google_redirect_uri
           title: Google Redirect URI
           type: text
           required: true
+          when: 'repl{{ ConfigOptionEquals "google_auth_enabled" "1" }}'
     - name: secrets
       title: Application Secrets
       description: "Auto-generated secrets for the application. These are hidden and generated automatically."

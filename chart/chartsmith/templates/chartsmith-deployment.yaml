@@ -42,11 +42,13 @@ spec:
               secretKeyRef:
                 key: CENTRIFUGO_TOKEN_HMAC_SECRET
                 name: {{ include "chartsmith.centrifugoTokenHmacSecret" . }}
+          {{- if .Values.auth.google.enabled }}
           - name: GOOGLE_CLIENT_SECRET
             valueFrom:
               secretKeyRef:
                 key: GOOGLE_CLIENT_SECRET
                 name: {{ include "chartsmith.googleClientSecret" . }}
+          {{- end }}
           - name: HMAC_SECRET
             valueFrom:
               secretKeyRef:
@@ -69,11 +71,25 @@ spec:
               configMapKeyRef:
                 key: NEXT_PUBLIC_GOOGLE_REDIRECT_URI
                 name: chartsmith-configs
+          - name: AUTH_REQUIRED
+            value: {{ .Values.auth.google.enabled | quote }}
+          - name: LLM_PROVIDER
+            value: {{ include "chartsmith.llmProvider" . | quote }}
+          - name: LLM_MODEL
+            value: {{ .Values.llm.model | required "llm.model is required" | quote }}
+          {{- if eq .Values.llm.provider "anthropic" }}
           - name: ANTHROPIC_API_KEY
             valueFrom:
               secretKeyRef:
                 key: ANTHROPIC_API_KEY
                 name: {{ include "chartsmith.anthropicApiKey" . }}
+          {{- else if eq .Values.llm.provider "fireworks" }}
+          - name: FIREWORKS_API_KEY
+            valueFrom:
+              secretKeyRef:
+                key: FIREWORKS_API_KEY
+                name: {{ include "chartsmith.fireworksApiKey" . }}
+          {{- end }}
           - name: NEXT_PUBLIC_API_ENDPOINT
             valueFrom:
               configMapKeyRef:

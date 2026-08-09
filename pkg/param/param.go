@@ -15,8 +15,9 @@ var awsSession *session.Session
 
 var paramLookup = map[string]string{
 	"ANTHROPIC_API_KEY":             "/chartsmith/anthropic_api_key",
-	"GROQ_API_KEY":                  "/chartsmith/groq_api_key",
-	"VOYAGE_API_KEY":                "/chartsmith/voyage_api_key",
+	"FIREWORKS_API_KEY":             "/chartsmith/fireworks_api_key",
+	"LLM_PROVIDER":                  "/chartsmith/llm_provider",
+	"LLM_MODEL":                     "/chartsmith/llm_model",
 	"CHARTSMITH_PG_URI":             "/chartsmith/pg_uri",
 	"CHARTSMITH_CENTRIFUGO_ADDRESS": "/chartsmith/centrifugo_address",
 	"CHARTSMITH_CENTRIFUGO_API_KEY": "/chartsmith/centrifugo_api_key",
@@ -27,8 +28,9 @@ var paramLookup = map[string]string{
 
 type Params struct {
 	AnthropicAPIKey   string
-	GroqAPIKey        string
-	VoyageAPIKey      string
+	FireworksAPIKey   string
+	LLMProvider       string
+	LLMModel          string
 	PGURI             string
 	CentrifugoAddress string
 	CentrifugoAPIKey  string
@@ -58,10 +60,29 @@ func Init(sess *session.Session) error {
 		paramsMap = GetParamsFromEnv(paramLookup)
 	}
 
+	llmProvider := paramsMap["LLM_PROVIDER"]
+	if llmProvider == "" {
+		if paramsMap["FIREWORKS_API_KEY"] != "" && paramsMap["ANTHROPIC_API_KEY"] == "" {
+			llmProvider = "fireworks"
+		} else {
+			llmProvider = "anthropic"
+		}
+	}
+
+	llmModel := paramsMap["LLM_MODEL"]
+	if llmModel == "" {
+		if llmProvider == "fireworks" {
+			llmModel = "accounts/fireworks/models/kimi-k2-instruct-0905"
+		} else {
+			llmModel = "claude-sonnet-5"
+		}
+	}
+
 	params = &Params{
 		AnthropicAPIKey:   paramsMap["ANTHROPIC_API_KEY"],
-		GroqAPIKey:        paramsMap["GROQ_API_KEY"],
-		VoyageAPIKey:      paramsMap["VOYAGE_API_KEY"],
+		FireworksAPIKey:   paramsMap["FIREWORKS_API_KEY"],
+		LLMProvider:       llmProvider,
+		LLMModel:          llmModel,
 		PGURI:             paramsMap["CHARTSMITH_PG_URI"],
 		CentrifugoAddress: paramsMap["CHARTSMITH_CENTRIFUGO_ADDRESS"],
 		CentrifugoAPIKey:  paramsMap["CHARTSMITH_CENTRIFUGO_API_KEY"],
@@ -71,6 +92,20 @@ func Init(sess *session.Session) error {
 	}
 
 	return nil
+}
+
+func (p Params) LLMAPIKey() string {
+	if p.LLMProvider == "fireworks" {
+		return p.FireworksAPIKey
+	}
+	return p.AnthropicAPIKey
+}
+
+func (p Params) LLMAPIKeyEnvName() string {
+	if p.LLMProvider == "fireworks" {
+		return "FIREWORKS_API_KEY"
+	}
+	return "ANTHROPIC_API_KEY"
 }
 
 func GetParamsFromSSM(paramLookup map[string]string) (map[string]string, error) {
