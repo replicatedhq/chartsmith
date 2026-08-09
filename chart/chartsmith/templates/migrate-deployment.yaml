@@ -40,7 +40,7 @@ spec:
 {{- end }}
       initContainers:
         - name: plan
-          image: schemahero/schemahero:0.19.0
+          image: schemahero/schemahero:0.25.1
           command: ["sh", "-c"]
           args:
             - |
@@ -69,7 +69,7 @@ spec:
               subPath: {{ base $path }}
 {{- end }}
         - name: apply
-          image: schemahero/schemahero:0.19.0
+          image: schemahero/schemahero:0.25.1
           command: ["sh", "-c"]
           args:
             - |
@@ -83,7 +83,7 @@ spec:
               mountPath: /plan
       containers:
         - name: sleep
-          image: schemahero/schemahero:0.19.0
+          image: schemahero/schemahero:0.25.1
           command: ["sh", "-c", "sleep infinity"]
           volumeMounts:
             - name: plan
