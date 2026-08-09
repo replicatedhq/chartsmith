@@ -168,3 +168,32 @@ Promote an existing version to production without rebuilding its images:
 ```sh
 make production version=1.2.3
 ```
+
+### Replicated release channels
+
+Create a Replicated release from the repository root:
+
+```bash
+make release-replicated
+```
+
+This target increments the patch version in `VERSION`, keeps the Helm chart and
+the KOTS `HelmChart` manifest's chart version in sync, creates one release, and
+promotes it to `Unstable`. Commit the resulting version-file changes. The Helm `appVersion`
+continues to track the Chartsmith container version and is not changed by this
+target.
+
+After validating the release, promote the same release sequence instead of
+creating another release:
+
+```bash
+make promote-beta sequence=123
+make promote-stable sequence=123
+```
+
+The equivalent Replicated CLI commands are:
+
+```bash
+replicated release promote 123 Beta
+replicated release promote 123 Stable
+```

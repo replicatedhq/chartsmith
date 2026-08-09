@@ -213,17 +213,40 @@ check-replicated-cli:
 	fi; \
 	echo "replicated CLI version check passed (>=0.124.0)"
 
-# Release to Replicated
+# Bump the Replicated release and chart versions together. The Helm appVersion is
+# the Chartsmith container version and is intentionally managed separately.
+.PHONY: bump-replicated-patch
+bump-replicated-patch:
+	@CHART_VERSION=$$(grep '^CHART_VERSION=' VERSION | cut -d= -f2); \
+	REPLICATED_VERSION=$$(grep '^REPLICATED_VERSION=' VERSION | cut -d= -f2); \
+	if [ "$$CHART_VERSION" != "$$REPLICATED_VERSION" ]; then \
+		echo "Error: CHART_VERSION ($$CHART_VERSION) and REPLICATED_VERSION ($$REPLICATED_VERSION) must match"; \
+		exit 1; \
+	fi; \
+	if ! echo "$$CHART_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$$'; then \
+		echo "Error: version $$CHART_VERSION is not a semantic version in x.y.z format"; \
+		exit 1; \
+	fi; \
+	MAJOR=$$(echo "$$CHART_VERSION" | cut -d. -f1); \
+	MINOR=$$(echo "$$CHART_VERSION" | cut -d. -f2); \
+	PATCH=$$(echo "$$CHART_VERSION" | cut -d. -f3); \
+	NEXT_VERSION="$$MAJOR.$$MINOR.$$((PATCH + 1))"; \
+	sed -i.bak "s/^CHART_VERSION=.*/CHART_VERSION=$$NEXT_VERSION/" VERSION && rm VERSION.bak; \
+	sed -i.bak "s/^REPLICATED_VERSION=.*/REPLICATED_VERSION=$$NEXT_VERSION/" VERSION && rm VERSION.bak; \
+	sed -i.bak "s/^version:.*/version: $$NEXT_VERSION/" chart/chartsmith/Chart.yaml && rm chart/chartsmith/Chart.yaml.bak; \
+	sed -i.bak "s/chartVersion:.*/chartVersion: $$NEXT_VERSION/" replicated/helmchart.yaml && rm replicated/helmchart.yaml.bak; \
+	echo "Bumped Replicated release and chart version: $$CHART_VERSION -> $$NEXT_VERSION"
+
+.PHONY: prepare-replicated-release
+prepare-replicated-release: check-replicated-cli
+	@$(MAKE) --no-print-directory bump-replicated-patch
+
+# Create one versioned release and initially promote it to Unstable.
 .PHONY: release-replicated
-release-replicated: check-replicated-cli
+release-replicated: prepare-replicated-release
 	@echo "Using versions from VERSION file:"
 	@echo "  Chart Version: $(CHART_VERSION)"
 	@echo "  Replicated Release Version: $(REPLICATED_VERSION)"
-	@echo ""
-	@echo "Updating chart version in Chart.yaml..."
-	@sed -i.bak 's/^version:.*/version: $(CHART_VERSION)/' chart/chartsmith/Chart.yaml && rm chart/chartsmith/Chart.yaml.bak
-	@echo "Updating chart version in helmchart.yaml..."
-	@sed -i.bak 's/chartVersion:.*/chartVersion: $(CHART_VERSION)/' replicated/helmchart.yaml && rm replicated/helmchart.yaml.bak
 	@echo "Verifying 'chartsmith' app exists..."
 	@if ! replicated app ls 2>&1 | grep -q "chartsmith"; then \
 		echo "Error: 'chartsmith' app not found in replicated apps list"; \
@@ -232,32 +255,51 @@ release-replicated: check-replicated-cli
 		exit 1; \
 	fi
 	@echo "Found 'chartsmith' app"
-	@echo "Getting proxy registry hostname..."
-	@PROXY_HOSTNAME=$$(replicated app hostname ls --output json 2>&1 | jq -r '.proxy' 2>/dev/null); \
+	@set -e; \
+	PROXY_HOSTNAME=$$(replicated app hostname ls --output json 2>&1 | jq -r '.proxy' 2>/dev/null); \
 	if [ -z "$$PROXY_HOSTNAME" ] || [ "$$PROXY_HOSTNAME" = "null" ]; then \
 		echo "Error: Could not determine proxy hostname from replicated app hostname ls"; \
 		replicated app hostname ls --output json || true; \
 		exit 1; \
-	fi
-	@echo "Proxy hostname: $$PROXY_HOSTNAME"
-	@echo "Backing up values.yaml..."
-	@cp chart/chartsmith/values.yaml chart/chartsmith/values.yaml.bak
-	@echo "Replacing proxy.replicated.com with proxy hostname in values.yaml..."
-	@PROXY_HOSTNAME=$$(replicated app hostname ls --output json 2>&1 | jq -r '.proxy' 2>/dev/null) && \
-	sed -i.tmp "s|proxy.replicated.com|$$PROXY_HOSTNAME|g" chart/chartsmith/values.yaml && \
-	rm chart/chartsmith/values.yaml.tmp
-	@echo "Packaging Helm chart..."
-	@cd chart/chartsmith && helm dependency update && helm package --version $(CHART_VERSION) --app-version $(CHART_VERSION) .
-	@echo "Creating release $(REPLICATED_VERSION) and promoting to Unstable channel..."
-	@cd chart/chartsmith && replicated release create --promote Unstable --version $(REPLICATED_VERSION); \
-	RELEASE_STATUS=$$?; \
-	cd ../..; \
-	mv chart/chartsmith/values.yaml.bak chart/chartsmith/values.yaml; \
-	if [ $$RELEASE_STATUS -ne 0 ]; then \
-		echo "Error: Release creation failed"; \
-		exit $$RELEASE_STATUS; \
-	fi
+	fi; \
+	echo "Using proxy hostname: $$PROXY_HOSTNAME"; \
+	REPO_ROOT=$$(pwd); \
+	VALUES_FILE="$$REPO_ROOT/chart/chartsmith/values.yaml"; \
+	VALUES_BACKUP=$$(mktemp "$${TMPDIR:-/tmp}/chartsmith-values.XXXXXX"); \
+	cp "$$VALUES_FILE" "$$VALUES_BACKUP"; \
+	trap 'mv "$$VALUES_BACKUP" "$$VALUES_FILE"' EXIT HUP INT TERM; \
+	sed -i.tmp "s|proxy.replicated.com|$$PROXY_HOSTNAME|g" "$$VALUES_FILE"; \
+	rm "$$VALUES_FILE.tmp"; \
+	cd chart/chartsmith; \
+	helm dependency update; \
+	echo "Creating release $(REPLICATED_VERSION) and promoting to Unstable channel..."; \
+	replicated release create --promote Unstable --version $(REPLICATED_VERSION); \
+	trap - EXIT HUP INT TERM; \
+	mv "$$VALUES_BACKUP" "$$VALUES_FILE"
 	@echo "Release $(REPLICATED_VERSION) created and promoted to Unstable channel successfully"
+	@echo "Promote this same release with: make promote-beta sequence=<release-sequence>"
+
+# Promote an existing release sequence. A release is built once, then advanced
+# through Beta and Stable without creating duplicate releases.
+.PHONY: promote-replicated promote-beta promote-stable
+promote-replicated: check-replicated-cli
+	@if ! echo "$(sequence)" | grep -Eq '^[0-9]+$$'; then \
+		echo "Error: sequence is required and must be a release sequence number"; \
+		echo "Usage: make promote-beta sequence=123"; \
+		exit 1; \
+	fi
+	@if [ "$(channel)" != "Beta" ] && [ "$(channel)" != "Stable" ]; then \
+		echo "Error: channel must be Beta or Stable"; \
+		exit 1; \
+	fi
+	@echo "Promoting existing release sequence $(sequence) to $(channel)..."
+	@replicated release promote "$(sequence)" "$(channel)"
+
+promote-beta:
+	@$(MAKE) --no-print-directory promote-replicated sequence="$(sequence)" channel=Beta
+
+promote-stable:
+	@$(MAKE) --no-print-directory promote-replicated sequence="$(sequence)" channel=Stable
 
 # Promote an already-built version to production.
 # Requires: GITHUB_TOKEN, OP_SERVICE_ACCOUNT_PRODUCTION, and the release CLIs
