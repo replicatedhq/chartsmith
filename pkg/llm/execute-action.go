@@ -458,7 +458,7 @@ func ExecuteAction(ctx context.Context, actionPlanWithPath llmtypes.ActionPlanWi
 
 					// Send error to the error channel and exit
 					select {
-					case errCh <- fmt.Errorf(errMsg):
+					case errCh <- fmt.Errorf("%s", errMsg):
 					default:
 						// Channel already has an error
 					}

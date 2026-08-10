@@ -74,7 +74,7 @@ func TestParser_ParseArtifacts(t *testing.T) {
 	}{
 		{
 			name: "parses complete Chart.yaml",
-			input: `<chartsmithArtifact>
+			input: `<chartsmithArtifact path="Chart.yaml">
 apiVersion: v2
 name: wordpress
 description: A Helm chart for WordPress
@@ -89,7 +89,7 @@ version: 1.0.0
 		},
 		{
 			name: "parses partial artifact",
-			input: `<chartsmithArtifact>
+			input: `<chartsmithArtifact path="Chart.yaml">
 apiVersion: v2
 name: wordpress
 description: A Helm chart`,
@@ -102,11 +102,11 @@ description: A Helm chart`,
 		},
 		{
 			name: "handles multiple artifacts with partial",
-			input: `<chartsmithArtifact>
+			input: `<chartsmithArtifact path="Chart.yaml">
 apiVersion: v2
 name: chart1
 </chartsmithArtifact>
-<chartsmithArtifact>
+<chartsmithArtifact path="Chart.yaml">
 apiVersion: v2
 name: chart2`,
 			expected: []types.Artifact{
@@ -122,7 +122,7 @@ name: chart2`,
 		},
 		{
 			name: "handles streaming chunks",
-			input: `<chartsmithArtifact>
+			input: `<chartsmithArtifact path="Chart.yaml">
 apiVersion: v2
 name: wordpr`,
 			expected: []types.Artifact{

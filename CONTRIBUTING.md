@@ -147,13 +147,24 @@ This guide covers:
 
 ## Release
 
-All releases are automated using various Dagger functions.
+Run the complete validation suite before opening a pull request or cutting a release:
 
-
-The validate function will run all the tests and linting checks.
-
+```sh
+make validate
 ```
+
+This renders the database migrations, runs the Go tests, installs the frontend dependencies, runs the frontend unit tests, and builds the frontend.
+
+Releases require Docker, the GitHub CLI, the 1Password CLI, the AWS CLI, and Kustomize. Authenticate the GitHub CLI with `GITHUB_TOKEN` and provide the production automation service-account token as `OP_SERVICE_ACCOUNT_PRODUCTION`.
+
+```sh
 make release version=[patch|minor|major]
 ```
 
-The release function will create a new release tag and push all container images to the appropriate registries and the K8s manifests to gitops repo.
+You can also pass an explicit version. The release script creates the tag, builds and pushes both container images to the staging, production, and Docker Hub registries, updates the staging GitOps manifests, and creates the GitHub release.
+
+Promote an existing version to production without rebuilding its images:
+
+```sh
+make production version=1.2.3
+```

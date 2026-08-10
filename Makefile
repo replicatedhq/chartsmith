@@ -137,10 +137,34 @@ integration-test: build
 # =============================================================================
 
 .PHONY: validate
-validate:
-	dagger call validate \
-		--op-service-account env:OP_SERVICE_ACCOUNT \
-		--progress plain
+validate: validate-schema test
+
+.PHONY: validate-schema
+validate-schema:
+	@tmp_file=$$(mktemp); \
+	trap 'rm -f "$$tmp_file"' EXIT; \
+	./scripts/render-migrations.sh "$$tmp_file"; \
+	test -s "$$tmp_file"; \
+	echo "Schema migrations rendered successfully"
+
+.PHONY: test
+test: test-worker test-app
+
+.PHONY: test-worker
+test-worker:
+	go test ./...
+
+.PHONY: test-app
+test-app:
+	cd chartsmith-app && npm ci && npm run test:unit && npm run build
+
+.PHONY: render-migrations
+render-migrations:
+	./scripts/render-migrations.sh "$(if $(output),$(output),-)"
+
+.PHONY: build-images
+build-images:
+	./scripts/build-images.sh "$(version)"
 
 .PHONY: okteto-dev
 okteto-dev:
@@ -155,14 +179,10 @@ run-debug-console:
 	@# We set DB_URI to maintain compatibility with existing code
 	export DB_URI=$(CHARTSMITH_PG_URI) && go run main.go debug-console
 
-# Requires: GITHUB_TOKEN, OP_SERVICE_ACCOUNT_PRODUCTION
+# Requires: GITHUB_TOKEN, OP_SERVICE_ACCOUNT_PRODUCTION, and the release CLIs
 .PHONY: release
 release:
-	dagger call release \
-		--version $(version) \
-		--github-token env:GITHUB_TOKEN \
-		--op-service-account env:OP_SERVICE_ACCOUNT_PRODUCTION \
-		--progress plain
+	./scripts/release.sh --version "$(version)"
 
 # Check replicated CLI is installed and meets minimum version requirement
 .PHONY: check-replicated-cli
@@ -239,16 +259,12 @@ release-replicated: check-replicated-cli
 	fi
 	@echo "Release $(REPLICATED_VERSION) created and promoted to Unstable channel successfully"
 
-# Requires: GITHUB_TOKEN, OP_SERVICE_ACCOUNT_PRODUCTION
+# Promote an already-built version to production.
+# Requires: GITHUB_TOKEN, OP_SERVICE_ACCOUNT_PRODUCTION, and the release CLIs
 .PHONY: production
 production:
-	dagger call release \
-		--version $(version) \
-		--build=false \
-		--staging=false \
-		--production=true \
-		--replicated=false \
-		--github-token env:GITHUB_TOKEN \
-		--op-service-account env:OP_SERVICE_ACCOUNT_PRODUCTION \
-		--progress plain
-
+	./scripts/release.sh \
+		--version "$(version)" \
+		--no-build \
+		--no-staging \
+		--production

@@ -50,29 +50,6 @@ updates:
           - "minor"
           - "patch"
 
-  # Go Modules - Dagger
-  - package-ecosystem: "gomod"
-    directory: "/dagger"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "go"
-      - "dagger"
-    commit-message:
-      prefix: "deps(dagger)"
-      include: "scope"
-    groups:
-      dagger-dependencies:
-        patterns:
-          - "*"
-        update-types:
-          - "minor"
-          - "patch"
-
   # NPM - ChartSmith App
   - package-ecosystem: "npm"
     directory: "/chartsmith-app"

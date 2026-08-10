@@ -1,0 +1,14 @@
+*
+!go.mod
+!go.sum
+!go.work
+!go.work.sum
+!main.go
+!bootstrap/
+!bootstrap/**
+!cmd/
+!cmd/**
+!helm-utils/
+!helm-utils/**
+!pkg/
+!pkg/**
