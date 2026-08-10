@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/replicatedhq/chartsmith/pkg/embedding"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 	"github.com/replicatedhq/chartsmith/pkg/workspace/types"
 	"github.com/tuvistavie/securerandom"
@@ -53,8 +54,8 @@ func SetFileEmbeddings(ctx context.Context, fileID string, revisionNumber int, e
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
 
-	query := `UPDATE workspace_file SET embeddings = $1 WHERE id = $2 AND revision_number = $3`
-	_, err := conn.Exec(ctx, query, embeddings, fileID, revisionNumber)
+	query := `UPDATE workspace_file SET embeddings = $1, embedding_version = $2 WHERE id = $3 AND revision_number = $4`
+	_, err := conn.Exec(ctx, query, embeddings, embedding.Version(), fileID, revisionNumber)
 	if err != nil {
 		return err
 	}

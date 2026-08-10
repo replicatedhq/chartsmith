@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Session } from "@/lib/types/session";
-import { validateSession, extendSessionAction } from "@/lib/auth/actions/validate-session";
+import { getSessionAction, extendSessionAction } from "@/lib/auth/actions/validate-session";
 import { logger } from "@/lib/utils/logger";
 
 export const useSession = (redirectIfNotLoggedIn: boolean = false) => {
@@ -56,14 +56,9 @@ export const useSession = (redirectIfNotLoggedIn: boolean = false) => {
       .find((cookie) => cookie.startsWith("session="))
       ?.split("=")[1];
 
-    if (!token) {
-      setIsLoading(false);
-      return;
-    }
-
-    const validate = async (token: string) => {
+    const validate = async (token?: string) => {
       try {
-        const sess = await validateSession(token);
+        const sess = await getSessionAction(token);
         if (!sess && redirectIfNotLoggedIn) {
           router.replace("/");
           return;

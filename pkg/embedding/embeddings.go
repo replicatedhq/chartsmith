@@ -1,37 +1,37 @@
 package embedding
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
-	"net/http"
+	"hash/fnv"
+	"math"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/replicatedhq/chartsmith/pkg/param"
 	"github.com/replicatedhq/chartsmith/pkg/persistence"
 )
 
-const VOYAGE_API_URL = "https://api.voyageai.com/v1/embeddings"
+const (
+	embeddingDimensions = 1024
+	embeddingVersion    = "feature-hash-v1"
+)
 
-type embeddingRequest struct {
-	Model string   `json:"model"`
-	Input []string `json:"input"`
+func Version() string {
+	return embeddingVersion
 }
 
-type embeddingResponse struct {
-	Data []struct {
-		Embedding []float64 `json:"embedding"`
-	} `json:"data"`
-}
+var (
+	ErrEmptyContent = errors.New("content is empty")
+	tokenPattern    = regexp.MustCompile(`[A-Za-z0-9_./:-]+`)
+)
 
-var ErrEmptyContent = errors.New("content is empty")
-
-// Embeddings generates embeddings and returns them in PostgreSQL vector format
+// Embeddings creates a local, deterministic feature-hashing vector and caches
+// it in PostgreSQL. pgvector remains responsible for storage and cosine search;
+// no external embedding API or key is required.
 func Embeddings(content string) (string, error) {
 	if content == "" {
 		return "", nil
@@ -40,9 +40,11 @@ func Embeddings(content string) (string, error) {
 	conn := persistence.MustGetPooledPostgresSession()
 	defer conn.Release()
 
-	contentSHA256 := sha256.Sum256([]byte(content))
+	cacheInput := embeddingVersion + "\x00" + content
+	contentSHA256 := sha256.Sum256([]byte(cacheInput))
+	cacheKey := fmt.Sprintf("%x", contentSHA256)
 	query := `select embeddings from content_cache where content_sha256 = $1`
-	row := conn.QueryRow(context.Background(), query, fmt.Sprintf("%x", contentSHA256))
+	row := conn.QueryRow(context.Background(), query, cacheKey)
 	var cachedEmbeddings string
 	if err := row.Scan(&cachedEmbeddings); err != nil {
 		if err != pgx.ErrNoRows {
@@ -52,65 +54,62 @@ func Embeddings(content string) (string, error) {
 		return cachedEmbeddings, nil
 	}
 
-	if param.Get().VoyageAPIKey == "" {
-		return "", fmt.Errorf("VOYAGE_API_KEY environment variable not set")
-	}
-
-	reqBody := embeddingRequest{
-		Model: "voyage-01",
-		Input: []string{content},
-	}
-
-	jsonData, err := json.Marshal(reqBody)
-	if err != nil {
-		return "", fmt.Errorf("marshal error: %v", err)
-	}
-
-	req, err := http.NewRequest("POST", VOYAGE_API_URL, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return "", fmt.Errorf("request creation error: %v", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", param.Get().VoyageAPIKey))
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("request error: %v", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("response read error: %v", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("API error %d: %s", resp.StatusCode, body)
-	}
-
-	var embeddings embeddingResponse
-	if err := json.Unmarshal(body, &embeddings); err != nil {
-		return "", fmt.Errorf("unmarshal error: %v", err)
-	}
-
-	if len(embeddings.Data) == 0 {
-		return "", fmt.Errorf("no embeddings generated")
-	}
-
-	// Convert float64 slice to PostgreSQL vector format
-	strValues := make([]string, len(embeddings.Data[0].Embedding))
-	for i, v := range embeddings.Data[0].Embedding {
-		strValues[i] = fmt.Sprintf("%.6f", v)
-	}
-
-	newEmbeddings := "[" + strings.Join(strValues, ",") + "]"
-
+	newEmbeddings := vectorize(content)
 	query = `insert into content_cache (content_sha256, embeddings) values ($1, $2) on conflict (content_sha256) do update set embeddings = $2`
-	_, err = conn.Exec(context.Background(), query, fmt.Sprintf("%x", contentSHA256), newEmbeddings)
-	if err != nil {
+	if _, err := conn.Exec(context.Background(), query, cacheKey, newEmbeddings); err != nil {
 		return "", fmt.Errorf("error inserting embeddings: %v", err)
 	}
 
 	return newEmbeddings, nil
+}
+
+func vectorize(content string) string {
+	vector := make([]float64, embeddingDimensions)
+	tokens := tokenPattern.FindAllString(strings.ToLower(content), -1)
+
+	for i, token := range tokens {
+		addFeature(vector, "word:"+token, 1)
+		if i > 0 {
+			addFeature(vector, "pair:"+tokens[i-1]+" "+token, 0.75)
+		}
+		if len(token) >= 3 {
+			for j := 0; j <= len(token)-3; j++ {
+				addFeature(vector, "tri:"+token[j:j+3], 0.2)
+			}
+		}
+	}
+
+	// Content such as a template consisting mostly of punctuation should still
+	// receive a usable vector.
+	if len(tokens) == 0 {
+		addFeature(vector, "raw:"+content, 1)
+	}
+
+	var magnitude float64
+	for _, value := range vector {
+		magnitude += value * value
+	}
+	magnitude = math.Sqrt(magnitude)
+	if magnitude > 0 {
+		for i := range vector {
+			vector[i] /= magnitude
+		}
+	}
+
+	values := make([]string, len(vector))
+	for i, value := range vector {
+		values[i] = strconv.FormatFloat(value, 'f', 6, 64)
+	}
+	return "[" + strings.Join(values, ",") + "]"
+}
+
+func addFeature(vector []float64, feature string, weight float64) {
+	h := fnv.New64a()
+	_, _ = h.Write([]byte(feature))
+	value := h.Sum64()
+	index := int(value % uint64(len(vector)))
+	if value&(uint64(1)<<63) != 0 {
+		weight = -weight
+	}
+	vector[index] += weight
 }

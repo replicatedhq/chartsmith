@@ -16,6 +16,9 @@
 *.tmp
 *.orig
 *~
+# Packaged Chartsmith archives are build artifacts. Excluding them prevents a
+# prior chartsmith-*.tgz from being recursively embedded in the next package.
+chartsmith-*.tgz
 # Various IDEs
 .project
 .idea/

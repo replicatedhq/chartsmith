@@ -71,34 +71,31 @@ Define ANTHROPIC_API_KEY
 {{- else if .Values.anthropic.existingSecret }}
 {{- .Values.anthropic.existingSecret }}
 {{- else }}
-{{- fail "\n\nThis chart requires an ANTHROPIC_API_KEY. See README for instructions." }}
+{{- fail "\n\nThis chart requires an ANTHROPIC_API_KEY when llm.provider=anthropic. See README for instructions." }}
 {{- end }}
 {{- end }}
 
 {{/*
-Define GROQ_API_KEY
+Define FIREWORKS_API_KEY
 */}}
-{{- define "chartsmith.groqApiKey" -}}
-{{- if .Values.groq.apiKey }}
+{{- define "chartsmith.fireworksApiKey" -}}
+{{- if .Values.fireworks.apiKey }}
 {{- include "chartsmith.fullname" . }}-secrets
-{{- else if .Values.groq.existingSecret }}
-{{- .Values.groq.existingSecret }}
+{{- else if .Values.fireworks.existingSecret }}
+{{- .Values.fireworks.existingSecret }}
 {{- else }}
-{{- fail "\n\nThis chart requires an GROQ_API_KEY. See README for instructions." }}
+{{- fail "\n\nThis chart requires a FIREWORKS_API_KEY when llm.provider=fireworks. See README for instructions." }}
 {{- end }}
 {{- end }}
 
 {{/*
-Define VOYAGE_API_KEY
+Validate the configured LLM provider.
 */}}
-{{- define "chartsmith.voyageApiKey" -}}
-{{- if .Values.voyage.apiKey }}
-{{- include "chartsmith.fullname" . }}-secrets
-{{- else if .Values.voyage.existingSecret }}
-{{- .Values.voyage.existingSecret }}
-{{- else }}
-{{- fail "\n\nThis chart requires an VOYAGE_API_KEY. See README for instructions." }}
+{{- define "chartsmith.llmProvider" -}}
+{{- if not (has .Values.llm.provider (list "anthropic" "fireworks")) }}
+{{- fail "\n\nllm.provider must be either anthropic or fireworks." }}
 {{- end }}
+{{- .Values.llm.provider }}
 {{- end }}
 
 {{/*

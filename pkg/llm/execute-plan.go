@@ -19,7 +19,7 @@ func CreateExecutePlan(ctx context.Context, planActionCreatedCh chan types.Actio
 		zap.Int("relevant_files_len", len(relevantFiles)),
 	)
 
-	client, err := newAnthropicClient(ctx)
+	client, err := newLLMClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -50,7 +50,7 @@ func CreateExecutePlan(ctx context.Context, planActionCreatedCh chan types.Actio
 	messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(plan.Description)))
 
 	stream := client.Messages.NewStreaming(context.TODO(), anthropic.MessageNewParams{
-		Model:     anthropic.F(anthropic.ModelClaude3_7Sonnet20250219),
+		Model:     anthropic.F(configuredModel()),
 		MaxTokens: anthropic.F(int64(8192)),
 		Messages:  anthropic.F(messages),
 	})

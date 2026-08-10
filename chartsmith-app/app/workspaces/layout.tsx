@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { validateSession } from "@/lib/auth/actions/validate-session";
+import { getSessionAction } from "@/lib/auth/actions/validate-session";
 import { redirect } from "next/navigation";
 import { WorkspaceUIProvider } from "@/contexts/WorkspaceUIContext";
 
@@ -11,11 +11,7 @@ export default async function WorkspacesLayout({
   const cookieStore = await cookies();
   const sessionToken = cookieStore.get('session')?.value;
 
-  if (!sessionToken) {
-    redirect('/login');
-  }
-
-  const session = await validateSession(sessionToken);
+  const session = await getSessionAction(sessionToken);
   if (!session) {
     redirect('/login');
   }

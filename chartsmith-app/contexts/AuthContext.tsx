@@ -1,5 +1,6 @@
 "use client";
 import React, { createContext, useContext, useState, useEffect } from "react";
+import { getSessionAction } from "@/lib/auth/actions/validate-session";
 
 interface User {
   id: string;
@@ -46,46 +47,68 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
 
   useEffect(() => {
-    // Check for session cookie
-    const cookies = document.cookie.split(";");
-    const sessionCookie = cookies.find((c) => c.trim().startsWith("session="));
+    let cancelled = false;
 
-    if (sessionCookie) {
-      const token = sessionCookie.split("=")[1];
-      const payload = parseJwt(token);
+    const loadAuth = async () => {
+      const cookies = document.cookie.split(";");
+      const sessionCookie = cookies.find((c) => c.trim().startsWith("session="));
 
-      if (payload && payload.exp * 1000 > Date.now()) {
-        // Valid JWT that hasn't expired
-        const waitlisted = payload.isWaitlisted === true;
-        const admin = payload.isAdmin === true;
-        
-        setUser({
-          id: payload.sub,
-          name: payload.name,
-          email: payload.email,
-          avatar: payload.picture,
-          isWaitlisted: waitlisted,
-          isAdmin: admin
-        });
-        
-        setIsWaitlisted(waitlisted);
-        setIsAdmin(admin);
-        
-        // If they're waitlisted and not already on the waitlist page, redirect them
-        if (waitlisted && typeof window !== 'undefined' && 
-            window.location.pathname !== '/waitlist' && 
-            window.location.pathname !== '/login' &&
-            window.location.pathname !== '/login-with-test-auth') {
-          window.location.href = '/waitlist';
+      if (sessionCookie) {
+        const token = sessionCookie.split("=")[1];
+        const payload = parseJwt(token);
+
+        if (payload && payload.exp * 1000 > Date.now()) {
+          const waitlisted = payload.isWaitlisted === true;
+          const admin = payload.isAdmin === true;
+          if (!cancelled) {
+            setUser({
+              id: payload.sub,
+              name: payload.name,
+              email: payload.email,
+              avatar: payload.picture,
+              isWaitlisted: waitlisted,
+              isAdmin: admin,
+            });
+            setIsWaitlisted(waitlisted);
+            setIsAdmin(admin);
+          }
+
+          if (waitlisted && typeof window !== 'undefined' &&
+              window.location.pathname !== '/waitlist' &&
+              window.location.pathname !== '/login' &&
+              window.location.pathname !== '/login-with-test-auth') {
+            window.location.href = '/waitlist';
+          }
+          return;
         }
-      } else {
-        // Invalid or expired token, clear the cookie
+
         document.cookie = "session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
       }
-    }
-    
-    // Authentication check is complete
-    setIsAuthLoading(false);
+
+      // When auth is disabled this returns the shared local anonymous user. It
+      // returns undefined for an auth-enabled deployment with no valid cookie.
+      const anonymousSession = await getSessionAction();
+      if (anonymousSession && !cancelled) {
+        setUser({
+          id: anonymousSession.user.id,
+          name: anonymousSession.user.name,
+          email: anonymousSession.user.email,
+          avatar: anonymousSession.user.imageUrl,
+          isWaitlisted: false,
+          isAdmin: anonymousSession.user.isAdmin,
+        });
+        setIsWaitlisted(false);
+        setIsAdmin(anonymousSession.user.isAdmin === true);
+      }
+    };
+
+    loadAuth().finally(() => {
+      if (!cancelled) setIsAuthLoading(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const signOut = () => {

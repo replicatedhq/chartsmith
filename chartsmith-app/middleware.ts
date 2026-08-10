@@ -28,6 +28,16 @@ const tokenAuthPaths = [
 // This function can be marked `async` if using `await` inside
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // A deployment without Google auth is intentionally available as a
+  // single-user, unauthenticated site.
+  const authRequired = process.env.AUTH_REQUIRED === 'true' || (
+    process.env.AUTH_REQUIRED === undefined &&
+    Boolean(process.env.GOOGLE_CLIENT_SECRET && process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID)
+  );
+  if (!authRequired) {
+    return NextResponse.next();
+  }
   
   // Check if the path is public
   const isPublicPath = publicPaths.some(path => 
@@ -72,4 +82,4 @@ export const config = {
      */
     '/((?!_next/static|_next/image|favicon.ico).*)',
   ],
-}; 
+};

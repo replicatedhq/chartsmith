@@ -1061,11 +1061,11 @@ func (c *DebugConsole) createNewRevision() error {
 	result, err = tx.Exec(c.ctx, `
 		INSERT INTO workspace_file (
 			id, revision_number, chart_id, workspace_id, file_path,
-			content, embeddings
+			content, embeddings, embedding_version
 		)
 		SELECT
 			id, $1, chart_id, workspace_id, file_path,
-			content, embeddings
+			content, embeddings, embedding_version
 		FROM workspace_file
 		WHERE workspace_id = $2 AND revision_number = $3
 	`, newRevisionNumber, workspaceID, previousRevisionNumber)
