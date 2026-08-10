@@ -187,9 +187,9 @@ func runBootstrap(ctx context.Context, pgURI string, workspaceDir string, force 
 			}
 
 			_, err = tx.Exec(ctx, `
-				INSERT INTO bootstrap_file (id, chart_id, workspace_id, file_path, content, embeddings)
-				VALUES ($1, $2, $3, $4, $5, $6)
-			`, hashString(relativePath), chartID, workspaceID, relativePath, content, embeddings)
+				INSERT INTO bootstrap_file (id, chart_id, workspace_id, file_path, content, embeddings, embedding_version)
+				VALUES ($1, $2, $3, $4, $5, $6, $7)
+			`, hashString(relativePath), chartID, workspaceID, relativePath, content, embeddings, embedding.Version())
 			if err != nil {
 				return fmt.Errorf("failed to insert file: %w", err)
 			}

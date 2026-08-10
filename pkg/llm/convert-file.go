@@ -6,9 +6,7 @@ import (
 	"strings"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
-	"github.com/jpoz/groq"
 	"github.com/replicatedhq/chartsmith/pkg/logger"
-	"github.com/replicatedhq/chartsmith/pkg/param"
 	"github.com/sourcegraph/go-diff/diff"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
@@ -26,104 +24,13 @@ func ConvertFile(ctx context.Context, opts ConvertFileOpts) (map[string]string, 
 		zap.String("path", opts.Path),
 	)
 
-	return convertFileUsingGroq(ctx, opts)
+	return convertFileUsingConfiguredLLM(ctx, opts)
 }
 
-func convertFileUsingGroq(ctx context.Context, opts ConvertFileOpts) (map[string]string, string, error) {
-	client := groq.NewClient(groq.WithAPIKey(param.Get().GroqAPIKey))
-
-	messages := []groq.Message{
-		{
-			Role:    "system",
-			Content: executePlanSystemPrompt,
-		},
-		{
-			Role:    "system",
-			Content: convertFileSystemPrompt,
-		},
-		{
-			Role: "user",
-			Content: fmt.Sprintf(`
-Here is the existing values.yaml file:
----
-%s
----
-			`, opts.ValuesYAML),
-		},
-		{
-			Role: "user",
-			Content: fmt.Sprintf(`
-Convert the following Kubernetes manifest to a helm template:
----
-%s
----
-			`, opts.Content),
-		},
-	}
-
-	response, err := client.CreateChatCompletion(groq.CompletionCreateParams{
-		Model:    "llama-3.3-70b-versatile",
-		Messages: messages,
-	})
+func convertFileUsingConfiguredLLM(ctx context.Context, opts ConvertFileOpts) (map[string]string, string, error) {
+	client, err := newLLMClient(ctx)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to get converted file content: %w", err)
-	}
-
-	artifacts, err := parseArtifactsInResponse(response.Choices[0].Message.Content)
-	if err != nil {
-		return nil, "", fmt.Errorf("failed to parse artifacts: %w", err)
-	}
-
-	updatedValuesYAML := opts.ValuesYAML
-	artifactsMap := make(map[string]string)
-	for _, artifact := range artifacts {
-		if artifact.Path == "values.yaml" {
-			// Check if the content is a unified diff patch
-			if strings.HasPrefix(strings.TrimSpace(artifact.Content), "---") &&
-				strings.Contains(artifact.Content, "+++") &&
-				strings.Contains(artifact.Content, "@@") {
-				// It's a patch, try to apply it safely
-				logger.Info("Received values.yaml as a patch, attempting to apply")
-
-				// Try to apply the patch
-				newContent, err := applyPatch(opts.ValuesYAML, artifact.Content)
-				if err != nil {
-					// Patch application failed, fall back to merging approach
-					logger.Warn("Failed to apply patch directly, falling back to content extraction", zap.Error(err))
-
-					// Extract and merge the added content from the patch
-					extractedContent := extractAddedContent(artifact.Content)
-					mergedValues, err := mergeValuesYAML(opts.ValuesYAML, extractedContent)
-					if err != nil {
-						logger.Warn("Failed to merge values.yaml, using original content", zap.Error(err))
-					} else {
-						updatedValuesYAML = mergedValues
-					}
-				} else {
-					// Patch applied successfully
-					updatedValuesYAML = newContent
-				}
-			} else {
-				// It's not a patch, use the normal merging approach
-				mergedValues, err := mergeValuesYAML(opts.ValuesYAML, artifact.Content)
-				if err != nil {
-					logger.Warn("Failed to merge values.yaml, using original content", zap.Error(err))
-				} else {
-					updatedValuesYAML = mergedValues
-				}
-			}
-		} else {
-			artifactsMap[artifact.Path] = artifact.Content
-		}
-	}
-
-	return artifactsMap, updatedValuesYAML, nil
-}
-
-func convertFileUsingClaude(ctx context.Context, opts ConvertFileOpts) (map[string]string, string, error) {
-	client, err := newAnthropicClient(ctx)
-	if err != nil {
-		return nil, "", fmt.Errorf("failed to get anthropic client: %w", err)
+		return nil, "", fmt.Errorf("failed to get LLM client: %w", err)
 	}
 
 	messages := []anthropic.MessageParam{
@@ -146,7 +53,7 @@ Convert the following Kubernetes manifest to a helm template:
 	}
 
 	response, err := client.Messages.New(context.TODO(), anthropic.MessageNewParams{
-		Model:     anthropic.F(anthropic.ModelClaude3_7Sonnet20250219),
+		Model:     anthropic.F(configuredModel()),
 		MaxTokens: anthropic.F(int64(8192)),
 		Messages:  anthropic.F(messages),
 	})

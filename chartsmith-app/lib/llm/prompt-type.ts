@@ -18,12 +18,22 @@ export interface PromptIntent {
 
 export async function promptType(message: string): Promise<PromptType> {
   try {
+    const provider = process.env.LLM_PROVIDER || (process.env.FIREWORKS_API_KEY ? "fireworks" : "anthropic");
+    const apiKey = provider === "fireworks" ? process.env.FIREWORKS_API_KEY : process.env.ANTHROPIC_API_KEY;
+    const model = process.env.LLM_MODEL || (provider === "fireworks"
+      ? "accounts/fireworks/models/kimi-k2p6"
+      : "claude-sonnet-5");
+    if (!apiKey) {
+      throw new Error(`${provider === "fireworks" ? "FIREWORKS_API_KEY" : "ANTHROPIC_API_KEY"} is not configured`);
+    }
+
     const anthropic = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY,
+      apiKey,
+      ...(provider === "fireworks" ? { baseURL: "https://api.fireworks.ai/inference" } : {}),
     });
 
     const msg = await anthropic.messages.create({
-      model: "claude-3-5-sonnet-20241022",
+      model,
       max_tokens: 1024,
       system: `You are ChartSmith, an expert at creating Helm charts for Kuberentes.
 You are invited to participate in an existing conversation between a user and an expert.

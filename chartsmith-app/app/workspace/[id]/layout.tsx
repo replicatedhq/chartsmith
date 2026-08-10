@@ -3,7 +3,7 @@
 import { SideNavWrapper } from "@/components/SideNavWrapper";
 import { WorkspaceUIProvider } from "@/contexts/WorkspaceUIContext";
 import { getWorkspace } from "@/lib/workspace/workspace";
-import { validateSession } from "@/lib/auth/actions/validate-session";
+import { getSessionAction } from "@/lib/auth/actions/validate-session";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -11,11 +11,7 @@ async function getSessionAndWorkspace(workspaceId: string) {
   const cookieStore = await cookies();
   const sessionToken = cookieStore.get('session')?.value;
 
-  if (!sessionToken) {
-    redirect('/login');
-  }
-
-  const session = await validateSession(sessionToken);
+  const session = await getSessionAction(sessionToken);
   if (!session) {
     redirect('/login');
   }

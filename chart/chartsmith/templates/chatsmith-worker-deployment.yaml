@@ -52,11 +52,6 @@ spec:
             {{- end }}
             - name: CHARTSMITH_PG_URI
               {{- include "chartsmith.pgUri" . | trim | nindent 14 }}
-            - name: VOYAGE_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "chartsmith.voyageApiKey" . }}
-                  key: VOYAGE_API_KEY
           image: "{{ .Values.images.worker.registry }}/{{ .Values.images.worker.repository }}:{{ .Values.images.worker.tag | default .Chart.AppVersion }}"
           name: bootstrap
       {{- end }}
@@ -76,21 +71,23 @@ spec:
             - name: AWS_REGION
               value: {{ $region }}
             {{- end }}
+            - name: LLM_PROVIDER
+              value: {{ include "chartsmith.llmProvider" . | quote }}
+            - name: LLM_MODEL
+              value: {{ .Values.llm.model | required "llm.model is required" | quote }}
+            {{- if eq .Values.llm.provider "anthropic" }}
             - name: ANTHROPIC_API_KEY
               valueFrom:
                 secretKeyRef:
                   name: {{ include "chartsmith.anthropicApiKey" . }}
                   key: ANTHROPIC_API_KEY
-            - name: GROQ_API_KEY
+            {{- else if eq .Values.llm.provider "fireworks" }}
+            - name: FIREWORKS_API_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "chartsmith.groqApiKey" . }}
-                  key: GROQ_API_KEY
-            - name: VOYAGE_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "chartsmith.voyageApiKey" . }}
-                  key: VOYAGE_API_KEY
+                  name: {{ include "chartsmith.fireworksApiKey" . }}
+                  key: FIREWORKS_API_KEY
+            {{- end }}
             - name: CHARTSMITH_PG_URI
               {{- include "chartsmith.pgUri" . | trim | nindent 14 }}
             - name: CHARTSMITH_CENTRIFUGO_ADDRESS

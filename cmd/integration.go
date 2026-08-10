@@ -37,11 +37,8 @@ func IntegrationCmd() *cobra.Command {
 
 			missingParams := []string{}
 
-			if param.Get().AnthropicAPIKey == "" {
-				missingParams = append(missingParams, "ANTHROPIC_API_KEY")
-			}
-			if param.Get().VoyageAPIKey == "" {
-				missingParams = append(missingParams, "VOYAGE_API_KEY")
+			if param.Get().LLMAPIKey() == "" {
+				missingParams = append(missingParams, param.Get().LLMAPIKeyEnvName())
 			}
 
 			if len(missingParams) > 0 {

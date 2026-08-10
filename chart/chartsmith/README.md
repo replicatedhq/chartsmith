@@ -7,7 +7,7 @@ Chartsmith is an AI-powered tool that helps you build better Helm charts.
 - Kubernetes 1.19+
 - Helm 3.8.0+
 - PV provisioner support in the underlying infrastructure
-- An Anthropic API key for AI features
+- An Anthropic or Fireworks API key for AI features
 - (Optional) Google OAuth credentials for authentication
 
 ## Install Chart
@@ -61,9 +61,20 @@ helm show values oci://ghcr.io/replicatedhq/charts/chartsmith
 The following values must be provided for the chart to function:
 
 ```yaml
-# Anthropic API key for AI features
+# Select one provider and model, then provide that provider's API key.
+llm:
+  provider: anthropic
+  model: claude-sonnet-5
+
 anthropic:
-  apiKey: "sk-ant-..."  # Required
+  apiKey: "sk-ant-..."
+
+# Alternatively:
+# llm:
+#   provider: fireworks
+#   model: accounts/fireworks/models/kimi-k2p6
+# fireworks:
+#   apiKey: "..."
 
 # HMAC secret for JWT tokens (generate with: openssl rand -hex 32)
 hmac:
@@ -82,11 +93,10 @@ centrifugo:
 ```yaml
 auth:
   google:
+    enabled: true
     clientId: "your-client-id.apps.googleusercontent.com"
     clientSecret: "your-client-secret"
-
-config:
-  googleRedirectUri: "https://chartsmith.example.com/auth/google"
+    redirectUri: "https://chartsmith.example.com/auth/google"
 ```
 
 #### Use External PostgreSQL Database
@@ -126,7 +136,8 @@ config:
 
 ```yaml
 auth:
-  required: false
+  google:
+    enabled: false
   enableTestAuth: true
 ```
 
@@ -139,7 +150,10 @@ Instead of passing sensitive values directly, you can reference existing Kuberne
 ```yaml
 anthropic:
   existingSecret: chartsmith-secrets
-  existingSecretKey: ANTHROPIC_API_KEY
+
+# Or, when llm.provider is fireworks:
+fireworks:
+  existingSecret: chartsmith-secrets
 
 hmac:
   existingSecret: chartsmith-secrets
@@ -148,8 +162,6 @@ hmac:
 auth:
   google:
     existingSecret: chartsmith-secrets
-    existingSecretClientIdKey: my-google-client-id
-    existingSecretClientSecretKey: GOOGLE_CLIENT_SECRET
 ```
 
 Create the secret:

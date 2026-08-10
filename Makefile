@@ -17,19 +17,20 @@ REPLICATED_VERSION=$(shell grep REPLICATED_VERSION VERSION | cut -d= -f2)
 # - make run-debug-console
 #
 # Required variables:
-#   - ANTHROPIC_API_KEY - API key for Anthropic services
-#   - GROQ_API_KEY - API key for Groq services
-#   - VOYAGE_API_KEY - API key for Voyage services
+#   - LLM_PROVIDER - anthropic (default) or fireworks
+#   - LLM_MODEL - provider model identifier
+#   - ANTHROPIC_API_KEY or FIREWORKS_API_KEY - key for the selected provider
 #   - CHARTSMITH_PG_URI - PostgreSQL connection string
 #   - CHARTSMITH_CENTRIFUGO_ADDRESS - Centrifugo service address
 #   - CHARTSMITH_CENTRIFUGO_API_KEY - API key for Centrifugo
+# Optional authentication variables:
 #   - GOOGLE_CLIENT_ID - Google OAuth client ID
 #   - GOOGLE_CLIENT_SECRET - Google OAuth client secret
 #
 # Example:
+#   export LLM_PROVIDER=anthropic
+#   export LLM_MODEL=claude-sonnet-5
 #   export ANTHROPIC_API_KEY=your-key
-#   export GROQ_API_KEY=your-key
-#   export VOYAGE_API_KEY=your-key
 #   export CHARTSMITH_PG_URI=postgresql://postgres:password@localhost:5432/chartsmith?sslmode=disable
 #   export CHARTSMITH_CENTRIFUGO_ADDRESS=http://localhost:8000/api
 #   export CHARTSMITH_CENTRIFUGO_API_KEY=api_key
@@ -53,14 +54,14 @@ endef
 # Check required environment variables
 .PHONY: check-env
 check-env:
-	$(call check_env_var,ANTHROPIC_API_KEY)
-	$(call check_env_var,GROQ_API_KEY)
-	$(call check_env_var,VOYAGE_API_KEY)
+	@if [ "$${LLM_PROVIDER:-anthropic}" = "fireworks" ]; then \
+		if [ -z "$$FIREWORKS_API_KEY" ]; then echo "Error: FIREWORKS_API_KEY environment variable is not set"; exit 1; fi; \
+	else \
+		if [ -z "$$ANTHROPIC_API_KEY" ]; then echo "Error: ANTHROPIC_API_KEY environment variable is not set"; exit 1; fi; \
+	fi
 	$(call check_env_var,CHARTSMITH_PG_URI)
 	$(call check_env_var,CHARTSMITH_CENTRIFUGO_ADDRESS)
 	$(call check_env_var,CHARTSMITH_CENTRIFUGO_API_KEY)
-	$(call check_env_var,GOOGLE_CLIENT_ID)
-	$(call check_env_var,GOOGLE_CLIENT_SECRET)
 	@echo "All required environment variables are set"
 
 # =============================================================================
@@ -104,7 +105,7 @@ build:
 	@mkdir -p $(WORKER_BUILD_DIR)
 	@go build -o $(WORKER_BUILD_DIR)/$(WORKER_BINARY_NAME) main.go
 
-# Requires: ANTHROPIC_API_KEY, GROQ_API_KEY, VOYAGE_API_KEY
+# Requires the API key for the selected LLM provider.
 .PHONY: run-worker
 run-worker: build
 	@echo "Running $(WORKER_BINARY_NAME) with environment variables from shell..."
@@ -172,7 +173,7 @@ okteto-dev:
 	@make build
 	@printf "\n\n To build and run this project, run: \n\n   # make run-worker\n   # make run-debug-console\n\n"
 
-# Requires: ANTHROPIC_API_KEY, GROQ_API_KEY, VOYAGE_API_KEY
+# Requires the API key for the selected LLM provider.
 .PHONY: run-debug-console
 run-debug-console:
 	@echo "Running debug console with environment variables from shell..."
@@ -213,17 +214,40 @@ check-replicated-cli:
 	fi; \
 	echo "replicated CLI version check passed (>=0.124.0)"
 
-# Release to Replicated
+# Bump the Replicated release and chart versions together. The Helm appVersion is
+# the Chartsmith container version and is intentionally managed separately.
+.PHONY: bump-replicated-patch
+bump-replicated-patch:
+	@CHART_VERSION=$$(grep '^CHART_VERSION=' VERSION | cut -d= -f2); \
+	REPLICATED_VERSION=$$(grep '^REPLICATED_VERSION=' VERSION | cut -d= -f2); \
+	if [ "$$CHART_VERSION" != "$$REPLICATED_VERSION" ]; then \
+		echo "Error: CHART_VERSION ($$CHART_VERSION) and REPLICATED_VERSION ($$REPLICATED_VERSION) must match"; \
+		exit 1; \
+	fi; \
+	if ! echo "$$CHART_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$$'; then \
+		echo "Error: version $$CHART_VERSION is not a semantic version in x.y.z format"; \
+		exit 1; \
+	fi; \
+	MAJOR=$$(echo "$$CHART_VERSION" | cut -d. -f1); \
+	MINOR=$$(echo "$$CHART_VERSION" | cut -d. -f2); \
+	PATCH=$$(echo "$$CHART_VERSION" | cut -d. -f3); \
+	NEXT_VERSION="$$MAJOR.$$MINOR.$$((PATCH + 1))"; \
+	sed -i.bak "s/^CHART_VERSION=.*/CHART_VERSION=$$NEXT_VERSION/" VERSION && rm VERSION.bak; \
+	sed -i.bak "s/^REPLICATED_VERSION=.*/REPLICATED_VERSION=$$NEXT_VERSION/" VERSION && rm VERSION.bak; \
+	sed -i.bak "s/^version:.*/version: $$NEXT_VERSION/" chart/chartsmith/Chart.yaml && rm chart/chartsmith/Chart.yaml.bak; \
+	sed -i.bak "s/chartVersion:.*/chartVersion: $$NEXT_VERSION/" replicated/helmchart.yaml && rm replicated/helmchart.yaml.bak; \
+	echo "Bumped Replicated release and chart version: $$CHART_VERSION -> $$NEXT_VERSION"
+
+.PHONY: prepare-replicated-release
+prepare-replicated-release: check-replicated-cli
+	@$(MAKE) --no-print-directory bump-replicated-patch
+
+# Create one versioned release and initially promote it to Unstable.
 .PHONY: release-replicated
-release-replicated: check-replicated-cli
+release-replicated: prepare-replicated-release
 	@echo "Using versions from VERSION file:"
 	@echo "  Chart Version: $(CHART_VERSION)"
 	@echo "  Replicated Release Version: $(REPLICATED_VERSION)"
-	@echo ""
-	@echo "Updating chart version in Chart.yaml..."
-	@sed -i.bak 's/^version:.*/version: $(CHART_VERSION)/' chart/chartsmith/Chart.yaml && rm chart/chartsmith/Chart.yaml.bak
-	@echo "Updating chart version in helmchart.yaml..."
-	@sed -i.bak 's/chartVersion:.*/chartVersion: $(CHART_VERSION)/' replicated/helmchart.yaml && rm replicated/helmchart.yaml.bak
 	@echo "Verifying 'chartsmith' app exists..."
 	@if ! replicated app ls 2>&1 | grep -q "chartsmith"; then \
 		echo "Error: 'chartsmith' app not found in replicated apps list"; \
@@ -232,32 +256,61 @@ release-replicated: check-replicated-cli
 		exit 1; \
 	fi
 	@echo "Found 'chartsmith' app"
-	@echo "Getting proxy registry hostname..."
-	@PROXY_HOSTNAME=$$(replicated app hostname ls --output json 2>&1 | jq -r '.proxy' 2>/dev/null); \
+	@set -e; \
+	PROXY_HOSTNAME=$$(replicated app hostname ls --output json 2>&1 | jq -r '.proxy' 2>/dev/null); \
 	if [ -z "$$PROXY_HOSTNAME" ] || [ "$$PROXY_HOSTNAME" = "null" ]; then \
 		echo "Error: Could not determine proxy hostname from replicated app hostname ls"; \
 		replicated app hostname ls --output json || true; \
 		exit 1; \
-	fi
-	@echo "Proxy hostname: $$PROXY_HOSTNAME"
-	@echo "Backing up values.yaml..."
-	@cp chart/chartsmith/values.yaml chart/chartsmith/values.yaml.bak
-	@echo "Replacing proxy.replicated.com with proxy hostname in values.yaml..."
-	@PROXY_HOSTNAME=$$(replicated app hostname ls --output json 2>&1 | jq -r '.proxy' 2>/dev/null) && \
-	sed -i.tmp "s|proxy.replicated.com|$$PROXY_HOSTNAME|g" chart/chartsmith/values.yaml && \
-	rm chart/chartsmith/values.yaml.tmp
-	@echo "Packaging Helm chart..."
-	@cd chart/chartsmith && helm dependency update && helm package --version $(CHART_VERSION) --app-version $(CHART_VERSION) .
-	@echo "Creating release $(REPLICATED_VERSION) and promoting to Unstable channel..."
-	@cd chart/chartsmith && replicated release create --promote Unstable --version $(REPLICATED_VERSION); \
-	RELEASE_STATUS=$$?; \
-	cd ../..; \
-	mv chart/chartsmith/values.yaml.bak chart/chartsmith/values.yaml; \
-	if [ $$RELEASE_STATUS -ne 0 ]; then \
-		echo "Error: Release creation failed"; \
-		exit $$RELEASE_STATUS; \
-	fi
+	fi; \
+	echo "Using proxy hostname: $$PROXY_HOSTNAME"; \
+	REPO_ROOT=$$(pwd); \
+	VALUES_FILE="$$REPO_ROOT/chart/chartsmith/values.yaml"; \
+	VALUES_BACKUP=$$(mktemp "$${TMPDIR:-/tmp}/chartsmith-values.XXXXXX"); \
+	cp "$$VALUES_FILE" "$$VALUES_BACKUP"; \
+	trap 'mv "$$VALUES_BACKUP" "$$VALUES_FILE"' EXIT HUP INT TERM; \
+	sed -i.tmp "s|proxy.replicated.com|$$PROXY_HOSTNAME|g" "$$VALUES_FILE"; \
+	rm "$$VALUES_FILE.tmp"; \
+	cd chart/chartsmith; \
+	helm dependency update; \
+	echo "Creating release $(REPLICATED_VERSION) and promoting to Unstable channel..."; \
+	replicated release create --promote Unstable --version $(REPLICATED_VERSION); \
+	trap - EXIT HUP INT TERM; \
+	mv "$$VALUES_BACKUP" "$$VALUES_FILE"
 	@echo "Release $(REPLICATED_VERSION) created and promoted to Unstable channel successfully"
+	@echo "Promote this same release with: make promote-beta sequence=<release-sequence>"
+
+# Promote an existing release sequence. A release is built once, then advanced
+# through Beta and Stable without creating duplicate releases.
+.PHONY: promote-replicated promote-beta promote-stable
+promote-replicated: check-replicated-cli
+	@if ! echo "$(sequence)" | grep -Eq '^[0-9]+$$'; then \
+		echo "Error: sequence is required and must be a release sequence number"; \
+		echo "Usage: make promote-beta sequence=123"; \
+		exit 1; \
+	fi
+	@if [ "$(channel)" != "Beta" ] && [ "$(channel)" != "Stable" ]; then \
+		echo "Error: channel must be Beta or Stable"; \
+		exit 1; \
+	fi
+	@APP_ID=$$(replicated app ls chartsmith --output json | jq -r '.[] | select(.app.slug == "chartsmith") | .app.id'); \
+	if [ -z "$$APP_ID" ] || [ "$$APP_ID" = "null" ]; then \
+		echo "Error: could not resolve the Chartsmith app ID"; \
+		exit 1; \
+	fi; \
+	RELEASE_VERSION=$$(replicated release inspect "$(sequence)" --app "$$APP_ID" --output json | jq -r '.charts[] | select(.name == "chartsmith" and .status == "pushed") | .version' | head -n1); \
+	if ! echo "$$RELEASE_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$$'; then \
+		echo "Error: could not resolve a semantic chart version for release $(sequence)"; \
+		exit 1; \
+	fi; \
+	echo "Promoting existing release sequence $(sequence) to $(channel) as $$RELEASE_VERSION..."; \
+	replicated release promote "$(sequence)" "$(channel)" --app "$$APP_ID" --version "$$RELEASE_VERSION"
+
+promote-beta:
+	@$(MAKE) --no-print-directory promote-replicated sequence="$(sequence)" channel=Beta
+
+promote-stable:
+	@$(MAKE) --no-print-directory promote-replicated sequence="$(sequence)" channel=Stable
 
 # Promote an already-built version to production.
 # Requires: GITHUB_TOKEN, OP_SERVICE_ACCOUNT_PRODUCTION, and the release CLIs

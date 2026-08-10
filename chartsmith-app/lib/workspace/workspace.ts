@@ -74,13 +74,13 @@ export async function createWorkspace(createdType: string, userId: string, creat
             [chartId, id, chart.name, initialRevisionNumber],
           );
 
-          const boostrapChartFiles = await client.query(`SELECT file_path, content, embeddings FROM bootstrap_file WHERE chart_id = $1`, [chart.id]);
+          const boostrapChartFiles = await client.query(`SELECT file_path, content, embeddings, embedding_version FROM bootstrap_file WHERE chart_id = $1`, [chart.id]);
           for (const file of boostrapChartFiles.rows) {
             const fileId = srs.default({ length: 12, alphanumeric: true });
             await client.query(
-              `INSERT INTO workspace_file (id, revision_number, chart_id, workspace_id, file_path, content, embeddings)
-              VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-              [fileId, initialRevisionNumber, chartId, id, file.file_path, file.content, file.embeddings],
+              `INSERT INTO workspace_file (id, revision_number, chart_id, workspace_id, file_path, content, embeddings, embedding_version)
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+              [fileId, initialRevisionNumber, chartId, id, file.file_path, file.content, file.embeddings, file.embedding_version],
             );
           }
 
@@ -1019,7 +1019,8 @@ export async function createRevision(plan: Plan, userID: string): Promise<number
           workspace_id,
           file_path,
           content,
-          embeddings
+          embeddings,
+          embedding_version
         FROM workspace_file
         WHERE workspace_id = $1
         AND revision_number = $2
@@ -1033,9 +1034,9 @@ export async function createRevision(plan: Plan, userID: string): Promise<number
         `
           INSERT INTO workspace_file (
             id, revision_number, chart_id, workspace_id, file_path,
-            content, embeddings
+            content, embeddings, embedding_version
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         `,
         [
           file.id,  // Keep the same ID
@@ -1044,7 +1045,8 @@ export async function createRevision(plan: Plan, userID: string): Promise<number
           file.workspace_id,
           file.file_path,
           file.content,
-          file.embeddings
+          file.embeddings,
+          file.embedding_version
         ]
       );
     }

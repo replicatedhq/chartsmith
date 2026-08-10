@@ -5,9 +5,16 @@ metadata:
 spec:
   chart:
     name: chartsmith
-    chartVersion: 0.3.1
+    chartVersion: 0.3.5
   
   releaseName: chartsmith
+
+  # The local EC VM is arm64 while the current Chartsmith application images
+  # are amd64-only. Apply the release successfully and let Kubernetes report
+  # any workload crash loops without blocking the installer.
+  helmUpgradeFlags:
+    - --wait=false
+    - --wait-for-jobs=false
   
   values:
     # External Database Configuration
@@ -19,19 +26,21 @@ spec:
         password: 'repl{{ ConfigOption "embedded_database_password" }}'
         database: 'repl{{ ConfigOption "embedded_database_name" }}'
     
-    # LLM API Keys
+    # LLM Configuration
+    llm:
+      provider: 'repl{{ ConfigOption "llm_provider" }}'
+      model: 'repl{{ if ConfigOptionEquals "llm_provider" "fireworks" }}repl{{ ConfigOption "fireworks_model" }}repl{{ else }}repl{{ ConfigOption "anthropic_model" }}repl{{ end }}'
+
     anthropic:
       apiKey: 'repl{{ ConfigOption "anthropic_api_key" }}'
-    
-    groq:
-      apiKey: 'repl{{ ConfigOption "groq_api_key" }}'
-    
-    voyage:
-      apiKey: 'repl{{ ConfigOption "voyage_api_key" }}'
+
+    fireworks:
+      apiKey: 'repl{{ ConfigOption "fireworks_api_key" }}'
     
     # Authentication Configuration
     auth:
       google:
+        enabled: repl{{ ConfigOptionEquals "google_auth_enabled" "1" }}
         clientId: 'repl{{ ConfigOption "google_client_id" }}'
         clientSecret: 'repl{{ ConfigOption "google_client_secret" }}'
         redirectUri: 'repl{{ ConfigOption "google_redirect_uri" }}'
@@ -57,12 +66,14 @@ spec:
         database: "chartsmith"
     anthropic:
       apiKey: "sk-ant-example"
-    groq:
-      apiKey: "gsk_example"
-    voyage:
-      apiKey: "pa-example"
+    fireworks:
+      apiKey: ""
+    llm:
+      provider: "anthropic"
+      model: "claude-sonnet-5"
     auth:
       google:
+        enabled: false
         clientId: "example.apps.googleusercontent.com"
         clientSecret: "GOCSPX-example"
         redirectUri: "http://example.com/auth/google"

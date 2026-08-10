@@ -13,6 +13,12 @@ spec:
               protocol: TCP
               name: http
           env:
+            - name: AUTH_REQUIRED
+              value: "true"
+            - name: LLM_PROVIDER
+              value: anthropic
+            - name: LLM_MODEL
+              value: claude-sonnet-5
             - name: CENTRIFUGO_TOKEN_HMAC_SECRET
               valueFrom:
                 secretKeyRef:

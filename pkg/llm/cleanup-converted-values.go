@@ -13,9 +13,9 @@ import (
 func CleanUpConvertedValuesYAML(ctx context.Context, valuesYAML string) (string, error) {
 	logger.Info("Cleaning up converted values.yaml")
 
-	client, err := newAnthropicClient(ctx)
+	client, err := newLLMClient(ctx)
 	if err != nil {
-		return "", fmt.Errorf("failed to get anthropic client: %w", err)
+		return "", fmt.Errorf("failed to get LLM client: %w", err)
 	}
 
 	messages := []anthropic.MessageParam{
@@ -30,7 +30,7 @@ Here is the converted values.yaml file:
 	}
 
 	response, err := client.Messages.New(context.TODO(), anthropic.MessageNewParams{
-		Model:     anthropic.F(anthropic.ModelClaude3_7Sonnet20250219),
+		Model:     anthropic.F(configuredModel()),
 		MaxTokens: anthropic.F(int64(8192)),
 		Messages:  anthropic.F(messages),
 	})
