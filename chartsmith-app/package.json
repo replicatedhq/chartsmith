@@ -36,7 +36,7 @@
     "jsonwebtoken": "^9.0.3",
     "lodash": "^4.17.23",
     "lucide-react": "^1.28.0",
-    "monaco-editor": "^0.55.1",
+    "monaco-editor": "^0.56.0",
     "next": "^15.5.15",
     "parse-duration": "^2.1.6",
     "parse-git-patch": "^2.1.1",
