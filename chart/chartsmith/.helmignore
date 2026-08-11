@@ -16,6 +16,8 @@
 *.tmp
 *.orig
 *~
+# Never recursively embed packages created in the chart source directory.
+chartsmith-*.tgz
 # Various IDEs
 .project
 .idea/
