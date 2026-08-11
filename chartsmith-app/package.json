@@ -24,7 +24,7 @@
     "@tailwindcss/typography": "^0.5.19",
     "@types/diff": "^8.0.0",
     "autoprefixer": "^10.5.4",
-    "centrifuge": "^5.5.3",
+    "centrifuge": "^5.7.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.4",
