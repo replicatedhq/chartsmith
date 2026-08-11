@@ -16,13 +16,15 @@ spec:
           artifacts:
             - os: linux
               arch: amd64
-              path: bootstrap/linux-amd64/embedded-cluster-dr
-              sha256: 5bb187d95a3e8674ca963af4861bde8caecbdd37c953208adfa4bcd37fdd048b
+              path: bootstrap/linux-amd64/embedded-cluster-dr.xz
+              compression: xz
+              sha256: 00695604ad0a63f4eee9e33c6c8c4d9764a8ee00174f1018a73d60318deecca0
               executable: embedded-cluster-dr
             - os: linux
               arch: arm64
-              path: bootstrap/linux-arm64/embedded-cluster-dr
-              sha256: 0f0297b29d84e8a806f9ad98e9c15ca2744527d5014f57e47bcb96f67016c4f5
+              path: bootstrap/linux-arm64/embedded-cluster-dr.xz
+              compression: xz
+              sha256: 6798f0773ccece49ebf0547a88008487ee52d9d352b48b8788f051407d76e021
               executable: embedded-cluster-dr
         service:
           namespace: embedded-cluster-dr

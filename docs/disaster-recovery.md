@@ -27,4 +27,6 @@ DR_EXTENSION_CHART_ARCHIVE=/path/to/embedded-cluster-disaster-recovery-0.1.0.tgz
   make prepare-dr-extension
 ```
 
-The staged `.release-charts` directory is generated and ignored by Git.
+The script XZ-decompresses the chart's bootstrap artifacts and verifies the
+executable hashes declared in `replicated/ec.yaml`. The staged
+`.release-charts` directory is generated and ignored by Git.

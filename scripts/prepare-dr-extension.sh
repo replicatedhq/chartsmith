@@ -29,8 +29,9 @@ fi
 
 staged="${staging}/embedded-cluster-disaster-recovery"
 test -s "${staged}/Chart.yaml"
-test -s "${staged}/bootstrap/linux-amd64/embedded-cluster-dr"
-test -s "${staged}/bootstrap/linux-arm64/embedded-cluster-dr"
+test -s "${staged}/bootstrap/linux-amd64/embedded-cluster-dr.xz"
+test -s "${staged}/bootstrap/linux-arm64/embedded-cluster-dr.xz"
+command -v xz >/dev/null 2>&1
 
 actual_version="$(awk '$0 ~ /^version:/ { print $2; exit }' "${staged}/Chart.yaml")"
 if [[ "${actual_version}" != "${version}" ]]; then
@@ -40,8 +41,10 @@ fi
 
 expected_amd64="$(awk '$1 == "arch:" { arch=$2 } $1 == "sha256:" && arch == "amd64" { print $2; exit }' "${repo_root}/replicated/ec.yaml")"
 expected_arm64="$(awk '$1 == "arch:" { arch=$2 } $1 == "sha256:" && arch == "arm64" { print $2; exit }' "${repo_root}/replicated/ec.yaml")"
-actual_amd64="$(shasum -a 256 "${staged}/bootstrap/linux-amd64/embedded-cluster-dr" | awk '{ print $1 }')"
-actual_arm64="$(shasum -a 256 "${staged}/bootstrap/linux-arm64/embedded-cluster-dr" | awk '{ print $1 }')"
+xz -dc "${staged}/bootstrap/linux-amd64/embedded-cluster-dr.xz" > "${staging}/embedded-cluster-dr-linux-amd64"
+xz -dc "${staged}/bootstrap/linux-arm64/embedded-cluster-dr.xz" > "${staging}/embedded-cluster-dr-linux-arm64"
+actual_amd64="$(shasum -a 256 "${staging}/embedded-cluster-dr-linux-amd64" | awk '{ print $1 }')"
+actual_arm64="$(shasum -a 256 "${staging}/embedded-cluster-dr-linux-arm64" | awk '{ print $1 }')"
 if [[ "${actual_amd64}" != "${expected_amd64}" || "${actual_arm64}" != "${expected_arm64}" ]]; then
   echo "Disaster-recovery bootstrap checksum does not match replicated/ec.yaml" >&2
   exit 1
