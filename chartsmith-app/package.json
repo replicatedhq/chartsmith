@@ -48,7 +48,7 @@
     "react-hotkeys-hook": "^5.3.3",
     "react-markdown": "^10.1.0",
     "secure-random-string": "^1.1.4",
-    "tailwind-merge": "^3.4.0",
+    "tailwind-merge": "^3.6.0",
     "tar": "^7.5.13",
     "unified-diff": "^5.0.0"
   },
