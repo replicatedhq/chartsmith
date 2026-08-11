@@ -7,6 +7,7 @@ GOARCH?=$(shell go env GOARCH)
 # Read versions from VERSION file
 CHART_VERSION=$(shell grep CHART_VERSION VERSION | cut -d= -f2)
 REPLICATED_VERSION=$(shell grep REPLICATED_VERSION VERSION | cut -d= -f2)
+DR_EXTENSION_VERSION?=0.1.0
 
 # =============================================================================
 # REQUIRED ENVIRONMENT VARIABLES (must be exported by the user)
@@ -214,8 +215,12 @@ check-replicated-cli:
 	echo "replicated CLI version check passed (>=0.124.0)"
 
 # Release to Replicated
+.PHONY: prepare-dr-extension
+prepare-dr-extension:
+	DR_EXTENSION_VERSION="$(DR_EXTENSION_VERSION)" ./scripts/prepare-dr-extension.sh
+
 .PHONY: release-replicated
-release-replicated: check-replicated-cli
+release-replicated: check-replicated-cli prepare-dr-extension
 	@echo "Using versions from VERSION file:"
 	@echo "  Chart Version: $(CHART_VERSION)"
 	@echo "  Replicated Release Version: $(REPLICATED_VERSION)"

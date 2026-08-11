@@ -2,3 +2,40 @@ apiVersion: embeddedcluster.replicated.com/v1beta1
 kind: Config
 spec:
   version: 3.10.0-beta.1+k8s-1.36
+  extensions:
+    helmCharts:
+      - chart:
+          name: embedded-cluster-disaster-recovery
+          chartVersion: 0.1.0
+        releaseName: embedded-cluster-disaster-recovery
+        namespace: embedded-cluster-dr
+    lifecycleHandlers:
+      - name: replicated-disaster-recovery
+        extensionChart: embedded-cluster-disaster-recovery
+        bootstrap:
+          artifacts:
+            - os: linux
+              arch: amd64
+              path: bootstrap/linux-amd64/embedded-cluster-dr
+              sha256: 5bb187d95a3e8674ca963af4861bde8caecbdd37c953208adfa4bcd37fdd048b
+              executable: embedded-cluster-dr
+            - os: linux
+              arch: arm64
+              path: bootstrap/linux-arm64/embedded-cluster-dr
+              sha256: 0f0297b29d84e8a806f9ad98e9c15ca2744527d5014f57e47bcb96f67016c4f5
+              executable: embedded-cluster-dr
+        service:
+          namespace: embedded-cluster-dr
+          name: embedded-cluster-dr
+          port: 8080
+          serviceAccount: embedded-cluster-dr
+  lifecycle:
+    backup:
+      handler: replicated-disaster-recovery
+    restore:
+      handler: replicated-disaster-recovery
+  backup:
+    includedNamespaces:
+      - 'repl{{ Namespace }}'
+    includedClusterResources: []
+    volumeBackup: fileSystem

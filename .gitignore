@@ -6,3 +6,4 @@ test-results/
 .specstory/
 chart/chartsmith/*.tgz
 .direnv/
+.release-charts/
