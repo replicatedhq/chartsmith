@@ -42,7 +42,7 @@
     "parse-git-patch": "^2.1.1",
     "patch": "^0.0.1",
     "patch-package": "^8.0.1",
-    "pg": "^8.22.0",
+    "pg": "^8.23.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-hotkeys-hook": "^5.3.3",
