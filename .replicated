@@ -2,6 +2,9 @@ appSlug: "chartsmith"
 charts: [
   {
     path: "./chart/chartsmith",
+  },
+  {
+    path: "./.release-charts/embedded-cluster-disaster-recovery",
   }
 ]
 manifests: ["replicated/**/*.yaml"]

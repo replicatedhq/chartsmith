@@ -17,9 +17,29 @@ spec:
       labels:
         app: chartsmith
         component: postgresql
+      annotations:
+        # The lifecycle extension runs these Velero hooks. Back up only the
+        # logical dump; copying live PGDATA would not be transactionally safe.
+        backup.velero.io/backup-volumes: backup
+        backup.velero.io/backup-volumes-excludes: data
+        pre.hook.backup.velero.io/container: postgresql
+        pre.hook.backup.velero.io/command: >-
+          ["/bin/sh", "-c", "set -eu; rm -f /var/lib/postgresql/backup/chartsmith.dump; PGPASSWORD=\"$POSTGRES_PASSWORD\" pg_dump --username=\"$POSTGRES_USER\" --dbname=\"$POSTGRES_DB\" --format=custom --file=/var/lib/postgresql/backup/chartsmith.dump; test -s /var/lib/postgresql/backup/chartsmith.dump"]
+        pre.hook.backup.velero.io/on-error: Fail
+        pre.hook.backup.velero.io/timeout: 15m
+        post.hook.restore.velero.io/container: postgresql
+        post.hook.restore.velero.io/command: >-
+          ["/bin/sh", "-c", "set -eu; test -s /var/lib/postgresql/backup/chartsmith.dump; PGPASSWORD=\"$POSTGRES_PASSWORD\" pg_restore --username=\"$POSTGRES_USER\" --dbname=\"$POSTGRES_DB\" --clean --if-exists --no-owner --exit-on-error /var/lib/postgresql/backup/chartsmith.dump"]
+        post.hook.restore.velero.io/on-error: Fail
+        post.hook.restore.velero.io/exec-timeout: 15m
+        post.hook.restore.velero.io/wait-timeout: 15m
+        post.hook.restore.velero.io/wait-for-ready: "true"
     spec:
       imagePullSecrets:
         - name: enterprise-pull-secret
+      volumes:
+        - name: backup
+          emptyDir: {}
       containers:
         - name: postgresql
           image: "{{ .Values.images.pgvector.registry }}/{{ .Values.images.pgvector.repository }}:{{ .Values.images.pgvector.tag }}"
@@ -46,6 +66,8 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /var/lib/postgresql
+            - name: backup
+              mountPath: /var/lib/postgresql/backup
           readinessProbe:
             exec:
               command:
