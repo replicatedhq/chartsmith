@@ -251,12 +251,11 @@ release-replicated: check-replicated-cli prepare-dr-extension
 	@PROXY_HOSTNAME=$$(replicated app hostname ls --output json 2>&1 | jq -r '.proxy' 2>/dev/null) && \
 	sed -i.tmp "s|proxy.replicated.com|$$PROXY_HOSTNAME|g" chart/chartsmith/values.yaml && \
 	rm chart/chartsmith/values.yaml.tmp
-	@echo "Packaging Helm chart..."
-	@cd chart/chartsmith && helm dependency update && helm package --version $(CHART_VERSION) --app-version $(CHART_VERSION) .
+	@echo "Updating Helm chart dependencies..."
+	@helm dependency update chart/chartsmith
 	@echo "Creating release $(REPLICATED_VERSION) and promoting to Unstable channel..."
-	@cd chart/chartsmith && replicated release create --promote Unstable --version $(REPLICATED_VERSION); \
+	@replicated release create --promote Unstable --version $(REPLICATED_VERSION); \
 	RELEASE_STATUS=$$?; \
-	cd ../..; \
 	mv chart/chartsmith/values.yaml.bak chart/chartsmith/values.yaml; \
 	if [ $$RELEASE_STATUS -ne 0 ]; then \
 		echo "Error: Release creation failed"; \
