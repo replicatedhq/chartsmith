@@ -1,1 +1,4 @@
 ChartSmith is running.
+
+To open the ChartSmith workspace:
+  Visit: the URL configured for your ChartSmith installation
