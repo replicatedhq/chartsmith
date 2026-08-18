@@ -109,7 +109,7 @@
   },
   "devDependencies": {
     "@types/glob": "^8.1.0",
-    "@types/marked": "^5.0.2",
+    "@types/marked": "^6.0.0",
     "@types/node": "20.2.5",
     "@types/vscode": "^1.125.0",
     "@types/ws": "^8.5.5",
