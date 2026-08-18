@@ -125,7 +125,7 @@
     "webpack-cli": "^5.1.1"
   },
   "dependencies": {
-    "centrifuge": "^3.1.0",
+    "centrifuge": "^5.7.1",
     "jotai": "^2.20.2",
     "marked": "^18.0.9",
     "react": "^19.2.8",
