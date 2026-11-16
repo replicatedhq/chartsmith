@@ -8,6 +8,8 @@ GOARCH?=$(shell go env GOARCH)
 CHART_VERSION=$(shell grep CHART_VERSION VERSION | cut -d= -f2)
 REPLICATED_VERSION=$(shell grep REPLICATED_VERSION VERSION | cut -d= -f2)
 DR_EXTENSION_VERSION?=0.1.0
+REPLICATED_PROFILE?=repldev
+REPLICATED_CLI=replicated --profile $(REPLICATED_PROFILE) --app chartsmith
 
 # =============================================================================
 # REQUIRED ENVIRONMENT VARIABLES (must be exported by the user)
@@ -219,8 +221,12 @@ check-replicated-cli:
 prepare-dr-extension:
 	DR_EXTENSION_VERSION="$(DR_EXTENSION_VERSION)" ./scripts/prepare-dr-extension.sh
 
+.PHONY: release-replicated-local
+release-replicated-local:
+	python3 scripts/with-local-api.py $(MAKE) release-replicated REPLICATED_PROFILE=repldev
+
 .PHONY: release-replicated
-release-replicated: check-replicated-cli prepare-dr-extension
+release-replicated: check-replicated-cli
 	@echo "Using versions from VERSION file:"
 	@echo "  Chart Version: $(CHART_VERSION)"
 	@echo "  Replicated Release Version: $(REPLICATED_VERSION)"
@@ -230,31 +236,33 @@ release-replicated: check-replicated-cli prepare-dr-extension
 	@echo "Updating chart version in helmchart.yaml..."
 	@sed -i.bak 's/chartVersion:.*/chartVersion: $(CHART_VERSION)/' replicated/helmchart.yaml && rm replicated/helmchart.yaml.bak
 	@echo "Verifying 'chartsmith' app exists..."
-	@if ! replicated app ls 2>&1 | grep -q "chartsmith"; then \
+	@if ! $(REPLICATED_CLI) app ls 2>&1 | grep -q "chartsmith"; then \
 		echo "Error: 'chartsmith' app not found in replicated apps list"; \
 		echo "Please ensure you are authenticated and have access to the chartsmith app"; \
-		echo "Run: replicated app ls"; \
+		echo "Run: $(REPLICATED_CLI) app ls"; \
 		exit 1; \
 	fi
 	@echo "Found 'chartsmith' app"
 	@echo "Getting proxy registry hostname..."
-	@PROXY_HOSTNAME=$$(replicated app hostname ls --output json 2>&1 | jq -r '.proxy' 2>/dev/null); \
+	@PROXY_HOSTNAME=$$($(REPLICATED_CLI) app hostname ls --output json 2>&1 | jq -r '.proxy' 2>/dev/null); \
 	if [ -z "$$PROXY_HOSTNAME" ] || [ "$$PROXY_HOSTNAME" = "null" ]; then \
-		echo "Error: Could not determine proxy hostname from replicated app hostname ls"; \
-		replicated app hostname ls --output json || true; \
+		echo "Error: Could not determine proxy hostname from $(REPLICATED_CLI) app hostname ls"; \
+		$(REPLICATED_CLI) app hostname ls --output json || true; \
 		exit 1; \
 	fi
 	@echo "Proxy hostname: $$PROXY_HOSTNAME"
+	@echo "Publishing kURL installer to Unstable..."
+	@$(REPLICATED_CLI) installer create --yaml-file kurl/installer.yaml --promote Unstable
 	@echo "Backing up values.yaml..."
 	@cp chart/chartsmith/values.yaml chart/chartsmith/values.yaml.bak
 	@echo "Replacing proxy.replicated.com with proxy hostname in values.yaml..."
-	@PROXY_HOSTNAME=$$(replicated app hostname ls --output json 2>&1 | jq -r '.proxy' 2>/dev/null) && \
+	@PROXY_HOSTNAME=$$($(REPLICATED_CLI) app hostname ls --output json 2>&1 | jq -r '.proxy' 2>/dev/null) && \
 	sed -i.tmp "s|proxy.replicated.com|$$PROXY_HOSTNAME|g" chart/chartsmith/values.yaml && \
 	rm chart/chartsmith/values.yaml.tmp
 	@echo "Updating Helm chart dependencies..."
 	@helm dependency update chart/chartsmith
 	@echo "Creating release $(REPLICATED_VERSION) and promoting to Unstable channel..."
-	@replicated release create --promote Unstable --version $(REPLICATED_VERSION); \
+	@$(REPLICATED_CLI) release create --promote Unstable --version $(REPLICATED_VERSION); \
 	RELEASE_STATUS=$$?; \
 	mv chart/chartsmith/values.yaml.bak chart/chartsmith/values.yaml; \
 	if [ $$RELEASE_STATUS -ne 0 ]; then \
