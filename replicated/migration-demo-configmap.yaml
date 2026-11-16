@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: chartsmith-migration-demo
+  labels:
+    app.kubernetes.io/name: chartsmith-migration-demo
+data:
+  index.html: |-
+    repl{{ ConfigOption "migration_demo_message" | nindent 4 }}

@@ -24,4 +24,4 @@ spec:
   containerd:
     version: 2.3.6
   kotsadm:
-    version: latest
+    version: 1.134.3

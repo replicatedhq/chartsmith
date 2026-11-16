@@ -251,8 +251,6 @@ release-replicated: check-replicated-cli
 		exit 1; \
 	fi
 	@echo "Proxy hostname: $$PROXY_HOSTNAME"
-	@echo "Publishing kURL installer to Unstable..."
-	@$(REPLICATED_CLI) installer create --yaml-file kurl/installer.yaml --promote Unstable
 	@echo "Backing up values.yaml..."
 	@cp chart/chartsmith/values.yaml chart/chartsmith/values.yaml.bak
 	@echo "Replacing proxy.replicated.com with proxy hostname in values.yaml..."

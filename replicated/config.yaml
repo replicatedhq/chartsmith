@@ -123,3 +123,12 @@ spec:
           hidden: true
           value: "{{repl RandomString 32}}"
           readonly: true
+    - name: migration_demo
+      title: Migration Demo
+      description: Settings for the standalone status page used to test Helm migration.
+      items:
+        - name: migration_demo_message
+          title: Status page message
+          type: text
+          default: "ChartSmith migration demo is running."
+          required: true

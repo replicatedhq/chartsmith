@@ -5,7 +5,7 @@ metadata:
 spec:
   chart:
     name: chartsmith
-    chartVersion: 0.1.0
+    chartVersion: 0.1.2
   
   releaseName: chartsmith
   

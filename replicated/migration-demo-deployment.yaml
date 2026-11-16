@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chartsmith-migration-demo
+  labels:
+    app.kubernetes.io/name: chartsmith-migration-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: chartsmith-migration-demo
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: chartsmith-migration-demo
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: status-page
+          image: busybox:1.37.0
+          command: ["httpd", "-f", "-p", "8080", "-h", "/www"]
+          ports:
+            - name: http
+              containerPort: 8080
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 32Mi
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+          volumeMounts:
+            - name: content
+              mountPath: /www
+              readOnly: true
+      volumes:
+        - name: content
+          configMap:
+            name: chartsmith-migration-demo

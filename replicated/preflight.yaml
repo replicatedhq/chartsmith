@@ -1,0 +1,22 @@
+apiVersion: troubleshoot.sh/v1beta2
+kind: Preflight
+metadata:
+  name: chartsmith-preflight
+spec:
+  collectors:
+    - data:
+        name: migration-demo/message.txt
+        data: |-
+          repl{{ ConfigOption "migration_demo_message" | nindent 10 }}
+  analyzers:
+    - textAnalyze:
+        checkName: Status page message
+        fileName: migration-demo/message.txt
+        regex: '\S'
+        outcomes:
+          - fail:
+              when: "false"
+              message: Enter a non-empty status page message in Migration Demo settings.
+          - pass:
+              when: "true"
+              message: The status page message is configured.
