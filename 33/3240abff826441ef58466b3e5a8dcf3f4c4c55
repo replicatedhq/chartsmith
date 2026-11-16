@@ -1,0 +1,20 @@
+Makefile
+  h_aa44c3b5b60dec 11-12,224-227,229,239,242,247,249-250,254-255,259,265
+VERSION
+  h_aa44c3b5b60dec 2
+kurl/installer.yaml
+  h_aa44c3b5b60dec 1-27
+scripts/with-local-api.py
+  h_aa44c3b5b60dec 1-47
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "333240abff826441ef58466b3e5a8dcf3f4c4c55",
+  "prompts": {},
+  "humans": {
+    "h_aa44c3b5b60dec": {
+      "author": "Marc Campbell <marc.e.campbell@gmail.com>"
+    }
+  }
+}
