@@ -1,0 +1,28 @@
+VERSION
+  h_aa44c3b5b60dec 1-2
+chart/chartsmith/Chart.yaml
+  h_aa44c3b5b60dec 18
+replicated/config.yaml
+  h_aa44c3b5b60dec 126-134
+replicated/helmchart.yaml
+  h_aa44c3b5b60dec 8
+replicated/installer.yaml
+  h_aa44c3b5b60dec 27
+replicated/migration-demo-configmap.yaml
+  h_aa44c3b5b60dec 1-9
+replicated/migration-demo-deployment.yaml
+  h_aa44c3b5b60dec 1-58
+replicated/preflight.yaml
+  h_aa44c3b5b60dec 1-22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0798505eb4a6f5d7e12e67b03f99d02e32e495cd",
+  "prompts": {},
+  "humans": {
+    "h_aa44c3b5b60dec": {
+      "author": "Marc Campbell <marc.e.campbell@gmail.com>"
+    }
+  }
+}
